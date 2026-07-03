@@ -15,6 +15,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV BUILD_STANDALONE=true
+ENV MICROCMS_SERVICE_DOMAIN=dummy
+ENV MICROCMS_API_KEY=dummy
+ENV DATABASE_URL=mysql://u:p@localhost:3306/db
+ENV BETTER_AUTH_SECRET=dummy_secret_for_build_only
+ENV BETTER_AUTH_URL=http://localhost:3000
 RUN npx prisma generate && npx next build
 
 FROM node:24-slim AS runner
