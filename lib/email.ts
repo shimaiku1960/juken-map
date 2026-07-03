@@ -1,6 +1,6 @@
 import { getResend } from "@/lib/resend";
 
-const FROM = "受験マップ <onboarding@resend.dev>";
+const FROM = "受験マップ <noreply@juken-map.com>";
 
 export async function sendVerificationEmail(to: string, url: string) {
   await getResend().emails.send({
