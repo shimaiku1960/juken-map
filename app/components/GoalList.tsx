@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { goalSchema, type GoalInput } from "@/lib/validations/goal";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,44 +14,19 @@ import {
 } from "@/components/ui/form";
 import { toast } from "sonner";
 import { daysUntil, formatExamDate } from "@/lib/date";
+import { useGoals, goalsKey, type Goal, type Faculty } from "@/app/hooks/useGoals";
 
-type Faculty = {
-  id: number;
-  name: string;
-  examDate: Date;
-  university: { name: string };
-  tags: { name: string }[];
-};
-
-type Goal = {
-  id: number;
-  createdAt: Date;
-  userId: string;
-  isFirstChoice: boolean;
-  faculty: Faculty;
-};
 
 type Props = {
   initialGoals: Goal[];
   faculties: Faculty[];
 };
 
-// サーバーから最新の goals を取得する（useQuery の queryFn）
-async function fetchGoals(): Promise<Goal[]> {
-  const res = await fetch("/api/goals");
-  if (!res.ok) throw new Error("目標の取得に失敗しました");
-  return res.json();
-}
-
 export default function GoalList({ initialGoals, faculties }: Props) {
   const queryClient = useQueryClient();
 
   // サーバー状態の取得。SSR で渡された initialGoals を初期キャッシュとして使う
-  const { data: goals = [] } = useQuery({
-    queryKey: ["goals"],
-    queryFn: fetchGoals,
-    initialData: initialGoals,
-  });
+  const { data: goals = [] } = useGoals(initialGoals);
 
   const form = useForm<GoalInput>({
     resolver: zodResolver(goalSchema),
@@ -75,7 +50,7 @@ export default function GoalList({ initialGoals, faculties }: Props) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: goalsKey });
       form.reset();
       toast.success("目標を追加しました");
     },
@@ -92,7 +67,7 @@ export default function GoalList({ initialGoals, faculties }: Props) {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: goalsKey });
       toast.success("目標を削除しました");
     },
     onError: (error) => toast.error(error.message),
@@ -113,7 +88,7 @@ export default function GoalList({ initialGoals, faculties }: Props) {
       return value;
     },
     onSuccess: (value) => {
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: goalsKey });
       toast.success(value ? "第一志望に設定しました" : "第一志望を解除しました");
     },
     onError: (error) => toast.error(error.message),

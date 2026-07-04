@@ -1,8 +1,9 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useGoals, goalsKey } from "@/app/hooks/useGoals";
 
 type Tag = { id: number; name: string };
 
@@ -18,14 +19,6 @@ type Props = {
   registeredFacultyIds: number[];
 };
 
-// GoalList と同じ ["goals"] キャッシュを共有するため、goals を丸ごと取得する
-// （queryKey が同じなら data の形も揃える必要がある）
-async function fetchGoals(): Promise<{ faculty: { id: number } }[]> {
-  const res = await fetch("/api/goals");
-  if (!res.ok) throw new Error("志望校の取得に失敗しました");
-  return res.json();
-}
-
 export default function FacultyList({
   faculties,
   registeredFacultyIds,
@@ -33,10 +26,7 @@ export default function FacultyList({
   const queryClient = useQueryClient();
 
   // ["goals"] を購読。読み込み前は SSR で渡された prop をフォールバックに使う（チラつき防止）
-  const { data: goals } = useQuery({
-    queryKey: ["goals"],
-    queryFn: fetchGoals,
-  });
+  const { data: goals } = useGoals();
   const registeredIds = goals
     ? goals.map((g) => g.faculty.id)
     : registeredFacultyIds;
@@ -56,7 +46,7 @@ export default function FacultyList({
     },
     onSuccess: ({ duplicated }) => {
       // ["goals"] を無効化 → GoalList 含め同じキャッシュを見る全員が最新に
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: goalsKey });
       if (duplicated) {
         toast.info("すでに登録済みです");
       } else {
