@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { goalSchema, type GoalInput } from "@/lib/validations/goal";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,8 +36,22 @@ type Props = {
   faculties: Faculty[];
 };
 
+// サーバーから最新の goals を取得する（useQuery の queryFn）
+async function fetchGoals(): Promise<Goal[]> {
+  const res = await fetch("/api/goals");
+  if (!res.ok) throw new Error("目標の取得に失敗しました");
+  return res.json();
+}
+
 export default function GoalList({ initialGoals, faculties }: Props) {
-  const [goals, setGoals] = useState(initialGoals);
+  const queryClient = useQueryClient();
+
+  // サーバー状態の取得。SSR で渡された initialGoals を初期キャッシュとして使う
+  const { data: goals = [] } = useQuery({
+    queryKey: ["goals"],
+    queryFn: fetchGoals,
+    initialData: initialGoals,
+  });
 
   const form = useForm<GoalInput>({
     resolver: zodResolver(goalSchema),
@@ -46,59 +60,66 @@ export default function GoalList({ initialGoals, faculties }: Props) {
     },
   });
 
-  const onSubmit = async (data: GoalInput) => {
-    const res = await fetch("/api/goals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    if (res.ok) {
-      const newGoal = await res.json();
-      setGoals((prev) => [...prev, newGoal]);
+  // 追加
+  const addMutation = useMutation({
+    mutationFn: async (data: GoalInput) => {
+      const res = await fetch("/api/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "追加に失敗しました");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
       form.reset();
       toast.success("目標を追加しました");
-    } else {
-      const data = await res.json();
-      toast.error(data.error ?? "追加に失敗しました");
-    }
-  };
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
-  const deleteGoal = async (id: number) => {
-    const res = await fetch(`/api/goals/${id}`, {
-      method: "DELETE",
-    });
-
-    if (res.ok) {
-      setGoals((prev) => prev.filter((goal) => goal.id !== id));
+  // 削除
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "削除に失敗しました");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
       toast.success("目標を削除しました");
-    } else {
-      const data = await res.json();
-      toast.error(data.error ?? "削除に失敗しました");
-    }
-  };
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
-  const setFirstChoice = async (id: number, value: boolean) => {
-    const res = await fetch(`/api/goals/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isFirstChoice: value }),
-    });
-
-    if (res.ok) {
-      // 第一志望は1校まで。対象を value に、他は全部 false にする
-      setGoals((prev) =>
-        prev.map((goal) => ({
-          ...goal,
-          isFirstChoice: goal.id === id ? value : false,
-        }))
-      );
+  // 第一志望の設定/解除
+  const firstChoiceMutation = useMutation({
+    mutationFn: async ({ id, value }: { id: number; value: boolean }) => {
+      const res = await fetch(`/api/goals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isFirstChoice: value }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "更新に失敗しました");
+      }
+      return value;
+    },
+    onSuccess: (value) => {
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
       toast.success(value ? "第一志望に設定しました" : "第一志望を解除しました");
-    } else {
-      const data = await res.json();
-      toast.error(data.error ?? "更新に失敗しました");
-    }
-  };
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const onSubmit = (data: GoalInput) => addMutation.mutate(data);
 
   // 学部セレクトを大学ごとに optgroup でまとめる
   const facultiesByUniversity = faculties.reduce<Record<string, Faculty[]>>(
@@ -143,14 +164,19 @@ export default function GoalList({ initialGoals, faculties }: Props) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button
-            onClick={() => setFirstChoice(goal.id, !goal.isFirstChoice)}
+            onClick={() =>
+              firstChoiceMutation.mutate({
+                id: goal.id,
+                value: !goal.isFirstChoice,
+              })
+            }
             className="text-sm hover:underline"
             title={goal.isFirstChoice ? "第一志望を解除" : "第一志望にする"}
           >
             {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
           </button>
           <button
-            onClick={() => deleteGoal(goal.id)}
+            onClick={() => deleteMutation.mutate(goal.id)}
             className="text-red-500 text-sm hover:underline"
           >
             削除
@@ -196,7 +222,7 @@ export default function GoalList({ initialGoals, faculties }: Props) {
               </FormItem>
             )}
           />
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button type="submit" disabled={addMutation.isPending}>
             追加
           </Button>
         </form>
