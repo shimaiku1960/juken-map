@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,6 @@ import { toast } from "sonner";
 import Link from "next/link";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -22,8 +20,7 @@ export default function LoginPage() {
       toast.error(error.message ?? "ログインに失敗しました");
       return;
     }
-    router.refresh();
-    router.push("/");
+    window.location.href = "/";
   };
 
   return (
