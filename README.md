@@ -13,22 +13,33 @@
 | 言語 | TypeScript |
 | スタイリング | Tailwind CSS v4 |
 | フォーム | React Hook Form + Zod |
+| サーバー状態管理 | TanStack Query |
 | カレンダー | Schedule-X |
 | CMS | microCMS |
 | ORM | Prisma 7 |
-| データベース | PostgreSQL (Supabase) |
-| 認証 | Supabase Auth |
-| インフラ | AWS EC2 (Ubuntu) / Nginx / PM2 |
-| CI/CD | GitHub Actions |
+| データベース | MySQL 8.4（ローカル: Docker / 本番: AWS RDS） |
+| 認証 | Better Auth（Google / GitHub / メール+パスワード） |
+| メール送信 | Resend（メール検証・パスワードリセット） |
+| コンテナ | Docker（マルチステージ / standalone） |
+| IaC | Terraform（AWS リソースをコード管理） |
+| インフラ | AWS EC2 (Ubuntu) / Nginx / PM2 / RDS / ECR |
+| CI/CD | GitHub Actions（OIDC 認証） |
 
 ## 主な機能
 
-- **志望校管理** — 全国の大学・学部マスターから志望校を選択。複数併願に対応し、同一学部の重複登録を多層防御（フロント／API／DB の3層）で防止
-- **大学を探す** — 全国 823 大学のマスターから、大学名・都道府県・設置区分で絞り込み。学部詳細では学部系統タグを表示
+- **志望校管理** — 全国の大学・学部マスターから志望校を選択。第一志望／併願を分けて管理し、同一学部の重複登録を多層防御（フロント／API／DB の3層）で防止
+- **大学を探す** — 全国 823 大学のマスターから、大学名・都道府県・設置区分で絞り込み。学部詳細では学部系統タグを表示し、その場で志望校に追加
 - **受験日程カレンダー** — 登録した志望校の受験日を Schedule-X で月表示。ダッシュボードで一覧
-- **ユーザー認証** — Supabase Auth によるサインアップ・ログイン・ログアウト・ルート保護
+- **ユーザー認証** — Better Auth による Google / GitHub / メール+パスワードの3方式ログイン。メール検証・パスワードリセット（Resend 経由）、ルート保護に対応
 - **プロフィール管理** — ニックネームの表示・編集
 - **ブログ** — microCMS で管理する記事の一覧・詳細表示
+
+## 設計上の工夫
+
+- **サーバー状態の一元管理** — 志望校データを TanStack Query で `["goals"]` キャッシュに集約。複数コンポーネント（志望校一覧／大学を探す）で共有・自動同期し、取得ロジックは `useGoals` カスタムフックに集約
+- **バリデーションの single source of truth** — Zod スキーマ（`lib/validations`）をサーバー／クライアントで共通利用。フロント（UX）・API（門番）・DB（最後の砦）の多層防御
+- **Infrastructure as Code** — 本番の VPC / EC2 / RDS / セキュリティグループ / ECR / IAM を Terraform で import しコード管理（`terraform/`）
+- **コンテナ化** — マルチステージ Dockerfile（`output: "standalone"` / 非 root 実行 / 起動時マイグレーション）。CI で ビルドしたイメージを ECR に push
 
 ## データソース
 
@@ -39,18 +50,32 @@
 ### 前提条件
 
 - Node.js 20 以上
-- PostgreSQL（Supabase 推奨）
-- Supabase プロジェクト（認証用）
+- Docker（ローカル DB = MySQL 8.4 を起動）
 - microCMS アカウント（ブログ管理用）
+- 各 OAuth / メール送信の資格情報（Google / GitHub OAuth、Resend）
 
 ### 環境変数
 
 プロジェクトルートに `.env` を作成し、以下を設定します：
 
 ```
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+# DB（ローカルは Docker の MySQL）
+DATABASE_URL="mysql://juken:jukenpassword@localhost:3306/juken_map"
+
+# Better Auth
+BETTER_AUTH_SECRET="your-random-secret"
+BETTER_AUTH_URL="http://localhost:3000"
+
+# OAuth プロバイダ
+AUTH_GOOGLE_ID="your-google-client-id"
+AUTH_GOOGLE_SECRET="your-google-client-secret"
+AUTH_GITHUB_ID="your-github-client-id"
+AUTH_GITHUB_SECRET="your-github-client-secret"
+
+# メール送信（メール検証・リセット）
+RESEND_API_KEY="your-resend-api-key"
+
+# microCMS（ブログ）
 MICROCMS_API_KEY="your-microcms-api-key"
 MICROCMS_SERVICE_DOMAIN="your-service-domain"
 ```
@@ -58,6 +83,9 @@ MICROCMS_SERVICE_DOMAIN="your-service-domain"
 ### インストールと起動
 
 ```bash
+# ローカル DB（MySQL）を Docker で起動
+docker compose up -d db
+
 # 依存関係のインストール
 npm install
 
@@ -76,6 +104,8 @@ npm run dev
 
 http://localhost:3000 でアクセスできます。
 
+> ローカル開発はアプリを `npm run dev`、DB のみ Docker コンテナで動かす構成です。本番相当（standalone ビルド）で確認したいときは `docker compose up --build`（アプリも含めてコンテナ起動）を使います。
+
 ## npm scripts
 
 | コマンド | 説明 |
@@ -85,17 +115,14 @@ http://localhost:3000 でアクセスできます。
 | `npm run start` | 本番サーバー起動 |
 | `npm run lint` | ESLint によるコード検査 |
 
-## デプロイ（AWS EC2）
+## デプロイ / インフラ（AWS）
 
-本番環境は Vercel ではなく AWS EC2 上にセルフホストしています（インフラ学習目的）。
+本番環境は Vercel ではなく AWS 上にセルフホストしています（インフラ学習目的）。
 
-- **EC2 (Ubuntu 24.04 / t3.micro)** にアプリを配置
-- **PM2** でプロセスを常駐化（クラッシュ・再起動時の自動復活）
-- **Nginx** をリバースプロキシとして配置（80 → 3000）
-- ビルド時のメモリ不足対策として **swap 2GB** を追加
-- **GitHub Actions** で `main` への push をトリガーに自動デプロイ
-
-DB・認証は Supabase をそのまま利用しています。
+- **EC2 (Ubuntu / t3.micro)** にアプリを配置、**PM2** で常駐化、**Nginx** をリバースプロキシに（443 → 3000）
+- **RDS (MySQL 8.4)** をデータベースに使用（VPC 内からのみアクセス可）
+- **GitHub Actions** で `main` への push をトリガーに自動デプロイ。イメージのビルド／push は **OIDC 認証**で **ECR** に対して実行（アクセスキーを持たせない短命トークン方式）
+- 本番インフラ（VPC / EC2 / RDS / セキュリティグループ / ECR / IAM）は **Terraform** でコード管理
 
 ## プロジェクト構成
 
@@ -107,36 +134,40 @@ app/
 │   └── [universityId]/   # 大学詳細（学部一覧・志望校追加）
 ├── goals/                # 志望校管理
 ├── profile/              # プロフィール
-├── blog/                 # ブログ一覧（microCMS）
-├── articles/[id]/        # 記事詳細
+├── blog/ articles/[id]/  # ブログ一覧・記事詳細（microCMS）
 ├── login/ signup/        # 認証ページ
-├── auth/                 # 認証 Server Actions / コールバック
+├── forgot-password/ reset-password/  # パスワードリセット
 ├── api/
+│   ├── auth/[...all]/    # Better Auth ハンドラ
 │   ├── goals/            # 志望校 CRUD
 │   └── profile/          # プロフィール更新
+├── hooks/useGoals.ts     # 志望校のサーバー状態フック（TanStack Query）
+├── providers.tsx         # QueryClientProvider
 └── components/           # 画面コンポーネント
 
 lib/
-├── microcms.ts           # microCMS クライアント
-├── prisma.ts             # Prisma クライアント
-├── supabase/             # Supabase クライアント（client / server / middleware）
-└── validations/          # Zod スキーマ（サーバー/クライアント共通）
+├── auth.ts / auth-client.ts  # Better Auth（サーバー / クライアント）
+├── email.ts / resend.ts      # メール送信（Resend）
+├── microcms.ts               # microCMS クライアント
+├── prisma.ts                 # Prisma クライアント
+└── validations/              # Zod スキーマ（サーバー/クライアント共通）
 
 prisma/
 ├── schema.prisma         # データベーススキーマ
 ├── seed.ts               # 初期データ投入
 └── migrations/           # マイグレーション
 
-scripts/
-└── transform-universities.ts  # 大学マスター CSV → JSON 整形
+terraform/                # AWS リソースの IaC（VPC/EC2/RDS/SG/ECR/IAM）
 
-data/                     # 大学マスター元データ・整形済み JSON
+Dockerfile                # マルチステージ（standalone / 非 root / 起動時マイグレーション）
+docker-compose.yml        # ローカル DB（+ 本番相当のアプリ起動）
+scripts/                  # 大学マスター整形スクリプト
 ```
 
-## データベースモデル
+## データベースモデル（主要）
 
-- **Profile** — ユーザープロフィール（Supabase Auth と連携）
-- **FinalGoal** — 志望校（Profile × Faculty。`@@unique` で重複防止）
+- **User / Account / Session / Verification** — Better Auth の認証モデル（ユーザー情報を自前 MySQL で保持）
+- **FinalGoal** — 志望校（User × Faculty。`@@unique` で重複防止、第一志望フラグを保持）
 - **University** — 大学マスター（名称・都道府県・設置区分）
 - **Faculty** — 学部マスター（受験日を保持。University にリレーション）
 - **Tag** — 学部系統タグ（Faculty と多対多）
