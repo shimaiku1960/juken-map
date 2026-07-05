@@ -9,6 +9,8 @@ resource "aws_instance" "app" {
     volume_size = 30
   }
 
+  iam_instance_profile = aws_iam_instance_profile.ec2_ecr.name
+
   tags = {
     Name = "juken-compass"
   }
