@@ -5,6 +5,10 @@ resource "aws_instance" "app" {
   subnet_id              = "subnet-0d4499710ef9ef629"
   vpc_security_group_ids = [aws_security_group.launch_wizard_2.id]
 
+  root_block_device {
+    volume_size = 30
+  }
+
   tags = {
     Name = "juken-compass"
   }
