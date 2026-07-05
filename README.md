@@ -20,10 +20,10 @@
 | データベース | MySQL 8.4（ローカル: Docker / 本番: AWS RDS） |
 | 認証 | Better Auth（Google / GitHub / メール+パスワード） |
 | メール送信 | Resend（メール検証・パスワードリセット） |
-| コンテナ | Docker（マルチステージ / standalone） |
+| コンテナ | Docker（マルチステージ / standalone / 本番はコンテナ運用） |
 | IaC | Terraform（AWS リソースをコード管理） |
-| インフラ | AWS EC2 (Ubuntu) / Nginx / PM2 / RDS / ECR |
-| CI/CD | GitHub Actions（OIDC 認証） |
+| インフラ | AWS EC2 (Ubuntu) / Nginx / RDS / ECR |
+| CI/CD | GitHub Actions（OIDC 認証 / ECR ビルド → 自動デプロイ） |
 
 ## 主な機能
 
@@ -39,7 +39,7 @@
 - **サーバー状態の一元管理** — 志望校データを TanStack Query で `["goals"]` キャッシュに集約。複数コンポーネント（志望校一覧／大学を探す）で共有・自動同期し、取得ロジックは `useGoals` カスタムフックに集約
 - **バリデーションの single source of truth** — Zod スキーマ（`lib/validations`）をサーバー／クライアントで共通利用。フロント（UX）・API（門番）・DB（最後の砦）の多層防御
 - **Infrastructure as Code** — 本番の VPC / EC2 / RDS / セキュリティグループ / ECR / IAM を Terraform で import しコード管理（`terraform/`）
-- **コンテナ化** — マルチステージ Dockerfile（`output: "standalone"` / 非 root 実行 / 起動時マイグレーション）。CI で ビルドしたイメージを ECR に push
+- **コンテナ化 / デプロイ自動化** — マルチステージ Dockerfile（`output: "standalone"` / 非 root 実行 / 起動時マイグレーション）。CI でビルドしたイメージを ECR に push し、本番 EC2 が IAM インスタンスロール経由で pull して `docker run`。`main` への push で「ビルド → ECR push → EC2 でコンテナ入れ替え」まで一気通貫の自動デプロイ
 
 ## データソース
 
@@ -119,9 +119,10 @@ http://localhost:3000 でアクセスできます。
 
 本番環境は Vercel ではなく AWS 上にセルフホストしています（インフラ学習目的）。
 
-- **EC2 (Ubuntu / t3.micro)** にアプリを配置、**PM2** で常駐化、**Nginx** をリバースプロキシに（443 → 3000）
+- **EC2 (Ubuntu / t3.micro)** 上で **Docker コンテナ**としてアプリを常駐（`--restart always` で自動復旧）、**Nginx** をリバースプロキシに（443 → コンテナの 3000）
 - **RDS (MySQL 8.4)** をデータベースに使用（VPC 内からのみアクセス可）
-- **GitHub Actions** で `main` への push をトリガーに自動デプロイ。イメージのビルド／push は **OIDC 認証**で **ECR** に対して実行（アクセスキーを持たせない短命トークン方式）
+- **GitHub Actions** で `main` への push をトリガーに、**ビルド → ECR push → EC2 で pull & コンテナ入れ替え**を自動実行（1 ワークフローに統合し `needs` で順序を保証）
+  - ビルド機（Actions ランナー）から ECR への push は **OIDC 認証**、実行機（EC2）から ECR の pull は **IAM インスタンスロール**。いずれもアクセスキーを持たせない短命トークン方式
 - 本番インフラ（VPC / EC2 / RDS / セキュリティグループ / ECR / IAM）は **Terraform** でコード管理
 
 ## プロジェクト構成
