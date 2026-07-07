@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { updateGoalSchema, firstChoiceSchema } from "@/lib/validations/goal";
+import { updateGoalSchema, patchGoalSchema } from "@/lib/validations/goal";
 
 export async function PUT(
   request: Request,
@@ -58,7 +58,7 @@ export async function PATCH(
   const { id } = await params;
 
   const body = await request.json();
-  const parsed = firstChoiceSchema.safeParse(body);
+  const parsed = patchGoalSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
@@ -72,22 +72,33 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (parsed.data.isFirstChoice) {
-    // 第一志望は1ユーザー1校まで。既存の第一志望を全部外してから付け替える
-    await prisma.$transaction([
-      prisma.finalGoal.updateMany({
-        where: { userId: session.user.id },
-        data: { isFirstChoice: false },
-      }),
-      prisma.finalGoal.update({
+  // 第一志望トグル（送られてきたときだけ処理。未指定なら現状維持）
+  if (parsed.data.isFirstChoice !== undefined) {
+    if (parsed.data.isFirstChoice) {
+      // 第一志望は1ユーザー1校まで。既存の第一志望を全部外してから付け替える
+      await prisma.$transaction([
+        prisma.finalGoal.updateMany({
+          where: { userId: session.user.id },
+          data: { isFirstChoice: false },
+        }),
+        prisma.finalGoal.update({
+          where: { id: Number(id) },
+          data: { isFirstChoice: true },
+        }),
+      ]);
+    } else {
+      await prisma.finalGoal.update({
         where: { id: Number(id) },
-        data: { isFirstChoice: true },
-      }),
-    ]);
-  } else {
+        data: { isFirstChoice: false },
+      });
+    }
+  }
+
+  // メモ更新（送られてきたときだけ）
+  if (parsed.data.note !== undefined) {
     await prisma.finalGoal.update({
       where: { id: Number(id) },
-      data: { isFirstChoice: false },
+      data: { note: parsed.data.note },
     });
   }
 

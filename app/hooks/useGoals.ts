@@ -17,6 +17,7 @@ export type Goal = {
   createdAt: Date;
   userId: string;
   isFirstChoice: boolean;
+  note: string | null;
   faculty: Faculty;
 };
 

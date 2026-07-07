@@ -2,7 +2,15 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import ExamCalendar from "@/app/components/ExamCalendar";
+import Link from "next/link";
+import ExamCountdown, {
+  type CountdownGoal,
+} from "@/app/components/ExamCountdown";
+import TodayStudyPlans, {
+  type TodayPlan,
+} from "@/app/components/TodayStudyPlans";
+import { Card, CardContent } from "@/components/ui/card";
+import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
 
 const Home = async () => {
   const session = await auth.api.getSession({
@@ -24,17 +32,78 @@ const Home = async () => {
     orderBy: { createdAt: "asc" },
   });
 
-  const events = goals.map((goal) => ({
-    id: String(goal.id),
-    title: `${goal.faculty.university.name} ${goal.faculty.name}`,
-    date: goal.faculty.examDate.toISOString().slice(0, 10),
+  const countdownGoals: CountdownGoal[] = goals.map((goal) => ({
+    id: goal.id,
+    universityName: goal.faculty.university.name,
+    facultyName: goal.faculty.name,
+    examDate: goal.faculty.examDate,
+    isFirstChoice: goal.isFirstChoice,
   }));
+
+  // ② 学習予定（今日 / 今後7日間）
+  const plans = await prisma.studyPlan.findMany({
+    where: { userId: session.user.id },
+    orderBy: { date: "asc" },
+  });
+
+  const todayStr = todayYmd();
+  const weekEndStr = ymdAfterDays(7);
+
+  const todayPlans: TodayPlan[] = plans
+    .filter((p) => ymdLocal(p.date) === todayStr)
+    .map((p) => ({ id: p.id, content: p.content, done: p.done }));
+
+  const weekCount = plans.filter((p) => {
+    const d = ymdLocal(p.date);
+    return d >= todayStr && d <= weekEndStr;
+  }).length;
+
+  // ③ 志望校サマリー
+  const firstChoice = goals.find((g) => g.isFirstChoice) ?? null;
+  const otherCount = goals.filter((g) => !g.isFirstChoice).length;
 
   return (
     <main className="w-full mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-bold mb-6">ダッシュボード</h1>
-      <ExamCalendar events={events} />
-      <p className="mt-4 text-sm text-gray-500">
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">受験カウントダウン</h2>
+        <ExamCountdown goals={countdownGoals} />
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">今日の学習予定</h2>
+        <TodayStudyPlans plans={todayPlans} weekCount={weekCount} />
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">志望校</h2>
+        <Card>
+          <CardContent className="py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">第一志望</p>
+                <p className="font-medium">
+                  {firstChoice
+                    ? `${firstChoice.faculty.university.name} ${firstChoice.faculty.name}`
+                    : "未設定"}
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  併願：{otherCount} 校
+                </p>
+              </div>
+              <Link
+                href="/profile"
+                className="text-blue-600 hover:underline text-sm"
+              >
+                志望校を設定 →
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <p className="text-sm text-gray-500">
         ※ 表示している受験日は暫定です。正式な日程は各大学の募集要項で必ずご確認ください。
       </p>
     </main>

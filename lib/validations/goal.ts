@@ -10,8 +10,11 @@ export const updateGoalSchema = goalSchema.partial();
 
 export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;
 
-export const firstChoiceSchema = z.object({
-  isFirstChoice: z.boolean(),
+// PATCH 用。第一志望トグルとメモ（ユーザー資産）をまとめて部分更新できる。
+// isFirstChoice / note のどちらか、または両方を送る想定。
+export const patchGoalSchema = z.object({
+  isFirstChoice: z.boolean().optional(),
+  note: z.string().max(500, "500文字以内で入力してください").nullable().optional(),
 });
 
-export type FirstChoiceInput = z.infer<typeof firstChoiceSchema>;
+export type PatchGoalInput = z.infer<typeof patchGoalSchema>;
