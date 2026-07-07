@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `StudyPlan` ADD COLUMN `done` BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN `subject` VARCHAR(191) NULL;

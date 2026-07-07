@@ -23,6 +23,9 @@ const Header = async () => {
             <Link href="/explore" className="text-blue-500 hover:underline">
               大学を探す
             </Link>
+            <Link href="/schedule" className="text-blue-500 hover:underline">
+              学習予定
+            </Link>
             <Link href="/profile" className="text-blue-500 hover:underline">
               プロフィール
             </Link>                

@@ -23,6 +23,7 @@ model User {
   accounts   Account[]
   sessions   Session[]
   finalGoals FinalGoal[]
+  studyPlans StudyPlan[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   emailVerified Boolean   @default(false)
@@ -80,6 +81,7 @@ model FinalGoal {
   faculty   Faculty  @relation(fields: [facultyId], references: [id])
 
   isFirstChoice Boolean @default(false)
+  note          String? @db.Text
 
   @@unique([userId, facultyId])
 }
@@ -112,6 +114,20 @@ model Tag {
   createdAt DateTime @default(now())
 
   faculties Faculty[]
+}
+
+model StudyPlan {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  content   String   @db.Text
+  subject   String?
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId(length: 191)])
 }
 
 model Verification {

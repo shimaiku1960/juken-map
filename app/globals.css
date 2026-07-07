@@ -4,6 +4,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 完了した学習予定は打ち消し線＋淡色（FullCalendar のイベント） */
+.fc-event.study-done {
+  opacity: 0.55;
+}
+.fc-event.study-done .fc-event-title {
+  text-decoration: line-through;
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans);

@@ -9,6 +9,25 @@ export function daysUntil(date: Date | string): number {
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
+// Date → ローカル基準の "YYYY-MM-DD"
+export function ymdLocal(date: Date | string): string {
+  const d = new Date(date);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// 今日の "YYYY-MM-DD"
+export function todayYmd(): string {
+  return ymdLocal(new Date());
+}
+
+// 今日から n 日後の "YYYY-MM-DD"
+export function ymdAfterDays(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return ymdLocal(d);
+}
+
 // 受験日を「2027年2月20日」形式で返す
 export function formatExamDate(date: Date | string): string {
   return new Date(date).toLocaleDateString("ja-JP", {
