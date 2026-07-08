@@ -63,9 +63,6 @@ const SubjectSelect = ({
   </select>
 );
 
-// 選択中の予定をどのモードで開いているか（Google風: まず閲覧→編集）
-type Selection = { plan: StudyPlan; mode: "view" | "edit" } | null;
-
 const todayStr = () => toDateStr(new Date());
 
 export default function StudyPlanCalendar({
@@ -79,20 +76,21 @@ export default function StudyPlanCalendar({
   const { data: plans = [] } = useStudyPlans(initialPlans);
   const { data: goals = [] } = useGoals(initialGoals);
 
-  const [selection, setSelection] = useState<Selection>(null);
-  // 日付クリックで開く「その日で登録」ダイアログ
-  const [createOpen, setCreateOpen] = useState(false);
+  // 「その日のダイアログ」（確認＋追加＋編集導線を1か所に集約）
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // 1件だけを編集するダイアログ
+  const [editingPlan, setEditingPlan] = useState<StudyPlan | null>(null);
   // 受験イベントクリックで開く志望校ダイアログ（ユーザー資産の編集）
   const [examGoalId, setExamGoalId] = useState<number | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const examGoal = goals.find((g) => g.id === examGoalId) ?? null;
 
-  // モーダルは開いた瞬間のコピーでなく、常に最新の plans から引き直す
-  const selectedPlan = selection
-    ? plans.find((p) => p.id === selection.plan.id) ?? selection.plan
-    : null;
+  // 選択中の日の予定（最新の plans から都度絞り込む）
+  const dayPlans = selectedDate
+    ? plans.filter((p) => toDateStr(p.date) === selectedDate)
+    : [];
 
-  // 作成フォーム：1つの日付に複数の内容（items）を登録
+  // 追加フォーム：選択中の日付に複数の内容（items）を登録
   const createForm = useForm<CreateStudyPlansInput>({
     resolver: zodResolver(createStudyPlansSchema),
     defaultValues: {
@@ -125,7 +123,11 @@ export default function StudyPlanCalendar({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyPlansKey });
       toast.success("学習予定を登録しました");
-      setCreateOpen(false);
+      // ダイアログは開いたまま。追加欄だけ空に戻して続けて足せるようにする
+      createForm.reset({
+        date: createForm.getValues("date"),
+        items: [{ content: "", subject: null }],
+      });
     },
     onError: (error) => toast.error(error.message),
   });
@@ -151,7 +153,7 @@ export default function StudyPlanCalendar({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyPlansKey });
       toast.success("更新しました");
-      setSelection(null);
+      setEditingPlan(null);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -193,7 +195,7 @@ export default function StudyPlanCalendar({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyPlansKey });
       toast.success("削除しました");
-      setSelection(null);
+      setEditingPlan(null);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -237,24 +239,27 @@ export default function StudyPlanCalendar({
     onError: (error) => toast.error(error.message),
   });
 
-  // 予定クリック → まず閲覧（クイックビュー）
-  const openView = (plan: StudyPlan) => setSelection({ plan, mode: "view" });
+  // 日をクリック → その日のダイアログを開く（追加フォームの日付もその日にセット）
+  const openDay = (date: string) => {
+    createForm.reset({ date, items: [{ content: "", subject: null }] });
+    setSelectedDate(date);
+  };
+
+  // 一覧の「編集」→ 1件編集ダイアログへ（日ダイアログは閉じてネストを避ける）
+  const openEdit = (plan: StudyPlan) => {
+    editForm.reset({
+      date: toDateStr(plan.date),
+      content: plan.content,
+      subject: plan.subject,
+    });
+    setSelectedDate(null);
+    setEditingPlan(plan);
+  };
 
   // 受験イベントクリック → 志望校ダイアログを開く（メモ下書きを現在値で初期化）
   const openExam = (goal: Goal) => {
     setNoteDraft(goal.note ?? "");
     setExamGoalId(goal.id);
-  };
-
-  // 閲覧 → 編集へ切り替え（フォームに現在値をセット）
-  const switchToEdit = () => {
-    if (!selection) return;
-    editForm.reset({
-      date: toDateStr(selection.plan.date),
-      content: selection.plan.content,
-      subject: selection.plan.subject,
-    });
-    setSelection({ plan: selection.plan, mode: "edit" });
   };
 
   // FullCalendar 用イベント（学習予定）。科目で色分け、完了は打ち消し線
@@ -278,7 +283,7 @@ export default function StudyPlanCalendar({
   return (
     <div className="space-y-8">
       <p className="text-sm text-gray-500">
-        空いている日をクリックするとその日で登録、予定をクリックすると詳細表示、
+        日をクリックすると、その日の予定の確認・追加・編集ができます。
         予定をドラッグすると別の日へ移動できます。
         <span className="text-red-600">赤色</span>
         は志望校の受験日です（クリックで第一志望・メモの編集や削除ができます）。
@@ -296,18 +301,15 @@ export default function StudyPlanCalendar({
             return;
           }
           const plan = plans.find((p) => String(p.id) === id);
-          if (plan) openView(plan);
+          if (plan) openDay(toDateStr(plan.date));
         }}
-        onDateClick={(date) => {
-          createForm.reset({ date, items: [{ content: "", subject: null }] });
-          setCreateOpen(true);
-        }}
+        onDateClick={(date) => openDay(date)}
         onEventDrop={(id, newDate) =>
           updateMutation.mutate({ id: Number(id), data: { date: newDate } })
         }
       />
 
-      {/* 日付順リスト（チェックで完了、クリックで詳細） */}
+      {/* 日付順リスト（チェックで完了、詳細でその日のダイアログ） */}
       <div>
         <h2 className="text-xl font-bold mb-3">予定一覧</h2>
         {plans.length === 0 ? (
@@ -351,7 +353,7 @@ export default function StudyPlanCalendar({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => openView(plan)}
+                  onClick={() => openDay(toDateStr(plan.date))}
                 >
                   詳細
                 </Button>
@@ -361,36 +363,82 @@ export default function StudyPlanCalendar({
         )}
       </div>
 
-      {/* 日付クリック → その日で複数登録するダイアログ */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      {/* その日のダイアログ：既存予定の確認・完了・削除・編集 ＋ 追加を1か所に */}
+      <Dialog
+        open={selectedDate !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedDate(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>学習予定を登録</DialogTitle>
+            <DialogTitle>{selectedDate}</DialogTitle>
           </DialogHeader>
-          <Form {...createForm}>
-            <form
-              onSubmit={createForm.handleSubmit((data) =>
-                createMutation.mutate(data)
-              )}
-              className="space-y-4"
-            >
-              <FormField
-                control={createForm.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>日付</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
-              {/* 内容（複数） */}
-              <div className="space-y-2">
-                <p className="text-sm font-medium leading-none">内容</p>
+          {/* その日の予定一覧 */}
+          {dayPlans.length === 0 ? (
+            <p className="text-sm text-gray-500">この日の予定はまだありません。</p>
+          ) : (
+            <ul className="space-y-2">
+              {dayPlans.map((plan) => (
+                <li
+                  key={plan.id}
+                  className="flex items-center gap-3 border rounded px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0"
+                    checked={plan.done}
+                    onChange={() =>
+                      toggleDoneMutation.mutate({
+                        id: plan.id,
+                        done: !plan.done,
+                      })
+                    }
+                    aria-label="完了"
+                  />
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: subjectColor(plan.subject) }}
+                    title={subjectLabel(plan.subject)}
+                  />
+                  <span
+                    className={`flex-1 text-sm ${
+                      plan.done ? "line-through text-gray-400" : ""
+                    }`}
+                  >
+                    {plan.content}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEdit(plan)}
+                  >
+                    編集
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteMutation.mutate(plan.id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    削除
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* 追加エリア（その日で複数登録） */}
+          <div className="border-t pt-4">
+            <Form {...createForm}>
+              <form
+                onSubmit={createForm.handleSubmit((data) =>
+                  createMutation.mutate(data)
+                )}
+                className="space-y-3"
+              >
+                <p className="text-sm font-medium leading-none">予定を追加</p>
                 {fields.map((f, index) => (
                   <div key={f.id} className="flex items-start gap-2">
                     <FormField
@@ -431,83 +479,34 @@ export default function StudyPlanCalendar({
                     </Button>
                   </div>
                 ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => append({ content: "", subject: null })}
-                >
-                  ＋ 内容を追加
-                </Button>
-              </div>
-
-              <DialogFooter>
-                <Button type="submit" disabled={createMutation.isPending}>
-                  登録
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+                <div className="flex items-center justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => append({ content: "", subject: null })}
+                  >
+                    ＋ 内容を追加
+                  </Button>
+                  <Button type="submit" disabled={createMutation.isPending}>
+                    登録
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* クイックビュー / 編集モーダル（Google風の2段階） */}
+      {/* 1件編集ダイアログ */}
       <Dialog
-        open={selection !== null}
+        open={editingPlan !== null}
         onOpenChange={(open) => {
-          if (!open) setSelection(null);
+          if (!open) setEditingPlan(null);
         }}
       >
         <DialogContent>
-          {selectedPlan && selection?.mode === "view" && (
-            <>
-              <DialogHeader>
-                <DialogTitle>学習予定</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-1">
-                <p className="text-sm text-gray-500">
-                  {toDateStr(selectedPlan.date)} ・{" "}
-                  {subjectLabel(selectedPlan.subject)}
-                </p>
-                <p
-                  className={`text-lg font-medium ${
-                    selectedPlan.done ? "line-through text-gray-400" : ""
-                  }`}
-                >
-                  {selectedPlan.content}
-                </p>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
-                  checked={selectedPlan.done}
-                  onChange={() =>
-                    toggleDoneMutation.mutate({
-                      id: selectedPlan.id,
-                      done: !selectedPlan.done,
-                    })
-                  }
-                />
-                完了にする
-              </label>
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => deleteMutation.mutate(selectedPlan.id)}
-                  disabled={deleteMutation.isPending}
-                >
-                  削除
-                </Button>
-                <Button type="button" onClick={switchToEdit}>
-                  編集
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-
-          {selection?.mode === "edit" && (
+          {editingPlan && (
             <>
               <DialogHeader>
                 <DialogTitle>学習予定を編集</DialogTitle>
@@ -515,7 +514,7 @@ export default function StudyPlanCalendar({
               <Form {...editForm}>
                 <form
                   onSubmit={editForm.handleSubmit((data) =>
-                    updateMutation.mutate({ id: selection.plan.id, data })
+                    updateMutation.mutate({ id: editingPlan.id, data })
                   )}
                   className="space-y-4"
                 >
@@ -567,7 +566,7 @@ export default function StudyPlanCalendar({
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => deleteMutation.mutate(selection.plan.id)}
+                      onClick={() => deleteMutation.mutate(editingPlan.id)}
                       disabled={deleteMutation.isPending}
                     >
                       削除
