@@ -50,13 +50,41 @@ jobs:
           envs: IMAGE_TAG
           script: |
             set -e
+            REPO=961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map
+            ENV_FILE=/home/ubuntu/juken-map/.env
+
             aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com
-            docker pull 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:$IMAGE_TAG
+
+            # 今動いているコンテナのイメージを退避（失敗時のロールバック先）
+            PREV=$(docker inspect --format '{{.Config.Image}}' juken-map 2>/dev/null || true)
+
+            docker pull $REPO:$IMAGE_TAG
             docker stop juken-map || true
             docker rm juken-map || true
             docker run -d \
               --name juken-map \
               --restart always \
-              --env-file /home/ubuntu/juken-map/.env \
+              --env-file $ENV_FILE \
               -p 3000:3000 \
-              961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:$IMAGE_TAG
+              $REPO:$IMAGE_TAG
+
+            # スモークテスト: /login が 200 を返すまで最大45秒待つ
+            ok=false
+            for i in $(seq 1 15); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/login || true)
+              if [ "$code" = "200" ]; then ok=true; break; fi
+              sleep 3
+            done
+
+            # 失敗なら前のイメージへロールバックし、デプロイを失敗(赤)にする
+            if [ "$ok" != "true" ]; then
+              echo "smoke test failed (last code: $code) -> rollback to $PREV"
+              docker stop juken-map || true
+              docker rm juken-map || true
+              if [ -n "$PREV" ]; then
+                docker run -d --name juken-map --restart always --env-file $ENV_FILE -p 3000:3000 "$PREV"
+              fi
+              exit 1
+            fi
+            echo "smoke test passed"
+            
