@@ -2,6 +2,8 @@
 import { readFileSync } from "fs";
 import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { hashPassword } from "better-auth/crypto";
+import { ymdAfterDays } from "../lib/date";
 
 const prisma = new PrismaClient({
   adapter: new PrismaMariaDb( process.env.DATABASE_URL! ),
@@ -161,6 +163,100 @@ async function main() {
       }
     }
   }
+
+  // 4. デモ用ユーザー（面接官がワンクリックで体験するための共有アカウント）
+  const DEMO_EMAIL = "demo@juken-map.com";
+  const DEMO_PASSWORD = "demodemo1234";
+
+  const demoUser = await prisma.user.upsert({
+    where: { email: DEMO_EMAIL },
+    update: {},
+    create: {
+      email: DEMO_EMAIL,
+      name: "デモユーザー",
+      nickname: "デモ太郎",
+      emailVerified: true,
+    },
+  });
+
+  // Better Auth の認証情報（credential アカウント）を用意
+  const passwordHash = await hashPassword(DEMO_PASSWORD);
+  const existingCredential = await prisma.account.findFirst({
+    where: { userId: demoUser.id, providerId: "credential" },
+  });
+  if (existingCredential) {
+    await prisma.account.update({
+      where: { id: existingCredential.id },
+      data: { password: passwordHash },
+    });
+  } else {
+    await prisma.account.create({
+      data: {
+        userId: demoUser.id,
+        accountId: demoUser.id,
+        providerId: "credential",
+        password: passwordHash,
+      },
+    });
+  }
+  console.log(`デモユーザーを投入: ${DEMO_EMAIL}`);
+
+  // 5. デモユーザーの志望校（FinalGoal）サンプル
+  //    大学名＋学部名から faculty を引いて紐づける
+  const demoGoals: { university: string; faculty: string; isFirstChoice: boolean; note?: string }[] = [
+    { university: "早稲田大学", faculty: "政治経済学部", isFirstChoice: true, note: "第一志望。英語と数学を重点的に。" },
+    { university: "慶應義塾大学", faculty: "経済学部", isFirstChoice: false, note: "小論文対策が必要。" },
+    { university: "明治大学", faculty: "政治経済学部", isFirstChoice: false },
+    { university: "中央大学", faculty: "経済学部", isFirstChoice: false, note: "併願の安全校。" },
+  ];
+
+  for (const g of demoGoals) {
+    const university = await prisma.university.findUniqueOrThrow({
+      where: { name: g.university },
+    });
+    const faculty = await prisma.faculty.findFirstOrThrow({
+      where: { name: g.faculty, universityId: university.id },
+    });
+
+    await prisma.finalGoal.upsert({
+      where: { userId_facultyId: { userId: demoUser.id, facultyId: faculty.id } },
+      update: { isFirstChoice: g.isFirstChoice, note: g.note ?? null },
+      create: {
+        userId: demoUser.id,
+        facultyId: faculty.id,
+        isFirstChoice: g.isFirstChoice,
+        note: g.note ?? null,
+      },
+    });
+  }
+  console.log(`デモの志望校を投入: ${demoGoals.length}件`);
+
+  // 6. デモユーザーの学習予定（StudyPlan）サンプル
+  //    今日を基準にした相対日付。過去は完了済み、今日・未来は未完了にする。
+  //    再seedで重複しないよう、デモの既存予定を一度消してから入れ直す（デモのリセット）
+  await prisma.studyPlan.deleteMany({ where: { userId: demoUser.id } });
+
+  const demoPlans: { offset: number; content: string; subject: string; done: boolean }[] = [
+    { offset: -3, content: "英単語 ターゲット1900（前半）", subject: "english", done: true },
+    { offset: -3, content: "数学ⅠA 二次関数 演習", subject: "math", done: true },
+    { offset: -1, content: "現代文 評論 読解1題", subject: "japanese", done: true },
+    { offset: 0, content: "英語長文 1題（早稲田過去問）", subject: "english", done: false },
+    { offset: 0, content: "日本史 近現代 通史", subject: "social", done: false },
+    { offset: 1, content: "数学ⅡB ベクトル", subject: "math", done: false },
+    { offset: 3, content: "英文法 Vintage 仮定法", subject: "english", done: false },
+    { offset: 6, content: "古文 助動詞 暗記", subject: "japanese", done: false },
+  ];
+
+  await prisma.studyPlan.createMany({
+    data: demoPlans.map((p) => ({
+      userId: demoUser.id,
+      date: new Date(ymdAfterDays(p.offset)),
+      content: p.content,
+      subject: p.subject,
+      done: p.done,
+    })),
+  });
+  console.log(`デモの学習予定を投入: ${demoPlans.length}件`);
 }
 
 main()
