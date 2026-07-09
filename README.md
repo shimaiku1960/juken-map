@@ -4,6 +4,10 @@
 
 🌐 **本番環境**: https://juken-map.com （AWS EC2 上でセルフホスト）
 
+> 👤 **面接官・採用担当の方へ（登録不要でお試しいただけます）**
+> [ログイン画面](https://juken-map.com/login) の **「デモでログイン」** ボタンから、志望校・学習予定があらかじめ入った状態をワンクリックで体験できます。
+> 手動でログインする場合のテストアカウント: `demo@juken-map.com` / `demodemo1234`
+
 ## テックスタック
 
 | カテゴリ | 技術 |
@@ -14,7 +18,7 @@
 | スタイリング | Tailwind CSS v4 |
 | フォーム | React Hook Form + Zod |
 | サーバー状態管理 | TanStack Query |
-| カレンダー | Schedule-X |
+| カレンダー | FullCalendar |
 | CMS | microCMS |
 | ORM | Prisma 7 |
 | データベース | MySQL 8.4（ローカル: Docker / 本番: AWS RDS） |
@@ -29,7 +33,8 @@
 
 - **志望校管理** — 全国の大学・学部マスターから志望校を選択。第一志望／併願を分けて管理し、同一学部の重複登録を多層防御（フロント／API／DB の3層）で防止
 - **大学を探す** — 全国 823 大学のマスターから、大学名・都道府県・設置区分で絞り込み。学部詳細では学部系統タグを表示し、その場で志望校に追加
-- **受験日程カレンダー** — 登録した志望校の受験日を Schedule-X で月表示。ダッシュボードで一覧
+- **学習予定カレンダー** — 日ごとの学習予定を FullCalendar に登録・編集（日クリックで「その日のダイアログ」に予定一覧＋追加を統合、ドラッグで日移動、完了チェック、科目で色分け、TanStack Query による楽観的更新）
+- **受験日程カレンダー** — 登録した志望校の受験日を学習予定と同じカレンダーに読み取り専用で重ねて表示。ダッシュボードには受験カウントダウン・今日の学習予定・志望校サマリーを表示
 - **ユーザー認証** — Better Auth による Google / GitHub / メール+パスワードの3方式ログイン。メール検証・パスワードリセット（Resend 経由）、ルート保護に対応
 - **プロフィール管理** — ニックネームの表示・編集
 - **ブログ** — microCMS で管理する記事の一覧・詳細表示
@@ -134,6 +139,7 @@ app/
 │   ├── page.tsx          # 大学一覧（絞り込み検索）
 │   └── [universityId]/   # 大学詳細（学部一覧・志望校追加）
 ├── goals/                # 志望校管理
+├── schedule/             # 学習予定カレンダー（FullCalendar）
 ├── profile/              # プロフィール
 ├── blog/ articles/[id]/  # ブログ一覧・記事詳細（microCMS）
 ├── login/ signup/        # 認証ページ
@@ -141,8 +147,10 @@ app/
 ├── api/
 │   ├── auth/[...all]/    # Better Auth ハンドラ
 │   ├── goals/            # 志望校 CRUD
+│   ├── study-plans/      # 学習予定 CRUD
 │   └── profile/          # プロフィール更新
 ├── hooks/useGoals.ts     # 志望校のサーバー状態フック（TanStack Query）
+├── hooks/useStudyPlans.ts  # 学習予定のサーバー状態フック（TanStack Query）
 ├── providers.tsx         # QueryClientProvider
 └── components/           # 画面コンポーネント
 
@@ -155,7 +163,8 @@ lib/
 
 prisma/
 ├── schema.prisma         # データベーススキーマ
-├── seed.ts               # 初期データ投入
+├── seed.ts               # 初期データ投入（大学マスター + デモユーザー）
+├── seed-demo.ts          # デモユーザーのみ投入する一回きりスクリプト（本番はトンネル経由で実行）
 └── migrations/           # マイグレーション
 
 terraform/                # AWS リソースの IaC（VPC/EC2/RDS/SG/ECR/IAM）
@@ -168,7 +177,8 @@ scripts/                  # 大学マスター整形スクリプト
 ## データベースモデル（主要）
 
 - **User / Account / Session / Verification** — Better Auth の認証モデル（ユーザー情報を自前 MySQL で保持）
-- **FinalGoal** — 志望校（User × Faculty。`@@unique` で重複防止、第一志望フラグを保持）
+- **FinalGoal** — 志望校（User × Faculty。`@@unique` で重複防止、第一志望フラグ・メモを保持）
+- **StudyPlan** — 学習予定（User に紐づく日次タスク。日付・内容・科目・完了フラグを保持）
 - **University** — 大学マスター（名称・都道府県・設置区分）
 - **Faculty** — 学部マスター（受験日を保持。University にリレーション）
 - **Tag** — 学部系統タグ（Faculty と多対多）
