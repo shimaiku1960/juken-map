@@ -24,6 +24,7 @@ model User {
   sessions   Session[]
   finalGoals FinalGoal[]
   studyPlans StudyPlan[]
+  textbooks  Textbook[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   emailVerified Boolean   @default(false)
@@ -121,12 +122,33 @@ model StudyPlan {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
-  content   String   @db.Text
+  content   String?  @db.Text
   subject   String?
   done      Boolean  @default(false)
+
+  textbookId Int?
+  textbook   Textbook? @relation(fields: [textbookId], references: [id], onDelete: SetNull)
+  rangeStart Int?
+  rangeEnd   Int?
+  rangeUnit  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([userId(length: 191)])
+  @@index([textbookId])
+}
+
+model Textbook {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studyPlans StudyPlan[]
+
+  @@unique([userId, name])
   @@index([userId(length: 191)])
 }
 

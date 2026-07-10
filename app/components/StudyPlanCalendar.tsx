@@ -17,7 +17,10 @@ import {
   type StudyPlan,
 } from "@/app/hooks/useStudyPlans";
 import { useGoals, goalsKey, type Goal } from "@/app/hooks/useGoals";
+import { useTextbooks, useCreateTextbook } from "@/app/hooks/useTextbooks";
 import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/subjects";
+import { RANGE_UNITS } from "@/lib/validations/studyPlan";
+import { studyPlanLabel } from "@/lib/studyPlan";
 import StudyFullCalendar from "@/app/components/StudyFullCalendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,7 +66,180 @@ const SubjectSelect = ({
   </select>
 );
 
+// 参考書セレクト（登録済みから選択＋新規追加）。空 = 参考書なし
+const TextbookSelect = ({
+  value,
+  onChange,
+}: {
+  value: number | null | undefined;
+  onChange: (v: number | null) => void;
+}) => {
+  const { data: textbooks = [] } = useTextbooks();
+  const createTextbook = useCreateTextbook();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+
+  const submitNew = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    createTextbook.mutate(trimmed, {
+      onSuccess: (created) => {
+        onChange(created.id); // 追加した参考書をそのまま選択状態に
+        setName("");
+        setAdding(false);
+      },
+      onError: () => toast.error("参考書の追加に失敗しました"),
+    });
+  };
+
+  if (adding) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="参考書名"
+          className="h-9 w-40"
+        />
+        <Button
+          type="button"
+          size="sm"
+          onClick={submitNew}
+          disabled={createTextbook.isPending}
+        >
+          追加
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setAdding(false);
+            setName("");
+          }}
+        >
+          ✕
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(e) => {
+        if (e.target.value === "__new__") {
+          setAdding(true);
+          return;
+        }
+        onChange(e.target.value ? Number(e.target.value) : null);
+      }}
+      className="h-9 rounded-md border bg-transparent px-2 text-sm"
+    >
+      <option value="">参考書なし</option>
+      {textbooks.map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+      <option value="__new__">＋ 新しい参考書を追加</option>
+    </select>
+  );
+};
+
+// 範囲の単位セレクト（ページ/問題/章）。空 = 未選択
+const RangeUnitSelect = ({
+  value,
+  onChange,
+}: {
+  value: string | null | undefined;
+  onChange: (v: string | null) => void;
+}) => (
+  <select
+    value={value ?? ""}
+    onChange={(e) => onChange(e.target.value || null)}
+    className="h-9 rounded-md border bg-transparent px-2 text-sm"
+  >
+    <option value="">単位</option>
+    {RANGE_UNITS.map((u) => (
+      <option key={u.value} value={u.value}>
+        {u.label}
+      </option>
+    ))}
+  </select>
+);
+
+// 数値入力＋自前の増減ボタン。ユーザー好みで「上＝減る / 下＝増える」に固定する
+// （ネイティブのスピナーは上＝増で反転できないため隠し、向きを自分で制御する）
+const NumberStepper = ({
+  value,
+  onChange,
+  placeholder,
+  min = 1,
+}: {
+  value: number | null | undefined;
+  onChange: (v: number | null) => void;
+  placeholder?: string;
+  min?: number;
+}) => {
+  const step = (delta: number) => {
+    if (value == null) {
+      // 空欄のとき：増やす(+1)は min から開始、減らす(-1)は空のまま
+      onChange(delta > 0 ? min : null);
+      return;
+    }
+    const next = value + delta;
+    onChange(next < min ? min : next);
+  };
+
+  return (
+    <div className="flex items-stretch gap-1">
+      <Input
+        type="number"
+        min={min}
+        placeholder={placeholder}
+        className="h-9 w-16 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        value={value ?? ""}
+        onChange={(e) =>
+          onChange(e.target.value === "" ? null : Number(e.target.value))
+        }
+      />
+      <div className="flex flex-col">
+        {/* 上ボタン＝減らす */}
+        <button
+          type="button"
+          aria-label="1つ減らす"
+          onClick={() => step(-1)}
+          className="flex h-[18px] w-6 items-center justify-center rounded-t-md border text-[10px] leading-none hover:bg-accent"
+        >
+          ▲
+        </button>
+        {/* 下ボタン＝増やす */}
+        <button
+          type="button"
+          aria-label="1つ増やす"
+          onClick={() => step(1)}
+          className="flex h-[18px] w-6 items-center justify-center rounded-b-md border border-t-0 text-[10px] leading-none hover:bg-accent"
+        >
+          ▼
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const todayStr = () => toDateStr(new Date());
+
+// 追加フォームの空の1件（参考書・範囲・メモ・科目すべて未入力）
+const emptyItem = () => ({
+  textbookId: null,
+  rangeStart: null,
+  rangeEnd: null,
+  rangeUnit: null,
+  content: "",
+  subject: null,
+});
 
 export default function StudyPlanCalendar({
   initialPlans,
@@ -95,7 +271,7 @@ export default function StudyPlanCalendar({
     resolver: zodResolver(createStudyPlansSchema),
     defaultValues: {
       date: todayStr(),
-      items: [{ content: "", subject: null }],
+      items: [emptyItem()],
     },
   });
   const { fields, append, remove } = useFieldArray({
@@ -105,7 +281,15 @@ export default function StudyPlanCalendar({
 
   const editForm = useForm<UpdateStudyPlanInput>({
     resolver: zodResolver(updateStudyPlanSchema),
-    defaultValues: { date: "", content: "", subject: null },
+    defaultValues: {
+      date: "",
+      content: "",
+      subject: null,
+      textbookId: null,
+      rangeStart: null,
+      rangeEnd: null,
+      rangeUnit: null,
+    },
   });
 
   const createMutation = useMutation({
@@ -249,8 +433,12 @@ export default function StudyPlanCalendar({
   const openEdit = (plan: StudyPlan) => {
     editForm.reset({
       date: toDateStr(plan.date),
-      content: plan.content,
+      content: plan.content ?? undefined,
       subject: plan.subject,
+      textbookId: plan.textbookId,
+      rangeStart: plan.rangeStart,
+      rangeEnd: plan.rangeEnd,
+      rangeUnit: plan.rangeUnit,
     });
     setSelectedDate(null);
     setEditingPlan(plan);
@@ -265,7 +453,7 @@ export default function StudyPlanCalendar({
   // FullCalendar 用イベント（学習予定）。科目で色分け、完了は打ち消し線
   const events = plans.map((p) => ({
     id: String(p.id),
-    title: p.content,
+    title: studyPlanLabel(p),
     date: toDateStr(p.date),
     color: subjectColor(p.subject),
     done: p.done,
@@ -347,7 +535,7 @@ export default function StudyPlanCalendar({
                       plan.done ? "line-through text-gray-400" : ""
                     }`}
                   >
-                    {plan.content}
+                    {studyPlanLabel(plan)}
                   </p>
                 </div>
                 <Button
@@ -407,7 +595,7 @@ export default function StudyPlanCalendar({
                       plan.done ? "line-through text-gray-400" : ""
                     }`}
                   >
-                    {plan.content}
+                    {studyPlanLabel(plan)}
                   </span>
                   <Button
                     variant="outline"
@@ -440,43 +628,114 @@ export default function StudyPlanCalendar({
               >
                 <p className="text-sm font-medium leading-none">予定を追加</p>
                 {fields.map((f, index) => (
-                  <div key={f.id} className="flex items-start gap-2">
-                    <FormField
-                      control={createForm.control}
-                      name={`items.${index}.subject`}
-                      render={({ field }) => (
-                        <SubjectSelect
-                          value={field.value}
-                          onChange={field.onChange}
-                        />
-                      )}
-                    />
+                  <div
+                    key={f.id}
+                    className="space-y-2 rounded-md border p-3"
+                  >
+                    {/* 上段：科目・参考書と、この1件の削除 */}
+                    <div className="flex items-center gap-2">
+                      <FormField
+                        control={createForm.control}
+                        name={`items.${index}.subject`}
+                        render={({ field }) => (
+                          <SubjectSelect
+                            value={field.value}
+                            onChange={field.onChange}
+                          />
+                        )}
+                      />
+                      <FormField
+                        control={createForm.control}
+                        name={`items.${index}.textbookId`}
+                        render={({ field }) => (
+                          <TextbookSelect
+                            value={field.value}
+                            onChange={field.onChange}
+                          />
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto"
+                        onClick={() => remove(index)}
+                        disabled={fields.length === 1}
+                        aria-label="この予定を削除"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+
+                    {/* 中段：範囲（開始〜終了）＋単位 */}
+                    <div className="flex items-center gap-2">
+                      <FormField
+                        control={createForm.control}
+                        name={`items.${index}.rangeStart`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <NumberStepper
+                                placeholder="開始"
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <span className="text-sm text-gray-500">〜</span>
+                      <FormField
+                        control={createForm.control}
+                        name={`items.${index}.rangeEnd`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <NumberStepper
+                                placeholder="終了"
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={createForm.control}
+                        name={`items.${index}.rangeUnit`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <RangeUnitSelect
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {/* 下段：任意メモ */}
                     <FormField
                       control={createForm.control}
                       name={`items.${index}.content`}
                       render={({ field }) => (
-                        <FormItem className="flex-1">
+                        <FormItem>
                           <FormControl>
                             <Input
-                              autoFocus={index === 0}
-                              placeholder="英単語 300〜400 / 数学 青チャ p.20"
-                              {...field}
+                              placeholder="メモ（任意）"
+                              value={field.value ?? ""}
+                              onChange={field.onChange}
                             />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => remove(index)}
-                      disabled={fields.length === 1}
-                      aria-label="この内容を削除"
-                    >
-                      ✕
-                    </Button>
                   </div>
                 ))}
                 <div className="flex items-center justify-between">
@@ -484,7 +743,7 @@ export default function StudyPlanCalendar({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => append({ content: "", subject: null })}
+                    onClick={() => append(emptyItem())}
                   >
                     ＋ 内容を追加
                   </Button>
@@ -551,12 +810,86 @@ export default function StudyPlanCalendar({
                   />
                   <FormField
                     control={editForm.control}
+                    name="textbookId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>参考書</FormLabel>
+                        <FormControl>
+                          <div>
+                            <TextbookSelect
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">範囲</p>
+                    <div className="flex items-center gap-2">
+                      <FormField
+                        control={editForm.control}
+                        name="rangeStart"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <NumberStepper
+                                placeholder="開始"
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <span className="text-sm text-gray-500">〜</span>
+                      <FormField
+                        control={editForm.control}
+                        name="rangeEnd"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <NumberStepper
+                                placeholder="終了"
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={editForm.control}
+                        name="rangeUnit"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <RangeUnitSelect
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                  <FormField
+                    control={editForm.control}
                     name="content"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>内容</FormLabel>
+                        <FormLabel>メモ（任意）</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

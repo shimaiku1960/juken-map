@@ -3,13 +3,23 @@ import { useQuery } from "@tanstack/react-query";
 // studyPlans（サーバー状態）の型・取得・queryKey をここに集約する。
 // フォーム/カレンダー/リストで共有し、鍵や取得処理の二重定義を防ぐ。
 
+export type Textbook = {
+  id: number;
+  name: string;
+};
+
 export type StudyPlan = {
   id: number;
   userId: string;
   date: string; // ISO 文字列（JSON 経由で来るため）
-  content: string;
+  content: string | null;
   subject: string | null;
   done: boolean;
+  textbookId: number | null;
+  textbook: Textbook | null; // include で取得（表示用。名前だけ使う）
+  rangeStart: number | null;
+  rangeEnd: number | null;
+  rangeUnit: string | null;
   createdAt: string;
   updatedAt: string;
 };

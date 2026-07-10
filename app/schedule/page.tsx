@@ -18,6 +18,7 @@ const SchedulePage = async () => {
   const plansRaw = await prisma.studyPlan.findMany({
     where: { userId: session.user.id },
     orderBy: { date: "asc" },
+    include: { textbook: true },
   });
 
   // Date を JSON と同じ ISO 文字列に揃えてクライアントへ渡す（useStudyPlans の型に合わせる）
@@ -28,6 +29,11 @@ const SchedulePage = async () => {
     content: p.content,
     subject: p.subject,
     done: p.done,
+    textbookId: p.textbookId,
+    textbook: p.textbook ? { id: p.textbook.id, name: p.textbook.name } : null,
+    rangeStart: p.rangeStart,
+    rangeEnd: p.rangeEnd,
+    rangeUnit: p.rangeUnit,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   }));
