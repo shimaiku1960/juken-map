@@ -11,6 +11,7 @@ import TodayStudyPlans, {
 } from "@/app/components/TodayStudyPlans";
 import { Card, CardContent } from "@/components/ui/card";
 import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
+import { studyPlanLabel } from "@/lib/studyPlan";
 
 const Home = async () => {
   const session = await auth.api.getSession({
@@ -44,6 +45,7 @@ const Home = async () => {
   const plans = await prisma.studyPlan.findMany({
     where: { userId: session.user.id },
     orderBy: { date: "asc" },
+    include: { textbook: true },
   });
 
   const todayStr = todayYmd();
@@ -51,7 +53,7 @@ const Home = async () => {
 
   const todayPlans: TodayPlan[] = plans
     .filter((p) => ymdLocal(p.date) === todayStr)
-    .map((p) => ({ id: p.id, content: p.content, done: p.done }));
+    .map((p) => ({ id: p.id, content: studyPlanLabel(p), done: p.done }));
 
   const weekCount = plans.filter((p) => {
     const d = ymdLocal(p.date);

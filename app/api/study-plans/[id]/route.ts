@@ -33,6 +33,19 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // 参考書を指定する場合は、自分の所有分だけを許可する
+  if (parsed.data.textbookId != null) {
+    const owned = await prisma.textbook.count({
+      where: { id: parsed.data.textbookId, userId: session.user.id },
+    });
+    if (owned === 0) {
+      return NextResponse.json(
+        { error: "不正な参考書です" },
+        { status: 400 }
+      );
+    }
+  }
+
   const updated = await prisma.studyPlan.update({
     where: { id: Number(id) },
     data: {
@@ -42,6 +55,18 @@ export async function PATCH(
       }),
       ...(parsed.data.subject !== undefined && {
         subject: parsed.data.subject,
+      }),
+      ...(parsed.data.textbookId !== undefined && {
+        textbookId: parsed.data.textbookId,
+      }),
+      ...(parsed.data.rangeStart !== undefined && {
+        rangeStart: parsed.data.rangeStart,
+      }),
+      ...(parsed.data.rangeEnd !== undefined && {
+        rangeEnd: parsed.data.rangeEnd,
+      }),
+      ...(parsed.data.rangeUnit !== undefined && {
+        rangeUnit: parsed.data.rangeUnit,
       }),
       ...(parsed.data.done !== undefined && { done: parsed.data.done }),
     },
