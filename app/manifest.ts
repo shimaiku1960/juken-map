@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "受験マップ",
     short_name: "受験マップ",
-    description: "受験校の受験日程を管理する受験生向けサービス",
+    description: "大学受験生向けの志望校・併願校・受験日程・学習進捗の管理アプリ",
     start_url: "/",
     scope: "/",
     display: "standalone",
