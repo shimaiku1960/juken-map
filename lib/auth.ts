@@ -40,5 +40,6 @@ export const auth = betterAuth({
       clientSecret: process.env.AUTH_GITHUB_SECRET as string,
     },
   },
+  trustedOrigins: ["https://juken-map.com", "https://www.juken-map.com"],
   plugins: [nextCookies()],
 });
