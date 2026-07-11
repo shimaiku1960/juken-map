@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
@@ -8,6 +8,7 @@ import {
   type CreateStudyLogInput,
 } from "@/lib/validations/studyLog";
 import { useCreateStudyLog } from "@/app/hooks/useStudyLogs";
+import { useTextbooks } from "@/app/hooks/useTextbooks";
 import {
   SubjectSelect,
   TextbookSelect,
@@ -43,11 +44,20 @@ const emptyValues = () => ({
 
 export default function StudyLogForm() {
   const createLog = useCreateStudyLog();
+  const { data: textbooks = [] } = useTextbooks();
 
   const form = useForm<CreateStudyLogInput>({
     resolver: zodResolver(createStudyLogSchema),
     defaultValues: emptyValues(),
   });
+  const selectedTextbookId = useWatch({
+    control: form.control,
+    name: "textbookId",
+  });
+  const selectedTextbook = textbooks.find(
+    (textbook) => textbook.id === selectedTextbookId
+  );
+  const lockedRangeUnit = selectedTextbook?.rangeUnit ?? null;
 
   const onSubmit = (data: CreateStudyLogInput) => {
     createLog.mutate(data, {
@@ -145,7 +155,20 @@ export default function StudyLogForm() {
             control={form.control}
             name="textbookId"
             render={({ field }) => (
-              <TextbookSelect value={field.value} onChange={field.onChange} />
+              <TextbookSelect
+                value={field.value}
+                onChange={(textbookId) => {
+                  field.onChange(textbookId);
+                  const textbook = textbooks.find(
+                    (candidate) => candidate.id === textbookId
+                  );
+                  if (textbook?.rangeUnit != null) {
+                    form.setValue("rangeUnit", textbook.rangeUnit, {
+                      shouldValidate: true,
+                    });
+                  }
+                }}
+              />
             )}
           />
           <FormField
@@ -190,6 +213,7 @@ export default function StudyLogForm() {
                   <RangeUnitSelect
                     value={field.value}
                     onChange={field.onChange}
+                    disabled={lockedRangeUnit != null}
                   />
                 </FormControl>
                 <FormMessage />

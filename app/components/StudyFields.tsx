@@ -4,7 +4,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { SUBJECTS } from "@/lib/subjects";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
-import { useTextbooks, useCreateTextbook } from "@/app/hooks/useTextbooks";
+import {
+  useTextbooks,
+  useCreateTextbook,
+  useTextbookMasters,
+} from "@/app/hooks/useTextbooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -42,6 +46,7 @@ export const TextbookSelect = ({
   onChange: (v: number | null) => void;
 }) => {
   const { data: textbooks = [] } = useTextbooks();
+  const { data: masters = [] } = useTextbookMasters();
   const createTextbook = useCreateTextbook();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -49,7 +54,7 @@ export const TextbookSelect = ({
   const submitNew = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    createTextbook.mutate(trimmed, {
+    createTextbook.mutate({ name: trimmed }, {
       onSuccess: (created) => {
         onChange(created.id); // 追加した参考書をそのまま選択状態に
         setName("");
@@ -100,8 +105,20 @@ export const TextbookSelect = ({
           setAdding(true);
           return;
         }
+        if (e.target.value.startsWith("master:")) {
+          const masterId = Number(e.target.value.slice("master:".length));
+          createTextbook.mutate(
+            { masterId },
+            {
+              onSuccess: (created) => onChange(created.id),
+              onError: (error) => toast.error(error.message),
+            }
+          );
+          return;
+        }
         onChange(e.target.value ? Number(e.target.value) : null);
       }}
+      disabled={createTextbook.isPending}
       className="h-9 rounded-md border bg-transparent px-2 text-sm"
     >
       <option value="">参考書なし</option>
@@ -110,6 +127,17 @@ export const TextbookSelect = ({
           {t.name}
         </option>
       ))}
+      {masters
+        .filter(
+          (master) =>
+            !textbooks.some((textbook) => textbook.masterId === master.id)
+        )
+        .map((master) => (
+          <option key={`master-${master.id}`} value={`master:${master.id}`}>
+            ＋ {master.name}
+            {master.edition ? `（${master.edition}）` : ""}
+          </option>
+        ))}
       <option value="__new__">＋ 新しい参考書を追加</option>
     </select>
   );
@@ -119,13 +147,16 @@ export const TextbookSelect = ({
 export const RangeUnitSelect = ({
   value,
   onChange,
+  disabled = false,
 }: {
   value: string | null | undefined;
   onChange: (v: string | null) => void;
+  disabled?: boolean;
 }) => (
   <select
     value={value ?? ""}
     onChange={(e) => onChange(e.target.value || null)}
+    disabled={disabled}
     className="h-9 rounded-md border bg-transparent px-2 text-sm"
   >
     <option value="">単位</option>

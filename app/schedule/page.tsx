@@ -30,7 +30,16 @@ const SchedulePage = async () => {
     subject: p.subject,
     done: p.done,
     textbookId: p.textbookId,
-    textbook: p.textbook ? { id: p.textbook.id, name: p.textbook.name } : null,
+    textbook: p.textbook
+      ? {
+          id: p.textbook.id,
+          masterId: p.textbook.masterId,
+          name: p.textbook.name,
+          totalAmount: p.textbook.totalAmount,
+          rangeUnit: p.textbook.rangeUnit,
+          targetDate: p.textbook.targetDate?.toISOString() ?? null,
+        }
+      : null,
     rangeStart: p.rangeStart,
     rangeEnd: p.rangeEnd,
     rangeUnit: p.rangeUnit,

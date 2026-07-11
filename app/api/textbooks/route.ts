@@ -43,11 +43,49 @@ export async function POST(request: Request) {
   }
 
   try {
-    const textbook = await prisma.textbook.create({
-      data: {
+    let textbookData: {
+      name: string;
+      userId: string;
+      masterId?: number;
+      totalAmount?: number;
+      rangeUnit?: string;
+    };
+
+    if ("masterId" in parsed.data) {
+      const master = await prisma.textbookMaster.findUnique({
+        where: { id: parsed.data.masterId },
+        include: { metrics: true },
+      });
+      if (!master) {
+        return NextResponse.json(
+          { error: "参考書マスターが見つかりません" },
+          { status: 404 }
+        );
+      }
+      const defaultMetric =
+        master.metrics.find((metric) => metric.isDefault) ?? master.metrics[0];
+      if (!defaultMetric) {
+        return NextResponse.json(
+          { error: "参考書の総量データが登録されていません" },
+          { status: 400 }
+        );
+      }
+      textbookData = {
+        name: master.name,
+        userId: session.user.id,
+        masterId: master.id,
+        totalAmount: defaultMetric.totalAmount,
+        rangeUnit: defaultMetric.unit,
+      };
+    } else {
+      textbookData = {
         name: parsed.data.name,
         userId: session.user.id,
-      },
+      };
+    }
+
+    const textbook = await prisma.textbook.create({
+      data: textbookData,
     });
 
     return NextResponse.json(textbook, { status: 201 });

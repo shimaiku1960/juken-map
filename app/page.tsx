@@ -24,15 +24,31 @@ const Home = async () => {
     redirect("/login");
   }
 
-  const goals = await prisma.finalGoal.findMany({
-    where: { userId: session.user.id },
-    include: {
-      faculty: {
-        include: { university: true },
+  const [goals, plans, logsRaw, textbooks] = await Promise.all([
+    prisma.finalGoal.findMany({
+      where: { userId: session.user.id },
+      include: {
+        faculty: {
+          include: { university: true },
+        },
       },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.studyPlan.findMany({
+      where: { userId: session.user.id },
+      orderBy: { date: "asc" },
+      include: { textbook: true },
+    }),
+    prisma.studyLog.findMany({
+      where: { userId: session.user.id },
+      orderBy: { date: "desc" },
+      include: { textbook: true },
+    }),
+    prisma.textbook.findMany({
+      where: { userId: session.user.id },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   const countdownGoals: CountdownGoal[] = goals.map((goal) => ({
     id: goal.id,
@@ -43,12 +59,6 @@ const Home = async () => {
   }));
 
   // ② 学習予定（今日 / 今後7日間）
-  const plans = await prisma.studyPlan.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "asc" },
-    include: { textbook: true },
-  });
-
   const todayStr = todayYmd();
   const weekEndStr = ymdAfterDays(7);
 
@@ -62,12 +72,6 @@ const Home = async () => {
   }).length;
 
   // ③ 学習実績（ストリーク・ヒートマップ・科目別はクライアントで集計＝記録すると即反映）
-  const logsRaw = await prisma.studyLog.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "desc" },
-    include: { textbook: true },
-  });
-
   const initialLogs: StudyLog[] = logsRaw.map((l) => ({
     id: l.id,
     userId: l.userId,
@@ -75,7 +79,16 @@ const Home = async () => {
     minutes: l.minutes,
     subject: l.subject,
     textbookId: l.textbookId,
-    textbook: l.textbook ? { id: l.textbook.id, name: l.textbook.name } : null,
+    textbook: l.textbook
+      ? {
+          id: l.textbook.id,
+          masterId: l.textbook.masterId,
+          name: l.textbook.name,
+          totalAmount: l.textbook.totalAmount,
+          rangeUnit: l.textbook.rangeUnit,
+          targetDate: l.textbook.targetDate?.toISOString() ?? null,
+        }
+      : null,
     rangeStart: l.rangeStart,
     rangeEnd: l.rangeEnd,
     rangeUnit: l.rangeUnit,
@@ -83,11 +96,18 @@ const Home = async () => {
     createdAt: l.createdAt.toISOString(),
     updatedAt: l.updatedAt.toISOString(),
   }));
+  const initialTextbooks = textbooks.map((textbook) => ({
+    id: textbook.id,
+    masterId: textbook.masterId,
+    name: textbook.name,
+    totalAmount: textbook.totalAmount,
+    rangeUnit: textbook.rangeUnit,
+    targetDate: textbook.targetDate?.toISOString() ?? null,
+  }));
 
   // ④ 志望校サマリー
   const firstChoice = goals.find((g) => g.isFirstChoice) ?? null;
   const otherCount = goals.filter((g) => !g.isFirstChoice).length;
-
   return (
     <main className="w-full mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-bold mb-6">ダッシュボード</h1>
@@ -103,7 +123,11 @@ const Home = async () => {
       </section>
 
       {/* 学習の記録・科目別・実績記録（クライアントで集計してリアクティブに更新） */}
-      <StudyRecordDashboard initialLogs={initialLogs} />
+      <StudyRecordDashboard
+        initialLogs={initialLogs}
+        initialTextbooks={initialTextbooks}
+        firstChoiceExamDate={firstChoice?.faculty.examDate.toISOString() ?? null}
+      />
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">志望校</h2>

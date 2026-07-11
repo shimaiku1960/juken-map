@@ -7,6 +7,8 @@ export const RANGE_UNITS = [
   { value: "question", label: "問題" },
   { value: "chapter", label: "章" },
   { value: "number", label: "番" },
+  { value: "part", label: "Part" },
+  { value: "section", label: "Section" },
 ] as const;
 
 export const RANGE_UNIT_VALUES: string[] = RANGE_UNITS.map((u) => u.value);

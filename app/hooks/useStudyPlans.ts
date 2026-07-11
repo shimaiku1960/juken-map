@@ -5,7 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 
 export type Textbook = {
   id: number;
+  masterId: number | null;
   name: string;
+  totalAmount: number | null;
+  rangeUnit: string | null;
+  targetDate: string | null;
 };
 
 export type StudyPlan = {
