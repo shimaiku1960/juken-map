@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "lock:fix": "rm -rf node_modules package-lock.json && npm install"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",
