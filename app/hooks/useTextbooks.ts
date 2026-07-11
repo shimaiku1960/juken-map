@@ -30,7 +30,10 @@ export function useCreateTextbook() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
-      if (!res.ok) throw new Error("参考書の追加に失敗しました");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "参考書の追加に失敗しました");
+      }
       return res.json();
     },
     onSuccess: () => {

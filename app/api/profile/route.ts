@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { profileSchema } from "@/lib/validations/profile";
+import { demoReadOnlyGuard } from "@/lib/demo";
 
 export const PUT = async (request: Request) => {
   const session = await auth.api.getSession({
@@ -12,6 +13,9 @@ export const PUT = async (request: Request) => {
   if (!session) {
     return NextResponse.json({ error: "未認証" }, { status: 401 });
   }
+
+  const denied = demoReadOnlyGuard(session);
+  if (denied) return denied;
 
   const body = await request.json();
   const result = profileSchema.safeParse(body);
