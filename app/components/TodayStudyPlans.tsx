@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import TodayProgressRing from "@/app/components/TodayProgressRing";
 
 export type TodayPlan = {
   id: number;
@@ -22,21 +23,26 @@ export default function TodayStudyPlans({
         {plans.length === 0 ? (
           <p className="text-gray-600">今日の学習予定はありません。</p>
         ) : (
-          <>
-            <p className="mb-2 text-sm font-medium text-gray-600">
-              達成 {doneCount} / {plans.length}
-            </p>
-            <ul className="space-y-1">
-              {plans.map((p) => (
-                <li key={p.id} className="flex items-start gap-2">
-                  <span>{p.done ? "✅" : "⬜️"}</span>
-                  <span className={p.done ? "line-through text-gray-400" : ""}>
-                    {p.content}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </>
+          <div className="flex items-start gap-5">
+            <div className="shrink-0">
+              <TodayProgressRing done={doneCount} total={plans.length} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="mb-2 text-sm font-medium text-gray-600">
+                達成 {doneCount} / {plans.length}
+              </p>
+              <ul className="space-y-1">
+                {plans.map((p) => (
+                  <li key={p.id} className="flex items-start gap-2">
+                    <span>{p.done ? "✅" : "⬜️"}</span>
+                    <span className={p.done ? "line-through text-gray-400" : ""}>
+                      {p.content}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         )}
         <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
           <span>今後7日間の予定：{weekCount} 件</span>

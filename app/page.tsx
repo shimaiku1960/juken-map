@@ -9,9 +9,12 @@ import ExamCountdown, {
 import TodayStudyPlans, {
   type TodayPlan,
 } from "@/app/components/TodayStudyPlans";
+import StreakBadge from "@/app/components/StreakBadge";
+import StudyHeatmap from "@/app/components/StudyHeatmap";
 import { Card, CardContent } from "@/components/ui/card";
 import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
 import { studyPlanLabel } from "@/lib/studyPlan";
+import { computeStreak, computeHeatmap } from "@/lib/studyStats";
 
 const Home = async () => {
   const session = await auth.api.getSession({
@@ -60,13 +63,26 @@ const Home = async () => {
     return d >= todayStr && d <= weekEndStr;
   }).length;
 
+  // 連続達成日数（ストリーク）
+  const streak = computeStreak(plans, todayStr);
+
+  // 今月の学習ヒートマップ
+  const heatmapWeeks = computeHeatmap(plans, todayStr);
+  const monthLabel = new Date().toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "long",
+  });
+
   // ③ 志望校サマリー
   const firstChoice = goals.find((g) => g.isFirstChoice) ?? null;
   const otherCount = goals.filter((g) => !g.isFirstChoice).length;
 
   return (
     <main className="w-full mx-auto max-w-3xl p-8">
-      <h1 className="text-3xl font-bold mb-6">ダッシュボード</h1>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold">ダッシュボード</h1>
+        <StreakBadge streak={streak} />
+      </div>
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">受験カウントダウン</h2>
@@ -76,6 +92,15 @@ const Home = async () => {
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">今日の学習予定</h2>
         <TodayStudyPlans plans={todayPlans} weekCount={weekCount} />
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">学習の記録</h2>
+        <Card>
+          <CardContent className="py-5">
+            <StudyHeatmap weeks={heatmapWeeks} monthLabel={monthLabel} />
+          </CardContent>
+        </Card>
       </section>
 
       <section className="mb-8">
