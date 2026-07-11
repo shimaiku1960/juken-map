@@ -9,18 +9,16 @@ import ExamCountdown, {
 import TodayStudyPlans, {
   type TodayPlan,
 } from "@/app/components/TodayStudyPlans";
-import StreakBadge from "@/app/components/StreakBadge";
-import StudyHeatmap from "@/app/components/StudyHeatmap";
+import StudyRecordDashboard from "@/app/components/StudyRecordDashboard";
+import type { StudyLog } from "@/app/hooks/useStudyLogs";
 import { Card, CardContent } from "@/components/ui/card";
 import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
 import { studyPlanLabel } from "@/lib/studyPlan";
-import { computeStreak, computeHeatmap } from "@/lib/studyStats";
 
 const Home = async () => {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
-
 
   if (!session) {
     redirect("/login");
@@ -63,26 +61,36 @@ const Home = async () => {
     return d >= todayStr && d <= weekEndStr;
   }).length;
 
-  // 連続達成日数（ストリーク）
-  const streak = computeStreak(plans, todayStr);
-
-  // 今月の学習ヒートマップ
-  const heatmapWeeks = computeHeatmap(plans, todayStr);
-  const monthLabel = new Date().toLocaleDateString("ja-JP", {
-    year: "numeric",
-    month: "long",
+  // ③ 学習実績（ストリーク・ヒートマップ・科目別はクライアントで集計＝記録すると即反映）
+  const logsRaw = await prisma.studyLog.findMany({
+    where: { userId: session.user.id },
+    orderBy: { date: "desc" },
+    include: { textbook: true },
   });
 
-  // ③ 志望校サマリー
+  const initialLogs: StudyLog[] = logsRaw.map((l) => ({
+    id: l.id,
+    userId: l.userId,
+    date: l.date.toISOString(),
+    minutes: l.minutes,
+    subject: l.subject,
+    textbookId: l.textbookId,
+    textbook: l.textbook ? { id: l.textbook.id, name: l.textbook.name } : null,
+    rangeStart: l.rangeStart,
+    rangeEnd: l.rangeEnd,
+    rangeUnit: l.rangeUnit,
+    memo: l.memo,
+    createdAt: l.createdAt.toISOString(),
+    updatedAt: l.updatedAt.toISOString(),
+  }));
+
+  // ④ 志望校サマリー
   const firstChoice = goals.find((g) => g.isFirstChoice) ?? null;
   const otherCount = goals.filter((g) => !g.isFirstChoice).length;
 
   return (
     <main className="w-full mx-auto max-w-3xl p-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold">ダッシュボード</h1>
-        <StreakBadge streak={streak} />
-      </div>
+      <h1 className="text-3xl font-bold mb-6">ダッシュボード</h1>
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">受験カウントダウン</h2>
@@ -94,14 +102,8 @@ const Home = async () => {
         <TodayStudyPlans plans={todayPlans} weekCount={weekCount} />
       </section>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">学習の記録</h2>
-        <Card>
-          <CardContent className="py-5">
-            <StudyHeatmap weeks={heatmapWeeks} monthLabel={monthLabel} />
-          </CardContent>
-        </Card>
-      </section>
+      {/* 学習の記録・科目別・実績記録（クライアントで集計してリアクティブに更新） */}
+      <StudyRecordDashboard initialLogs={initialLogs} />
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">志望校</h2>

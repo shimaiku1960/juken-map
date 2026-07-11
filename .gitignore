@@ -44,3 +44,10 @@ next-env.d.ts
 
 # Claude auto-memory（私的メモ・公開リポジトリに含めない）
 memory/
+
+# Playwright（E2E）
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+/e2e/.auth

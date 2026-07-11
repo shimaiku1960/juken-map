@@ -1,11 +1,12 @@
 import type { HeatmapCell } from "@/lib/studyStats";
+import { formatMinutes } from "@/lib/studyLog";
 
-// done 件数 → 色の濃さ（4段階）。0件は薄いグレー。
-function levelClass(count: number): string {
-  if (count === 0) return "bg-gray-100";
-  if (count === 1) return "bg-green-200";
-  if (count === 2) return "bg-green-400";
-  if (count === 3) return "bg-green-500";
+// 合計学習時間（分）→ 色の濃さ（4段階）。0分は薄いグレー。
+function levelClass(minutes: number): string {
+  if (minutes <= 0) return "bg-gray-100";
+  if (minutes < 30) return "bg-green-200";
+  if (minutes < 60) return "bg-green-400";
+  if (minutes < 120) return "bg-green-500";
   return "bg-green-700";
 }
 
@@ -21,7 +22,7 @@ export default function StudyHeatmap({
   return (
     <div>
       <p className="mb-2 text-sm font-medium text-gray-600">
-        {monthLabel} の学習達成
+        {monthLabel} の学習時間
       </p>
 
       {/* 曜日ヘッダー */}
@@ -43,9 +44,9 @@ export default function StudyHeatmap({
               ) : (
                 <div
                   key={ci}
-                  title={`${cell.ymd}：${cell.count}件`}
+                  title={`${cell.ymd}：${formatMinutes(cell.minutes)}`}
                   className={`flex aspect-square items-center justify-center rounded-sm text-[10px] text-gray-500 ${levelClass(
-                    cell.count
+                    cell.minutes
                   )}`}
                 >
                   {Number(cell.ymd.slice(-2))}
