@@ -11,7 +11,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   default: {
     studyLog: { findMany: vi.fn(), create: vi.fn() },
-    textbook: { count: vi.fn() },
+    textbook: { findFirst: vi.fn() },
   },
 }));
 
@@ -22,7 +22,7 @@ vi.mock("next/headers", () => ({
 const getSession = auth.api.getSession as unknown as Mock;
 const findMany = prisma.studyLog.findMany as unknown as Mock;
 const create = prisma.studyLog.create as unknown as Mock;
-const textbookCount = prisma.textbook.count as unknown as Mock;
+const findTextbook = prisma.textbook.findFirst as unknown as Mock;
 
 const loggedInSession = { user: { id: "user-1", email: "me@example.com" } };
 
@@ -92,7 +92,7 @@ describe("POST /api/study-logs", () => {
 
   it("他人の参考書IDなら 400 を返す（所有チェック）", async () => {
     getSession.mockResolvedValue(loggedInSession);
-    textbookCount.mockResolvedValue(0); // 自分の所有分に無い
+    findTextbook.mockResolvedValue(null); // 自分の所有分に無い
 
     const res = await POST(
       makeRequest({ ...validBody, textbookId: 999 })
@@ -100,11 +100,57 @@ describe("POST /api/study-logs", () => {
 
     expect(res.status).toBe(400);
     expect(create).not.toHaveBeenCalled();
-    expect(textbookCount).toHaveBeenCalledWith(
+    expect(findTextbook).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 999, userId: "user-1" },
       })
     );
+  });
+
+  it("逆算設定と実績の単位が異なるなら 400 を返す", async () => {
+    getSession.mockResolvedValue(loggedInSession);
+    findTextbook.mockResolvedValue({
+      id: 3,
+      userId: "user-1",
+      totalAmount: 300,
+      rangeUnit: "page",
+    });
+
+    const res = await POST(
+      makeRequest({
+        ...validBody,
+        textbookId: 3,
+        rangeStart: 1,
+        rangeEnd: 10,
+        rangeUnit: "question",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("実績の終了位置が参考書の総量を超えたら 400 を返す", async () => {
+    getSession.mockResolvedValue(loggedInSession);
+    findTextbook.mockResolvedValue({
+      id: 3,
+      userId: "user-1",
+      totalAmount: 300,
+      rangeUnit: "page",
+    });
+
+    const res = await POST(
+      makeRequest({
+        ...validBody,
+        textbookId: 3,
+        rangeStart: 290,
+        rangeEnd: 301,
+        rangeUnit: "page",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("正常なら 201 で作成した実績を返す", async () => {

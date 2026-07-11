@@ -42,14 +42,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
   }
 
-  // 参考書を指定する場合は、自分の所有分だけを許可する（他人のIDを弾く）
+  // 参考書を指定する場合は、所有権と逆算設定との整合性を検証する。
   if (parsed.data.textbookId != null) {
-    const owned = await prisma.textbook.count({
+    const textbook = await prisma.textbook.findFirst({
       where: { id: parsed.data.textbookId, userId: session.user.id },
     });
-    if (owned === 0) {
+    if (!textbook) {
       return NextResponse.json(
         { error: "不正な参考書です" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      parsed.data.rangeEnd != null &&
+      textbook.rangeUnit != null &&
+      parsed.data.rangeUnit !== textbook.rangeUnit
+    ) {
+      return NextResponse.json(
+        { error: "範囲の単位を参考書の逆算設定に合わせてください" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      parsed.data.rangeEnd != null &&
+      textbook.totalAmount != null &&
+      parsed.data.rangeEnd > textbook.totalAmount
+    ) {
+      return NextResponse.json(
+        { error: `終了位置は参考書の総量（${textbook.totalAmount}）以下にしてください` },
         { status: 400 }
       );
     }

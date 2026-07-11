@@ -14,13 +14,19 @@ import SubjectMinutesBars from "@/app/components/SubjectMinutesBars";
 import StudyLogForm from "@/app/components/StudyLogForm";
 import RecentStudyLogs from "@/app/components/RecentStudyLogs";
 import { Card, CardContent } from "@/components/ui/card";
+import ReverseStudyNavigation from "@/app/components/ReverseStudyNavigation";
+import type { Textbook } from "@/app/hooks/useStudyPlans";
 
 // 実績（StudyLog）まわりのダッシュボード。記録するとキャッシュ更新で
 // ストリーク・ヒートマップ・科目別バーが即座に伸びる（クライアントで集計）。
 export default function StudyRecordDashboard({
   initialLogs,
+  initialTextbooks,
+  firstChoiceExamDate,
 }: {
   initialLogs: StudyLog[];
+  initialTextbooks: Textbook[];
+  firstChoiceExamDate: string | null;
 }) {
   const { data: logs = [] } = useStudyLogs(initialLogs);
 
@@ -43,6 +49,12 @@ export default function StudyRecordDashboard({
 
   return (
     <>
+      <ReverseStudyNavigation
+        initialTextbooks={initialTextbooks}
+        logs={logs}
+        examDate={firstChoiceExamDate}
+      />
+
       <section className="mb-8">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-bold">学習の記録</h2>

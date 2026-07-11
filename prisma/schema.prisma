@@ -13,22 +13,23 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  
-  image         String?
-  nickname      String?
+  id    String  @id @default(cuid())
+  name  String?
+  email String? @unique
 
-  accounts   Account[]
-  sessions   Session[]
-  finalGoals FinalGoal[]
-  studyPlans StudyPlan[]
-  studyLogs  StudyLog[]
-  textbooks  Textbook[]
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  emailVerified Boolean   @default(false)
+  image    String?
+  nickname String?
+
+  accounts      Account[]
+  sessions      Session[]
+  finalGoals    FinalGoal[]
+  studyPlans    StudyPlan[]
+  studyLogs     StudyLog[]
+  textbooks     Textbook[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  emailVerified Boolean     @default(false)
+
   @@map("user")
 }
 
@@ -38,13 +39,13 @@ model Account {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  accountId             String    @db.Text
-  providerId            String    @db.Text
-  accessToken           String?   @db.Text
-  refreshToken          String?   @db.Text
-  idToken               String?   @db.Text
-  scope                 String?   @db.Text
-  
+  accountId    String  @db.Text
+  providerId   String  @db.Text
+  accessToken  String? @db.Text
+  refreshToken String? @db.Text
+  idToken      String? @db.Text
+  scope        String? @db.Text
+
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
   password              String?   @db.Text
@@ -72,7 +73,6 @@ model Session {
   @@index([userId(length: 191)])
   @@map("session")
 }
-
 
 model FinalGoal {
   id        Int      @id @default(autoincrement())
@@ -119,39 +119,72 @@ model Tag {
 }
 
 model StudyPlan {
-  id        Int      @id @default(autoincrement())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date      DateTime
-  content   String?  @db.Text
-  subject   String?
-  done      Boolean  @default(false)
+  id      Int      @id @default(autoincrement())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date    DateTime
+  content String?  @db.Text
+  subject String?
+  done    Boolean  @default(false)
 
   textbookId Int?
   textbook   Textbook? @relation(fields: [textbookId], references: [id], onDelete: SetNull)
   rangeStart Int?
   rangeEnd   Int?
   rangeUnit  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([userId(length: 191)])
   @@index([textbookId])
 }
 
 model Textbook {
-  id        Int      @id @default(autoincrement())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  masterId    Int?
+  master      TextbookMaster? @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  name        String
+  totalAmount Int?
+  rangeUnit   String?
+  targetDate  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   studyPlans StudyPlan[]
   studyLogs  StudyLog[]
 
   @@unique([userId, name])
   @@index([userId(length: 191)])
+  @@index([masterId])
+}
+
+model TextbookMaster {
+  id        Int      @id @default(autoincrement())
+  name      String
+  publisher String?
+  edition   String?
+  isbn      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metrics   TextbookMasterMetric[]
+  textbooks Textbook[]
+}
+
+model TextbookMasterMetric {
+  id          Int      @id @default(autoincrement())
+  masterId    Int
+  master      TextbookMaster @relation(fields: [masterId], references: [id], onDelete: Cascade)
+  unit        String
+  totalAmount Int
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([masterId, unit])
+  @@index([masterId])
 }
 
 model StudyLog {
@@ -167,7 +200,7 @@ model StudyLog {
   rangeStart Int?
   rangeEnd   Int?
   rangeUnit  String?
-  memo       String? @db.Text
+  memo       String?   @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
