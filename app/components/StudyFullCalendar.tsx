@@ -21,6 +21,8 @@ type Props = {
   onEventClick: (id: string) => void;
   onDateClick: (date: string) => void;
   onEventDrop: (id: string, newDate: string) => void;
+  // ドラッグでの日移動を許可するか（デモは閲覧専用のため false）
+  editable?: boolean;
 };
 
 export default function StudyFullCalendar({
@@ -29,6 +31,7 @@ export default function StudyFullCalendar({
   onEventClick,
   onDateClick,
   onEventDrop,
+  editable = true,
 }: Props) {
   return (
     <FullCalendar
@@ -48,7 +51,7 @@ export default function StudyFullCalendar({
           title: e.title,
           start: e.date,
           allDay: true,
-          editable: true,
+          editable,
           color: e.color,
           classNames: e.done ? ["study-done"] : [],
         })),
@@ -61,7 +64,7 @@ export default function StudyFullCalendar({
           color: "#dc2626", // 受験日は赤系で強調
         })),
       ]}
-      editable={true}
+      editable={editable}
       eventClick={(arg: EventClickArg) => onEventClick(arg.event.id)}
       dateClick={(arg: DateClickArg) => onDateClick(arg.dateStr)}
       eventDrop={(arg: EventDropArg) => {

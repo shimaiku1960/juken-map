@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import ProfileEdit from "@/app/components/ProfileEdit";
 import GoalList from "@/app/components/GoalList";
 import { Card, CardContent } from "@/components/ui/card";
+import { DEMO_EMAIL } from "@/lib/demo-email";
 
 const ProfilePage = async () => {
     const session = await auth.api.getSession({
@@ -17,6 +18,7 @@ const ProfilePage = async () => {
 
     const user = session.user;
     const nickname = user.nickname ?? user.name ?? "ユーザー";
+    const isDemo = user.email === DEMO_EMAIL;
 
     const goals = await prisma.finalGoal.findMany({
         where: { userId: user.id },
@@ -47,7 +49,7 @@ const ProfilePage = async () => {
       </div>
       <div className="py-4">
         <p className="text-sm text-gray-500 mb-1">ニックネーム</p>
-        <ProfileEdit currentNickname={user.nickname ?? ""} />
+        <ProfileEdit currentNickname={user.nickname ?? ""} isDemo={isDemo} />
       </div>
       <div className="pt-4">
         <p className="text-sm text-gray-500 mb-1">メールアドレス</p>
@@ -59,7 +61,7 @@ const ProfilePage = async () => {
   <h2 className="text-2xl font-bold mt-10 mb-4">志望校</h2>
   <Card>
     <CardContent>
-      <GoalList initialGoals={goals} faculties={faculties} />
+      <GoalList initialGoals={goals} faculties={faculties} isDemo={isDemo} />
     </CardContent>
   </Card>
         </main>

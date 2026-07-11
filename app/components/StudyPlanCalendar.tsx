@@ -244,9 +244,11 @@ const emptyItem = () => ({
 export default function StudyPlanCalendar({
   initialPlans,
   initialGoals = [],
+  isDemo,
 }: {
   initialPlans: StudyPlan[];
   initialGoals?: Goal[];
+  isDemo: boolean;
 }) {
   const queryClient = useQueryClient();
   const { data: plans = [] } = useStudyPlans(initialPlans);
@@ -480,16 +482,25 @@ export default function StudyPlanCalendar({
   return (
     <div className="space-y-8">
       <p className="text-sm text-gray-500">
-        日をクリックすると、その日の予定の確認・追加・編集ができます。
-        予定をドラッグすると別の日へ移動できます。
-        <span className="text-red-600">赤色</span>
-        は志望校の受験日です（クリックで第一志望・メモの編集や削除ができます）。
+        {isDemo ? (
+          <>
+            デモアカウントは閲覧専用です。予定の閲覧のみ可能です（登録・編集・削除はできません）。
+          </>
+        ) : (
+          <>
+            日をクリックすると、その日の予定の確認・追加・編集ができます。
+            予定をドラッグすると別の日へ移動できます。
+            <span className="text-red-600">赤色</span>
+            は志望校の受験日です（クリックで第一志望・メモの編集や削除ができます）。
+          </>
+        )}
       </p>
 
       {/* FullCalendar 本体 */}
       <StudyFullCalendar
         events={events}
         examEvents={examEvents}
+        editable={!isDemo}
         onEventClick={(id) => {
           if (id.startsWith("exam-")) {
             const goalId = Number(id.slice("exam-".length));
@@ -524,6 +535,7 @@ export default function StudyPlanCalendar({
                   type="checkbox"
                   className="h-4 w-4 shrink-0"
                   checked={plan.done}
+                  disabled={isDemo}
                   onChange={() =>
                     toggleDoneMutation.mutate({
                       id: plan.id,
@@ -606,27 +618,32 @@ export default function StudyPlanCalendar({
                   >
                     {studyPlanLabel(plan)}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEdit(plan)}
-                  >
-                    編集
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteMutation.mutate(plan.id)}
-                    disabled={deleteMutation.isPending}
-                  >
-                    削除
-                  </Button>
+                  {!isDemo && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEdit(plan)}
+                      >
+                        編集
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteMutation.mutate(plan.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        削除
+                      </Button>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
           )}
 
-          {/* 追加エリア（その日で複数登録） */}
+          {/* 追加エリア（その日で複数登録）。デモは閲覧専用のため非表示 */}
+          {!isDemo && (
           <div className="border-t pt-4">
             <Form {...createForm}>
               <form
@@ -763,6 +780,7 @@ export default function StudyPlanCalendar({
               </form>
             </Form>
           </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -946,54 +964,75 @@ export default function StudyPlanCalendar({
                 受験日：{toDateStr(examGoal.faculty.examDate)}
               </p>
 
-              {/* 第一志望トグル（ユーザー資産） */}
-              <Button
-                type="button"
-                variant={examGoal.isFirstChoice ? "default" : "outline"}
-                onClick={() =>
-                  goalPatchMutation.mutate({
-                    id: examGoal.id,
-                    data: { isFirstChoice: !examGoal.isFirstChoice },
-                  })
-                }
-                disabled={goalPatchMutation.isPending}
-              >
-                {examGoal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
-              </Button>
-
-              {/* メモ（ユーザー資産） */}
-              <div className="space-y-1">
-                <label className="text-sm font-medium">メモ・備考</label>
-                <textarea
-                  className="w-full min-h-24 rounded-md border px-3 py-2 text-sm"
-                  placeholder="会場・持ち物・対策メモなど"
-                  value={noteDraft}
-                  onChange={(e) => setNoteDraft(e.target.value)}
-                />
-              </div>
-
-              <DialogFooter className="gap-2 sm:gap-0">
+              {/* 第一志望トグル（ユーザー資産）。デモは静的ラベル表示のみ */}
+              {isDemo ? (
+                examGoal.isFirstChoice && (
+                  <p className="text-sm font-medium">★ 第一志望</p>
+                )
+              ) : (
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={() => goalDeleteMutation.mutate(examGoal.id)}
-                  disabled={goalDeleteMutation.isPending}
-                >
-                  志望校から削除
-                </Button>
-                <Button
-                  type="button"
+                  variant={examGoal.isFirstChoice ? "default" : "outline"}
                   onClick={() =>
                     goalPatchMutation.mutate({
                       id: examGoal.id,
-                      data: { note: noteDraft.trim() === "" ? null : noteDraft },
+                      data: { isFirstChoice: !examGoal.isFirstChoice },
                     })
                   }
                   disabled={goalPatchMutation.isPending}
                 >
-                  メモを保存
+                  {examGoal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
                 </Button>
-              </DialogFooter>
+              )}
+
+              {/* メモ（ユーザー資産）。デモは読み取り表示のみ */}
+              {isDemo ? (
+                examGoal.note && (
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">メモ・備考</label>
+                    <p className="whitespace-pre-wrap rounded-md border px-3 py-2 text-sm">
+                      {examGoal.note}
+                    </p>
+                  </div>
+                )
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">メモ・備考</label>
+                  <textarea
+                    className="w-full min-h-24 rounded-md border px-3 py-2 text-sm"
+                    placeholder="会場・持ち物・対策メモなど"
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {!isDemo && (
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => goalDeleteMutation.mutate(examGoal.id)}
+                    disabled={goalDeleteMutation.isPending}
+                  >
+                    志望校から削除
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      goalPatchMutation.mutate({
+                        id: examGoal.id,
+                        data: {
+                          note: noteDraft.trim() === "" ? null : noteDraft,
+                        },
+                      })
+                    }
+                    disabled={goalPatchMutation.isPending}
+                  >
+                    メモを保存
+                  </Button>
+                </DialogFooter>
+              )}
             </>
           )}
         </DialogContent>

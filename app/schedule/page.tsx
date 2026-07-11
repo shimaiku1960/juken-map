@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import StudyPlanCalendar from "@/app/components/StudyPlanCalendar";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import type { Goal } from "@/app/hooks/useGoals";
+import { DEMO_EMAIL } from "@/lib/demo-email";
 
 const SchedulePage = async () => {
   const session = await auth.api.getSession({
@@ -64,7 +65,11 @@ const SchedulePage = async () => {
   return (
     <main className="w-full mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-bold mb-6">学習予定</h1>
-      <StudyPlanCalendar initialPlans={initialPlans} initialGoals={initialGoals} />
+      <StudyPlanCalendar
+        initialPlans={initialPlans}
+        initialGoals={initialGoals}
+        isDemo={session.user.email === DEMO_EMAIL}
+      />
     </main>
   );
 };

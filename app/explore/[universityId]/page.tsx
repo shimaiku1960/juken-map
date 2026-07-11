@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import FacultyList from "@/app/components/FacultyList";
+import { DEMO_EMAIL } from "@/lib/demo-email";
 
 const UniversityDetailPage = async ({
   params,
@@ -67,6 +68,7 @@ const UniversityDetailPage = async ({
         <FacultyList
           faculties={university.faculties}
           registeredFacultyIds={registeredFacultyIds}
+          isDemo={session.user.email === DEMO_EMAIL}
         />
       )}
     </main>

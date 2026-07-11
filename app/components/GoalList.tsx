@@ -20,9 +20,10 @@ import { useGoals, goalsKey, type Goal, type Faculty } from "@/app/hooks/useGoal
 type Props = {
   initialGoals: Goal[];
   faculties: Faculty[];
+  isDemo: boolean;
 };
 
-export default function GoalList({ initialGoals, faculties }: Props) {
+export default function GoalList({ initialGoals, faculties, isDemo }: Props) {
   const queryClient = useQueryClient();
 
   // サーバー状態の取得。SSR で渡された initialGoals を初期キャッシュとして使う
@@ -137,32 +138,41 @@ export default function GoalList({ initialGoals, faculties }: Props) {
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={() =>
-              firstChoiceMutation.mutate({
-                id: goal.id,
-                value: !goal.isFirstChoice,
-              })
-            }
-            className="text-sm hover:underline"
-            title={goal.isFirstChoice ? "第一志望を解除" : "第一志望にする"}
-          >
-            {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
-          </button>
-          <button
-            onClick={() => deleteMutation.mutate(goal.id)}
-            className="text-red-500 text-sm hover:underline"
-          >
-            削除
-          </button>
-        </div>
+        {isDemo ? (
+          goal.isFirstChoice && (
+            <span className="text-sm shrink-0" title="第一志望">
+              ★ 第一志望
+            </span>
+          )
+        ) : (
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() =>
+                firstChoiceMutation.mutate({
+                  id: goal.id,
+                  value: !goal.isFirstChoice,
+                })
+              }
+              className="text-sm hover:underline"
+              title={goal.isFirstChoice ? "第一志望を解除" : "第一志望にする"}
+            >
+              {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
+            </button>
+            <button
+              onClick={() => deleteMutation.mutate(goal.id)}
+              className="text-red-500 text-sm hover:underline"
+            >
+              削除
+            </button>
+          </div>
+        )}
       </li>
     );
   };
 
   return (
     <div>
+      {!isDemo && (
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
@@ -202,6 +212,7 @@ export default function GoalList({ initialGoals, faculties }: Props) {
           </Button>
         </form>
       </Form>
+      )}
 
       <section className="mb-6">
         <h3 className="text-sm font-bold text-gray-500 mb-2">第一志望</h3>

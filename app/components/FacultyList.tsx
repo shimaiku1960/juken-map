@@ -17,11 +17,13 @@ type Faculty = {
 type Props = {
   faculties: Faculty[];
   registeredFacultyIds: number[];
+  isDemo: boolean;
 };
 
 export default function FacultyList({
   faculties,
   registeredFacultyIds,
+  isDemo,
 }: Props) {
   const queryClient = useQueryClient();
 
@@ -71,13 +73,19 @@ export default function FacultyList({
                 {faculty.tags.map((t) => t.name).join(" / ")}
               </p>
             </div>
-            <Button
-              onClick={() => registerMutation.mutate(faculty.id)}
-              disabled={isRegistered || registerMutation.isPending}
-              variant={isRegistered ? "secondary" : "default"}
-            >
-              {isRegistered ? "登録済み" : "志望校に追加"}
-            </Button>
+            {isDemo ? (
+              isRegistered && (
+                <span className="text-sm text-gray-500 shrink-0">登録済み</span>
+              )
+            ) : (
+              <Button
+                onClick={() => registerMutation.mutate(faculty.id)}
+                disabled={isRegistered || registerMutation.isPending}
+                variant={isRegistered ? "secondary" : "default"}
+              >
+                {isRegistered ? "登録済み" : "志望校に追加"}
+              </Button>
+            )}
           </li>
         );
       })}

@@ -16,7 +16,13 @@ import {
 } from "@/components/ui/form";
 import { toast } from "sonner";
 
-const ProfileEdit = ({ currentNickname }: { currentNickname: string }) => {
+const ProfileEdit = ({
+  currentNickname,
+  isDemo,
+}: {
+  currentNickname: string;
+  isDemo: boolean;
+}) => {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -49,17 +55,19 @@ const ProfileEdit = ({ currentNickname }: { currentNickname: string }) => {
     return (
       <div className="flex items-center justify-between gap-2">
         <p className="text-lg">{currentNickname}</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            form.reset({ nickname: currentNickname });
-            setIsEditing(true);
-          }}
-        >
-          編集
-        </Button>
+        {!isDemo && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              form.reset({ nickname: currentNickname });
+              setIsEditing(true);
+            }}
+          >
+            編集
+          </Button>
+        )}
       </div>
     );
   }
