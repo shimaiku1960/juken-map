@@ -6,6 +6,32 @@ on:
       - main
 
 jobs:
+  # package-lock.json に Linux 用ネイティブ依存が記録されているかを検査する。
+  # mac で依存追加すると Linux 用オプショナル依存が lock から抜け、CI(Linux)の
+  # npm ci が落ちる npm の既知バグ対策。npm を実行せず grep で直接確認するため、
+  # 実行OSに依存せず false positive が出ない（npm install --package-lock-only は
+  # 実行OS以外を間引くのでガードには使わない）。
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Verify Linux native deps are in package-lock.json
+        run: |
+          missing=0
+          for pkg in \
+            "@tailwindcss/oxide-linux-x64-gnu" \
+            "@unrs/resolver-binding-linux-x64-gnu" \
+            "lightningcss-linux-x64-gnu" \
+            "@rolldown/binding-linux-x64-gnu"; do
+            if ! grep -q "\"node_modules/$pkg\"" package-lock.json; then
+              echo "::error::package-lock.json に Linux 用ネイティブ依存 $pkg がありません。ローカルで 'npm run lock:fix' を実行し、更新された package-lock.json をコミットしてください。"
+              missing=1
+            fi
+          done
+          [ "$missing" = 0 ]
+
   check:
     runs-on: ubuntu-latest
     steps:
