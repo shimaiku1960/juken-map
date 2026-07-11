@@ -17,10 +17,14 @@ import {
   type StudyPlan,
 } from "@/app/hooks/useStudyPlans";
 import { useGoals, goalsKey, type Goal } from "@/app/hooks/useGoals";
-import { useTextbooks, useCreateTextbook } from "@/app/hooks/useTextbooks";
-import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/subjects";
-import { RANGE_UNITS } from "@/lib/validations/studyPlan";
+import { subjectColor, subjectLabel } from "@/lib/subjects";
 import { studyPlanLabel } from "@/lib/studyPlan";
+import {
+  SubjectSelect,
+  TextbookSelect,
+  RangeUnitSelect,
+  NumberStepper,
+} from "@/app/components/StudyFields";
 import StudyFullCalendar from "@/app/components/StudyFullCalendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,191 +47,6 @@ import {
 // 文字列 or Date → "YYYY-MM-DD"（表示・フォーム初期値・カレンダー用に統一）
 const toDateStr = (d: string | Date) =>
   typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10);
-
-// 科目セレクト（固定リスト。空 = 科目なし）
-const SubjectSelect = ({
-  value,
-  onChange,
-}: {
-  value: string | null | undefined;
-  onChange: (v: string | null) => void;
-}) => (
-  <select
-    value={value ?? ""}
-    onChange={(e) => onChange(e.target.value || null)}
-    className="h-9 rounded-md border bg-transparent px-2 text-sm"
-  >
-    <option value="">科目なし</option>
-    {SUBJECTS.map((s) => (
-      <option key={s.value} value={s.value}>
-        {s.label}
-      </option>
-    ))}
-  </select>
-);
-
-// 参考書セレクト（登録済みから選択＋新規追加）。空 = 参考書なし
-const TextbookSelect = ({
-  value,
-  onChange,
-}: {
-  value: number | null | undefined;
-  onChange: (v: number | null) => void;
-}) => {
-  const { data: textbooks = [] } = useTextbooks();
-  const createTextbook = useCreateTextbook();
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-
-  const submitNew = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    createTextbook.mutate(trimmed, {
-      onSuccess: (created) => {
-        onChange(created.id); // 追加した参考書をそのまま選択状態に
-        setName("");
-        setAdding(false);
-      },
-      onError: (error) => toast.error(error.message),
-    });
-  };
-
-  if (adding) {
-    return (
-      <div className="flex items-center gap-1">
-        <Input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="参考書名"
-          className="h-9 w-40"
-        />
-        <Button
-          type="button"
-          size="sm"
-          onClick={submitNew}
-          disabled={createTextbook.isPending}
-        >
-          追加
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setAdding(false);
-            setName("");
-          }}
-        >
-          ✕
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <select
-      value={value ?? ""}
-      onChange={(e) => {
-        if (e.target.value === "__new__") {
-          setAdding(true);
-          return;
-        }
-        onChange(e.target.value ? Number(e.target.value) : null);
-      }}
-      className="h-9 rounded-md border bg-transparent px-2 text-sm"
-    >
-      <option value="">参考書なし</option>
-      {textbooks.map((t) => (
-        <option key={t.id} value={t.id}>
-          {t.name}
-        </option>
-      ))}
-      <option value="__new__">＋ 新しい参考書を追加</option>
-    </select>
-  );
-};
-
-// 範囲の単位セレクト（ページ/問題/章）。空 = 未選択
-const RangeUnitSelect = ({
-  value,
-  onChange,
-}: {
-  value: string | null | undefined;
-  onChange: (v: string | null) => void;
-}) => (
-  <select
-    value={value ?? ""}
-    onChange={(e) => onChange(e.target.value || null)}
-    className="h-9 rounded-md border bg-transparent px-2 text-sm"
-  >
-    <option value="">単位</option>
-    {RANGE_UNITS.map((u) => (
-      <option key={u.value} value={u.value}>
-        {u.label}
-      </option>
-    ))}
-  </select>
-);
-
-// 数値入力＋自前の増減ボタン。ユーザー好みで「上＝減る / 下＝増える」に固定する
-// （ネイティブのスピナーは上＝増で反転できないため隠し、向きを自分で制御する）
-const NumberStepper = ({
-  value,
-  onChange,
-  placeholder,
-  min = 1,
-}: {
-  value: number | null | undefined;
-  onChange: (v: number | null) => void;
-  placeholder?: string;
-  min?: number;
-}) => {
-  const step = (delta: number) => {
-    if (value == null) {
-      // 空欄のとき：増やす(+1)は min から開始、減らす(-1)は空のまま
-      onChange(delta > 0 ? min : null);
-      return;
-    }
-    const next = value + delta;
-    onChange(next < min ? min : next);
-  };
-
-  return (
-    <div className="flex items-stretch gap-1">
-      <Input
-        type="number"
-        min={min}
-        placeholder={placeholder}
-        className="h-9 w-16 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-        value={value ?? ""}
-        onChange={(e) =>
-          onChange(e.target.value === "" ? null : Number(e.target.value))
-        }
-      />
-      <div className="flex flex-col">
-        {/* 上ボタン＝減らす */}
-        <button
-          type="button"
-          aria-label="1つ減らす"
-          onClick={() => step(-1)}
-          className="flex h-[18px] w-6 items-center justify-center rounded-t-md border text-[10px] leading-none hover:bg-accent"
-        >
-          ▲
-        </button>
-        {/* 下ボタン＝増やす */}
-        <button
-          type="button"
-          aria-label="1つ増やす"
-          onClick={() => step(1)}
-          className="flex h-[18px] w-6 items-center justify-center rounded-b-md border border-t-0 text-[10px] leading-none hover:bg-accent"
-        >
-          ▼
-        </button>
-      </div>
-    </div>
-  );
-};
 
 const todayStr = () => toDateStr(new Date());
 

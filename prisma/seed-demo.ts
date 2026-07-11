@@ -103,6 +103,42 @@ async function main() {
     })),
   });
   console.log(`デモの学習予定を投入: ${demoPlans.length}件`);
+
+  // 5. 学習実績（StudyLog）サンプル。今日基準の相対日付で直近2週間ぶん。
+  //    ヒートマップ・ストリーク・科目別バーが「動いて見える」よう科目と時間を散らす。
+  //    再実行で重複しないよう、デモの既存実績だけ消してから入れ直す（デモのリセット）。
+  await prisma.studyLog.deleteMany({ where: { userId: demoUser.id } });
+
+  const demoLogs: { offset: number; subject: string; minutes: number }[] = [
+    { offset: -13, subject: "english", minutes: 60 },
+    { offset: -12, subject: "math", minutes: 90 },
+    { offset: -10, subject: "japanese", minutes: 45 },
+    { offset: -9, subject: "english", minutes: 30 },
+    { offset: -9, subject: "social", minutes: 40 },
+    { offset: -8, subject: "math", minutes: 120 },
+    // 直近7日は連続で記録（ストリーク7日）
+    { offset: -6, subject: "english", minutes: 80 },
+    { offset: -5, subject: "math", minutes: 60 },
+    { offset: -5, subject: "japanese", minutes: 30 },
+    { offset: -4, subject: "social", minutes: 50 },
+    { offset: -3, subject: "english", minutes: 70 },
+    { offset: -3, subject: "math", minutes: 40 },
+    { offset: -2, subject: "japanese", minutes: 55 },
+    { offset: -1, subject: "english", minutes: 90 },
+    { offset: -1, subject: "science", minutes: 45 },
+    { offset: 0, subject: "math", minutes: 60 },
+    { offset: 0, subject: "english", minutes: 50 },
+  ];
+
+  await prisma.studyLog.createMany({
+    data: demoLogs.map((l) => ({
+      userId: demoUser.id,
+      date: new Date(ymdAfterDays(l.offset)),
+      minutes: l.minutes,
+      subject: l.subject,
+    })),
+  });
+  console.log(`デモの学習実績を投入: ${demoLogs.length}件`);
 }
 
 main()

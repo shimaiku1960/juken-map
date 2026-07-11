@@ -2,78 +2,79 @@ import { describe, it, expect } from "vitest";
 import {
   computeStreak,
   computeHeatmap,
-  type StatPlan,
+  computeSubjectMinutes,
+  type StatLog,
 } from "@/lib/studyStats";
 
-// date + done だけのプランを作るヘルパー
-const p = (date: string, done: boolean): StatPlan => ({ date, done });
+// date + minutes（+ subject）だけの実績を作るヘルパー
+const l = (date: string, minutes: number, subject?: string): StatLog => ({
+  date,
+  minutes,
+  subject,
+});
 
 describe("computeStreak", () => {
   it("達成日がなければ 0", () => {
     expect(computeStreak([], "2026-07-11")).toBe(0);
     expect(
-      computeStreak([p("2026-07-11", false), p("2026-07-10", false)], "2026-07-11")
+      computeStreak([l("2026-07-11", 0), l("2026-07-10", 0)], "2026-07-11")
     ).toBe(0);
   });
 
   it("今日を含む連続達成日を数える", () => {
-    const plans = [
-      p("2026-07-11", true),
-      p("2026-07-10", true),
-      p("2026-07-09", true),
+    const logs = [
+      l("2026-07-11", 60),
+      l("2026-07-10", 30),
+      l("2026-07-09", 90),
     ];
-    expect(computeStreak(plans, "2026-07-11")).toBe(3);
+    expect(computeStreak(logs, "2026-07-11")).toBe(3);
   });
 
-  it("今日が未達成でも昨日までが連続なら継続を維持する", () => {
-    const plans = [
-      p("2026-07-11", false), // 今日はまだ
-      p("2026-07-10", true),
-      p("2026-07-09", true),
+  it("今日が未記録でも昨日までが連続なら継続を維持する", () => {
+    const logs = [
+      // 今日はまだ記録なし
+      l("2026-07-10", 60),
+      l("2026-07-09", 60),
     ];
-    expect(computeStreak(plans, "2026-07-11")).toBe(2);
+    expect(computeStreak(logs, "2026-07-11")).toBe(2);
   });
 
   it("途中で途切れたらそこで止まる", () => {
-    const plans = [
-      p("2026-07-11", true),
-      p("2026-07-10", true),
-      // 07-09 は達成なし → ここで途切れる
-      p("2026-07-08", true),
+    const logs = [
+      l("2026-07-11", 60),
+      l("2026-07-10", 60),
+      // 07-09 は記録なし → ここで途切れる
+      l("2026-07-08", 60),
     ];
-    expect(computeStreak(plans, "2026-07-11")).toBe(2);
+    expect(computeStreak(logs, "2026-07-11")).toBe(2);
   });
 
-  it("同じ日に done が複数あっても1日として数える", () => {
-    const plans = [
-      p("2026-07-11", true),
-      p("2026-07-11", true),
-      p("2026-07-10", true),
+  it("同じ日に複数の実績があっても1日として数える", () => {
+    const logs = [
+      l("2026-07-11", 30),
+      l("2026-07-11", 30),
+      l("2026-07-10", 60),
     ];
-    expect(computeStreak(plans, "2026-07-11")).toBe(2);
+    expect(computeStreak(logs, "2026-07-11")).toBe(2);
   });
 
   it("月をまたいでも連続を数えられる", () => {
-    const plans = [
-      p("2026-08-01", true),
-      p("2026-07-31", true),
-      p("2026-07-30", true),
+    const logs = [
+      l("2026-08-01", 60),
+      l("2026-07-31", 60),
+      l("2026-07-30", 60),
     ];
-    expect(computeStreak(plans, "2026-08-01")).toBe(3);
+    expect(computeStreak(logs, "2026-08-01")).toBe(3);
   });
 
-  it("昨日も今日も未達成なら 0", () => {
-    const plans = [
-      p("2026-07-11", false),
-      p("2026-07-10", false),
-      p("2026-07-09", true),
-    ];
-    expect(computeStreak(plans, "2026-07-11")).toBe(0);
+  it("昨日も今日も未記録なら 0", () => {
+    const logs = [l("2026-07-09", 60)];
+    expect(computeStreak(logs, "2026-07-11")).toBe(0);
   });
 });
 
 describe("computeHeatmap", () => {
-  const flat = (weeks: { ymd: string | null; count: number }[][]) =>
+  const flat = (weeks: { ymd: string | null; minutes: number }[][]) =>
     weeks.flat();
 
   it("全セル数は7の倍数で、日付セルはその月の日数ぶんある", () => {
@@ -87,27 +88,61 @@ describe("computeHeatmap", () => {
     const weeks = computeHeatmap([], "2026-07-01");
     const cells = flat(weeks);
     const firstDow = new Date(2026, 6, 1).getDay();
-    // 先頭 firstDow 個が空白、その次が 7/1
     expect(cells.slice(0, firstDow).every((c) => c.ymd === null)).toBe(true);
     expect(cells[firstDow].ymd).toBe("2026-07-01");
   });
 
-  it("done 件数を日付ごとに数える（未達成は数えない）", () => {
-    const plans = [
-      p("2026-07-10", true),
-      p("2026-07-10", true),
-      p("2026-07-10", false), // 未達成は無視
-      p("2026-07-11", true),
+  it("学習時間を日付ごとに合算する", () => {
+    const logs = [
+      l("2026-07-10", 60),
+      l("2026-07-10", 30),
+      l("2026-07-11", 45),
     ];
-    const cells = flat(computeHeatmap(plans, "2026-07-01"));
-    expect(cells.find((c) => c.ymd === "2026-07-10")?.count).toBe(2);
-    expect(cells.find((c) => c.ymd === "2026-07-11")?.count).toBe(1);
-    expect(cells.find((c) => c.ymd === "2026-07-12")?.count).toBe(0);
+    const cells = flat(computeHeatmap(logs, "2026-07-01"));
+    expect(cells.find((c) => c.ymd === "2026-07-10")?.minutes).toBe(90);
+    expect(cells.find((c) => c.ymd === "2026-07-11")?.minutes).toBe(45);
+    expect(cells.find((c) => c.ymd === "2026-07-12")?.minutes).toBe(0);
   });
 
-  it("対象月以外の done は集計に含めない", () => {
-    const plans = [p("2026-06-30", true), p("2026-08-01", true)];
-    const cells = flat(computeHeatmap(plans, "2026-07-15"));
-    expect(cells.every((c) => c.count === 0)).toBe(true);
+  it("対象月以外の実績は集計に含めない", () => {
+    const logs = [l("2026-06-30", 60), l("2026-08-01", 60)];
+    const cells = flat(computeHeatmap(logs, "2026-07-15"));
+    expect(cells.every((c) => c.minutes === 0)).toBe(true);
+  });
+});
+
+describe("computeSubjectMinutes", () => {
+  it("期間内の科目別に合計し、SUBJECTS の並びで返す", () => {
+    const logs = [
+      l("2026-07-06", 60, "english"),
+      l("2026-07-07", 30, "english"),
+      l("2026-07-08", 90, "math"),
+    ];
+    const result = computeSubjectMinutes(logs, "2026-07-06", "2026-07-12");
+    const map = Object.fromEntries(result.map((r) => [r.value, r.minutes]));
+    expect(map.english).toBe(90);
+    expect(map.math).toBe(90);
+    expect(map.japanese).toBe(0);
+    // 先頭は SUBJECTS の並び通り english
+    expect(result[0].value).toBe("english");
+  });
+
+  it("期間外の実績は含めない（両端は含む）", () => {
+    const logs = [
+      l("2026-07-05", 60, "english"), // 期間前
+      l("2026-07-06", 60, "english"), // 開始日（含む）
+      l("2026-07-12", 60, "english"), // 終了日（含む）
+      l("2026-07-13", 60, "english"), // 期間後
+    ];
+    const result = computeSubjectMinutes(logs, "2026-07-06", "2026-07-12");
+    const english = result.find((r) => r.value === "english");
+    expect(english?.minutes).toBe(120);
+  });
+
+  it("科目未設定（null）は その他(other) に合算する", () => {
+    const logs = [l("2026-07-06", 40, undefined), l("2026-07-06", 20, "other")];
+    const result = computeSubjectMinutes(logs, "2026-07-06", "2026-07-12");
+    const other = result.find((r) => r.value === "other");
+    expect(other?.minutes).toBe(60);
   });
 });
