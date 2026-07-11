@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import prisma  from "@/lib/prisma";
 import { goalSchema } from "@/lib/validations/goal";
 import { Prisma } from "@/app/generated/prisma/client";
+import { demoReadOnlyGuard } from "@/lib/demo";
 
 
 
@@ -38,6 +39,9 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = demoReadOnlyGuard(session);
+  if (denied) return denied;
 
   const body = await request.json();
   const parsed = goalSchema.safeParse(body);

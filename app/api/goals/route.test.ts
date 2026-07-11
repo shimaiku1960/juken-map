@@ -71,6 +71,17 @@ describe("POST /api/goals", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("デモアカウントなら 403 を返す（作成しない）", async () => {
+    getSession.mockResolvedValue({
+      user: { id: "demo-1", email: "demo@juken-map.com" },
+    });
+
+    const res = await POST(makeRequest({ facultyId: 10 }));
+
+    expect(res.status).toBe(403);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("入力が不正なら 400 を返す（Zod）", async () => {
     getSession.mockResolvedValue(loggedInSession);
 

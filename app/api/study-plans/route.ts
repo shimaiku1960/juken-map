@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createStudyPlansSchema } from "@/lib/validations/studyPlan";
+import { demoReadOnlyGuard } from "@/lib/demo";
 
 export async function GET() {
   const session = await auth.api.getSession({
@@ -30,6 +31,9 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = demoReadOnlyGuard(session);
+  if (denied) return denied;
 
   const body = await request.json();
   const parsed = createStudyPlansSchema.safeParse(body);

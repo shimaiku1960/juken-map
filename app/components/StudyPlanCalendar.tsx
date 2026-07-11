@@ -88,7 +88,7 @@ const TextbookSelect = ({
         setName("");
         setAdding(false);
       },
-      onError: () => toast.error("参考書の追加に失敗しました"),
+      onError: (error) => toast.error(error.message),
     });
   };
 
@@ -350,7 +350,10 @@ export default function StudyPlanCalendar({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ done }),
       });
-      if (!res.ok) throw new Error("更新に失敗しました");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "更新に失敗しました");
+      }
     },
     onMutate: async ({ id, done }) => {
       await queryClient.cancelQueries({ queryKey: studyPlansKey });
@@ -374,7 +377,10 @@ export default function StudyPlanCalendar({
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/study-plans/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("削除に失敗しました");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "削除に失敗しました");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyPlansKey });
@@ -413,7 +419,10 @@ export default function StudyPlanCalendar({
   const goalDeleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("削除に失敗しました");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "削除に失敗しました");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: goalsKey });

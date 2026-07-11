@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { updateStudyPlanSchema } from "@/lib/validations/studyPlan";
+import { demoReadOnlyGuard } from "@/lib/demo";
 
 export async function PATCH(
   request: Request,
@@ -15,6 +16,9 @@ export async function PATCH(
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = demoReadOnlyGuard(session);
+  if (denied) return denied;
 
   const { id } = await params;
 
@@ -86,6 +90,9 @@ export async function DELETE(
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = demoReadOnlyGuard(session);
+  if (denied) return denied;
 
   const { id } = await params;
 
