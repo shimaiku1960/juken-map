@@ -8,7 +8,14 @@ import {
   type CreateStudyLogInput,
 } from "@/lib/validations/studyLog";
 import { useCreateStudyLog } from "@/app/hooks/useStudyLogs";
-import { useTextbooks } from "@/app/hooks/useTextbooks";
+import {
+  useTextbooks,
+  useTextbookMasters,
+  useUpdateTextbookProgress,
+} from "@/app/hooks/useTextbooks";
+import { ymdLocal } from "@/lib/date";
+import { RANGE_UNIT_VALUES } from "@/lib/validations/studyPlan";
+import type { UpdateTextbookProgressInput } from "@/lib/validations/textbook";
 import {
   SubjectSelect,
   TextbookSelect,
@@ -45,6 +52,8 @@ const emptyValues = () => ({
 export default function StudyLogForm() {
   const createLog = useCreateStudyLog();
   const { data: textbooks = [] } = useTextbooks();
+  const { data: masters = [] } = useTextbookMasters();
+  const updateProgress = useUpdateTextbookProgress();
 
   const form = useForm<CreateStudyLogInput>({
     resolver: zodResolver(createStudyLogSchema),
@@ -57,7 +66,32 @@ export default function StudyLogForm() {
   const selectedTextbook = textbooks.find(
     (textbook) => textbook.id === selectedTextbookId
   );
-  const lockedRangeUnit = selectedTextbook?.rangeUnit ?? null;
+
+  // 逆算設定済みの参考書を選んで単位を変えたら、その参考書の「追跡単位」を切り替える。
+  // マスタ参考書ならその単位の総量も自動反映。1参考書=1単位で逆算の一貫性を保つ。
+  const applyUnitToTextbook = (unit: string | null) => {
+    if (
+      unit == null ||
+      !selectedTextbook ||
+      selectedTextbook.totalAmount == null ||
+      !RANGE_UNIT_VALUES.includes(unit) ||
+      unit === selectedTextbook.rangeUnit
+    ) {
+      return;
+    }
+    const master = masters.find((m) => m.id === selectedTextbook.masterId);
+    const metric = master?.metrics.find((mm) => mm.unit === unit);
+    updateProgress.mutate({
+      id: selectedTextbook.id,
+      data: {
+        totalAmount: metric?.totalAmount ?? selectedTextbook.totalAmount,
+        rangeUnit: unit as UpdateTextbookProgressInput["rangeUnit"],
+        targetDate: selectedTextbook.targetDate
+          ? ymdLocal(selectedTextbook.targetDate)
+          : null,
+      },
+    });
+  };
 
   const onSubmit = (data: CreateStudyLogInput) => {
     createLog.mutate(data, {
@@ -212,8 +246,10 @@ export default function StudyLogForm() {
                 <FormControl>
                   <RangeUnitSelect
                     value={field.value}
-                    onChange={field.onChange}
-                    disabled={lockedRangeUnit != null}
+                    onChange={(unit) => {
+                      field.onChange(unit);
+                      applyUnitToTextbook(unit);
+                    }}
                   />
                 </FormControl>
                 <FormMessage />
