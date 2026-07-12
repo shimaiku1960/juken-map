@@ -204,20 +204,20 @@ export const NumberStepper = ({
         }
       />
       <div className="flex flex-col">
-        {/* 上ボタン＝減らす */}
-        <button
-          type="button"
-          aria-label="1つ減らす"
-          onClick={() => step(-1)}
-          className="flex h-[18px] w-6 items-center justify-center rounded-t-md border text-[10px] leading-none hover:bg-accent"
-        >
-          ▲
-        </button>
-        {/* 下ボタン＝増やす */}
+        {/* 上ボタン＝増やす */}
         <button
           type="button"
           aria-label="1つ増やす"
           onClick={() => step(1)}
+          className="flex h-[18px] w-6 items-center justify-center rounded-t-md border text-[10px] leading-none hover:bg-accent"
+        >
+          ▲
+        </button>
+        {/* 下ボタン＝減らす */}
+        <button
+          type="button"
+          aria-label="1つ減らす"
+          onClick={() => step(-1)}
           className="flex h-[18px] w-6 items-center justify-center rounded-b-md border border-t-0 text-[10px] leading-none hover:bg-accent"
         >
           ▼
