@@ -103,4 +103,27 @@ describe("updateTextbookProgressSchema", () => {
       }).success
     ).toBe(false);
   });
+
+  it("科目を指定できる／null・未指定も許容", () => {
+    const base = { totalAmount: 100, rangeUnit: "page", targetDate: null };
+    expect(
+      updateTextbookProgressSchema.safeParse({ ...base, subject: "english" })
+        .success
+    ).toBe(true);
+    expect(
+      updateTextbookProgressSchema.safeParse({ ...base, subject: null }).success
+    ).toBe(true);
+    expect(updateTextbookProgressSchema.safeParse(base).success).toBe(true);
+  });
+
+  it("未知の科目なら弾く", () => {
+    expect(
+      updateTextbookProgressSchema.safeParse({
+        totalAmount: 100,
+        rangeUnit: "page",
+        targetDate: null,
+        subject: "history",
+      }).success
+    ).toBe(false);
+  });
 });

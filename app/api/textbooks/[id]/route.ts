@@ -44,6 +44,8 @@ export async function PATCH(
         parsed.data.targetDate == null
           ? null
           : new Date(`${parsed.data.targetDate}T00:00:00.000Z`),
+      // subject は送られてきたときだけ更新（未指定なら現状維持）
+      ...(parsed.data.subject !== undefined && { subject: parsed.data.subject }),
     },
   });
 

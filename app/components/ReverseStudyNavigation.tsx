@@ -16,6 +16,7 @@ import {
 } from "@/lib/reverseStudyNavigation";
 import { todayYmd, ymdLocal } from "@/lib/date";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
+import { SUBJECTS, SUBJECT_VALUES, subjectColor, subjectLabel } from "@/lib/subjects";
 import type { UpdateTextbookProgressInput } from "@/lib/validations/textbook";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,6 +56,7 @@ function TextbookNavigationItem({
   const [targetDate, setTargetDate] = useState(
     textbook.targetDate == null ? "" : ymdLocal(textbook.targetDate)
   );
+  const [subject, setSubject] = useState<string>(textbook.subject ?? "");
 
   const save = () => {
     if (totalAmount == null || totalAmount < 1) {
@@ -64,7 +66,12 @@ function TextbookNavigationItem({
     updateProgress.mutate(
       {
         id: textbook.id,
-        data: { totalAmount, rangeUnit, targetDate: targetDate || null },
+        data: {
+          totalAmount,
+          rangeUnit,
+          targetDate: targetDate || null,
+          subject: subject === "" ? null : (subject as (typeof SUBJECT_VALUES)[number]),
+        },
       },
       {
         onSuccess: () => {
@@ -110,6 +117,19 @@ function TextbookNavigationItem({
             {RANGE_UNITS.map((unit) => (
               <option key={unit.value} value={unit.value}>
                 {unit.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+            className="h-9 rounded-md border bg-transparent px-2 text-sm"
+            aria-label="対策科目"
+          >
+            <option value="">科目（未設定）</option>
+            {SUBJECTS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
               </option>
             ))}
           </select>
@@ -160,7 +180,20 @@ function TextbookNavigationItem({
       <li className="rounded-lg border p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="font-medium">{textbook.name}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium">{textbook.name}</p>
+              {textbook.subject && (
+                <span
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs"
+                  style={{
+                    backgroundColor: `${subjectColor(textbook.subject)}1a`,
+                    color: subjectColor(textbook.subject),
+                  }}
+                >
+                  {subjectLabel(textbook.subject)}
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-sm text-gray-500">
               完了目標日または第一志望の受験日を設定してください
             </p>
@@ -243,6 +276,30 @@ export default function ReverseStudyNavigation({
   const { data: textbooks = [] } = useTextbooks(initialTextbooks);
   const { data: masters = [] } = useTextbookMasters();
 
+  // 科目ごとにまとめて表示（志望校→科目→参考書の因果を読み取りやすく）。
+  // 並びは SUBJECTS の順→未設定を最後に。
+  const groups = [
+    ...SUBJECTS.map((s) => s.value),
+    null as string | null,
+  ]
+    .map((subjectValue) => ({
+      subjectValue,
+      items: textbooks.filter(
+        (textbook) => (textbook.subject ?? null) === subjectValue
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const renderItem = (textbook: Textbook) => (
+    <TextbookNavigationItem
+      key={textbook.id}
+      textbook={textbook}
+      logs={logs}
+      examDate={examDate}
+      master={masters.find((master) => master.id === textbook.masterId) ?? null}
+    />
+  );
+
   return (
     <section className="mb-8">
       <h2 className="mb-3 text-xl font-bold">今日やること</h2>
@@ -253,20 +310,22 @@ export default function ReverseStudyNavigation({
               学習実績の入力欄から参考書を追加すると、今日のノルマを表示できます。
             </p>
           ) : (
-            <ul className="space-y-3">
-              {textbooks.map((textbook) => (
-                <TextbookNavigationItem
-                  key={textbook.id}
-                  textbook={textbook}
-                  logs={logs}
-                  examDate={examDate}
-                  master={
-                    masters.find((master) => master.id === textbook.masterId) ??
-                    null
-                  }
-                />
+            <div className="space-y-5">
+              {groups.map((group) => (
+                <div key={group.subjectValue ?? "none"}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: subjectColor(group.subjectValue) }}
+                    />
+                    <h3 className="text-sm font-bold text-gray-600">
+                      {subjectLabel(group.subjectValue)}
+                    </h3>
+                  </div>
+                  <ul className="space-y-3">{group.items.map(renderItem)}</ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </CardContent>
       </Card>

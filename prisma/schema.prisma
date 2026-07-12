@@ -153,6 +153,9 @@ model Textbook {
   totalAmount Int?
   rangeUnit   String?
   targetDate  DateTime?
+  // 対策科目（english/math/... SUBJECT_VALUES）。未設定は null。
+  // 志望校（受験日）→科目→参考書→今日のノルマ、という計画〜実行の因果を繋ぐ。
+  subject     String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
