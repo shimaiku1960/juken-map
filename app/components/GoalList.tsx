@@ -128,10 +128,17 @@ export default function GoalList({ initialGoals, faculties }: Props) {
 
   const decided = goals.filter((goal) => goal.status === "decided");
   const candidates = goals.filter((goal) => goal.status === "candidate");
+  // 比較テーブルは受験日の早い順に並べる（日程の比較をしやすく）
+  const sortedCandidates = [...candidates].sort(
+    (a, b) =>
+      new Date(a.faculty.examDate).getTime() -
+      new Date(b.faculty.examDate).getTime()
+  );
   const firstChoice = decided.find((goal) => goal.isFirstChoice);
   const others = decided.filter((goal) => !goal.isFirstChoice);
 
-  const renderGoalCard = (goal: Goal, isCandidate = false) => {
+  // 受験校（decided）カード。候補は比較テーブルで別途表示する。
+  const renderGoalCard = (goal: Goal) => {
     const days = daysUntil(goal.faculty.examDate);
     return (
       <li
@@ -160,29 +167,18 @@ export default function GoalList({ initialGoals, faculties }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          {isCandidate ? (
-            <button
-              onClick={() => statusMutation.mutate(goal.id)}
-              disabled={statusMutation.isPending}
-              className="text-sm text-blue-600 hover:underline"
-              title="この学部を受験校として確定する"
-            >
-              受験校にする
-            </button>
-          ) : (
-            <button
-              onClick={() =>
-                firstChoiceMutation.mutate({
-                  id: goal.id,
-                  value: !goal.isFirstChoice,
-                })
-              }
-              className="text-sm hover:underline"
-              title={goal.isFirstChoice ? "第一志望を解除" : "第一志望にする"}
-            >
-              {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
-            </button>
-          )}
+          <button
+            onClick={() =>
+              firstChoiceMutation.mutate({
+                id: goal.id,
+                value: !goal.isFirstChoice,
+              })
+            }
+            className="text-sm hover:underline"
+            title={goal.isFirstChoice ? "第一志望を解除" : "第一志望にする"}
+          >
+            {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
+          </button>
           <button
             onClick={() => deleteMutation.mutate(goal.id)}
             className="text-red-500 text-sm hover:underline"
@@ -263,9 +259,79 @@ export default function GoalList({ initialGoals, faculties }: Props) {
           検討中（候補）
         </h3>
         {candidates.length > 0 ? (
-          <ul className="space-y-2">
-            {candidates.map((goal) => renderGoalCard(goal, true))}
-          </ul>
+          <>
+            <p className="mb-2 text-xs text-gray-400">
+              受験日順に並べて比較できます。決めたら「受験校にする」を押してください。
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-gray-500">
+                    <th className="py-2 pr-3 font-medium">大学・学部</th>
+                    <th className="py-2 pr-3 font-medium">系統</th>
+                    <th className="py-2 pr-3 font-medium">受験日</th>
+                    <th className="py-2 pr-3 font-medium">区分</th>
+                    <th className="py-2 font-medium" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedCandidates.map((goal) => {
+                    const days = daysUntil(goal.faculty.examDate);
+                    return (
+                      <tr key={goal.id} className="border-b align-top">
+                        <td className="py-3 pr-3">
+                          <p className="font-medium">
+                            {goal.faculty.university.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {goal.faculty.name}
+                          </p>
+                        </td>
+                        <td className="py-3 pr-3">
+                          <div className="flex flex-wrap gap-1">
+                            {goal.faculty.tags.map((tag) => (
+                              <span
+                                key={tag.name}
+                                className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+                              >
+                                #{tag.name}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-3 whitespace-nowrap">
+                          {formatExamDate(goal.faculty.examDate)}
+                          {days >= 0 && (
+                            <span className="ml-1 text-xs text-blue-600">
+                              (あと{days}日)
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-3 whitespace-nowrap text-gray-600">
+                          {goal.faculty.university.type || "—"}
+                        </td>
+                        <td className="py-3 whitespace-nowrap text-right">
+                          <button
+                            onClick={() => statusMutation.mutate(goal.id)}
+                            disabled={statusMutation.isPending}
+                            className="text-sm text-blue-600 hover:underline"
+                          >
+                            受験校にする
+                          </button>
+                          <button
+                            onClick={() => deleteMutation.mutate(goal.id)}
+                            className="ml-3 text-sm text-red-500 hover:underline"
+                          >
+                            削除
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <p className="text-sm text-gray-400">
             「大学を探す」で気になる学部を候補に追加すると、ここで比較して受験校を決められます。

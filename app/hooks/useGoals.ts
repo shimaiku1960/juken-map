@@ -8,7 +8,7 @@ export type Faculty = {
   id: number;
   name: string;
   examDate: Date;
-  university: { name: string };
+  university: { name: string; type: string; prefecture: string };
   tags: { name: string }[];
 };
 

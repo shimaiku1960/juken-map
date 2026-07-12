@@ -66,7 +66,11 @@ const SchedulePage = async () => {
       id: g.faculty.id,
       name: g.faculty.name,
       examDate: g.faculty.examDate,
-      university: { name: g.faculty.university.name },
+      university: {
+        name: g.faculty.university.name,
+        type: g.faculty.university.type,
+        prefecture: g.faculty.university.prefecture,
+      },
       tags: g.faculty.tags.map((t) => ({ name: t.name })),
     },
   }));
