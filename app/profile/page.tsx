@@ -1,9 +1,8 @@
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import ProfileEdit from "@/app/components/ProfileEdit";
-import GoalList from "@/app/components/GoalList";
 import { Card, CardContent } from "@/components/ui/card";
 
 const ProfilePage = async () => {
@@ -17,22 +16,6 @@ const ProfilePage = async () => {
 
     const user = session.user;
     const nickname = user.nickname ?? user.name ?? "ユーザー";
-
-    const goals = await prisma.finalGoal.findMany({
-        where: { userId: user.id },
-        include: {
-          faculty: {
-            include: { university: true, tags: true },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      });
-
-    const faculties = await prisma.faculty.findMany({
-        include: { university: true, tags: true },
-        orderBy: { id: "asc" },
-      });
-
 
       return (
         <main className="w-full mx-auto max-w-3xl p-8">
@@ -58,8 +41,16 @@ const ProfilePage = async () => {
 
   <h2 className="text-2xl font-bold mt-10 mb-4">志望校</h2>
   <Card>
-    <CardContent>
-      <GoalList initialGoals={goals} faculties={faculties} />
+    <CardContent className="flex flex-wrap items-center justify-between gap-3 py-5">
+      <p className="text-sm text-gray-500">
+        志望校の設定・第一志望の切り替えは「志望校」ページに移動しました。
+      </p>
+      <Link
+        href="/goals"
+        className="text-sm text-blue-500 hover:underline whitespace-nowrap"
+      >
+        志望校ページへ →
+      </Link>
     </CardContent>
   </Card>
         </main>

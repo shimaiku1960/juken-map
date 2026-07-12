@@ -1,5 +1,59 @@
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import GoalList from "@/app/components/GoalList";
+import { Card, CardContent } from "@/components/ui/card";
 
-export default function GoalsPage() {
-  redirect("/profile");
-}
+// 志望校ページ＝「受験戦略を俯瞰し、受験校を決める」場所。
+// 以前はプロフィール下部に埋もれていた GoalList をここへ独立させた。
+const GoalsPage = async () => {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  const goals = await prisma.finalGoal.findMany({
+    where: { userId: session.user.id },
+    include: {
+      faculty: {
+        include: { university: true, tags: true },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const faculties = await prisma.faculty.findMany({
+    include: { university: true, tags: true },
+    orderBy: { id: "asc" },
+  });
+
+  return (
+    <main className="w-full mx-auto max-w-3xl p-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold">志望校</h1>
+        <Link
+          href="/explore"
+          className="text-sm text-blue-500 hover:underline"
+        >
+          大学を探す →
+        </Link>
+      </div>
+      <p className="mb-6 text-sm text-gray-500">
+        第一志望と併願校を俯瞰して、受験する大学・学部を決めましょう。
+      </p>
+
+      <Card>
+        <CardContent>
+          <GoalList initialGoals={goals} faculties={faculties} />
+        </CardContent>
+      </Card>
+    </main>
+  );
+};
+
+export default GoalsPage;

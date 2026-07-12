@@ -15,30 +15,41 @@ const Header = async () => {
         受験マップ
       </Link>                                                                                        
       <nav className="flex gap-4 items-center">
-        <Link href="/blog" className="text-blue-500 hover:underline">
-          ブログ
-        </Link>
         {user ? (
           <>
-            <Link href="/explore" className="text-blue-500 hover:underline">
-              大学を探す
+            <Link href="/" className="text-blue-500 hover:underline">
+              今日
+            </Link>
+            <Link href="/goals" className="text-blue-500 hover:underline">
+              志望校
             </Link>
             <Link href="/schedule" className="text-blue-500 hover:underline">
               学習予定
             </Link>
+            <Link href="/explore" className="text-blue-500 hover:underline">
+              大学を探す
+            </Link>
+            <Link href="/blog" className="text-blue-500 hover:underline">
+              ブログ
+            </Link>
             <Link href="/profile" className="text-blue-500 hover:underline">
               プロフィール
-            </Link>                
+            </Link>
             <form action={logout}>                                                                   
               <button type="submit" className="text-red-500 hover:underline">                        
                 ログアウト
               </button>                                                                              
             </form>                                                                                
           </>
-        ) : (                                                                                        
-          <Link href="/login" className="text-blue-500 hover:underline">
-            ログイン                                                                                 
-          </Link>                                                                                  
+        ) : (
+          <>
+            <Link href="/blog" className="text-blue-500 hover:underline">
+              ブログ
+            </Link>
+            <Link href="/login" className="text-blue-500 hover:underline">
+              ログイン
+            </Link>
+          </>
         )}
       </nav>
     </header>
