@@ -7,9 +7,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Project Memory
 
 When resuming work, checking previous decisions, or reviewing the user's working
-preferences, treat Claude Code's auto-memory as the source of truth:
+preferences, treat Claude Code's auto-memory as the source of truth. Access it
+through the repo-local entry point (a gitignored symlink to the real external
+location):
 
-`~/.claude/projects/-Users-ikuroshimamura-dev-product-juken-map/memory/MEMORY.md`
+`./.agent-memory/MEMORY.md`
 
 Read only the relevant topic files referenced from that file when additional
 detail is needed. Do not use the repository-local `memory/MEMORY.md` as the

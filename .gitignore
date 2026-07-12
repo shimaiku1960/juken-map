@@ -45,6 +45,9 @@ next-env.d.ts
 # Claude auto-memory（私的メモ・公開リポジトリに含めない）
 memory/
 
+# エージェント共有メモリへのsymlink入口（実体は ~/.claude/... 外部・公開しない）
+/.agent-memory
+
 # Playwright（E2E）
 /test-results
 /playwright-report
