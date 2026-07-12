@@ -146,7 +146,7 @@ const Home = async () => {
                 </p>
               </div>
               <Link
-                href="/profile"
+                href="/goals"
                 className="text-blue-600 hover:underline text-sm"
               >
                 志望校を設定 →

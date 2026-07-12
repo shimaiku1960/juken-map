@@ -49,10 +49,10 @@ export default function ExamCountdown({ goals }: { goals: CountdownGoal[] }) {
         <CardContent className="py-6 text-center">
           <p className="text-gray-600">まだ志望校が登録されていません。</p>
           <Link
-            href="/profile"
+            href="/goals"
             className="text-blue-600 hover:underline text-sm"
           >
-            プロフィールで志望校を設定する →
+            志望校を設定する →
           </Link>
         </CardContent>
       </Card>
