@@ -50,7 +50,10 @@ const Home = async () => {
     }),
   ]);
 
-  const countdownGoals: CountdownGoal[] = goals.map((goal) => ({
+  // 受験校（decided）のみをダッシュボードの対象にする。候補（candidate）は志望校ページで比較検討中。
+  const decidedGoals = goals.filter((goal) => goal.status === "decided");
+
+  const countdownGoals: CountdownGoal[] = decidedGoals.map((goal) => ({
     id: goal.id,
     universityName: goal.faculty.university.name,
     facultyName: goal.faculty.name,
@@ -106,8 +109,9 @@ const Home = async () => {
   }));
 
   // ④ 志望校サマリー
-  const firstChoice = goals.find((g) => g.isFirstChoice) ?? null;
-  const otherCount = goals.filter((g) => !g.isFirstChoice).length;
+  const firstChoice = decidedGoals.find((g) => g.isFirstChoice) ?? null;
+  const otherCount = decidedGoals.filter((g) => !g.isFirstChoice).length;
+  const candidateCount = goals.length - decidedGoals.length;
   return (
     <main className="w-full mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-bold mb-6">ダッシュボード</h1>
@@ -143,6 +147,7 @@ const Home = async () => {
                 </p>
                 <p className="mt-1 text-sm text-gray-500">
                   併願：{otherCount} 校
+                  {candidateCount > 0 && ` ・ 検討中：${candidateCount} 校`}
                 </p>
               </div>
               <Link

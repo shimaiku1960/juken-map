@@ -94,6 +94,26 @@ export default function GoalList({ initialGoals, faculties }: Props) {
     onError: (error) => toast.error(error.message),
   });
 
+  // 候補 → 受験校に確定
+  const statusMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/goals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "decided" }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "更新に失敗しました");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: goalsKey });
+      toast.success("受験校に決めました");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
   const onSubmit = (data: GoalInput) => addMutation.mutate(data);
 
   // 学部セレクトを大学ごとに optgroup でまとめる
@@ -106,10 +126,12 @@ export default function GoalList({ initialGoals, faculties }: Props) {
     {}
   );
 
-  const firstChoice = goals.find((goal) => goal.isFirstChoice);
-  const others = goals.filter((goal) => !goal.isFirstChoice);
+  const decided = goals.filter((goal) => goal.status === "decided");
+  const candidates = goals.filter((goal) => goal.status === "candidate");
+  const firstChoice = decided.find((goal) => goal.isFirstChoice);
+  const others = decided.filter((goal) => !goal.isFirstChoice);
 
-  const renderGoalCard = (goal: Goal) => {
+  const renderGoalCard = (goal: Goal, isCandidate = false) => {
     const days = daysUntil(goal.faculty.examDate);
     return (
       <li
@@ -138,18 +160,29 @@ export default function GoalList({ initialGoals, faculties }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={() =>
-              firstChoiceMutation.mutate({
-                id: goal.id,
-                value: !goal.isFirstChoice,
-              })
-            }
-            className="text-sm hover:underline"
-            title={goal.isFirstChoice ? "第一志望を解除" : "第一志望にする"}
-          >
-            {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
-          </button>
+          {isCandidate ? (
+            <button
+              onClick={() => statusMutation.mutate(goal.id)}
+              disabled={statusMutation.isPending}
+              className="text-sm text-blue-600 hover:underline"
+              title="この学部を受験校として確定する"
+            >
+              受験校にする
+            </button>
+          ) : (
+            <button
+              onClick={() =>
+                firstChoiceMutation.mutate({
+                  id: goal.id,
+                  value: !goal.isFirstChoice,
+                })
+              }
+              className="text-sm hover:underline"
+              title={goal.isFirstChoice ? "第一志望を解除" : "第一志望にする"}
+            >
+              {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
+            </button>
+          )}
           <button
             onClick={() => deleteMutation.mutate(goal.id)}
             className="text-red-500 text-sm hover:underline"
@@ -214,12 +247,29 @@ export default function GoalList({ initialGoals, faculties }: Props) {
         )}
       </section>
 
-      <section>
+      <section className="mb-6">
         <h3 className="text-sm font-bold text-gray-500 mb-2">併願校</h3>
         {others.length > 0 ? (
-          <ul className="space-y-2">{others.map(renderGoalCard)}</ul>
+          <ul className="space-y-2">
+            {others.map((goal) => renderGoalCard(goal))}
+          </ul>
         ) : (
           <p className="text-sm text-gray-400">併願校はありません</p>
+        )}
+      </section>
+
+      <section>
+        <h3 className="text-sm font-bold text-gray-500 mb-2">
+          検討中（候補）
+        </h3>
+        {candidates.length > 0 ? (
+          <ul className="space-y-2">
+            {candidates.map((goal) => renderGoalCard(goal, true))}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-400">
+            「大学を探す」で気になる学部を候補に追加すると、ここで比較して受験校を決められます。
+          </p>
         )}
       </section>
     </div>

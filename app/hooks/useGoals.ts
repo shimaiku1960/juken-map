@@ -12,12 +12,15 @@ export type Faculty = {
   tags: { name: string }[];
 };
 
+export type GoalStatus = "candidate" | "decided";
+
 export type Goal = {
   id: number;
   createdAt: Date;
   userId: string;
   isFirstChoice: boolean;
   note: string | null;
+  status: GoalStatus;
   faculty: Faculty;
 };
 

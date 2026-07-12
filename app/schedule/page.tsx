@@ -61,6 +61,7 @@ const SchedulePage = async () => {
     userId: g.userId,
     isFirstChoice: g.isFirstChoice,
     note: g.note,
+    status: g.status as Goal["status"],
     faculty: {
       id: g.faculty.id,
       name: g.faculty.name,

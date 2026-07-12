@@ -288,7 +288,9 @@ export default function StudyPlanCalendar({
   }));
 
   // 受験日程イベント（読み取り専用。第一志望は ★ を付ける）
-  const examEvents = goals.map((g) => ({
+  const examEvents = goals
+    .filter((g) => g.status === "decided")
+    .map((g) => ({
     id: `exam-${g.id}`,
     title: `【受験】${g.faculty.university.name} ${g.faculty.name}${
       g.isFirstChoice ? " ★" : ""

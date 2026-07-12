@@ -55,6 +55,7 @@ export async function POST(request: Request) {
       data: {
         facultyId: parsed.data.facultyId,
         userId: session.user.id,
+        status: parsed.data.status ?? "decided",
       },
       include: {
         faculty: {
