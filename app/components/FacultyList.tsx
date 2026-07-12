@@ -27,16 +27,18 @@ export default function FacultyList({
 
   // ["goals"] を購読。読み込み前は SSR で渡された prop をフォールバックに使う（チラつき防止）
   const { data: goals } = useGoals();
-  const registeredIds = goals
-    ? goals.map((g) => g.faculty.id)
-    : registeredFacultyIds;
+  // 学部ID → 現在のステータス（candidate/decided）。未登録なら未定義。
+  const statusByFaculty = goals
+    ? new Map(goals.map((g) => [g.faculty.id, g.status]))
+    : new Map(registeredFacultyIds.map((id) => [id, "decided" as const]));
 
+  // 探す画面からは「気になる（候補）」として追加する。比較検討は志望校ページで。
   const registerMutation = useMutation({
     mutationFn: async (facultyId: number) => {
       const res = await fetch("/api/goals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ facultyId }),
+        body: JSON.stringify({ facultyId, status: "candidate" }),
       });
       if (res.ok) return { duplicated: false };
       const err = await res.json();
@@ -48,9 +50,9 @@ export default function FacultyList({
       // ["goals"] を無効化 → GoalList 含め同じキャッシュを見る全員が最新に
       queryClient.invalidateQueries({ queryKey: goalsKey });
       if (duplicated) {
-        toast.info("すでに登録済みです");
+        toast.info("すでに追加済みです");
       } else {
-        toast.success("志望校に追加しました");
+        toast.success("候補に追加しました（志望校ページで比較できます）");
       }
     },
     onError: (error) => toast.error(error.message),
@@ -59,7 +61,13 @@ export default function FacultyList({
   return (
     <ul className="space-y-2">
       {faculties.map((faculty) => {
-        const isRegistered = registeredIds.includes(faculty.id);
+        const status = statusByFaculty.get(faculty.id);
+        const label =
+          status === "decided"
+            ? "受験校"
+            : status === "candidate"
+              ? "候補に追加済み"
+              : "気になる";
         return (
           <li
             key={faculty.id}
@@ -73,10 +81,10 @@ export default function FacultyList({
             </div>
             <Button
               onClick={() => registerMutation.mutate(faculty.id)}
-              disabled={isRegistered || registerMutation.isPending}
-              variant={isRegistered ? "secondary" : "default"}
+              disabled={status !== undefined || registerMutation.isPending}
+              variant={status !== undefined ? "secondary" : "default"}
             >
-              {isRegistered ? "登録済み" : "志望校に追加"}
+              {label}
             </Button>
           </li>
         );

@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import GoalList from "@/app/components/GoalList";
+import type { Goal } from "@/app/hooks/useGoals";
 import { Card, CardContent } from "@/components/ui/card";
 
 // 志望校ページ＝「受験戦略を俯瞰し、受験校を決める」場所。
@@ -17,7 +18,7 @@ const GoalsPage = async () => {
     redirect("/login");
   }
 
-  const goals = await prisma.finalGoal.findMany({
+  const goalsRaw = await prisma.finalGoal.findMany({
     where: { userId: session.user.id },
     include: {
       faculty: {
@@ -26,6 +27,12 @@ const GoalsPage = async () => {
     },
     orderBy: { createdAt: "asc" },
   });
+
+  // Prisma の status(string) を Goal 型（"candidate" | "decided"）に揃える
+  const goals: Goal[] = goalsRaw.map((g) => ({
+    ...g,
+    status: g.status as Goal["status"],
+  }));
 
   const faculties = await prisma.faculty.findMany({
     include: { university: true, tags: true },

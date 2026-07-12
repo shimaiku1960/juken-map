@@ -85,6 +85,10 @@ model FinalGoal {
   isFirstChoice Boolean @default(false)
   note          String? @db.Text
 
+  // "candidate"（気になる＝比較検討中）/ "decided"（受験校として確定）。
+  // 既存行は decided 相当のためデフォルトを decided に。探す画面からは candidate で追加する。
+  status String @default("decided")
+
   @@unique([userId, facultyId])
 }
 

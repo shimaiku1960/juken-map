@@ -109,6 +109,14 @@ export async function PATCH(
     });
   }
 
+  // ステータス更新（候補→受験校に確定 など。送られてきたときだけ）
+  if (parsed.data.status !== undefined) {
+    await prisma.finalGoal.update({
+      where: { id: Number(id) },
+      data: { status: parsed.data.status },
+    });
+  }
+
   return NextResponse.json({ message: "OK" });
 }
 

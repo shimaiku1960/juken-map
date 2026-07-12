@@ -50,11 +50,20 @@ async function main() {
   console.log(`デモユーザーを投入: ${DEMO_EMAIL}`);
 
   // 3. 志望校（FinalGoal）サンプル。既存の大学＋学部を名前で引いて紐づける。
-  const demoGoals: { university: string; faculty: string; isFirstChoice: boolean; note?: string }[] = [
-    { university: "早稲田大学", faculty: "政治経済学部", isFirstChoice: true, note: "第一志望。英語と数学を重点的に。" },
-    { university: "慶應義塾大学", faculty: "経済学部", isFirstChoice: false, note: "小論文対策が必要。" },
-    { university: "明治大学", faculty: "政治経済学部", isFirstChoice: false },
-    { university: "中央大学", faculty: "経済学部", isFirstChoice: false, note: "併願の安全校。" },
+  const demoGoals: {
+    university: string;
+    faculty: string;
+    isFirstChoice: boolean;
+    status: "candidate" | "decided";
+    note?: string;
+  }[] = [
+    { university: "早稲田大学", faculty: "政治経済学部", isFirstChoice: true, status: "decided", note: "第一志望。英語と数学を重点的に。" },
+    { university: "慶應義塾大学", faculty: "経済学部", isFirstChoice: false, status: "decided", note: "小論文対策が必要。" },
+    { university: "明治大学", faculty: "政治経済学部", isFirstChoice: false, status: "decided" },
+    { university: "中央大学", faculty: "経済学部", isFirstChoice: false, status: "decided", note: "併願の安全校。" },
+    // 比較検討中の候補（受験校としては未確定）
+    { university: "法政大学", faculty: "経済学部", isFirstChoice: false, status: "candidate", note: "日程が合えば受験候補。" },
+    { university: "青山学院大学", faculty: "経済学部", isFirstChoice: false, status: "candidate" },
   ];
 
   for (const g of demoGoals) {
@@ -67,12 +76,13 @@ async function main() {
 
     await prisma.finalGoal.upsert({
       where: { userId_facultyId: { userId: demoUser.id, facultyId: faculty.id } },
-      update: { isFirstChoice: g.isFirstChoice, note: g.note ?? null },
+      update: { isFirstChoice: g.isFirstChoice, note: g.note ?? null, status: g.status },
       create: {
         userId: demoUser.id,
         facultyId: faculty.id,
         isFirstChoice: g.isFirstChoice,
         note: g.note ?? null,
+        status: g.status,
       },
     });
   }
