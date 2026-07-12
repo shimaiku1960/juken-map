@@ -38,6 +38,7 @@ const SchedulePage = async () => {
           totalAmount: p.textbook.totalAmount,
           rangeUnit: p.textbook.rangeUnit,
           targetDate: p.textbook.targetDate?.toISOString() ?? null,
+          subject: p.textbook.subject,
         }
       : null,
     rangeStart: p.rangeStart,

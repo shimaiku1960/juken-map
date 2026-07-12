@@ -10,6 +10,7 @@ export type Textbook = {
   totalAmount: number | null;
   rangeUnit: string | null;
   targetDate: string | null;
+  subject: string | null;
 };
 
 export type StudyPlan = {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SUBJECT_VALUES } from "@/lib/subjects";
 
 const textbookNameSchema = z
   .string()
@@ -26,6 +27,11 @@ export const updateTextbookProgressSchema = z.object({
     "section",
   ]),
   targetDate: z.iso.date().nullable(),
+  // 対策科目。未設定は null。送られてこなければ現状維持。
+  subject: z
+    .enum(SUBJECT_VALUES as [string, ...string[]])
+    .nullable()
+    .optional(),
 });
 
 export type CreateTextbookInput = z.infer<typeof createTextbookSchema>;

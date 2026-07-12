@@ -90,6 +90,7 @@ const Home = async () => {
           totalAmount: l.textbook.totalAmount,
           rangeUnit: l.textbook.rangeUnit,
           targetDate: l.textbook.targetDate?.toISOString() ?? null,
+          subject: l.textbook.subject,
         }
       : null,
     rangeStart: l.rangeStart,
@@ -106,6 +107,7 @@ const Home = async () => {
     totalAmount: textbook.totalAmount,
     rangeUnit: textbook.rangeUnit,
     targetDate: textbook.targetDate?.toISOString() ?? null,
+    subject: textbook.subject,
   }));
 
   // ④ 志望校サマリー
