@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "npm run dev:infra && next dev -p 3000",
+    "dev:infra": "docker compose up -d --wait db",
+    "dev:infra:stop": "docker compose stop db",
+    "dev:infra:logs": "docker compose logs -f db",
     "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint",
