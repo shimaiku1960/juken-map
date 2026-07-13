@@ -12,6 +12,60 @@
   text-decoration: line-through;
 }
 
+/* FullCalendar をアプリのデザイントークンに寄せる（/schedule） */
+.fc {
+  font-family: var(--font-sans);
+  /* 枠線・背景 */
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: var(--card);
+  --fc-neutral-bg-color: var(--muted);
+  /* 今日のセル */
+  --fc-today-bg-color: var(--accent);
+  /* prev/next/today ボタンを primary に */
+  --fc-button-text-color: var(--primary-foreground);
+  --fc-button-bg-color: var(--primary);
+  --fc-button-border-color: var(--primary);
+  --fc-button-hover-bg-color: var(--primary);
+  --fc-button-hover-border-color: var(--primary);
+  --fc-button-active-bg-color: var(--primary);
+  --fc-button-active-border-color: var(--primary);
+}
+
+/* ボタンの角丸・フォーカスリング・影をトークンに合わせる */
+.fc .fc-button {
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  text-transform: none;
+  box-shadow: none;
+}
+.fc .fc-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.fc .fc-button:disabled {
+  opacity: 0.5;
+}
+
+/* 年月タイトル・曜日/日付の文字色 */
+.fc .fc-toolbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+/* イベントの角丸 */
+.fc .fc-daygrid-event {
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+}
+
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans);
