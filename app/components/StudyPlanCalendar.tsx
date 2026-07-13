@@ -645,7 +645,7 @@ export default function StudyPlanCalendar({
                       <FormItem>
                         <FormLabel>参考書</FormLabel>
                         <FormControl>
-                          <div>
+                          <div className="min-w-0 [&>select]:w-full">
                             <TextbookSelect
                               value={field.value}
                               onChange={field.onChange}
