@@ -4,6 +4,14 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+## Language
+
+Always respond to the user in Japanese (日本語), regardless of the language of
+these instructions or any documentation you read (including
+`node_modules/next/dist/docs/`). Code, identifiers, and commit messages follow
+each project's existing conventions, but all conversational replies to the user
+must be in Japanese.
+
 ## Project Memory
 
 When resuming work, checking previous decisions, or reviewing the user's working
