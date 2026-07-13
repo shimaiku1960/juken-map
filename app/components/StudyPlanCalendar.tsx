@@ -605,7 +605,7 @@ export default function StudyPlanCalendar({
                   onSubmit={editForm.handleSubmit((data) =>
                     updateMutation.mutate({ id: editingPlan.id, data })
                   )}
-                  className="space-y-4"
+                  className="min-w-0 space-y-4"
                 >
                   <FormField
                     control={editForm.control}
