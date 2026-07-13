@@ -448,7 +448,7 @@ export default function StudyPlanCalendar({
           )}
 
           {/* 追加エリア（その日で複数登録） */}
-          <div className="border-t pt-4">
+          <div className="border-t pt-4 min-w-0">
             <Form {...createForm}>
               <form
                 onSubmit={createForm.handleSubmit((data) =>

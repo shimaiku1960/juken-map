@@ -26,7 +26,7 @@ export const SubjectSelect = ({
   <select
     value={value ?? ""}
     onChange={(e) => onChange(e.target.value || null)}
-    className="h-9 rounded-md border bg-transparent px-2 text-sm"
+    className="h-9 shrink-0 rounded-md border bg-transparent px-2 text-sm"
   >
     <option value="">科目なし</option>
     {SUBJECTS.map((s) => (
@@ -119,7 +119,7 @@ export const TextbookSelect = ({
         onChange(e.target.value ? Number(e.target.value) : null);
       }}
       disabled={createTextbook.isPending}
-      className="h-9 rounded-md border bg-transparent px-2 text-sm"
+      className="h-9 min-w-0 rounded-md border bg-transparent px-2 text-sm"
     >
       <option value="">参考書なし</option>
       {textbooks.map((t) => (
