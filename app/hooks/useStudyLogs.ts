@@ -15,6 +15,7 @@ export type StudyLog = {
   rangeEnd: number | null;
   rangeUnit: string | null;
   memo: string | null;
+  studyPlanId: number | null;
   createdAt: string;
   updatedAt: string;
 };

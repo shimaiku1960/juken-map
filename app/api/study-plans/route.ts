@@ -17,10 +17,15 @@ export async function GET() {
   const plans = await prisma.studyPlan.findMany({
     where: { userId: session.user.id },
     orderBy: { date: "asc" },
-    include: { textbook: true },
+    include: { textbook: true, studyLog: { select: { id: true } } },
   });
 
-  return NextResponse.json(plans);
+  return NextResponse.json(
+    plans.map(({ studyLog, ...plan }) => ({
+      ...plan,
+      studyLogId: studyLog?.id ?? null,
+    }))
+  );
 }
 
 export async function POST(request: Request) {

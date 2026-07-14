@@ -24,7 +24,7 @@ const Home = async () => {
     redirect("/login");
   }
 
-  const [goals, plans, logsRaw, textbooks] = await Promise.all([
+  const [goals, plans, logsRaw] = await Promise.all([
     prisma.finalGoal.findMany({
       where: { userId: session.user.id },
       include: {
@@ -43,10 +43,6 @@ const Home = async () => {
       where: { userId: session.user.id },
       orderBy: { date: "desc" },
       include: { textbook: true },
-    }),
-    prisma.textbook.findMany({
-      where: { userId: session.user.id },
-      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -67,7 +63,20 @@ const Home = async () => {
 
   const todayPlans: TodayPlan[] = plans
     .filter((p) => ymdLocal(p.date) === todayStr)
-    .map((p) => ({ id: p.id, content: studyPlanLabel(p), done: p.done }));
+    .map((p) => {
+      const linkedLog = logsRaw.find((log) => log.studyPlanId === p.id);
+      return {
+        id: p.id,
+        content: studyPlanLabel(p),
+        done: p.done,
+        subject: p.subject,
+        textbookName: p.textbook?.name ?? null,
+        rangeStart: p.rangeStart,
+        rangeEnd: p.rangeEnd,
+        rangeUnit: p.rangeUnit,
+        recordedMinutes: linkedLog?.minutes ?? null,
+      };
+    });
 
   const weekCount = plans.filter((p) => {
     const d = ymdLocal(p.date);
@@ -97,19 +106,10 @@ const Home = async () => {
     rangeEnd: l.rangeEnd,
     rangeUnit: l.rangeUnit,
     memo: l.memo,
+    studyPlanId: l.studyPlanId,
     createdAt: l.createdAt.toISOString(),
     updatedAt: l.updatedAt.toISOString(),
   }));
-  const initialTextbooks = textbooks.map((textbook) => ({
-    id: textbook.id,
-    masterId: textbook.masterId,
-    name: textbook.name,
-    totalAmount: textbook.totalAmount,
-    rangeUnit: textbook.rangeUnit,
-    targetDate: textbook.targetDate?.toISOString() ?? null,
-    subject: textbook.subject,
-  }));
-
   // ④ 志望校サマリー
   const firstChoice = decidedGoals.find((g) => g.isFirstChoice) ?? null;
   const otherCount = decidedGoals.filter((g) => !g.isFirstChoice).length;
@@ -129,11 +129,7 @@ const Home = async () => {
       </section>
 
       {/* 学習の記録・科目別・実績記録（クライアントで集計してリアクティブに更新） */}
-      <StudyRecordDashboard
-        initialLogs={initialLogs}
-        initialTextbooks={initialTextbooks}
-        firstChoiceExamDate={firstChoice?.faculty.examDate.toISOString() ?? null}
-      />
+      <StudyRecordDashboard initialLogs={initialLogs} />
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">志望校</h2>

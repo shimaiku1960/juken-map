@@ -345,13 +345,23 @@ export default function StudyPlanCalendar({
                   type="checkbox"
                   className="h-4 w-4 shrink-0"
                   checked={plan.done}
+                  disabled={plan.studyLogId != null}
                   onChange={() =>
                     toggleDoneMutation.mutate({
                       id: plan.id,
                       done: !plan.done,
                     })
                   }
-                  aria-label="完了"
+                  aria-label={
+                    plan.studyLogId != null
+                      ? "実績記録済みのため完了解除できません"
+                      : "予定のみ完了（学習時間は記録されません）"
+                  }
+                  title={
+                    plan.studyLogId != null
+                      ? "実績記録済みのため完了解除できません"
+                      : "予定のみ完了（学習時間は記録されません）"
+                  }
                 />
                 <span
                   className="h-3 w-3 shrink-0 rounded-full"
@@ -367,6 +377,11 @@ export default function StudyPlanCalendar({
                   >
                     {studyPlanLabel(plan)}
                   </p>
+                  {plan.studyLogId != null && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      実績記録済み
+                    </p>
+                  )}
                 </div>
                 <Button
                   variant="outline"
@@ -407,13 +422,23 @@ export default function StudyPlanCalendar({
                     type="checkbox"
                     className="h-4 w-4 shrink-0"
                     checked={plan.done}
+                    disabled={plan.studyLogId != null}
                     onChange={() =>
                       toggleDoneMutation.mutate({
                         id: plan.id,
                         done: !plan.done,
                       })
                     }
-                    aria-label="完了"
+                    aria-label={
+                      plan.studyLogId != null
+                        ? "実績記録済みのため完了解除できません"
+                        : "予定のみ完了（学習時間は記録されません）"
+                    }
+                    title={
+                      plan.studyLogId != null
+                        ? "実績記録済みのため完了解除できません"
+                        : "予定のみ完了（学習時間は記録されません）"
+                    }
                   />
                   <span
                     className="h-3 w-3 shrink-0 rounded-full"
@@ -426,6 +451,11 @@ export default function StudyPlanCalendar({
                     }`}
                   >
                     {studyPlanLabel(plan)}
+                    {plan.studyLogId != null && (
+                      <span className="mt-1 block text-xs text-muted-foreground no-underline">
+                        実績記録済み
+                      </span>
+                    )}
                   </span>
                   <Button
                     variant="outline"

@@ -66,3 +66,48 @@ export const createStudyLogSchema = z
   });
 
 export type CreateStudyLogInput = z.infer<typeof createStudyLogSchema>;
+
+// 今日の予定から実績を作るときは、予定側の日付・科目・参考書を引き継ぐ。
+export const completeStudyPlanSchema = z
+  .object({
+    minutes: z
+      .number({ message: "学習時間を入力してください" })
+      .int("整数で入力してください")
+      .positive("1分以上を入力してください")
+      .max(1440, "24時間（1440分）以内で入力してください"),
+    rangeStart: z.number().int().positive().nullable().optional(),
+    rangeEnd: z.number().int().positive().nullable().optional(),
+    rangeUnit: z
+      .string()
+      .refine((v) => RANGE_UNIT_VALUES.includes(v), "単位の値が不正です")
+      .nullable()
+      .optional(),
+    memo: z.string().max(500, "500文字以内で入力してください").trim().optional(),
+  })
+  .superRefine((val, ctx) => {
+    const hasStart = val.rangeStart != null;
+    const hasEnd = val.rangeEnd != null;
+    if (hasStart !== hasEnd) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "範囲は開始と終了の両方を入力してください",
+        path: [hasStart ? "rangeEnd" : "rangeStart"],
+      });
+    }
+    if (hasStart && hasEnd && val.rangeStart! > val.rangeEnd!) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "終了は開始以上にしてください",
+        path: ["rangeEnd"],
+      });
+    }
+    if ((hasStart || hasEnd) && val.rangeUnit == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "単位を選択してください",
+        path: ["rangeUnit"],
+      });
+    }
+  });
+
+export type CompleteStudyPlanInput = z.infer<typeof completeStudyPlanSchema>;

@@ -20,6 +20,7 @@ export type StudyPlan = {
   content: string | null;
   subject: string | null;
   done: boolean;
+  studyLogId: number | null;
   textbookId: number | null;
   textbook: Textbook | null; // include で取得（表示用。名前だけ使う）
   rangeStart: number | null;

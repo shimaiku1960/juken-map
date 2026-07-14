@@ -18,7 +18,7 @@ const SchedulePage = async () => {
   const plansRaw = await prisma.studyPlan.findMany({
     where: { userId: session.user.id },
     orderBy: { date: "asc" },
-    include: { textbook: true },
+    include: { textbook: true, studyLog: { select: { id: true } } },
   });
 
   // Date を JSON と同じ ISO 文字列に揃えてクライアントへ渡す（useStudyPlans の型に合わせる）
@@ -29,6 +29,7 @@ const SchedulePage = async () => {
     content: p.content,
     subject: p.subject,
     done: p.done,
+    studyLogId: p.studyLog?.id ?? null,
     textbookId: p.textbookId,
     textbook: p.textbook
       ? {
