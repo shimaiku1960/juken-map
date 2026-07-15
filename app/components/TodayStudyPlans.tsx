@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import TodayProgressRing from "@/app/components/TodayProgressRing";
 import QuickStudyLogDialog from "@/app/components/QuickStudyLogDialog";
+import QuickManualStudyLogButton from "@/app/components/QuickManualStudyLogButton";
 
 export type TodayPlan = {
   id: number;
@@ -47,12 +48,10 @@ export default function TodayStudyPlans({
           <div className="space-y-3">
             <p className="text-muted-foreground">今日の学習予定はありません。</p>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button asChild>
+              <Button asChild variant="outline">
                 <Link href="/schedule">今日の予定を作る</Link>
               </Button>
-              <Button asChild variant="outline">
-                <a href="#manual-study-log">予定外の学習を記録</a>
-              </Button>
+              <QuickManualStudyLogButton />
             </div>
           </div>
         ) : (

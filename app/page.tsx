@@ -10,6 +10,7 @@ import TodayStudyPlans, {
   type TodayPlan,
 } from "@/app/components/TodayStudyPlans";
 import StudyRecordDashboard from "@/app/components/StudyRecordDashboard";
+import QuickManualStudyLogButton from "@/app/components/QuickManualStudyLogButton";
 import type { StudyLog } from "@/app/hooks/useStudyLogs";
 import { Card, CardContent } from "@/components/ui/card";
 import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
@@ -116,7 +117,10 @@ const Home = async () => {
   const candidateCount = goals.length - decidedGoals.length;
   return (
     <main className="w-full mx-auto max-w-3xl p-8">
-      <h1 className="text-3xl font-bold mb-6">ダッシュボード</h1>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-bold">ダッシュボード</h1>
+        <QuickManualStudyLogButton />
+      </div>
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">受験カウントダウン</h2>

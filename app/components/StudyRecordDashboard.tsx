@@ -11,7 +11,6 @@ import { formatMinutes } from "@/lib/studyLog";
 import StreakBadge from "@/app/components/StreakBadge";
 import StudyHeatmap from "@/app/components/StudyHeatmap";
 import SubjectMinutesBars from "@/app/components/SubjectMinutesBars";
-import StudyLogForm from "@/app/components/StudyLogForm";
 import RecentStudyLogs from "@/app/components/RecentStudyLogs";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -44,7 +43,7 @@ export default function StudyRecordDashboard({
   return (
     <>
       <section className="mb-8">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold">学習の記録</h2>
           <StreakBadge streak={streak} />
         </div>
@@ -70,17 +69,11 @@ export default function StudyRecordDashboard({
         </Card>
       </section>
 
-      <section id="manual-study-log" className="mb-8 scroll-mt-6">
-        <h2 className="text-xl font-bold mb-3">予定外の学習を記録</h2>
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">最近の記録</h2>
         <Card>
-          <CardContent className="space-y-5 py-5">
-            <StudyLogForm />
-            <div className="border-t pt-4">
-              <p className="mb-2 text-sm font-medium text-gray-600">
-                最近の記録
-              </p>
-              <RecentStudyLogs logs={logs} />
-            </div>
+          <CardContent className="py-5">
+            <RecentStudyLogs logs={logs} />
           </CardContent>
         </Card>
       </section>

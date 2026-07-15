@@ -11,6 +11,7 @@ import {
 } from "@/app/hooks/useTextbooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 // 学習予定（StudyPlan）と学習実績（StudyLog）のフォームで共有する入力部品。
 // 科目セレクト・参考書セレクト・範囲単位セレクト・数値ステッパー。
@@ -19,14 +20,25 @@ import { Input } from "@/components/ui/input";
 export const SubjectSelect = ({
   value,
   onChange,
+  id,
+  ariaLabel,
+  className,
 }: {
   value: string | null | undefined;
   onChange: (v: string | null) => void;
+  id?: string;
+  ariaLabel?: string;
+  className?: string;
 }) => (
   <select
+    id={id}
+    aria-label={ariaLabel}
     value={value ?? ""}
     onChange={(e) => onChange(e.target.value || null)}
-    className="h-9 shrink-0 rounded-md border bg-transparent px-2 text-sm"
+    className={cn(
+      "h-9 shrink-0 rounded-md border bg-transparent px-2 text-sm",
+      className
+    )}
   >
     <option value="">科目なし</option>
     {SUBJECTS.map((s) => (
