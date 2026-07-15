@@ -148,12 +148,15 @@ export const RangeUnitSelect = ({
   value,
   onChange,
   disabled = false,
+  ariaLabel,
 }: {
   value: string | null | undefined;
   onChange: (v: string | null) => void;
   disabled?: boolean;
+  ariaLabel?: string;
 }) => (
   <select
+    aria-label={ariaLabel}
     value={value ?? ""}
     onChange={(e) => onChange(e.target.value || null)}
     disabled={disabled}
@@ -175,11 +178,13 @@ export const NumberStepper = ({
   onChange,
   placeholder,
   min = 1,
+  ariaLabel,
 }: {
   value: number | null | undefined;
   onChange: (v: number | null) => void;
   placeholder?: string;
   min?: number;
+  ariaLabel?: string;
 }) => {
   const step = (delta: number) => {
     if (value == null) {
@@ -194,6 +199,7 @@ export const NumberStepper = ({
   return (
     <div className="flex items-stretch gap-1">
       <Input
+        aria-label={ariaLabel}
         type="number"
         min={min}
         placeholder={placeholder}

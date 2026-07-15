@@ -37,6 +37,18 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  if (parsed.data.done === false) {
+    const linkedLog = await prisma.studyLog.count({
+      where: { studyPlanId: plan.id },
+    });
+    if (linkedLog > 0) {
+      return NextResponse.json(
+        { error: "実績を記録済みの予定は未完了に戻せません" },
+        { status: 409 }
+      );
+    }
+  }
+
   // 参考書を指定する場合は、自分の所有分だけを許可する
   if (parsed.data.textbookId != null) {
     const owned = await prisma.textbook.count({

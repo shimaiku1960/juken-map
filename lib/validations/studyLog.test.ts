@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { createStudyLogSchema } from "@/lib/validations/studyLog";
+import {
+  completeStudyPlanSchema,
+  createStudyLogSchema,
+} from "@/lib/validations/studyLog";
 
 describe("createStudyLogSchema", () => {
   it("正常な入力を通す（時間のみ）", () => {
@@ -122,5 +125,32 @@ describe("createStudyLogSchema", () => {
       memo: "あ".repeat(501),
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("completeStudyPlanSchema", () => {
+  it("学習時間と実施範囲を通す", () => {
+    expect(
+      completeStudyPlanSchema.safeParse({
+        minutes: 45,
+        rangeStart: 10,
+        rangeEnd: 20,
+        rangeUnit: "page",
+      }).success
+    ).toBe(true);
+  });
+
+  it("学習時間が無ければ弾く", () => {
+    expect(completeStudyPlanSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("実施範囲が片側だけなら弾く", () => {
+    expect(
+      completeStudyPlanSchema.safeParse({
+        minutes: 45,
+        rangeStart: 10,
+        rangeUnit: "page",
+      }).success
+    ).toBe(false);
   });
 });
