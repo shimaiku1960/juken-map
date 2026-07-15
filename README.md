@@ -31,11 +31,14 @@
 
 ## 主な機能
 
-- **志望校管理** — 全国の大学・学部マスターから志望校を選択。第一志望／併願を分けて管理し、同一学部の重複登録を多層防御（フロント／API／DB の3層）で防止
+- **志望校管理** — 全国の大学・学部マスターから志望校を選択。第一志望／併願を分けて管理し、同一学部の重複登録を多層防御（フロント／API／DB の3層）で防止。「探す」から気になる校（candidate）として仮登録し、受験校（decided）へ確定する2段階のステータス管理
 - **大学を探す** — 全国 823 大学のマスターから、大学名・都道府県・設置区分で絞り込み。学部詳細では学部系統タグを表示し、その場で志望校に追加
-- **学習予定カレンダー** — 日ごとの学習予定を FullCalendar に登録・編集（日クリックで「その日のダイアログ」に予定一覧＋追加を統合、ドラッグで日移動、完了チェック、科目で色分け、TanStack Query による楽観的更新）
+- **学習予定カレンダー** — 日ごとの学習予定を FullCalendar に登録・編集（日クリックで「その日のダイアログ」に予定一覧＋追加を統合、ドラッグで日移動、完了チェック、科目で色分け、TanStack Query による楽観的更新）。予定には参考書・学習範囲（開始〜終了・単位）を紐づけ可能
+- **参考書と学習範囲** — 参考書マスター（ISBN・出版社・複数単位の総量メトリクス）から自分の参考書を登録。単位（ページ／章など）は参考書ごとに切り替え可能で、総量はマスターから自動補完
+- **実績記録（逆算ナビ）** — 今日の予定から学習実績（学習時間・到達範囲・メモ）を記録し、予定完了と実績記録をトランザクションで同時反映。参考書の総量・目標日と最大到達位置から「今日やるべき範囲」を逆算して提示
 - **受験日程カレンダー** — 登録した志望校の受験日を学習予定と同じカレンダーに読み取り専用で重ねて表示。ダッシュボードには受験カウントダウン・今日の学習予定・志望校サマリーを表示
 - **ユーザー認証** — Better Auth による Google / GitHub / メール+パスワードの3方式ログイン。メール検証・パスワードリセット（Resend 経由）、ルート保護に対応
+- **デモ閲覧モード** — 登録不要でデータ入りの状態を体験できるデモユーザー。編集系操作はサーバー側ガードで読み取り専用に制限
 - **プロフィール管理** — ニックネームの表示・編集
 - **ブログ** — microCMS で管理する記事の一覧・詳細表示
 
@@ -45,6 +48,7 @@
 - **バリデーションの single source of truth** — Zod スキーマ（`lib/validations`）をサーバー／クライアントで共通利用。フロント（UX）・API（門番）・DB（最後の砦）の多層防御
 - **Infrastructure as Code** — 本番の VPC / EC2 / RDS / セキュリティグループ / ECR / IAM を Terraform で import しコード管理（`terraform/`）
 - **コンテナ化 / デプロイ自動化** — マルチステージ Dockerfile（`output: "standalone"` / 非 root 実行 / 起動時マイグレーション）。CI でビルドしたイメージを ECR に push し、本番 EC2 が IAM インスタンスロール経由で pull して `docker run`。`main` への push で「ビルド → ECR push → EC2 でコンテナ入れ替え」まで一気通貫の自動デプロイ
+- **テスト** — Vitest によるユニットテスト（Zod スキーマ・純粋関数・API ルート）と Playwright による E2E。`npm run check` で Prisma 生成 / Lint / 型チェック / Vitest / build をまとめて実行
 
 ## データソース
 
@@ -115,10 +119,14 @@ http://localhost:3000 でアクセスできます。
 
 | コマンド | 説明 |
 |---------|------|
-| `npm run dev` | 開発サーバー起動 |
+| `npm run dev` | ローカル DB（Docker）を起動してから開発サーバー起動 |
+| `npm run dev:infra` / `dev:infra:stop` / `dev:infra:logs` | ローカル DB コンテナの起動 / 停止 / ログ |
 | `npm run build` | Prisma 生成 + マイグレーション + 本番ビルド |
 | `npm run start` | 本番サーバー起動 |
 | `npm run lint` | ESLint によるコード検査 |
+| `npm run test` | Vitest によるユニットテスト |
+| `npm run e2e` | Playwright による E2E テスト |
+| `npm run check` | Prisma 生成 / Lint / 型チェック / Vitest / build を一括実行（push 前チェック） |
 
 ## デプロイ / インフラ（AWS）
 
@@ -148,6 +156,9 @@ app/
 │   ├── auth/[...all]/    # Better Auth ハンドラ
 │   ├── goals/            # 志望校 CRUD
 │   ├── study-plans/      # 学習予定 CRUD
+│   ├── study-logs/       # 学習実績 CRUD
+│   ├── textbooks/        # 参考書 CRUD
+│   ├── textbook-masters/ # 参考書マスター
 │   └── profile/          # プロフィール更新
 ├── hooks/useGoals.ts     # 志望校のサーバー状態フック（TanStack Query）
 ├── hooks/useStudyPlans.ts  # 学習予定のサーバー状態フック（TanStack Query）
@@ -177,8 +188,11 @@ scripts/                  # 大学マスター整形スクリプト
 ## データベースモデル（主要）
 
 - **User / Account / Session / Verification** — Better Auth の認証モデル（ユーザー情報を自前 MySQL で保持）
-- **FinalGoal** — 志望校（User × Faculty。`@@unique` で重複防止、第一志望フラグ・メモを保持）
-- **StudyPlan** — 学習予定（User に紐づく日次タスク。日付・内容・科目・完了フラグを保持）
+- **FinalGoal** — 志望校（User × Faculty。`@@unique` で重複防止、第一志望フラグ・メモ・candidate/decided ステータスを保持）
+- **StudyPlan** — 学習予定（User に紐づく日次タスク。日付・内容・科目・完了フラグ、参考書と学習範囲を保持）
+- **StudyLog** — 学習実績（学習時間・到達範囲・メモ。StudyPlan と 1:1 で紐づき、参考書にもリレーション）
+- **Textbook** — ユーザーの参考書（総量・追跡単位・目標日・対策科目。TextbookMaster にリレーション）
+- **TextbookMaster / TextbookMasterMetric** — 参考書マスター（ISBN・出版社）と単位別の総量メトリクス
 - **University** — 大学マスター（名称・都道府県・設置区分）
 - **Faculty** — 学部マスター（受験日を保持。University にリレーション）
 - **Tag** — 学部系統タグ（Faculty と多対多）
