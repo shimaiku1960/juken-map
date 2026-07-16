@@ -1,18 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import TodayProgressRing from "@/app/components/TodayProgressRing";
-import QuickStudyLogDialog from "@/app/components/QuickStudyLogDialog";
-import QuickManualStudyLogButton from "@/app/components/QuickManualStudyLogButton";
 
 export type TodayPlan = {
   id: number;
   content: string;
   done: boolean;
   subject: string | null;
+  textbookId: number | null;
   textbookName: string | null;
   rangeStart: number | null;
   rangeEnd: number | null;
@@ -27,44 +25,29 @@ export default function TodayStudyPlans({
   plans: TodayPlan[];
   weekCount: number;
 }) {
-  const [currentPlans, setCurrentPlans] = useState(plans);
-  const [selectedPlan, setSelectedPlan] = useState<TodayPlan | null>(null);
-  const doneCount = currentPlans.filter((p) => p.done).length;
-
-  const handleRecorded = (planId: number, minutes: number) => {
-    setCurrentPlans((current) =>
-      current.map((plan) =>
-        plan.id === planId
-          ? { ...plan, done: true, recordedMinutes: minutes }
-          : plan
-      )
-    );
-  };
+  const doneCount = plans.filter((plan) => plan.done).length;
 
   return (
     <Card>
       <CardContent className="py-5">
-        {currentPlans.length === 0 ? (
+        {plans.length === 0 ? (
           <div className="space-y-3">
             <p className="text-muted-foreground">今日の学習予定はありません。</p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button asChild variant="outline">
-                <Link href="/schedule">今日の予定を作る</Link>
-              </Button>
-              <QuickManualStudyLogButton />
-            </div>
+            <Button asChild variant="outline">
+              <Link href="/schedule">今日の予定を作る</Link>
+            </Button>
           </div>
         ) : (
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
             <div className="shrink-0">
-              <TodayProgressRing done={doneCount} total={currentPlans.length} />
+              <TodayProgressRing done={doneCount} total={plans.length} />
             </div>
             <div className="min-w-0 flex-1">
               <p className="mb-2 text-sm font-medium text-gray-600">
-                達成 {doneCount} / {currentPlans.length}
+                達成 {doneCount} / {plans.length}
               </p>
               <ul className="space-y-3">
-                {currentPlans.map((plan) => (
+                {plans.map((plan) => (
                   <li
                     key={plan.id}
                     className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center"
@@ -83,16 +66,6 @@ export default function TodayStudyPlans({
                         </p>
                       ) : null}
                     </div>
-                    {plan.recordedMinutes == null && (
-                      <Button
-                        type="button"
-                        variant={plan.done ? "outline" : "default"}
-                        className="h-11 w-full sm:w-auto"
-                        onClick={() => setSelectedPlan(plan)}
-                      >
-                        {plan.done ? "実績を追加" : "実績を記録"}
-                      </Button>
-                    )}
                   </li>
                 ))}
               </ul>
@@ -106,14 +79,6 @@ export default function TodayStudyPlans({
           </Link>
         </div>
       </CardContent>
-      <QuickStudyLogDialog
-        plan={selectedPlan}
-        open={selectedPlan !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedPlan(null);
-        }}
-        onSuccess={handleRecorded}
-      />
     </Card>
   );
 }
