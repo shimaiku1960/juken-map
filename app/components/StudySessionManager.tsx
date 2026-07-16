@@ -30,7 +30,6 @@ import {
   studySessionStorageKey,
 } from "@/lib/studySession";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -55,10 +54,13 @@ export default function StudySessionManager({
   plans,
   userId,
   readOnly = false,
+  variant = "compact",
 }: {
   plans: TodayPlan[];
   userId: string;
   readOnly?: boolean;
+  /** hero: ログイン直後の集中スタート画面向けに、ボタンを中央・大きく表示する */
+  variant?: "compact" | "hero";
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -275,16 +277,32 @@ export default function StudySessionManager({
     setSession(null);
   };
 
+  const isHero = variant === "hero";
+
   return (
-    <div className="flex w-full flex-col items-end gap-2">
+    <div
+      className={
+        isHero
+          ? "flex w-full flex-col items-center gap-3"
+          : "flex w-full flex-col items-end gap-2"
+      }
+    >
       {!hydrated ? (
-        <Button type="button" className="h-11 w-full sm:w-auto" disabled>
+        <Button
+          type="button"
+          className={
+            isHero ? "h-14 px-8 text-lg" : "h-11 w-full sm:w-auto"
+          }
+          disabled
+        >
           タイマーを確認中…
         </Button>
       ) : session ? null : (
         <Button
           type="button"
-          className="h-11 w-full sm:w-auto"
+          className={
+            isHero ? "h-14 px-8 text-lg" : "h-11 w-full sm:w-auto"
+          }
           disabled={readOnly}
           title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
           onClick={openPicker}
@@ -295,56 +313,62 @@ export default function StudySessionManager({
       )}
 
       {readOnly && !session && (
-        <p className="text-xs text-muted-foreground sm:text-right">
+        <p
+          className={
+            isHero
+              ? "text-xs text-muted-foreground"
+              : "text-xs text-muted-foreground sm:text-right"
+          }
+        >
           デモアカウントでは計測できません
         </p>
       )}
 
       {session && session.status !== "reviewing" && (
-        <Card className="w-full border-blue-200 bg-blue-50/60">
-          <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-blue-700">
-                {session.status === "running" ? "● 計測中" : "一時停止中"}
-              </p>
-              <p className="mt-1 truncate font-medium">{session.label}</p>
-              <p className="mt-1 font-mono text-3xl font-bold tabular-nums">
-                {formatStudyElapsed(elapsed)}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:flex">
-              {session.status === "running" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11"
-                  onClick={() => setSession(pauseStudySession(session))}
-                >
-                  <Pause aria-hidden="true" />
-                  一時停止
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  className="h-11"
-                  onClick={() => setSession(resumeStudySession(session))}
-                >
-                  <Play aria-hidden="true" />
-                  再開
-                </Button>
-              )}
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-background px-6 text-center">
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm font-medium text-blue-600">
+              {session.status === "running" ? "● 計測中" : "一時停止中"}
+            </p>
+            <p className="max-w-md truncate text-lg font-medium">
+              {session.label}
+            </p>
+            <p className="font-mono text-6xl font-bold tabular-nums sm:text-7xl">
+              {formatStudyElapsed(elapsed)}
+            </p>
+          </div>
+          <div className="flex w-full max-w-xs flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center">
+            {session.status === "running" ? (
               <Button
                 type="button"
-                variant="destructive"
-                className="h-11"
-                onClick={moveToReview}
+                variant="outline"
+                className="h-12 sm:w-40"
+                onClick={() => setSession(pauseStudySession(session))}
               >
-                <Square aria-hidden="true" />
-                学習を終了
+                <Pause aria-hidden="true" />
+                一時停止
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+            ) : (
+              <Button
+                type="button"
+                className="h-12 sm:w-40"
+                onClick={() => setSession(resumeStudySession(session))}
+              >
+                <Play aria-hidden="true" />
+                再開
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              className="h-12 sm:w-40"
+              onClick={moveToReview}
+            >
+              <Square aria-hidden="true" />
+              学習を終了
+            </Button>
+          </div>
+        </div>
       )}
 
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>

@@ -18,7 +18,10 @@ const Header = async () => {
         {user ? (
           <>
             <Link href="/" className="text-blue-500 hover:underline">
-              今日
+              学習
+            </Link>
+            <Link href="/dashboard" className="text-blue-500 hover:underline">
+              ダッシュボード
             </Link>
             <Link href="/goals" className="text-blue-500 hover:underline">
               志望校

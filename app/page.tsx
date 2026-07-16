@@ -3,17 +3,9 @@ import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import ExamCountdown, {
-  type CountdownGoal,
-} from "@/app/components/ExamCountdown";
-import TodayStudyPlans, {
-  type TodayPlan,
-} from "@/app/components/TodayStudyPlans";
-import StudyRecordDashboard from "@/app/components/StudyRecordDashboard";
+import { type TodayPlan } from "@/app/components/TodayStudyPlans";
 import StudySessionManager from "@/app/components/StudySessionManager";
-import type { StudyLog } from "@/app/hooks/useStudyLogs";
-import { Card, CardContent } from "@/components/ui/card";
-import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
+import { ymdLocal, todayYmd } from "@/lib/date";
 import { studyPlanLabel } from "@/lib/studyPlan";
 import { DEMO_EMAIL } from "@/lib/demo";
 
@@ -26,15 +18,17 @@ const Home = async () => {
     redirect("/login");
   }
 
-  const [goals, plans, logsRaw] = await Promise.all([
-    prisma.finalGoal.findMany({
-      where: { userId: session.user.id },
-      include: {
-        faculty: {
-          include: { university: true },
-        },
+  // トップページは「学習を始める」ことだけに集中できるよう、
+  // 今日の予定と第一志望のカウントダウンに必要な最小限だけを取得する。
+  const todayStr = todayYmd();
+  const [firstChoiceGoal, plans, linkedLogs] = await Promise.all([
+    prisma.finalGoal.findFirst({
+      where: {
+        userId: session.user.id,
+        status: "decided",
+        isFirstChoice: true,
       },
-      orderBy: { createdAt: "asc" },
+      include: { faculty: { include: { university: true } } },
     }),
     prisma.studyPlan.findMany({
       where: { userId: session.user.id },
@@ -42,31 +36,15 @@ const Home = async () => {
       include: { textbook: true },
     }),
     prisma.studyLog.findMany({
-      where: { userId: session.user.id },
-      orderBy: { date: "desc" },
-      include: { textbook: true },
+      where: { userId: session.user.id, studyPlanId: { not: null } },
+      select: { studyPlanId: true, minutes: true },
     }),
   ]);
-
-  // 受験校（decided）のみをダッシュボードの対象にする。候補（candidate）は志望校ページで比較検討中。
-  const decidedGoals = goals.filter((goal) => goal.status === "decided");
-
-  const countdownGoals: CountdownGoal[] = decidedGoals.map((goal) => ({
-    id: goal.id,
-    universityName: goal.faculty.university.name,
-    facultyName: goal.faculty.name,
-    examDate: goal.faculty.examDate,
-    isFirstChoice: goal.isFirstChoice,
-  }));
-
-  // ② 学習予定（今日 / 今後7日間）
-  const todayStr = todayYmd();
-  const weekEndStr = ymdAfterDays(7);
 
   const todayPlans: TodayPlan[] = plans
     .filter((p) => ymdLocal(p.date) === todayStr)
     .map((p) => {
-      const linkedLog = logsRaw.find((log) => log.studyPlanId === p.id);
+      const linkedLog = linkedLogs.find((log) => log.studyPlanId === p.id);
       return {
         id: p.id,
         content: studyPlanLabel(p),
@@ -81,100 +59,44 @@ const Home = async () => {
       };
     });
 
-  const weekCount = plans.filter((p) => {
-    const d = ymdLocal(p.date);
-    return d >= todayStr && d <= weekEndStr;
-  }).length;
+  // 第一志望の受験日を一言だけ添えてモチベーションにする。
+  const heroFirstChoice = firstChoiceGoal
+    ? {
+        name: `${firstChoiceGoal.faculty.university.name} ${firstChoiceGoal.faculty.name}`,
+        examDate: firstChoiceGoal.faculty.examDate,
+      }
+    : null;
+  const daysToExam = heroFirstChoice
+    ? Math.ceil(
+        (new Date(ymdLocal(heroFirstChoice.examDate)).getTime() -
+          new Date(todayStr).getTime()) /
+          86_400_000
+      )
+    : null;
 
-  // ③ 学習実績（ストリーク・ヒートマップ・科目別はクライアントで集計＝記録すると即反映）
-  const initialLogs: StudyLog[] = logsRaw.map((l) => ({
-    id: l.id,
-    userId: l.userId,
-    date: l.date.toISOString(),
-    minutes: l.minutes,
-    subject: l.subject,
-    textbookId: l.textbookId,
-    textbook: l.textbook
-      ? {
-          id: l.textbook.id,
-          masterId: l.textbook.masterId,
-          name: l.textbook.name,
-          totalAmount: l.textbook.totalAmount,
-          rangeUnit: l.textbook.rangeUnit,
-          targetDate: l.textbook.targetDate?.toISOString() ?? null,
-          subject: l.textbook.subject,
-        }
-      : null,
-    rangeStart: l.rangeStart,
-    rangeEnd: l.rangeEnd,
-    rangeUnit: l.rangeUnit,
-    memo: l.memo,
-    studyPlanId: l.studyPlanId,
-    createdAt: l.createdAt.toISOString(),
-    updatedAt: l.updatedAt.toISOString(),
-  }));
-  // ④ 志望校サマリー
-  const firstChoice = decidedGoals.find((g) => g.isFirstChoice) ?? null;
-  const otherCount = decidedGoals.filter((g) => !g.isFirstChoice).length;
-  const candidateCount = goals.length - decidedGoals.length;
   return (
-    <main className="w-full mx-auto max-w-3xl p-8">
-      <h1 className="mb-4 text-3xl font-bold">ダッシュボード</h1>
-
-      <section className="mb-8">
-        <div className="flex justify-end">
-          <StudySessionManager
-            plans={todayPlans}
-            userId={session.user.id}
-            readOnly={session.user.email === DEMO_EMAIL}
-          />
-        </div>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">受験カウントダウン</h2>
-        <ExamCountdown goals={countdownGoals} />
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">今日の学習予定</h2>
-        <TodayStudyPlans plans={todayPlans} weekCount={weekCount} />
-      </section>
-
-      {/* 学習の記録・科目別・実績記録（クライアントで集計してリアクティブに更新） */}
-      <StudyRecordDashboard initialLogs={initialLogs} />
-
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">志望校</h2>
-        <Card>
-          <CardContent className="py-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">第一志望</p>
-                <p className="font-medium">
-                  {firstChoice
-                    ? `${firstChoice.faculty.university.name} ${firstChoice.faculty.name}`
-                    : "未設定"}
-                </p>
-                <p className="mt-1 text-sm text-gray-500">
-                  併願：{otherCount} 校
-                  {candidateCount > 0 && ` ・ 検討中：${candidateCount} 校`}
-                </p>
-              </div>
-              <Link
-                href="/goals"
-                className="text-blue-600 hover:underline text-sm"
-              >
-                志望校を設定 →
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <p className="text-sm text-gray-500">
-        ※ 表示している受験日は暫定です。正式な日程は各大学の募集要項で必ずご確認ください。
-      </p>
+    <main className="w-full mx-auto flex min-h-[calc(100dvh-4rem)] max-w-3xl flex-col items-center justify-center gap-6 p-8 text-center">
+      {heroFirstChoice && daysToExam != null && daysToExam >= 0 && (
+        <p className="text-sm text-muted-foreground">
+          {heroFirstChoice.name} まで
+          <span className="mx-1 text-lg font-bold text-foreground">
+            あと {daysToExam} 日
+          </span>
+        </p>
+      )}
+      <p className="text-2xl font-bold sm:text-3xl">今日の学習を始めよう</p>
+      <StudySessionManager
+        plans={todayPlans}
+        userId={session.user.id}
+        readOnly={session.user.email === DEMO_EMAIL}
+        variant="hero"
+      />
+      <Link
+        href="/dashboard"
+        className="mt-4 text-sm text-blue-600 hover:underline"
+      >
+        今日の予定・記録を見る →
+      </Link>
     </main>
   );
 };
