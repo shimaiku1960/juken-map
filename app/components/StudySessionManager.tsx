@@ -173,7 +173,7 @@ export default function StudySessionManager({
         startStudySession(
           {
             planId: null,
-            label: label === "未設定" ? "予定外の学習" : label,
+            label: label === "未設定" ? "その他の学習" : label,
             subject: manualSubject,
             textbookId: manualTextbookId,
             rangeStart: null,
@@ -339,7 +339,7 @@ export default function StudySessionManager({
           <DialogHeader>
             <DialogTitle>何を勉強しますか？</DialogTitle>
             <DialogDescription>
-              今日の予定または予定外の学習を選んで、時間計測を始めます。
+              今日の予定またはその他の学習を選んで、時間計測を始めます。
             </DialogDescription>
           </DialogHeader>
 
@@ -373,7 +373,7 @@ export default function StudySessionManager({
                 checked={selectedTarget === "manual"}
                 onChange={(event) => setSelectedTarget(event.target.value)}
               />
-              <span className="font-medium">予定外の学習</span>
+              <span className="font-medium">その他の学習</span>
             </label>
 
             {selectedTarget === "manual" && (
@@ -461,7 +461,7 @@ export default function StudySessionManager({
                       disabled={saving}
                       onClick={() => save(true)}
                     >
-                      予定外の実績として保存
+                      その他の実績として保存
                     </Button>
                   )}
                 </div>
