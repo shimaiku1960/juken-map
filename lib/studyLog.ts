@@ -24,6 +24,7 @@ export function studyLogLabel(log: {
   rangeStart: number | null;
   rangeEnd: number | null;
   rangeUnit: string | null;
+  memo?: string | null;
 }): string {
   const head = `${subjectLabel(log.subject)}・${formatMinutes(log.minutes)}`;
 
@@ -32,6 +33,10 @@ export function studyLogLabel(log: {
   if (log.rangeStart != null && log.rangeEnd != null) {
     detail.push(`${log.rangeStart}〜${log.rangeEnd}${unitLabel(log.rangeUnit)}`);
   }
+  // 自由入力した「内容」はメモとして保存される。参考書・範囲がないときの
+  // 「何をやったか」を記録に残すため、末尾に表示する。
+  const memo = log.memo?.trim();
+  if (memo) detail.push(memo);
 
   return detail.length ? `${head}（${detail.join(" ")}）` : head;
 }

@@ -16,7 +16,6 @@ import {
 import { studyLogsKey } from "@/app/hooks/useStudyLogs";
 import { studyPlansKey } from "@/app/hooks/useStudyPlans";
 import { useTextbooks } from "@/app/hooks/useTextbooks";
-import { subjectLabel } from "@/lib/subjects";
 import { todayYmd } from "@/lib/date";
 import {
   type ActiveStudySession,
@@ -76,6 +75,7 @@ export default function StudySessionManager({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [manualLogOpen, setManualLogOpen] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState("manual");
+  const [manualLabel, setManualLabel] = useState("");
   const [manualSubject, setManualSubject] = useState<string | null>(null);
   const [manualTextbookId, setManualTextbookId] = useState<number | null>(null);
   const [minutes, setMinutes] = useState(1);
@@ -143,6 +143,9 @@ export default function StudySessionManager({
     setSelectedTarget(
       selectablePlans[0] ? `plan:${selectablePlans[0].id}` : "manual"
     );
+    setManualLabel("");
+    setManualSubject(null);
+    setManualTextbookId(null);
     setPickerOpen(true);
   };
 
@@ -168,12 +171,14 @@ export default function StudySessionManager({
       );
     } else {
       const textbook = textbooks.find((item) => item.id === manualTextbookId);
-      const label = textbook?.name ?? subjectLabel(manualSubject);
+      // 自由入力した「内容」を最優先。なければ参考書名 → その他の学習。
+      const trimmedLabel = manualLabel.trim();
+      const label = trimmedLabel || textbook?.name || "その他の学習";
       setSession(
         startStudySession(
           {
             planId: null,
-            label: label === "未設定" ? "その他の学習" : label,
+            label,
             subject: manualSubject,
             textbookId: manualTextbookId,
             rangeStart: null,
@@ -197,7 +202,15 @@ export default function StudySessionManager({
     setRangeStart(reviewed.rangeStart);
     setRangeEnd(reviewed.rangeEnd);
     setRangeUnit(reviewed.rangeUnit);
-    setMemo("");
+    // 「その他の学習」で自由入力した内容（＝ラベル）をメモの初期値に引き継ぎ、
+    // 記録に「何をやったか」を残せるようにする。予定・参考書由来のラベルは対象外。
+    const freeTextLabel =
+      reviewed.planId == null &&
+      reviewed.textbookId == null &&
+      reviewed.label !== "その他の学習"
+        ? reviewed.label
+        : "";
+    setMemo(freeTextLabel);
     setSaveError(null);
     setConfirmDiscard(false);
   };
@@ -378,6 +391,20 @@ export default function StudySessionManager({
 
             {selectedTarget === "manual" && (
               <div className="grid gap-3 rounded-lg bg-muted p-3 sm:grid-cols-2">
+                <div className="space-y-1 sm:col-span-2">
+                  <Label htmlFor="session-activity">内容（任意）</Label>
+                  <Input
+                    id="session-activity"
+                    className="h-11"
+                    placeholder="例：英作文の添削、過去問演習"
+                    maxLength={100}
+                    value={manualLabel}
+                    onChange={(event) => setManualLabel(event.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    科目や参考書に当てはまらない学習も、ここに自由に書けます。
+                  </p>
+                </div>
                 <div className="space-y-1">
                   <Label htmlFor="session-subject">科目</Label>
                   <SubjectSelect
