@@ -48,6 +48,9 @@ memory/
 # エージェント共有メモリへのsymlink入口（実体は ~/.claude/... 外部・公開しない）
 /.agent-memory
 
+# Codex（エージェントのローカル設定・絶対パスを含むため追跡しない）
+/.codex
+
 # Playwright（E2E）
 /test-results
 /playwright-report
