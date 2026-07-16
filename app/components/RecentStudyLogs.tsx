@@ -21,7 +21,7 @@ export default function RecentStudyLogs({
   if (logs.length === 0) {
     return (
       <p className="text-sm text-gray-500">
-        まだ記録がありません。上のフォームから今日の学習を記録しましょう。
+        まだ記録がありません。画面上部の「学習を記録」から始めましょう。
       </p>
     );
   }
