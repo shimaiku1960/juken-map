@@ -53,9 +53,15 @@ export const SubjectSelect = ({
 export const TextbookSelect = ({
   value,
   onChange,
+  id,
+  ariaLabel,
+  className,
 }: {
   value: number | null | undefined;
   onChange: (v: number | null) => void;
+  id?: string;
+  ariaLabel?: string;
+  className?: string;
 }) => {
   const { data: textbooks = [] } = useTextbooks();
   const { data: masters = [] } = useTextbookMasters();
@@ -111,6 +117,8 @@ export const TextbookSelect = ({
 
   return (
     <select
+      id={id}
+      aria-label={ariaLabel}
       value={value ?? ""}
       onChange={(e) => {
         if (e.target.value === "__new__") {
@@ -131,7 +139,10 @@ export const TextbookSelect = ({
         onChange(e.target.value ? Number(e.target.value) : null);
       }}
       disabled={createTextbook.isPending}
-      className="h-9 min-w-0 rounded-md border bg-transparent px-2 text-sm"
+      className={cn(
+        "h-9 min-w-0 rounded-md border bg-transparent px-2 text-sm",
+        className
+      )}
     >
       <option value="">参考書なし</option>
       {textbooks.map((t) => (

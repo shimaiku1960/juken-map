@@ -10,11 +10,12 @@ import TodayStudyPlans, {
   type TodayPlan,
 } from "@/app/components/TodayStudyPlans";
 import StudyRecordDashboard from "@/app/components/StudyRecordDashboard";
-import QuickManualStudyLogButton from "@/app/components/QuickManualStudyLogButton";
+import StudySessionManager from "@/app/components/StudySessionManager";
 import type { StudyLog } from "@/app/hooks/useStudyLogs";
 import { Card, CardContent } from "@/components/ui/card";
 import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
 import { studyPlanLabel } from "@/lib/studyPlan";
+import { DEMO_EMAIL } from "@/lib/demo";
 
 const Home = async () => {
   const session = await auth.api.getSession({
@@ -71,6 +72,7 @@ const Home = async () => {
         content: studyPlanLabel(p),
         done: p.done,
         subject: p.subject,
+        textbookId: p.textbookId,
         textbookName: p.textbook?.name ?? null,
         rangeStart: p.rangeStart,
         rangeEnd: p.rangeEnd,
@@ -117,10 +119,17 @@ const Home = async () => {
   const candidateCount = goals.length - decidedGoals.length;
   return (
     <main className="w-full mx-auto max-w-3xl p-8">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-3xl font-bold">ダッシュボード</h1>
-        <QuickManualStudyLogButton />
-      </div>
+      <h1 className="mb-4 text-3xl font-bold">ダッシュボード</h1>
+
+      <section className="mb-8">
+        <div className="flex justify-end">
+          <StudySessionManager
+            plans={todayPlans}
+            userId={session.user.id}
+            readOnly={session.user.email === DEMO_EMAIL}
+          />
+        </div>
+      </section>
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">受験カウントダウン</h2>
