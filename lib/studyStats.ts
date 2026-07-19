@@ -42,6 +42,12 @@ export function computeStreak(logs: StatLog[], today: string): number {
 export type HeatmapCell = {
   ymd: string | null;
   minutes: number; // その日の合計学習時間（分）
+  subjects: HeatmapSubjectMinutes[];
+};
+
+export type HeatmapSubjectMinutes = {
+  value: string;
+  minutes: number;
 };
 
 // 対象月（anchor が属する月）の日ごとの合計学習時間（分）を、
@@ -52,10 +58,15 @@ export function computeHeatmap(
 ): HeatmapCell[][] {
   // 日付ごとの合計分を集計
   const totals = new Map<string, number>();
+  const subjectTotals = new Map<string, Map<string, number>>();
   for (const l of logs) {
     if (l.minutes <= 0) continue;
     const key = ymdLocal(l.date);
     totals.set(key, (totals.get(key) ?? 0) + l.minutes);
+    const subject = l.subject ?? "other";
+    const bySubject = subjectTotals.get(key) ?? new Map<string, number>();
+    bySubject.set(subject, (bySubject.get(subject) ?? 0) + l.minutes);
+    subjectTotals.set(key, bySubject);
   }
 
   const [year, month] = anchor.split("-").map(Number);
@@ -66,15 +77,23 @@ export function computeHeatmap(
   // 空白 → 各日、の順にフラットなセル列を作る
   const cells: HeatmapCell[] = [];
   for (let i = 0; i < leadingBlanks; i++) {
-    cells.push({ ymd: null, minutes: 0 });
+    cells.push({ ymd: null, minutes: 0, subjects: [] });
   }
   for (let d = 1; d <= daysInMonth; d++) {
     const ymd = ymdLocal(new Date(year, month - 1, d));
-    cells.push({ ymd, minutes: totals.get(ymd) ?? 0 });
+    const bySubject = subjectTotals.get(ymd);
+    cells.push({
+      ymd,
+      minutes: totals.get(ymd) ?? 0,
+      subjects: SUBJECTS.map((subject) => ({
+        value: subject.value,
+        minutes: bySubject?.get(subject.value) ?? 0,
+      })).filter((subject) => subject.minutes > 0),
+    });
   }
   // 末尾を7の倍数まで空白で埋める
   while (cells.length % 7 !== 0) {
-    cells.push({ ymd: null, minutes: 0 });
+    cells.push({ ymd: null, minutes: 0, subjects: [] });
   }
 
   // 7列ずつの週に分割

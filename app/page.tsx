@@ -3,63 +3,55 @@ import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { type TodayPlan } from "@/app/components/TodayStudyPlans";
 import StudySessionManager from "@/app/components/StudySessionManager";
+import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import { ymdLocal, todayYmd } from "@/lib/date";
-import { studyPlanLabel } from "@/lib/studyPlan";
 import { DEMO_EMAIL } from "@/lib/demo";
 
 const Home = async () => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
 
-  if (!session) {
-    redirect("/login");
-  }
-
-  // トップページは「学習を始める」ことだけに集中できるよう、
-  // 今日の予定と第一志望のカウントダウンに必要な最小限だけを取得する。
   const todayStr = todayYmd();
-  const [firstChoiceGoal, plans, linkedLogs] = await Promise.all([
+  const [firstChoiceGoal, plans] = await Promise.all([
     prisma.finalGoal.findFirst({
-      where: {
-        userId: session.user.id,
-        status: "decided",
-        isFirstChoice: true,
-      },
+      where: { userId: session.user.id, status: "decided", isFirstChoice: true },
       include: { faculty: { include: { university: true } } },
     }),
     prisma.studyPlan.findMany({
       where: { userId: session.user.id },
       orderBy: { date: "asc" },
-      include: { textbook: true },
-    }),
-    prisma.studyLog.findMany({
-      where: { userId: session.user.id, studyPlanId: { not: null } },
-      select: { studyPlanId: true, minutes: true },
+      include: { textbook: true, studyLog: { select: { id: true } } },
     }),
   ]);
 
-  const todayPlans: TodayPlan[] = plans
-    .filter((p) => ymdLocal(p.date) === todayStr)
-    .map((p) => {
-      const linkedLog = linkedLogs.find((log) => log.studyPlanId === p.id);
-      return {
-        id: p.id,
-        content: studyPlanLabel(p),
-        done: p.done,
-        subject: p.subject,
-        textbookId: p.textbookId,
-        textbookName: p.textbook?.name ?? null,
-        rangeStart: p.rangeStart,
-        rangeEnd: p.rangeEnd,
-        rangeUnit: p.rangeUnit,
-        recordedMinutes: linkedLog?.minutes ?? null,
-      };
-    });
+  const initialPlans: StudyPlan[] = plans.map((plan) => ({
+    id: plan.id,
+    userId: plan.userId,
+    date: plan.date.toISOString(),
+    content: plan.content,
+    subject: plan.subject,
+    done: plan.done,
+    studyLogId: plan.studyLog?.id ?? null,
+    textbookId: plan.textbookId,
+    textbook: plan.textbook
+      ? {
+          id: plan.textbook.id,
+          masterId: plan.textbook.masterId,
+          name: plan.textbook.name,
+          totalAmount: plan.textbook.totalAmount,
+          rangeUnit: plan.textbook.rangeUnit,
+          targetDate: plan.textbook.targetDate?.toISOString() ?? null,
+          subject: plan.textbook.subject,
+        }
+      : null,
+    rangeStart: plan.rangeStart,
+    rangeEnd: plan.rangeEnd,
+    rangeUnit: plan.rangeUnit,
+    createdAt: plan.createdAt.toISOString(),
+    updatedAt: plan.updatedAt.toISOString(),
+  }));
 
-  // 第一志望の受験日を一言だけ添えてモチベーションにする。
   const heroFirstChoice = firstChoiceGoal
     ? {
         name: `${firstChoiceGoal.faculty.university.name} ${firstChoiceGoal.faculty.name}`,
@@ -79,22 +71,17 @@ const Home = async () => {
       {heroFirstChoice && daysToExam != null && daysToExam >= 0 && (
         <p className="text-sm text-muted-foreground">
           {heroFirstChoice.name} まで
-          <span className="mx-1 text-lg font-bold text-foreground">
-            あと {daysToExam} 日
-          </span>
+          <span className="mx-1 text-lg font-bold text-foreground">あと {daysToExam} 日</span>
         </p>
       )}
       <p className="text-2xl font-bold sm:text-3xl">今日の学習を始めよう</p>
       <StudySessionManager
-        plans={todayPlans}
+        initialPlans={initialPlans}
         userId={session.user.id}
         readOnly={session.user.email === DEMO_EMAIL}
         variant="hero"
       />
-      <Link
-        href="/dashboard"
-        className="mt-4 text-sm text-blue-600 hover:underline"
-      >
+      <Link href="/dashboard" className="mt-4 text-sm text-blue-600 hover:underline">
         今日の予定・記録を見る →
       </Link>
     </main>

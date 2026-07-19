@@ -8,7 +8,13 @@ const textbookNameSchema = z
   .max(100, "100文字以内で入力してください");
 
 export const createTextbookSchema = z.union([
-  z.object({ name: textbookNameSchema }),
+  z.object({
+    name: textbookNameSchema,
+    subject: z.enum(SUBJECT_VALUES as [string, ...string[]]).nullable().optional(),
+    rangeUnit: z
+      .enum(["page", "question", "chapter", "number", "part", "section"])
+      .optional(),
+  }),
   z.object({ masterId: z.number().int().positive() }),
 ]);
 
