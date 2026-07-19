@@ -15,6 +15,15 @@ export function formatMinutes(total: number): string {
 const unitLabel = (value: string | null | undefined) =>
   (value && RANGE_UNITS.find((u) => u.value === value)?.label) || "";
 
+export function formatStudyRange(
+  start: number | null,
+  end: number | null,
+  unit: string | null
+): string | null {
+  if (start == null || end == null) return null;
+  return `${start}〜${end}${unitLabel(unit)}`;
+}
+
 // 実績1件を「科目・時間（＋参考書・範囲）」の表示用テキストにまとめる。
 // 例: 英語・1時間30分（青チャート 10〜20ページ）
 export function studyLogLabel(log: {
@@ -30,9 +39,12 @@ export function studyLogLabel(log: {
 
   const detail: string[] = [];
   if (log.textbook) detail.push(log.textbook.name);
-  if (log.rangeStart != null && log.rangeEnd != null) {
-    detail.push(`${log.rangeStart}〜${log.rangeEnd}${unitLabel(log.rangeUnit)}`);
-  }
+  const range = formatStudyRange(
+    log.rangeStart,
+    log.rangeEnd,
+    log.rangeUnit
+  );
+  if (range) detail.push(range);
   // 自由入力した「内容」はメモとして保存される。参考書・範囲がないときの
   // 「何をやったか」を記録に残すため、末尾に表示する。
   const memo = log.memo?.trim();

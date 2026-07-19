@@ -3,41 +3,27 @@ import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import ExamCountdown, {
-  type CountdownGoal,
-} from "@/app/components/ExamCountdown";
-import TodayStudyPlans, {
-  type TodayPlan,
-} from "@/app/components/TodayStudyPlans";
+import ExamCountdown, { type CountdownGoal } from "@/app/components/ExamCountdown";
 import StudyRecordDashboard from "@/app/components/StudyRecordDashboard";
 import type { StudyLog } from "@/app/hooks/useStudyLogs";
+import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import { Card, CardContent } from "@/components/ui/card";
-import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
-import { studyPlanLabel } from "@/lib/studyPlan";
+import { DEMO_EMAIL } from "@/lib/demo";
 
 const DashboardPage = async () => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/login");
-  }
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
 
   const [goals, plans, logsRaw] = await Promise.all([
     prisma.finalGoal.findMany({
       where: { userId: session.user.id },
-      include: {
-        faculty: {
-          include: { university: true },
-        },
-      },
+      include: { faculty: { include: { university: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.studyPlan.findMany({
       where: { userId: session.user.id },
       orderBy: { date: "asc" },
-      include: { textbook: true },
+      include: { textbook: true, studyLog: { select: { id: true } } },
     }),
     prisma.studyLog.findMany({
       where: { userId: session.user.id },
@@ -46,9 +32,7 @@ const DashboardPage = async () => {
     }),
   ]);
 
-  // 受験校（decided）のみをダッシュボードの対象にする。候補（candidate）は志望校ページで比較検討中。
   const decidedGoals = goals.filter((goal) => goal.status === "decided");
-
   const countdownGoals: CountdownGoal[] = decidedGoals.map((goal) => ({
     id: goal.id,
     universityName: goal.faculty.university.name,
@@ -57,66 +41,66 @@ const DashboardPage = async () => {
     isFirstChoice: goal.isFirstChoice,
   }));
 
-  // ② 学習予定（今日 / 今後7日間）
-  const todayStr = todayYmd();
-  const weekEndStr = ymdAfterDays(7);
-
-  const todayPlans: TodayPlan[] = plans
-    .filter((p) => ymdLocal(p.date) === todayStr)
-    .map((p) => {
-      const linkedLog = logsRaw.find((log) => log.studyPlanId === p.id);
-      return {
-        id: p.id,
-        content: studyPlanLabel(p),
-        done: p.done,
-        subject: p.subject,
-        textbookId: p.textbookId,
-        textbookName: p.textbook?.name ?? null,
-        rangeStart: p.rangeStart,
-        rangeEnd: p.rangeEnd,
-        rangeUnit: p.rangeUnit,
-        recordedMinutes: linkedLog?.minutes ?? null,
-      };
-    });
-
-  const weekCount = plans.filter((p) => {
-    const d = ymdLocal(p.date);
-    return d >= todayStr && d <= weekEndStr;
-  }).length;
-
-  // ③ 学習実績（ストリーク・ヒートマップ・科目別はクライアントで集計＝記録すると即反映）
-  const initialLogs: StudyLog[] = logsRaw.map((l) => ({
-    id: l.id,
-    userId: l.userId,
-    date: l.date.toISOString(),
-    minutes: l.minutes,
-    subject: l.subject,
-    textbookId: l.textbookId,
-    textbook: l.textbook
+  const initialPlans: StudyPlan[] = plans.map((plan) => ({
+    id: plan.id,
+    userId: plan.userId,
+    date: plan.date.toISOString(),
+    content: plan.content,
+    subject: plan.subject,
+    done: plan.done,
+    studyLogId: plan.studyLog?.id ?? null,
+    textbookId: plan.textbookId,
+    textbook: plan.textbook
       ? {
-          id: l.textbook.id,
-          masterId: l.textbook.masterId,
-          name: l.textbook.name,
-          totalAmount: l.textbook.totalAmount,
-          rangeUnit: l.textbook.rangeUnit,
-          targetDate: l.textbook.targetDate?.toISOString() ?? null,
-          subject: l.textbook.subject,
+          id: plan.textbook.id,
+          masterId: plan.textbook.masterId,
+          name: plan.textbook.name,
+          totalAmount: plan.textbook.totalAmount,
+          rangeUnit: plan.textbook.rangeUnit,
+          targetDate: plan.textbook.targetDate?.toISOString() ?? null,
+          subject: plan.textbook.subject,
         }
       : null,
-    rangeStart: l.rangeStart,
-    rangeEnd: l.rangeEnd,
-    rangeUnit: l.rangeUnit,
-    memo: l.memo,
-    studyPlanId: l.studyPlanId,
-    createdAt: l.createdAt.toISOString(),
-    updatedAt: l.updatedAt.toISOString(),
+    rangeStart: plan.rangeStart,
+    rangeEnd: plan.rangeEnd,
+    rangeUnit: plan.rangeUnit,
+    createdAt: plan.createdAt.toISOString(),
+    updatedAt: plan.updatedAt.toISOString(),
   }));
-  // ④ 志望校サマリー
-  const firstChoice = decidedGoals.find((g) => g.isFirstChoice) ?? null;
-  const otherCount = decidedGoals.filter((g) => !g.isFirstChoice).length;
+
+  const initialLogs: StudyLog[] = logsRaw.map((log) => ({
+    id: log.id,
+    userId: log.userId,
+    date: log.date.toISOString(),
+    minutes: log.minutes,
+    subject: log.subject,
+    textbookId: log.textbookId,
+    textbook: log.textbook
+      ? {
+          id: log.textbook.id,
+          masterId: log.textbook.masterId,
+          name: log.textbook.name,
+          totalAmount: log.textbook.totalAmount,
+          rangeUnit: log.textbook.rangeUnit,
+          targetDate: log.textbook.targetDate?.toISOString() ?? null,
+          subject: log.textbook.subject,
+        }
+      : null,
+    rangeStart: log.rangeStart,
+    rangeEnd: log.rangeEnd,
+    rangeUnit: log.rangeUnit,
+    memo: log.memo,
+    studyPlanId: log.studyPlanId,
+    createdAt: log.createdAt.toISOString(),
+    updatedAt: log.updatedAt.toISOString(),
+  }));
+
+  const firstChoice = decidedGoals.find((goal) => goal.isFirstChoice) ?? null;
+  const otherCount = decidedGoals.filter((goal) => !goal.isFirstChoice).length;
   const candidateCount = goals.length - decidedGoals.length;
+
   return (
-    <main className="w-full mx-auto max-w-3xl p-8">
+    <main className="mx-auto w-full max-w-3xl p-4 sm:p-8">
       <h1 className="mb-4 text-3xl font-bold">ダッシュボード</h1>
 
       <section className="mb-8">
@@ -124,13 +108,11 @@ const DashboardPage = async () => {
         <ExamCountdown goals={countdownGoals} />
       </section>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">今日の学習予定</h2>
-        <TodayStudyPlans plans={todayPlans} weekCount={weekCount} />
-      </section>
-
-      {/* 学習の記録・科目別・実績記録（クライアントで集計してリアクティブに更新） */}
-      <StudyRecordDashboard initialLogs={initialLogs} />
+      <StudyRecordDashboard
+        initialLogs={initialLogs}
+        initialPlans={initialPlans}
+        readOnly={session.user.email === DEMO_EMAIL}
+      />
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">志望校</h2>
@@ -149,10 +131,7 @@ const DashboardPage = async () => {
                   {candidateCount > 0 && ` ・ 検討中：${candidateCount} 校`}
                 </p>
               </div>
-              <Link
-                href="/goals"
-                className="text-blue-600 hover:underline text-sm"
-              >
+              <Link href="/goals" className="text-blue-600 hover:underline text-sm">
                 志望校を設定 →
               </Link>
             </div>

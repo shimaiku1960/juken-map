@@ -1,9 +1,9 @@
 "use client";
 
 import { useStudyLogs, type StudyLog } from "@/app/hooks/useStudyLogs";
+import { useStudyPlans, type StudyPlan } from "@/app/hooks/useStudyPlans";
 import {
   computeStreak,
-  computeHeatmap,
   computeSubjectMinutes,
 } from "@/lib/studyStats";
 import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
@@ -18,10 +18,19 @@ import { Card, CardContent } from "@/components/ui/card";
 // ストリーク・ヒートマップ・科目別バーが即座に伸びる（クライアントで集計）。
 export default function StudyRecordDashboard({
   initialLogs,
+  initialPlans,
+  readOnly,
 }: {
   initialLogs: StudyLog[];
+  initialPlans: StudyPlan[];
+  readOnly: boolean;
 }) {
   const { data: logs = [] } = useStudyLogs(initialLogs);
+  const {
+    data: plans = [],
+    isError: plansError,
+    refetch: refetchPlans,
+  } = useStudyPlans(initialPlans);
 
   const today = todayYmd();
   const streak = computeStreak(logs, today);
@@ -30,32 +39,43 @@ export default function StudyRecordDashboard({
     .filter((l) => ymdLocal(l.date) === today)
     .reduce((sum, l) => sum + l.minutes, 0);
 
-  const heatmapWeeks = computeHeatmap(logs, today);
-  const monthLabel = new Date().toLocaleDateString("ja-JP", {
-    year: "numeric",
-    month: "long",
-  });
-
   // 直近7日間（今日を含む）の科目別合計
   const weekFrom = ymdAfterDays(-6);
   const subjectMinutes = computeSubjectMinutes(logs, weekFrom, today);
 
   return (
     <>
-      <section className="mb-8">
+      <section id="study-calendar" className="mb-8 scroll-mt-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold">学習の記録</h2>
+          <h2 className="text-xl font-bold">学習カレンダー</h2>
           <StreakBadge streak={streak} />
         </div>
         <Card>
-          <CardContent className="py-5">
+          <CardContent className="px-3 py-5 sm:px-6">
+            {plansError ? (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+                <span>学習予定を更新できませんでした。表示が古い可能性があります。</span>
+                <button
+                  type="button"
+                  className="font-medium underline underline-offset-2"
+                  onClick={() => refetchPlans()}
+                >
+                  再試行
+                </button>
+              </div>
+            ) : null}
             <p className="mb-4 text-sm text-gray-600">
               今日の学習時間：
               <span className="font-bold text-gray-900">
                 {formatMinutes(todayMinutes)}
               </span>
             </p>
-            <StudyHeatmap weeks={heatmapWeeks} monthLabel={monthLabel} />
+            <StudyHeatmap
+              logs={logs}
+              plans={plans}
+              today={today}
+              readOnly={readOnly}
+            />
           </CardContent>
         </Card>
       </section>

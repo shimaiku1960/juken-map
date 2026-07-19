@@ -26,9 +26,6 @@ const Header = async () => {
             <Link href="/goals" className="text-blue-500 hover:underline">
               志望校
             </Link>
-            <Link href="/schedule" className="text-blue-500 hover:underline">
-              学習予定
-            </Link>
             <Link href="/explore" className="text-blue-500 hover:underline">
               大学を探す
             </Link>
@@ -59,4 +56,4 @@ const Header = async () => {
   );                                        
 };                                      
 
-export default Header; 
+export default Header;

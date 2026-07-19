@@ -74,8 +74,7 @@ describe("computeStreak", () => {
 });
 
 describe("computeHeatmap", () => {
-  const flat = (weeks: { ymd: string | null; minutes: number }[][]) =>
-    weeks.flat();
+  const flat = (weeks: ReturnType<typeof computeHeatmap>) => weeks.flat();
 
   it("全セル数は7の倍数で、日付セルはその月の日数ぶんある", () => {
     const weeks = computeHeatmap([], "2026-07-15");
@@ -102,6 +101,23 @@ describe("computeHeatmap", () => {
     expect(cells.find((c) => c.ymd === "2026-07-10")?.minutes).toBe(90);
     expect(cells.find((c) => c.ymd === "2026-07-11")?.minutes).toBe(45);
     expect(cells.find((c) => c.ymd === "2026-07-12")?.minutes).toBe(0);
+  });
+
+  it("日付ごとに科目別の構成も集計する", () => {
+    const logs = [
+      l("2026-07-10", 60, "english"),
+      l("2026-07-10", 30, "math"),
+      l("2026-07-10", 15),
+    ];
+    const cell = flat(computeHeatmap(logs, "2026-07-01")).find(
+      (item) => item.ymd === "2026-07-10"
+    );
+
+    expect(cell?.subjects).toEqual([
+      { value: "english", minutes: 60 },
+      { value: "math", minutes: 30 },
+      { value: "other", minutes: 15 },
+    ]);
   });
 
   it("対象月以外の実績は集計に含めない", () => {

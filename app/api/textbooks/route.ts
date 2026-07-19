@@ -49,6 +49,7 @@ export async function POST(request: Request) {
       masterId?: number;
       totalAmount?: number;
       rangeUnit?: string;
+      subject?: string | null;
     };
 
     if ("masterId" in parsed.data) {
@@ -81,6 +82,8 @@ export async function POST(request: Request) {
       textbookData = {
         name: parsed.data.name,
         userId: session.user.id,
+        subject: parsed.data.subject,
+        rangeUnit: parsed.data.rangeUnit,
       };
     }
 

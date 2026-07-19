@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Square } from "lucide-react";
 import { toast } from "sonner";
-import type { TodayPlan } from "@/app/components/TodayStudyPlans";
 import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialog";
 import {
   NumberStepper,
@@ -14,9 +13,14 @@ import {
   TextbookSelect,
 } from "@/app/components/StudyFields";
 import { studyLogsKey } from "@/app/hooks/useStudyLogs";
-import { studyPlansKey } from "@/app/hooks/useStudyPlans";
+import {
+  studyPlansKey,
+  useStudyPlans,
+  type StudyPlan,
+} from "@/app/hooks/useStudyPlans";
 import { useTextbooks } from "@/app/hooks/useTextbooks";
 import { todayYmd } from "@/lib/date";
+import { studyPlanLabel } from "@/lib/studyPlan";
 import {
   type ActiveStudySession,
   elapsedStudyMs,
@@ -51,12 +55,12 @@ const responseError = async (response: Response) => {
 };
 
 export default function StudySessionManager({
-  plans,
+  initialPlans,
   userId,
   readOnly = false,
   variant = "compact",
 }: {
-  plans: TodayPlan[];
+  initialPlans: StudyPlan[];
   userId: string;
   readOnly?: boolean;
   /** hero: ログイン直後の集中スタート画面向けに、ボタンを中央・大きく表示する */
@@ -65,6 +69,25 @@ export default function StudySessionManager({
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: textbooks = [] } = useTextbooks();
+  const { data: studyPlans = [] } = useStudyPlans(initialPlans);
+  const plans = useMemo(
+    () =>
+      studyPlans
+        .filter((plan) => plan.date.slice(0, 10) === todayYmd())
+        .map((plan) => ({
+          id: plan.id,
+          content: studyPlanLabel(plan),
+          done: plan.done,
+          subject: plan.subject,
+          textbookId: plan.textbookId,
+          textbookName: plan.textbook?.name ?? null,
+          rangeStart: plan.rangeStart,
+          rangeEnd: plan.rangeEnd,
+          rangeUnit: plan.rangeUnit,
+          recordedMinutes: plan.studyLogId == null ? null : 0,
+        })),
+    [studyPlans]
+  );
   const storageKey = studySessionStorageKey(userId);
   const selectablePlans = useMemo(
     () => plans.filter((plan) => plan.recordedMinutes == null),
