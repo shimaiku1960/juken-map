@@ -15,8 +15,15 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { toast } from "sonner";
+import { notifyDemoReadOnly } from "@/lib/demo-client";
 
-const ProfileEdit = ({ currentNickname }: { currentNickname: string }) => {
+const ProfileEdit = ({
+  currentNickname,
+  readOnly = false,
+}: {
+  currentNickname: string;
+  readOnly?: boolean;
+}) => {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -53,7 +60,12 @@ const ProfileEdit = ({ currentNickname }: { currentNickname: string }) => {
           type="button"
           variant="outline"
           size="sm"
+          title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
           onClick={() => {
+            if (readOnly) {
+              notifyDemoReadOnly();
+              return;
+            }
             form.reset({ nickname: currentNickname });
             setIsEditing(true);
           }}

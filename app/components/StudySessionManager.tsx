@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Square } from "lucide-react";
+import { notifyDemoReadOnly } from "@/lib/demo-client";
 import { toast } from "sonner";
 import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialog";
 import {
@@ -326,9 +327,8 @@ export default function StudySessionManager({
           className={
             isHero ? "h-14 px-8 text-lg" : "h-11 w-full sm:w-auto"
           }
-          disabled={readOnly}
           title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
-          onClick={openPicker}
+          onClick={readOnly ? notifyDemoReadOnly : openPicker}
         >
           <Play aria-hidden="true" />
           学習を始める

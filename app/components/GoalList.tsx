@@ -15,14 +15,20 @@ import {
 import { toast } from "sonner";
 import { daysUntil, formatExamDate } from "@/lib/date";
 import { useGoals, goalsKey, type Goal, type Faculty } from "@/app/hooks/useGoals";
+import { notifyDemoReadOnly } from "@/lib/demo-client";
 
 
 type Props = {
   initialGoals: Goal[];
   faculties: Faculty[];
+  readOnly?: boolean;
 };
 
-export default function GoalList({ initialGoals, faculties }: Props) {
+export default function GoalList({
+  initialGoals,
+  faculties,
+  readOnly = false,
+}: Props) {
   const queryClient = useQueryClient();
 
   // サーバー状態の取得。SSR で渡された initialGoals を初期キャッシュとして使う
@@ -114,7 +120,16 @@ export default function GoalList({ initialGoals, faculties }: Props) {
     onError: (error) => toast.error(error.message),
   });
 
-  const onSubmit = (data: GoalInput) => addMutation.mutate(data);
+  const runIfWritable = (action: () => void) => {
+    if (readOnly) {
+      notifyDemoReadOnly();
+      return;
+    }
+    action();
+  };
+
+  const onSubmit = (data: GoalInput) =>
+    runIfWritable(() => addMutation.mutate(data));
 
   // 学部セレクトを大学ごとに optgroup でまとめる
   const facultiesByUniversity = faculties.reduce<Record<string, Faculty[]>>(
@@ -168,19 +183,28 @@ export default function GoalList({ initialGoals, faculties }: Props) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button
+            title={
+              readOnly
+                ? "デモアカウントは閲覧専用です"
+                : goal.isFirstChoice
+                  ? "第一志望を解除"
+                  : "第一志望にする"
+            }
             onClick={() =>
-              firstChoiceMutation.mutate({
-                id: goal.id,
-                value: !goal.isFirstChoice,
-              })
+              runIfWritable(() =>
+                firstChoiceMutation.mutate({
+                  id: goal.id,
+                  value: !goal.isFirstChoice,
+                })
+              )
             }
             className="text-sm hover:underline"
-            title={goal.isFirstChoice ? "第一志望を解除" : "第一志望にする"}
           >
             {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
           </button>
           <button
-            onClick={() => deleteMutation.mutate(goal.id)}
+            title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
+            onClick={() => runIfWritable(() => deleteMutation.mutate(goal.id))}
             className="text-red-500 text-sm hover:underline"
           >
             削除
@@ -312,14 +336,32 @@ export default function GoalList({ initialGoals, faculties }: Props) {
                         </td>
                         <td className="py-3 whitespace-nowrap text-right">
                           <button
-                            onClick={() => statusMutation.mutate(goal.id)}
+                            title={
+                              readOnly
+                                ? "デモアカウントは閲覧専用です"
+                                : undefined
+                            }
+                            onClick={() =>
+                              runIfWritable(() =>
+                                statusMutation.mutate(goal.id)
+                              )
+                            }
                             disabled={statusMutation.isPending}
                             className="text-sm text-blue-600 hover:underline"
                           >
                             受験校にする
                           </button>
                           <button
-                            onClick={() => deleteMutation.mutate(goal.id)}
+                            title={
+                              readOnly
+                                ? "デモアカウントは閲覧専用です"
+                                : undefined
+                            }
+                            onClick={() =>
+                              runIfWritable(() =>
+                                deleteMutation.mutate(goal.id)
+                              )
+                            }
                             className="ml-3 text-sm text-red-500 hover:underline"
                           >
                             削除

@@ -1,59 +1,43 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { MapPinned } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { logout } from "@/app/auth/actions";
+import HeaderNavigation from "@/app/components/HeaderNavigation";
 
 const Header = async () => {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
   const user = session?.user;
-                                                                                                     
-  return (                                                                                         
-    <header className="border-b px-8 py-4 flex justify-between items-center">
-      <Link href="/" className="text-xl font-bold">
-        受験マップ
-      </Link>                                                                                        
-      <nav className="flex gap-4 items-center">
-        {user ? (
-          <>
-            <Link href="/" className="text-blue-500 hover:underline">
-              学習
-            </Link>
-            <Link href="/dashboard" className="text-blue-500 hover:underline">
-              ダッシュボード
-            </Link>
-            <Link href="/goals" className="text-blue-500 hover:underline">
-              志望校
-            </Link>
-            <Link href="/explore" className="text-blue-500 hover:underline">
-              大学を探す
-            </Link>
-            <Link href="/blog" className="text-blue-500 hover:underline">
-              ブログ
-            </Link>
-            <Link href="/profile" className="text-blue-500 hover:underline">
-              プロフィール
-            </Link>
-            <form action={logout}>                                                                   
-              <button type="submit" className="text-red-500 hover:underline">                        
-                ログアウト
-              </button>                                                                              
-            </form>                                                                                
-          </>
-        ) : (
-          <>
-            <Link href="/blog" className="text-blue-500 hover:underline">
-              ブログ
-            </Link>
-            <Link href="/login" className="text-blue-500 hover:underline">
-              ログイン
-            </Link>
-          </>
-        )}
-      </nav>
-    </header>
-  );                                        
-};                                      
+
+  return (
+    <>
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <Link
+            href="/"
+            className="flex shrink-0 items-center gap-2 rounded-md font-bold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <MapPinned aria-hidden="true" className="size-5" />
+            </span>
+            <span className="text-lg sm:text-xl">受験マップ</span>
+          </Link>
+
+          <HeaderNavigation
+            user={
+              user
+                ? {
+                    name: user.name,
+                    email: user.email,
+                  }
+                : null
+            }
+          />
+        </div>
+      </header>
+    </>
+  );
+};
 
 export default Header;

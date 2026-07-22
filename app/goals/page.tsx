@@ -8,6 +8,7 @@ import ExamScheduleTimeline from "@/app/components/ExamScheduleTimeline";
 import type { Goal } from "@/app/hooks/useGoals";
 import { Card, CardContent } from "@/components/ui/card";
 import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/subjects";
+import { DEMO_EMAIL } from "@/lib/demo";
 
 // 志望校ページ＝「受験戦略を俯瞰し、受験校を決める」場所。
 // 以前はプロフィール下部に埋もれていた GoalList をここへ独立させた。
@@ -126,7 +127,11 @@ const GoalsPage = async () => {
 
       <Card>
         <CardContent>
-          <GoalList initialGoals={goals} faculties={faculties} />
+          <GoalList
+            initialGoals={goals}
+            faculties={faculties}
+            readOnly={session.user.email === DEMO_EMAIL}
+          />
         </CardContent>
       </Card>
     </main>

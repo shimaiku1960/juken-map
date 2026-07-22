@@ -93,7 +93,7 @@ export default function StudyRecordDashboard({
         <h2 className="text-xl font-bold mb-3">最近の記録</h2>
         <Card>
           <CardContent className="py-5">
-            <RecentStudyLogs logs={logs} />
+            <RecentStudyLogs logs={logs} readOnly={readOnly} />
           </CardContent>
         </Card>
       </section>

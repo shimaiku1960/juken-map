@@ -5,6 +5,7 @@ import { type StudyLog, useDeleteStudyLog } from "@/app/hooks/useStudyLogs";
 import { studyLogLabel } from "@/lib/studyLog";
 import { subjectColor } from "@/lib/subjects";
 import { Button } from "@/components/ui/button";
+import { notifyDemoReadOnly } from "@/lib/demo-client";
 
 const toDateStr = (d: string) => d.slice(0, 10);
 
@@ -12,9 +13,11 @@ const toDateStr = (d: string) => d.slice(0, 10);
 export default function RecentStudyLogs({
   logs,
   limit = 5,
+  readOnly = false,
 }: {
   logs: StudyLog[];
   limit?: number;
+  readOnly?: boolean;
 }) {
   const deleteLog = useDeleteStudyLog();
 
@@ -46,12 +49,17 @@ export default function RecentStudyLogs({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() =>
+            title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
+            onClick={() => {
+              if (readOnly) {
+                notifyDemoReadOnly();
+                return;
+              }
               deleteLog.mutate(log.id, {
                 onSuccess: () => toast.success("削除しました"),
                 onError: (error) => toast.error(error.message),
-              })
-            }
+              });
+            }}
             disabled={deleteLog.isPending}
             aria-label="削除"
           >
