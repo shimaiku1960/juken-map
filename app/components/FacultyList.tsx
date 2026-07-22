@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useGoals, goalsKey } from "@/app/hooks/useGoals";
+import { notifyDemoReadOnly } from "@/lib/demo-client";
 
 type Tag = { id: number; name: string };
 
@@ -17,11 +18,13 @@ type Faculty = {
 type Props = {
   faculties: Faculty[];
   registeredFacultyIds: number[];
+  readOnly?: boolean;
 };
 
 export default function FacultyList({
   faculties,
   registeredFacultyIds,
+  readOnly = false,
 }: Props) {
   const queryClient = useQueryClient();
 
@@ -80,8 +83,15 @@ export default function FacultyList({
               </p>
             </div>
             <Button
-              onClick={() => registerMutation.mutate(faculty.id)}
+              onClick={() => {
+                if (readOnly) {
+                  notifyDemoReadOnly();
+                  return;
+                }
+                registerMutation.mutate(faculty.id);
+              }}
               disabled={status !== undefined || registerMutation.isPending}
+              title={readOnly && status === undefined ? "デモアカウントは閲覧専用です" : undefined}
               variant={status !== undefined ? "secondary" : "default"}
             >
               {label}

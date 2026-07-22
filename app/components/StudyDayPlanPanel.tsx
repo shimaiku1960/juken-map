@@ -11,6 +11,7 @@ import StudyPlanEditDialog from "@/app/components/StudyPlanEditDialog";
 import { studyPlanLabel } from "@/lib/studyPlan";
 import { subjectColor, subjectLabel } from "@/lib/subjects";
 import { Button } from "@/components/ui/button";
+import { notifyDemoReadOnly } from "@/lib/demo-client";
 
 export default function StudyDayPlanPanel({
   date,
@@ -87,8 +88,14 @@ export default function StudyDayPlanPanel({
         <h4 id="selected-day-plans" className="text-sm font-semibold text-gray-700">
           学習予定 {plans.length > 0 ? `${plans.length}件` : ""}
         </h4>
-        {!readOnly && allowAdd ? (
-          <Button type="button" size="sm" variant="outline" onClick={() => setAdding(true)}>
+        {allowAdd ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
+            onClick={readOnly ? notifyDemoReadOnly : () => setAdding(true)}
+          >
             ＋ 予定を追加
           </Button>
         ) : null}
@@ -108,8 +115,9 @@ export default function StudyDayPlanPanel({
                   role="checkbox"
                   aria-checked={plan.done}
                   aria-label={`${studyPlanLabel(plan)}を${plan.done ? "未完了に戻す" : "完了にする"}`}
-                  disabled={readOnly || plan.studyLogId != null || updatePlan.isPending}
-                  onClick={() => toggleDone(plan)}
+                  disabled={plan.studyLogId != null || updatePlan.isPending}
+                  title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
+                  onClick={readOnly ? notifyDemoReadOnly : () => toggleDone(plan)}
                   className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                     plan.done
                       ? "border-green-600 bg-green-600 text-white"
@@ -140,26 +148,37 @@ export default function StudyDayPlanPanel({
                     <p className="mt-1 text-xs text-green-700">実績記録済み</p>
                   ) : null}
                 </div>
-                {!readOnly ? (
-                  <div className="flex shrink-0 gap-1">
-                    <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(plan)}>
-                      編集
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      disabled={deletePlan.isPending}
-                      onClick={() => {
-                        if (window.confirm("この学習予定を削除しますか？")) {
-                          deletePlan.mutate(plan.id);
-                        }
-                      }}
-                    >
-                      削除
-                    </Button>
-                  </div>
-                ) : null}
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
+                    onClick={
+                      readOnly ? notifyDemoReadOnly : () => openEdit(plan)
+                    }
+                  >
+                    編集
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={deletePlan.isPending}
+                    title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
+                    onClick={() => {
+                      if (readOnly) {
+                        notifyDemoReadOnly();
+                        return;
+                      }
+                      if (window.confirm("この学習予定を削除しますか？")) {
+                        deletePlan.mutate(plan.id);
+                      }
+                    }}
+                  >
+                    削除
+                  </Button>
+                </div>
               </div>
             </li>
           ))}

@@ -74,13 +74,15 @@ const Home = async () => {
           <span className="mx-1 text-lg font-bold text-foreground">あと {daysToExam} 日</span>
         </p>
       )}
-      <p className="text-2xl font-bold sm:text-3xl">今日の学習を始めよう</p>
-      <StudySessionManager
-        initialPlans={initialPlans}
-        userId={session.user.id}
-        readOnly={session.user.email === DEMO_EMAIL}
-        variant="hero"
-      />
+      <h1 className="text-2xl font-bold sm:text-3xl">今日の学習を始めよう</h1>
+      <div id="study-start" className="scroll-mt-24">
+        <StudySessionManager
+          initialPlans={initialPlans}
+          userId={session.user.id}
+          readOnly={session.user.email === DEMO_EMAIL}
+          variant="hero"
+        />
+      </div>
       <Link href="/dashboard" className="mt-4 text-sm text-blue-600 hover:underline">
         今日の予定・記録を見る →
       </Link>

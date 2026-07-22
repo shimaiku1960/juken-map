@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import ProfileEdit from "@/app/components/ProfileEdit";
 import { Card, CardContent } from "@/components/ui/card";
+import { DEMO_EMAIL } from "@/lib/demo";
 
 const ProfilePage = async () => {
     const session = await auth.api.getSession({
@@ -30,7 +31,10 @@ const ProfilePage = async () => {
       </div>
       <div className="py-4">
         <p className="text-sm text-gray-500 mb-1">ニックネーム</p>
-        <ProfileEdit currentNickname={user.nickname ?? ""} />
+        <ProfileEdit
+          currentNickname={user.nickname ?? ""}
+          readOnly={user.email === DEMO_EMAIL}
+        />
       </div>
       <div className="pt-4">
         <p className="text-sm text-gray-500 mb-1">メールアドレス</p>
