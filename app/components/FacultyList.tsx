@@ -78,7 +78,7 @@ export default function FacultyList({
           >
             <div>
               <p className="font-medium">{faculty.name}</p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 {faculty.tags.map((t) => t.name).join(" / ")}
               </p>
             </div>

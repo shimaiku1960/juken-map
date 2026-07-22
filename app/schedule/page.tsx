@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function SchedulePage() {
-  redirect("/#study-calendar");
+  redirect("/dashboard#study-calendar");
 }

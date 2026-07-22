@@ -60,7 +60,7 @@ export default function PrefectureModal({ value, onChange, children }: Props) {
                 {prefs.map((pref) => (
                   <label
                     key={pref}
-                    className="flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer hover:bg-gray-50"
+                    className="flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer hover:bg-muted/50"
                   >
                     <Checkbox
                       checked={draft.has(pref)}

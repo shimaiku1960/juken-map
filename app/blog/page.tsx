@@ -1,6 +1,8 @@
 import { client, type Blog } from "@/lib/microcms";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import PageShell from "@/app/components/layout/PageShell";
+import PageHeader from "@/app/components/layout/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +11,8 @@ const BlogPage = async () => {
     endpoint: "blogs",
   });
   return (
-    <main className="w-full mx-auto max-w-3xl p-8">
-      <h1 className="text-3xl font-bold mb-6">ブログ記事一覧</h1>
+    <PageShell>
+      <PageHeader title="ブログ記事一覧" />
       <ul className="space-y-4">
         {data.contents.map((blog) => (
           <li key={blog.id}>
@@ -18,7 +20,7 @@ const BlogPage = async () => {
               <Card>
                 <CardContent>
                   <h2 className="text-xl font-semibold">{blog.title}</h2>
-                  <time className="text-sm text-gray-400">
+                  <time className="text-sm text-muted-foreground">
                     {new Date(blog.createdAt).toLocaleDateString("ja-JP")}
                   </time>
                 </CardContent>
@@ -27,7 +29,7 @@ const BlogPage = async () => {
           </li>
         ))}
       </ul>
-    </main>
+    </PageShell>
   );
 };
 

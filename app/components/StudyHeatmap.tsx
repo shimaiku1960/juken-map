@@ -11,11 +11,11 @@ import { ymdLocal } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 
 function levelClass(minutes: number): string {
-  if (minutes <= 0) return "bg-gray-100";
-  if (minutes < 30) return "bg-green-200";
-  if (minutes < 60) return "bg-green-400";
-  if (minutes < 120) return "bg-green-500";
-  return "bg-green-700";
+  if (minutes <= 0) return "bg-muted";
+  if (minutes < 30) return "bg-success/20";
+  if (minutes < 60) return "bg-success/55";
+  if (minutes < 120) return "bg-success/75";
+  return "bg-success";
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -112,7 +112,7 @@ export default function StudyHeatmap({
 
   return (
     <div>
-      <p className="mb-3 text-sm text-gray-600">
+      <p className="mb-3 text-sm text-muted-foreground">
         日付を選ぶと、未来の予定を追加・編集でき、過去の学習内容を確認できます。
       </p>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -120,7 +120,7 @@ export default function StudyHeatmap({
           <Button type="button" size="sm" variant="ghost" onClick={() => moveMonth(-1)} aria-label="前の月">
             ←
           </Button>
-          <p className="min-w-28 text-center text-sm font-semibold text-gray-700">
+          <p className="min-w-28 text-center text-sm font-semibold text-foreground">
             {monthLabel(displayMonth)}
           </p>
           <Button type="button" size="sm" variant="ghost" onClick={() => moveMonth(1)} aria-label="次の月">
@@ -138,7 +138,7 @@ export default function StudyHeatmap({
         <div className="min-w-80">
           <div className="mb-0.5 grid grid-cols-7 gap-0.5">
             {WEEKDAYS.map((weekday) => (
-              <div key={weekday} className="text-center text-xs text-gray-500">
+              <div key={weekday} className="text-center text-xs text-muted-foreground">
                 {weekday}
               </div>
             ))}
@@ -178,26 +178,26 @@ export default function StudyHeatmap({
                       aria-label={`${cell.ymd}、${ariaParts.join("、")}。詳細を表示`}
                       aria-pressed={selected}
                       onClick={() => setSelectedYmd(cell.ymd as string)}
-                      className={`flex aspect-square min-w-0 flex-col justify-between rounded-sm border p-1 text-left text-[10px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 ${
+                      className={`flex aspect-square min-w-0 flex-col justify-between rounded-sm border p-1 text-left text-[10px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                         isFuture && cell.minutes === 0
                           ? dayPlans.length > 0
-                            ? "border-dashed border-blue-300 bg-blue-50 text-blue-950"
-                            : "border-gray-200 bg-white text-gray-600"
+                            ? "border-dashed border-info/40 bg-info/10 text-info"
+                            : "border-border bg-card text-muted-foreground"
                           : `${levelClass(cell.minutes)} border-transparent ${
-                              cell.minutes >= 120 ? "text-white" : "text-gray-900"
+                              cell.minutes >= 120 ? "text-success-foreground" : "text-foreground"
                             }`
                       } ${
-                        isToday ? "ring-2 ring-blue-600 ring-inset" : ""
+                        isToday ? "ring-2 ring-ring ring-inset" : ""
                       } ${
                         selected
-                          ? "outline-2 outline-offset-1 outline-blue-700"
-                          : "hover:border-gray-400"
+                          ? "outline-2 outline-offset-1 outline-primary"
+                          : "hover:border-muted-foreground"
                       }`}
                     >
                       <span className="flex w-full items-center justify-between gap-1">
                         <span>{Number(cell.ymd.slice(-2))}</span>
                         {isToday ? (
-                          <span className="rounded bg-blue-700 px-1 text-[8px] text-white">
+                          <span className="rounded bg-info px-1 text-[8px] text-info-foreground">
                             今日
                           </span>
                         ) : null}
@@ -214,7 +214,7 @@ export default function StudyHeatmap({
                             : ""}
                       </span>
                       <span
-                        className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/70"
+                        className="flex h-1.5 w-full overflow-hidden rounded-full bg-card/70"
                         aria-hidden="true"
                       >
                         {cell.minutes > 0
@@ -246,28 +246,28 @@ export default function StudyHeatmap({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1">
-            <span className="h-3 w-3 rounded-sm bg-green-500" /> 実績量
+            <span className="h-3 w-3 rounded-sm bg-success/75" /> 実績量
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-3 w-3 rounded-sm border border-dashed border-blue-400 bg-blue-50" /> 予定
+            <span className="h-3 w-3 rounded-sm border border-dashed border-primary/60 bg-info/10" /> 予定
           </span>
         </div>
         <div className="flex items-center gap-1" aria-label="実績量の凡例、少ないから多い">
           <span>少</span>
-          <span className="h-3 w-3 rounded-sm bg-gray-100" />
-          <span className="h-3 w-3 rounded-sm bg-green-200" />
-          <span className="h-3 w-3 rounded-sm bg-green-400" />
-          <span className="h-3 w-3 rounded-sm bg-green-500" />
-          <span className="h-3 w-3 rounded-sm bg-green-700" />
+          <span className="h-3 w-3 rounded-sm bg-muted" />
+          <span className="h-3 w-3 rounded-sm bg-success/20" />
+          <span className="h-3 w-3 rounded-sm bg-success/55" />
+          <span className="h-3 w-3 rounded-sm bg-success/75" />
+          <span className="h-3 w-3 rounded-sm bg-success" />
           <span>多</span>
         </div>
       </div>
 
       {visibleSubjects.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {visibleSubjects.map((subject) => (
             <span key={subject} className="inline-flex items-center gap-1">
               <span
@@ -283,12 +283,12 @@ export default function StudyHeatmap({
 
       <div className="mt-5 space-y-5 border-t pt-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="font-semibold text-gray-900" aria-live="polite">
+          <h3 className="font-semibold text-foreground" aria-live="polite">
             {detailHeading}
           </h3>
           {selectedMinutes > 0 ? (
-            <p className="text-sm text-gray-600">
-              合計 <span className="font-semibold text-gray-900">{formatMinutes(selectedMinutes)}</span>
+            <p className="text-sm text-muted-foreground">
+              合計 <span className="font-semibold text-foreground">{formatMinutes(selectedMinutes)}</span>
             </p>
           ) : null}
         </div>
@@ -303,16 +303,16 @@ export default function StudyHeatmap({
         ) : null}
 
         {!selectedIsPast && selectedLogs.length > 0 ? (
-          <h4 className="text-sm font-semibold text-gray-700">学習実績</h4>
+          <h4 className="text-sm font-semibold text-foreground">学習実績</h4>
         ) : null}
 
         {selectedLogs.length === 0 ? (
           selectedIsPast || selectedIsToday ? (
-            <div className="rounded-md bg-gray-50 px-3 py-4 text-sm text-gray-600">
+            <div className="rounded-md bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
               <p>この日の学習実績はありません。</p>
               <a
                 href="#study-actions"
-                className="mt-2 inline-flex font-medium text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                className="mt-2 inline-flex font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 学習を記録する ↑
               </a>
@@ -335,22 +335,22 @@ export default function StudyHeatmap({
                         style={{ backgroundColor: subjectColor(log.subject) }}
                         aria-hidden="true"
                       />
-                      <span className="font-medium text-gray-900">
+                      <span className="font-medium text-foreground">
                         {subjectLabel(log.subject)}
                       </span>
                     </div>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums text-gray-900">
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                       {formatMinutes(log.minutes)}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-gray-600">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {log.textbook?.name || log.memo?.trim() || "教材・内容の記録なし"}
                   </p>
                   {range ? (
-                    <p className="mt-1 text-xs text-gray-500">学習範囲：{range}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">学習範囲：{range}</p>
                   ) : null}
                   {log.textbook && log.memo?.trim() ? (
-                    <p className="mt-1 text-xs text-gray-500">{log.memo.trim()}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{log.memo.trim()}</p>
                   ) : null}
                 </li>
               );

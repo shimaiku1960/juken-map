@@ -300,10 +300,10 @@ export default function StudyPlanCalendar({
 
   return (
     <div className="space-y-8">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         日をクリックすると、その日の予定の確認・追加・編集ができます。
         予定をドラッグすると別の日へ移動できます。
-        <span className="text-red-600">赤色</span>
+        <span className="text-destructive">赤色</span>
         は志望校の受験日です（クリックで第一志望・メモの編集や削除ができます）。
       </p>
 
@@ -331,7 +331,7 @@ export default function StudyPlanCalendar({
       <div>
         <h2 className="text-xl font-bold mb-3">予定一覧</h2>
         {plans.length === 0 ? (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             まだ予定がありません。カレンダーの日付をクリックして登録しましょう。
           </p>
         ) : (
@@ -369,10 +369,10 @@ export default function StudyPlanCalendar({
                   title={subjectLabel(plan.subject)}
                 />
                 <div className="flex-1">
-                  <p className="text-sm text-gray-500">{toDateStr(plan.date)}</p>
+                  <p className="text-sm text-muted-foreground">{toDateStr(plan.date)}</p>
                   <p
                     className={`font-medium ${
-                      plan.done ? "line-through text-gray-400" : ""
+                      plan.done ? "line-through text-muted-foreground" : ""
                     }`}
                   >
                     {studyPlanLabel(plan)}
@@ -410,7 +410,7 @@ export default function StudyPlanCalendar({
 
           {/* その日の予定一覧 */}
           {dayPlans.length === 0 ? (
-            <p className="text-sm text-gray-500">この日の予定はまだありません。</p>
+            <p className="text-sm text-muted-foreground">この日の予定はまだありません。</p>
           ) : (
             <ul className="space-y-2">
               {dayPlans.map((plan) => (
@@ -447,7 +447,7 @@ export default function StudyPlanCalendar({
                   />
                   <span
                     className={`flex-1 text-sm ${
-                      plan.done ? "line-through text-gray-400" : ""
+                      plan.done ? "line-through text-muted-foreground" : ""
                     }`}
                   >
                     {studyPlanLabel(plan)}
@@ -545,7 +545,7 @@ export default function StudyPlanCalendar({
                           </FormItem>
                         )}
                       />
-                      <span className="text-sm text-gray-500">〜</span>
+                      <span className="text-sm text-muted-foreground">〜</span>
                       <FormField
                         control={createForm.control}
                         name={`items.${index}.rangeEnd`}
@@ -705,7 +705,7 @@ export default function StudyPlanCalendar({
                           </FormItem>
                         )}
                       />
-                      <span className="text-sm text-gray-500">〜</span>
+                      <span className="text-sm text-muted-foreground">〜</span>
                       <FormField
                         control={editForm.control}
                         name="rangeEnd"
@@ -793,7 +793,7 @@ export default function StudyPlanCalendar({
               </DialogHeader>
 
               {/* 読み取り専用（マスター） */}
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 受験日：{toDateStr(examGoal.faculty.examDate)}
               </p>
 

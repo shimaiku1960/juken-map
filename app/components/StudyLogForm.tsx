@@ -278,7 +278,7 @@ export default function StudyLogForm({
                   </FormItem>
                 )}
               />
-              <span className="text-sm text-gray-500">〜</span>
+              <span className="text-sm text-muted-foreground">〜</span>
               <FormField
                 control={form.control}
                 name="rangeEnd"

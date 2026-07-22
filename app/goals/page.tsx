@@ -9,6 +9,12 @@ import type { Goal } from "@/app/hooks/useGoals";
 import { Card, CardContent } from "@/components/ui/card";
 import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/subjects";
 import { DEMO_EMAIL } from "@/lib/demo";
+import { Target } from "lucide-react";
+import PageShell from "@/app/components/layout/PageShell";
+import PageHeader from "@/app/components/layout/PageHeader";
+import SectionHeader from "@/app/components/layout/SectionHeader";
+import EmptyState from "@/app/components/feedback/EmptyState";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 // 志望校ページ＝「受験戦略を俯瞰し、受験校を決める」場所。
 // 以前はプロフィール下部に埋もれていた GoalList をここへ独立させた。
@@ -62,27 +68,30 @@ const GoalsPage = async () => {
   );
 
   return (
-    <main className="w-full mx-auto max-w-3xl p-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold">志望校</h1>
-        <Link
-          href="/explore"
-          className="text-sm text-blue-500 hover:underline"
-        >
-          大学を探す →
-        </Link>
-      </div>
-      <p className="mb-6 text-sm text-gray-500">
-        第一志望と併願校を俯瞰して、受験する大学・学部を決めましょう。
-      </p>
+    <PageShell>
+      <PageHeader
+        title="志望校"
+        description="第一志望と併願校を俯瞰して、受験する大学・学部を決めましょう。"
+        action={goals.length > 0 ? <Button asChild><Link href="/explore">大学を探す</Link></Button> : undefined}
+      />
+
+      {goals.length === 0 ? (
+        <EmptyState
+          icon={Target}
+          title="志望校を登録して受験計画を始めよう"
+          description="大学・学部を登録すると、試験日や併願校、必要な対策をまとめて整理できます。"
+          action={<Button asChild size="lg" className="h-11"><Link href="/explore">大学を探す</Link></Button>}
+        />
+      ) : (
+      <>
 
       <section className="mb-6">
-        <h2 className="mb-2 text-sm font-bold text-gray-500">受験日程</h2>
+        <SectionHeader title="受験日程" />
         <ExamScheduleTimeline initialGoals={goals} />
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 text-sm font-bold text-gray-500">対策の科目</h2>
+        <SectionHeader title="対策の科目" />
         <Card>
           <CardContent className="py-5">
             {subjectChips.length > 0 ? (
@@ -104,18 +113,18 @@ const GoalsPage = async () => {
                     </span>
                   ))}
                 </div>
-                <p className="mt-3 text-sm text-gray-500">
+                <p className="mt-3 text-sm text-muted-foreground">
                   受験日から逆算した今日のノルマは{" "}
-                  <Link href="/" className="text-blue-500 hover:underline">
+                  <Link href="/" className={buttonVariants({ variant: "link", size: "sm" })}>
                     「今日やること」
                   </Link>{" "}
                   で確認できます。
                 </p>
               </>
             ) : (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 参考書に科目を設定すると、対策科目がここに表示されます。参考書は{" "}
-                <Link href="/" className="text-blue-500 hover:underline">
+                <Link href="/dashboard" className={buttonVariants({ variant: "link", size: "sm" })}>
                   ダッシュボード
                 </Link>{" "}
                 の実績記録から追加できます。
@@ -134,7 +143,9 @@ const GoalsPage = async () => {
           />
         </CardContent>
       </Card>
-    </main>
+      </>
+      )}
+    </PageShell>
   );
 };
 

@@ -29,12 +29,12 @@ const CountdownItem = ({
   return (
     <Card>
       <CardContent className="py-5">
-        <p className="text-sm text-gray-500">{label}</p>
+        <p className="text-sm text-muted-foreground">{label}</p>
         <p className="font-medium">
           {goal.universityName} {goal.facultyName}
         </p>
-        <p className="mt-2 text-3xl font-bold text-blue-600">{daysLabel(n)}</p>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-2 text-3xl font-bold text-primary">{daysLabel(n)}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
           {formatExamDate(goal.examDate)}
         </p>
       </CardContent>
@@ -47,10 +47,10 @@ export default function ExamCountdown({ goals }: { goals: CountdownGoal[] }) {
     return (
       <Card>
         <CardContent className="py-6 text-center">
-          <p className="text-gray-600">まだ志望校が登録されていません。</p>
+          <p className="text-muted-foreground">まだ志望校が登録されていません。</p>
           <Link
             href="/goals"
-            className="text-blue-600 hover:underline text-sm"
+            className="text-primary hover:underline text-sm"
           >
             志望校を設定する →
           </Link>

@@ -5,51 +5,57 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { Label } from "@/components/ui/label";
+import InlineFeedback from "@/app/components/feedback/InlineFeedback";
+import PageShell from "@/app/components/layout/PageShell";
+import PageHeader from "@/app/components/layout/PageHeader";
 
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    setErrorMessage(null);
     if (!token) {
-      toast.error("リンクが無効です。お手数ですが再度お試しください");
+      setErrorMessage("リンクが無効です。お手数ですが再度お試しください");
       return;
     }
+    setLoading(true);
     const { error } = await authClient.resetPassword({
       newPassword: password,
       token,
     });
     if (error) {
-      toast.error(error.message ?? "再設定に失敗しました");
+      setErrorMessage(error.message ?? "再設定に失敗しました");
+      setLoading(false);
       return;
     }
-    toast.success("パスワードを再設定しました");
     router.push("/login");
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <Input
-        type="password"
-        placeholder="新しいパスワード"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <Button onClick={handleSubmit}>パスワードを再設定する</Button>
-    </div>
+    <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}>
+      {errorMessage ? <InlineFeedback variant="error">{errorMessage}</InlineFeedback> : null}
+      <div className="space-y-2">
+        <Label htmlFor="new-password">新しいパスワード</Label>
+        <Input id="new-password" name="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+      </div>
+      <Button type="submit" size="lg" className="h-11 w-full" disabled={loading}>{loading ? "再設定中…" : "パスワードを再設定する"}</Button>
+    </form>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <main className="w-full mx-auto max-w-md p-8">
-      <h1 className="text-3xl font-bold mb-6">新しいパスワードの設定</h1>
+    <PageShell className="max-w-md">
+      <PageHeader title="新しいパスワードの設定" description="新しく使用するパスワードを入力してください。" />
       <Suspense>
         <ResetPasswordForm />
       </Suspense>
-    </main>
+    </PageShell>
   );
 }

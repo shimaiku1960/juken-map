@@ -13,7 +13,7 @@ const ArticlePage = async ({ params }: { params: Promise<{ id: string }> }) => {
     <Card>
       <CardContent className="space-y-4">
         <h1 className="text-3xl font-bold">{blog.title}</h1>
-        <time className="text-sm text-gray-400">
+        <time className="text-sm text-muted-foreground">
           {new Date(blog.createdAt).toLocaleDateString("ja-JP")}
         </time>
         <div

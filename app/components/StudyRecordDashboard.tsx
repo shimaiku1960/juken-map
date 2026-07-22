@@ -45,7 +45,7 @@ export default function StudyRecordDashboard({
 
   return (
     <>
-      <section id="study-calendar" className="mb-8 scroll-mt-4">
+      <section id="study-calendar" className="mb-8 scroll-mt-24">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold">学習カレンダー</h2>
           <StreakBadge streak={streak} />
@@ -53,7 +53,7 @@ export default function StudyRecordDashboard({
         <Card>
           <CardContent className="px-3 py-5 sm:px-6">
             {plansError ? (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 <span>学習予定を更新できませんでした。表示が古い可能性があります。</span>
                 <button
                   type="button"
@@ -64,9 +64,9 @@ export default function StudyRecordDashboard({
                 </button>
               </div>
             ) : null}
-            <p className="mb-4 text-sm text-gray-600">
+            <p className="mb-4 text-sm text-muted-foreground">
               今日の学習時間：
-              <span className="font-bold text-gray-900">
+              <span className="font-bold text-foreground">
                 {formatMinutes(todayMinutes)}
               </span>
             </p>

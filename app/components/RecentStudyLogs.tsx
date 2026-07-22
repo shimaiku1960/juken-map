@@ -23,7 +23,7 @@ export default function RecentStudyLogs({
 
   if (logs.length === 0) {
     return (
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         まだ記録がありません。画面上部の「学習を記録」から始めましょう。
       </p>
     );
@@ -43,7 +43,7 @@ export default function RecentStudyLogs({
             style={{ backgroundColor: subjectColor(log.subject) }}
           />
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-gray-500">{toDateStr(log.date)}</p>
+            <p className="text-xs text-muted-foreground">{toDateStr(log.date)}</p>
             <p className="truncate text-sm font-medium">{studyLogLabel(log)}</p>
           </div>
           <Button

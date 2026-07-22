@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import UniversitySearch from "@/app/components/UniversitySearch";
+import PageShell from "@/app/components/layout/PageShell";
+import PageHeader from "@/app/components/layout/PageHeader";
 
 const ExplorePage = async () => {
   const session = await auth.api.getSession({
@@ -37,10 +39,10 @@ const ExplorePage = async () => {
   }));
 
   return (
-    <main className="w-full mx-auto max-w-3xl p-8">
-      <h1 className="text-3xl font-bold mb-6">大学を探す</h1>
+    <PageShell>
+      <PageHeader title="大学を探す" description="地域や設置区分、学部系統から志望校候補を絞り込めます。" />
       <UniversitySearch universities={universities} />
-    </main>
+    </PageShell>
   );
 };
 

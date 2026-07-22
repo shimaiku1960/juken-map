@@ -9,6 +9,10 @@ import type { StudyLog } from "@/app/hooks/useStudyLogs";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import { Card, CardContent } from "@/components/ui/card";
 import { DEMO_EMAIL } from "@/lib/demo";
+import PageShell from "@/app/components/layout/PageShell";
+import PageHeader from "@/app/components/layout/PageHeader";
+import SectionHeader from "@/app/components/layout/SectionHeader";
+import { buttonVariants } from "@/components/ui/button";
 
 const DashboardPage = async () => {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -100,11 +104,11 @@ const DashboardPage = async () => {
   const candidateCount = goals.length - decidedGoals.length;
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-4 sm:p-8">
-      <h1 className="mb-4 text-3xl font-bold">ダッシュボード</h1>
+    <PageShell>
+      <PageHeader title="記録・予定" description="学習予定と実績をまとめて確認できます。" />
 
       <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">受験カウントダウン</h2>
+        <SectionHeader title="受験カウントダウン" />
         <ExamCountdown goals={countdownGoals} />
       </section>
 
@@ -115,23 +119,23 @@ const DashboardPage = async () => {
       />
 
       <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">志望校</h2>
+        <SectionHeader title="志望校" />
         <Card>
           <CardContent className="py-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">第一志望</p>
+                <p className="text-sm text-muted-foreground">第一志望</p>
                 <p className="font-medium">
                   {firstChoice
                     ? `${firstChoice.faculty.university.name} ${firstChoice.faculty.name}`
                     : "未設定"}
                 </p>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-muted-foreground">
                   併願：{otherCount} 校
                   {candidateCount > 0 && ` ・ 検討中：${candidateCount} 校`}
                 </p>
               </div>
-              <Link href="/goals" className="text-blue-600 hover:underline text-sm">
+              <Link href="/goals" className={buttonVariants({ variant: "link" })}>
                 志望校を設定 →
               </Link>
             </div>
@@ -139,10 +143,10 @@ const DashboardPage = async () => {
         </Card>
       </section>
 
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         ※ 表示している受験日は暫定です。正式な日程は各大学の募集要項で必ずご確認ください。
       </p>
-    </main>
+    </PageShell>
   );
 };
 

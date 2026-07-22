@@ -85,7 +85,7 @@ export default function StudyDayPlanPanel({
   return (
     <section aria-labelledby="selected-day-plans">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h4 id="selected-day-plans" className="text-sm font-semibold text-gray-700">
+        <h4 id="selected-day-plans" className="text-sm font-semibold text-foreground">
           学習予定 {plans.length > 0 ? `${plans.length}件` : ""}
         </h4>
         {allowAdd ? (
@@ -102,7 +102,7 @@ export default function StudyDayPlanPanel({
       </div>
 
       {plans.length === 0 ? (
-        <p className="rounded-md bg-blue-50 px-3 py-4 text-sm text-blue-900">
+        <p className="rounded-md bg-info/10 px-3 py-4 text-sm text-info">
           この日の予定はまだありません。
         </p>
       ) : (
@@ -118,10 +118,10 @@ export default function StudyDayPlanPanel({
                   disabled={plan.studyLogId != null || updatePlan.isPending}
                   title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
                   onClick={readOnly ? notifyDemoReadOnly : () => toggleDone(plan)}
-                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     plan.done
-                      ? "border-green-600 bg-green-600 text-white"
-                      : "border-gray-300 bg-white"
+                      ? "border-success bg-success text-success-foreground"
+                      : "border-border bg-card"
                   }`}
                 >
                   {plan.done ? "✓" : ""}
@@ -133,19 +133,19 @@ export default function StudyDayPlanPanel({
                       style={{ backgroundColor: subjectColor(plan.subject) }}
                       aria-hidden="true"
                     />
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {subjectLabel(plan.subject)}
                     </span>
                   </div>
                   <p
                     className={`mt-1 text-sm font-medium ${
-                      plan.done ? "text-gray-500 line-through" : "text-gray-900"
+                      plan.done ? "text-muted-foreground line-through" : "text-foreground"
                     }`}
                   >
                     {studyPlanLabel(plan)}
                   </p>
                   {plan.studyLogId != null ? (
-                    <p className="mt-1 text-xs text-green-700">実績記録済み</p>
+                    <p className="mt-1 text-xs text-success">実績記録済み</p>
                   ) : null}
                 </div>
                 <div className="flex shrink-0 gap-1">

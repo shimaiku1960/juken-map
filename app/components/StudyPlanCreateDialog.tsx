@@ -230,7 +230,7 @@ export default function StudyPlanCreateDialog({
                 setFormError(null);
                 setView("choose");
               }}
-              className="mb-2 inline-flex w-fit items-center gap-1 text-sm font-medium text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+              className="mb-2 inline-flex w-fit items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ArrowLeft className="h-4 w-4" /> 戻る
             </button>
@@ -250,20 +250,20 @@ export default function StudyPlanCreateDialog({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           {view === "choose" ? (
             <div className="space-y-3">
-              <p className="mb-4 text-base font-semibold text-gray-900">
+              <p className="mb-4 text-base font-semibold text-foreground">
                 何を勉強する？
               </p>
               <button
                 type="button"
                 onClick={() => setView("textbook")}
-                className="flex min-h-20 w-full items-center gap-4 rounded-xl border p-4 text-left transition hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                className="flex min-h-20 w-full items-center gap-4 rounded-xl border p-4 text-left transition hover:border-primary/60 hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="rounded-lg bg-blue-100 p-2 text-blue-700">
+                <span className="rounded-lg bg-info/15 p-2 text-primary">
                   <BookOpen className="h-5 w-5" />
                 </span>
                 <span>
-                  <span className="block font-semibold text-gray-900">参考書から選ぶ</span>
-                  <span className="mt-1 block text-sm text-gray-500">
+                  <span className="block font-semibold text-foreground">参考書から選ぶ</span>
+                  <span className="mt-1 block text-sm text-muted-foreground">
                     登録済みの教材と範囲を指定
                   </span>
                 </span>
@@ -271,14 +271,14 @@ export default function StudyPlanCreateDialog({
               <button
                 type="button"
                 onClick={() => setView("free")}
-                className="flex min-h-20 w-full items-center gap-4 rounded-xl border p-4 text-left transition hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                className="flex min-h-20 w-full items-center gap-4 rounded-xl border p-4 text-left transition hover:border-primary/60 hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="rounded-lg bg-gray-100 p-2 text-gray-700">
+                <span className="rounded-lg bg-muted p-2 text-foreground">
                   <PencilLine className="h-5 w-5" />
                 </span>
                 <span>
-                  <span className="block font-semibold text-gray-900">自由に入力する</span>
-                  <span className="mt-1 block text-sm text-gray-500">
+                  <span className="block font-semibold text-foreground">自由に入力する</span>
+                  <span className="mt-1 block text-sm text-muted-foreground">
                     復習、過去問、授業など
                   </span>
                 </span>
@@ -291,18 +291,18 @@ export default function StudyPlanCreateDialog({
               <div>
                 <Label className="mb-2 block">参考書</Label>
                 {textbooksPending ? (
-                  <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600" role="status">
+                  <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground" role="status">
                     参考書を読み込んでいます…
                   </div>
                 ) : textbooksError ? (
-                  <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                  <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                     <p>参考書を読み込めませんでした。</p>
                     <button type="button" onClick={() => refetchTextbooks()} className="mt-2 font-medium underline">
                       再試行
                     </button>
                   </div>
                 ) : textbooks.length === 0 ? (
-                  <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                  <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
                     <p>登録済みの参考書がありません。</p>
                     <Button type="button" size="sm" variant="outline" className="mt-3" onClick={() => setView("new-textbook")}>参考書を登録する</Button>
                   </div>
@@ -320,17 +320,17 @@ export default function StudyPlanCreateDialog({
                             setRangeStart("");
                             setRangeEnd("");
                           }}
-                          className={`flex min-h-14 w-full items-center gap-3 rounded-lg border px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${selected ? "border-blue-600 bg-blue-50" : "hover:border-gray-400"}`}
+                          className={`flex min-h-14 w-full items-center gap-3 rounded-lg border px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-info/10" : "hover:border-muted-foreground"}`}
                         >
-                          <span className={`h-4 w-4 shrink-0 rounded-full border-2 ${selected ? "border-[5px] border-blue-600" : "border-gray-300"}`} />
+                          <span className={`h-4 w-4 shrink-0 rounded-full border-2 ${selected ? "border-[5px] border-primary" : "border-border"}`} />
                           <span className="min-w-0">
-                            <span className="block truncate font-medium text-gray-900">{textbook.name}</span>
-                            <span className="mt-0.5 block text-xs text-gray-500">{subjectLabel(textbook.subject)}</span>
+                            <span className="block truncate font-medium text-foreground">{textbook.name}</span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">{subjectLabel(textbook.subject)}</span>
                           </span>
                         </button>
                       );
                     })}
-                    <button type="button" onClick={() => setView("new-textbook")} className="mt-2 text-sm font-medium text-blue-700 hover:underline">＋ 新しい参考書を登録</button>
+                    <button type="button" onClick={() => setView("new-textbook")} className="mt-2 text-sm font-medium text-primary hover:underline">＋ 新しい参考書を登録</button>
                   </div>
                 )}
               </div>
@@ -341,15 +341,15 @@ export default function StudyPlanCreateDialog({
                     <Label className="mb-2 block">どこまでやる？（任意）</Label>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label htmlFor="plan-range-start" className="text-xs text-gray-500">開始</Label>
+                        <Label htmlFor="plan-range-start" className="text-xs text-muted-foreground">開始</Label>
                         <Input id="plan-range-start" type="number" min={1} value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} placeholder="例：32" />
                       </div>
                       <div>
-                        <Label htmlFor="plan-range-end" className="text-xs text-gray-500">終了</Label>
+                        <Label htmlFor="plan-range-end" className="text-xs text-muted-foreground">終了</Label>
                         <Input id="plan-range-end" type="number" min={1} value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} placeholder="例：45" />
                       </div>
                     </div>
-                    <p className="mt-2 text-xs text-gray-500">単位：{rangeUnitLabel(selectedTextbook.rangeUnit)}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">単位：{rangeUnitLabel(selectedTextbook.rangeUnit)}</p>
                   </div>
                   <div>
                     <Label htmlFor="plan-memo">メモ（任意）</Label>
@@ -377,7 +377,7 @@ export default function StudyPlanCreateDialog({
                         type="button"
                         aria-pressed={selected}
                         onClick={() => setFreeSubject(selected ? null : subject.value)}
-                        className={`min-h-10 rounded-full border bg-white px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${selected ? "ring-1" : "text-gray-700"}`}
+                        className={`min-h-10 rounded-full border bg-card px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "ring-1" : "text-foreground"}`}
                         style={
                           selected
                             ? {
@@ -412,7 +412,7 @@ export default function StudyPlanCreateDialog({
                       type="button"
                       aria-pressed={newTextbookSubject === subject.value}
                       onClick={() => setNewTextbookSubject(newTextbookSubject === subject.value ? null : subject.value)}
-                      className="min-h-10 rounded-full border px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                      className="min-h-10 rounded-full border px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       style={newTextbookSubject === subject.value ? { borderColor: subjectColor(subject.value), color: subjectColor(subject.value), backgroundColor: `${subjectColor(subject.value)}12` } : undefined}
                     >
                       {subject.label}
@@ -430,7 +430,7 @@ export default function StudyPlanCreateDialog({
                       event.target.value as (typeof RANGE_UNITS)[number]["value"]
                     )
                   }
-                  className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {RANGE_UNITS.map((unit) => <option key={unit.value} value={unit.value}>{unit.label}</option>)}
                 </select>
@@ -443,13 +443,13 @@ export default function StudyPlanCreateDialog({
 
           {view === "success" && created ? (
             <div className="space-y-5 text-center">
-              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700"><Check className="h-6 w-6" /></span>
-              <div className="rounded-xl border bg-gray-50 p-4 text-left">
-                <p className="mb-2 text-sm font-medium text-gray-700">{naturalDate(date)}</p>
-                <p className="text-xs text-gray-500">{subjectLabel(created.subject)}</p>
-                <p className="mt-1 font-semibold text-gray-900">{created.title}</p>
-                {created.range ? <p className="mt-1 text-sm text-gray-600">{created.range}</p> : null}
-                {created.memo ? <p className="mt-2 text-sm text-gray-600">メモ：{created.memo}</p> : null}
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-success"><Check className="h-6 w-6" /></span>
+              <div className="rounded-xl border bg-muted/50 p-4 text-left">
+                <p className="mb-2 text-sm font-medium text-foreground">{naturalDate(date)}</p>
+                <p className="text-xs text-muted-foreground">{subjectLabel(created.subject)}</p>
+                <p className="mt-1 font-semibold text-foreground">{created.title}</p>
+                {created.range ? <p className="mt-1 text-sm text-muted-foreground">{created.range}</p> : null}
+                {created.memo ? <p className="mt-2 text-sm text-muted-foreground">メモ：{created.memo}</p> : null}
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 <Button type="button" variant="outline" onClick={resetForNext}>続けて予定を追加</Button>
@@ -459,14 +459,14 @@ export default function StudyPlanCreateDialog({
           ) : null}
 
           {formError ? (
-            <div role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {formError}
             </div>
           ) : null}
         </div>
 
         {(view === "textbook" && selectedTextbook) || view === "free" ? (
-          <div className="border-t bg-white px-5 py-4">
+          <div className="border-t bg-card px-5 py-4">
             <Button type="button" className="min-h-11 w-full" onClick={submit} disabled={saving}>
               {saving ? "追加中…" : "この予定を追加"}
             </Button>
