@@ -350,7 +350,7 @@ export default function StudySessionManager({
       {session && session.status !== "reviewing" && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-background px-6 text-center">
           <div className="flex flex-col items-center gap-3">
-            <p className="text-sm font-medium text-blue-600">
+            <p className="text-sm font-medium text-primary">
               {session.status === "running" ? "● 計測中" : "一時停止中"}
             </p>
             <p className="max-w-md truncate text-lg font-medium">
@@ -383,7 +383,6 @@ export default function StudySessionManager({
             )}
             <Button
               type="button"
-              variant="destructive"
               className="h-12 sm:w-40"
               onClick={moveToReview}
             >
@@ -410,7 +409,7 @@ export default function StudySessionManager({
                 {selectablePlans.map((plan) => (
                   <label
                     key={plan.id}
-                    className="flex cursor-pointer gap-3 rounded-lg border p-3 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50"
+                    className="flex cursor-pointer gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:checked]:bg-info/10"
                   >
                     <input
                       type="radio"
@@ -425,7 +424,7 @@ export default function StudySessionManager({
               </fieldset>
             )}
 
-            <label className="flex cursor-pointer gap-3 rounded-lg border p-3 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+            <label className="flex cursor-pointer gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:checked]:bg-info/10">
               <input
                 type="radio"
                 name="study-target"

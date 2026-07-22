@@ -148,11 +148,11 @@ export default function StudyPlanEditDialog({
               <div>
                 <Label className="mb-2 block">参考書</Label>
                 {isPending ? (
-                  <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600" role="status">
+                  <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground" role="status">
                     参考書を読み込んでいます…
                   </div>
                 ) : isError ? (
-                  <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                  <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                     <p>参考書を読み込めませんでした。</p>
                     <button type="button" onClick={() => refetch()} className="mt-2 font-medium underline">
                       再試行
@@ -166,7 +166,7 @@ export default function StudyPlanEditDialog({
                       return (
                         <label
                           key={textbook.id}
-                          className={`relative flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-left has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-600 ${selected ? "border-blue-600 bg-blue-50" : "hover:border-gray-400"}`}
+                          className={`relative flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-left has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${selected ? "border-primary bg-info/10" : "hover:border-muted-foreground"}`}
                         >
                           <input
                             type="radio"
@@ -181,10 +181,10 @@ export default function StudyPlanEditDialog({
                             }}
                             className="sr-only"
                           />
-                          <span className={`h-4 w-4 shrink-0 rounded-full border-2 ${selected ? "border-[5px] border-blue-600" : "border-gray-300"}`} />
+                          <span className={`h-4 w-4 shrink-0 rounded-full border-2 ${selected ? "border-[5px] border-primary" : "border-border"}`} />
                           <span className="min-w-0">
-                            <span className="block truncate font-medium text-gray-900">{textbook.name}</span>
-                            <span className="mt-0.5 block text-xs text-gray-500">{subjectLabel(textbook.subject)}</span>
+                            <span className="block truncate font-medium text-foreground">{textbook.name}</span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">{subjectLabel(textbook.subject)}</span>
                           </span>
                         </label>
                       );
@@ -199,15 +199,15 @@ export default function StudyPlanEditDialog({
                     <Label className="mb-2 block">どこまでやる？（任意）</Label>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label htmlFor="edit-plan-range-start" className="text-xs text-gray-500">開始</Label>
+                        <Label htmlFor="edit-plan-range-start" className="text-xs text-muted-foreground">開始</Label>
                         <Input id="edit-plan-range-start" type="number" min={1} value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} />
                       </div>
                       <div>
-                        <Label htmlFor="edit-plan-range-end" className="text-xs text-gray-500">終了</Label>
+                        <Label htmlFor="edit-plan-range-end" className="text-xs text-muted-foreground">終了</Label>
                         <Input id="edit-plan-range-end" type="number" min={1} value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} />
                       </div>
                     </div>
-                    <p className="mt-2 text-xs text-gray-500">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       単位：{RANGE_UNITS.find((unit) => unit.value === effectiveRangeUnit)?.label ?? "ページ"}
                     </p>
                   </div>
@@ -235,7 +235,7 @@ export default function StudyPlanEditDialog({
                         type="button"
                         aria-pressed={selected}
                         onClick={() => setSubject(selected ? null : item.value)}
-                        className="min-h-10 rounded-full border bg-white px-3 text-sm font-medium text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                        className="min-h-10 rounded-full border bg-card px-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         style={selected ? { borderColor: subjectColor(item.value), color: subjectColor(item.value), backgroundColor: `${subjectColor(item.value)}12` } : undefined}
                       >
                         {item.label}
@@ -248,18 +248,18 @@ export default function StudyPlanEditDialog({
           )}
 
           {formError ? (
-            <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {formError}
             </div>
           ) : null}
           {saveError ? (
-            <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {saveError}
             </div>
           ) : null}
         </div>
 
-        <div className="border-t bg-white px-5 py-4">
+        <div className="border-t bg-card px-5 py-4">
           <Button type="button" className="min-h-11 w-full" onClick={submit} disabled={saving || !isDirty || (isTextbookPlan && !selectedTextbook)}>
             {saving ? "保存中…" : "変更を保存"}
           </Button>

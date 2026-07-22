@@ -30,7 +30,7 @@ export default function ExamScheduleTimeline({
     return (
       <Card>
         <CardContent className="py-5">
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             受験校を決めると、入試日程がここに受験日順で並びます。
           </p>
         </CardContent>
@@ -41,15 +41,15 @@ export default function ExamScheduleTimeline({
   return (
     <Card>
       <CardContent className="py-5">
-        <ol className="relative space-y-4 border-l border-gray-200 pl-5">
+        <ol className="relative space-y-4 border-l border-border pl-5">
           {schedule.map((entry) => {
             const days = daysUntil(entry.examDate);
             return (
               <li key={entry.id} className="relative">
                 {/* タイムラインの節点 */}
                 <span
-                  className={`absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white ${
-                    entry.isFirstChoice ? "bg-blue-600" : "bg-gray-400"
+                  className={`absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-background ${
+                    entry.isFirstChoice ? "bg-primary" : "bg-muted-foreground"
                   }`}
                 />
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -57,15 +57,15 @@ export default function ExamScheduleTimeline({
                     {formatExamDate(entry.examDate)}
                   </span>
                   {days >= 0 && (
-                    <span className="text-xs text-blue-600">あと{days}日</span>
+                    <span className="text-xs text-primary">あと{days}日</span>
                   )}
                   {entry.isFirstChoice && (
-                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
+                    <span className="rounded bg-info/10 px-1.5 py-0.5 text-xs text-primary">
                       第一志望
                     </span>
                   )}
                   {entry.sameDayCount > 0 && (
-                    <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600">
+                    <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
                       同日に{entry.sameDayCount + 1}校
                     </span>
                   )}
@@ -75,7 +75,7 @@ export default function ExamScheduleTimeline({
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-700">
+                <p className="text-sm text-foreground">
                   {entry.universityName} {entry.facultyName}
                 </p>
                 {entry.tags.length > 0 && (
@@ -83,7 +83,7 @@ export default function ExamScheduleTimeline({
                     {entry.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+                        className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                       >
                         #{tag}
                       </span>

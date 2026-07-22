@@ -164,17 +164,17 @@ export default function GoalList({
           <p className="font-medium">
             {goal.faculty.university.name} {goal.faculty.name}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             受験日 {formatExamDate(goal.faculty.examDate)}
             {days >= 0 && (
-              <span className="ml-2 text-blue-600">あと{days}日</span>
+              <span className="ml-2 text-primary">あと{days}日</span>
             )}
           </p>
           <div className="flex flex-wrap gap-1">
             {goal.faculty.tags.map((tag) => (
               <span
                 key={tag.name}
-                className="text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5"
+                className="text-xs bg-muted text-muted-foreground rounded px-2 py-0.5"
               >
                 #{tag.name}
               </span>
@@ -205,7 +205,7 @@ export default function GoalList({
           <button
             title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
             onClick={() => runIfWritable(() => deleteMutation.mutate(goal.id))}
-            className="text-red-500 text-sm hover:underline"
+            className="text-destructive text-sm hover:underline"
           >
             削除
           </button>
@@ -257,40 +257,40 @@ export default function GoalList({
       </Form>
 
       <section className="mb-6">
-        <h3 className="text-sm font-bold text-gray-500 mb-2">第一志望</h3>
+        <h3 className="text-sm font-bold text-muted-foreground mb-2">第一志望</h3>
         {firstChoice ? (
           <ul>{renderGoalCard(firstChoice)}</ul>
         ) : (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             まだ設定されていません（併願校から ☆ で設定できます）
           </p>
         )}
       </section>
 
       <section className="mb-6">
-        <h3 className="text-sm font-bold text-gray-500 mb-2">併願校</h3>
+        <h3 className="text-sm font-bold text-muted-foreground mb-2">併願校</h3>
         {others.length > 0 ? (
           <ul className="space-y-2">
             {others.map((goal) => renderGoalCard(goal))}
           </ul>
         ) : (
-          <p className="text-sm text-gray-400">併願校はありません</p>
+          <p className="text-sm text-muted-foreground">併願校はありません</p>
         )}
       </section>
 
       <section>
-        <h3 className="text-sm font-bold text-gray-500 mb-2">
+        <h3 className="text-sm font-bold text-muted-foreground mb-2">
           検討中（候補）
         </h3>
         {candidates.length > 0 ? (
           <>
-            <p className="mb-2 text-xs text-gray-400">
+            <p className="mb-2 text-xs text-muted-foreground">
               受験日順に並べて比較できます。決めたら「受験校にする」を押してください。
             </p>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[520px] text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs text-gray-500">
+                  <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">大学・学部</th>
                     <th className="py-2 pr-3 font-medium">系統</th>
                     <th className="py-2 pr-3 font-medium">受験日</th>
@@ -307,7 +307,7 @@ export default function GoalList({
                           <p className="font-medium">
                             {goal.faculty.university.name}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             {goal.faculty.name}
                           </p>
                         </td>
@@ -316,7 +316,7 @@ export default function GoalList({
                             {goal.faculty.tags.map((tag) => (
                               <span
                                 key={tag.name}
-                                className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+                                className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                               >
                                 #{tag.name}
                               </span>
@@ -326,12 +326,12 @@ export default function GoalList({
                         <td className="py-3 pr-3 whitespace-nowrap">
                           {formatExamDate(goal.faculty.examDate)}
                           {days >= 0 && (
-                            <span className="ml-1 text-xs text-blue-600">
+                            <span className="ml-1 text-xs text-primary">
                               (あと{days}日)
                             </span>
                           )}
                         </td>
-                        <td className="py-3 pr-3 whitespace-nowrap text-gray-600">
+                        <td className="py-3 pr-3 whitespace-nowrap text-muted-foreground">
                           {goal.faculty.university.type || "—"}
                         </td>
                         <td className="py-3 whitespace-nowrap text-right">
@@ -347,7 +347,7 @@ export default function GoalList({
                               )
                             }
                             disabled={statusMutation.isPending}
-                            className="text-sm text-blue-600 hover:underline"
+                            className="text-sm text-primary hover:underline"
                           >
                             受験校にする
                           </button>
@@ -362,7 +362,7 @@ export default function GoalList({
                                 deleteMutation.mutate(goal.id)
                               )
                             }
-                            className="ml-3 text-sm text-red-500 hover:underline"
+                            className="ml-3 text-sm text-destructive hover:underline"
                           >
                             削除
                           </button>
@@ -375,7 +375,7 @@ export default function GoalList({
             </div>
           </>
         ) : (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             「大学を探す」で気になる学部を候補に追加すると、ここで比較して受験校を決められます。
           </p>
         )}

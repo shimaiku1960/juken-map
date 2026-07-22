@@ -133,7 +133,7 @@ function TextbookNavigationItem({
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-2 text-sm text-gray-500">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
             完了目標日
             <Input
               type="date"
@@ -194,7 +194,7 @@ function TextbookNavigationItem({
                 </span>
               )}
             </div>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               完了目標日または第一志望の受験日を設定してください
             </p>
           </div>
@@ -228,25 +228,25 @@ function TextbookNavigationItem({
         <div>
           <p className="font-medium">{textbook.name}</p>
           {navigation.status === "active" && (
-            <p className="mt-1 text-lg font-bold text-blue-700">
+            <p className="mt-1 text-lg font-bold text-primary">
               今日：{todayRange}
             </p>
           )}
           {navigation.status === "completed" && (
-            <p className="mt-1 font-bold text-green-700">完了しました</p>
+            <p className="mt-1 font-bold text-success">完了しました</p>
           )}
           {navigation.status === "expired" && (
-            <p className="mt-1 font-bold text-red-700">
+            <p className="mt-1 font-bold text-destructive">
               {textbook.targetDate == null
                 ? "受験日を迎えています"
                 : "完了目標日を迎えています"}
             </p>
           )}
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             現在 {navigation.currentAmount}/{textbook.totalAmount}{label}・残り
             {navigation.remainingAmount}{label}・あと{navigation.remainingDays}日
           </p>
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             期限：{ymdLocal(deadline)}
             {textbook.targetDate == null ? "（受験日）" : "（完了目標日）"}
           </p>
@@ -306,7 +306,7 @@ export default function ReverseStudyNavigation({
       <Card>
         <CardContent className="py-5">
           {textbooks.length === 0 ? (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               学習実績の入力欄から参考書を追加すると、今日のノルマを表示できます。
             </p>
           ) : (
@@ -318,7 +318,7 @@ export default function ReverseStudyNavigation({
                       className="h-2.5 w-2.5 rounded-full"
                       style={{ backgroundColor: subjectColor(group.subjectValue) }}
                     />
-                    <h3 className="text-sm font-bold text-gray-600">
+                    <h3 className="text-sm font-bold text-muted-foreground">
                       {subjectLabel(group.subjectValue)}
                     </h3>
                   </div>

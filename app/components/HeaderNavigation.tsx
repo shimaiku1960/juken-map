@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BookOpen,
   CalendarDays,
   ChevronDown,
   LogOut,
@@ -28,7 +27,7 @@ type HeaderNavigationProps = {
 };
 
 const primaryLinks = [
-  { href: "/", label: "学習", icon: BookOpen },
+  { href: "/#study-start", activeHref: "/", label: "学習", mobileLabel: "学習開始", icon: Play },
   {
     href: "/dashboard",
     label: "記録・予定",
@@ -90,8 +89,8 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
   return (
     <>
       <nav aria-label="メインナビゲーション" className="hidden items-center gap-1 md:flex">
-        {primaryLinks.map(({ href, label }) => {
-          const active = isActivePath(pathname, href);
+        {primaryLinks.map(({ href, label, ...link }) => {
+          const active = isActivePath(pathname, "activeHref" in link ? link.activeHref : href);
           return (
             <Link
               key={href}
@@ -109,13 +108,15 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
           );
         })}
 
-        <Link
-          href="/#study-start"
-          className={cn(buttonVariants({ size: "lg" }), "ml-2 gap-2 px-4")}
-        >
-          <Play aria-hidden="true" className="size-4 fill-current" />
-          学習を始める
-        </Link>
+        {pathname !== "/" ? (
+          <Link
+            href="/#study-start"
+            className={cn(buttonVariants({ size: "lg" }), "ml-2 h-11 gap-2 px-4")}
+          >
+            <Play aria-hidden="true" className="size-4 fill-current" />
+            学習を始める
+          </Link>
+        ) : null}
       </nav>
 
       <div ref={menuRef} className="relative">
@@ -189,10 +190,10 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
       <nav
         aria-label="モバイルナビゲーション"
         data-mobile-bottom-nav
-        className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
         {primaryLinks.map(({ href, label, icon: Icon, ...link }) => {
-          const active = isActivePath(pathname, href);
+          const active = isActivePath(pathname, "activeHref" in link ? link.activeHref : href);
           return (
             <Link
               key={href}
@@ -203,7 +204,7 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
                 active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <span className={cn("rounded-full px-4 py-1", active && "bg-muted")}>
+              <span className={cn("rounded-full px-4 py-1", active && "bg-primary/12 text-primary")}>
                 <Icon aria-hidden="true" className="size-5" />
               </span>
               <span className="truncate">

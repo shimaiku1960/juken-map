@@ -64,7 +64,7 @@ export default function FacultyTagModal({ value, onChange, children }: Props) {
           {TAGS.map((tag) => (
             <label
               key={tag}
-              className="flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer hover:bg-gray-50"
+              className="flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer hover:bg-muted/50"
             >
               <Checkbox
                 checked={draft.has(tag)}

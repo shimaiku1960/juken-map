@@ -12,7 +12,7 @@ export default function SubjectMinutesBars({
 
   if (total === 0) {
     return (
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         今週の記録はまだありません。学習を記録すると科目ごとの時間が表示されます。
       </p>
     );
@@ -22,8 +22,8 @@ export default function SubjectMinutesBars({
     <div className="space-y-2">
       {data.map((d) => (
         <div key={d.value} className="flex items-center gap-3">
-          <span className="w-10 shrink-0 text-sm text-gray-600">{d.label}</span>
-          <div className="h-4 flex-1 overflow-hidden rounded bg-gray-100">
+          <span className="w-10 shrink-0 text-sm text-muted-foreground">{d.label}</span>
+          <div className="h-4 flex-1 overflow-hidden rounded bg-muted">
             <div
               className="h-full rounded"
               style={{
@@ -32,7 +32,7 @@ export default function SubjectMinutesBars({
               }}
             />
           </div>
-          <span className="w-20 shrink-0 text-right text-sm tabular-nums text-gray-600">
+          <span className="w-20 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
             {d.minutes === 0 ? "—" : formatMinutes(d.minutes)}
           </span>
         </div>

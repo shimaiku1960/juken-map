@@ -43,7 +43,7 @@ export default function TodayStudyPlans({
               <TodayProgressRing done={doneCount} total={plans.length} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="mb-2 text-sm font-medium text-gray-600">
+              <p className="mb-2 text-sm font-medium text-muted-foreground">
                 達成 {doneCount} / {plans.length}
               </p>
               <ul className="space-y-3">
@@ -72,9 +72,9 @@ export default function TodayStudyPlans({
             </div>
           </div>
         )}
-        <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
+        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
           <span>今後7日間の予定：{weekCount} 件</span>
-          <Link href="/schedule" className="text-blue-600 hover:underline">
+          <Link href="/schedule" className="text-primary hover:underline">
             学習予定カレンダー →
           </Link>
         </div>

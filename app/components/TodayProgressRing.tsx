@@ -25,7 +25,7 @@ export default function TodayProgressRing({ done, total }: Props) {
           fill="none"
           stroke="currentColor"
           strokeWidth={stroke}
-          className="text-gray-200"
+          className="text-muted"
         />
         {/* 進捗の円 */}
         <circle
@@ -38,7 +38,7 @@ export default function TodayProgressRing({ done, total }: Props) {
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          className="text-blue-600 transition-all"
+          className="text-primary transition-all"
         />
       </svg>
       <span className="absolute text-lg font-bold">{percent}%</span>

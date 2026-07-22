@@ -7,6 +7,8 @@ import StudySessionManager from "@/app/components/StudySessionManager";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import { ymdLocal, todayYmd } from "@/lib/date";
 import { DEMO_EMAIL } from "@/lib/demo";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const Home = async () => {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -67,14 +69,14 @@ const Home = async () => {
     : null;
 
   return (
-    <main className="w-full mx-auto flex min-h-[calc(100dvh-4rem)] max-w-3xl flex-col items-center justify-center gap-6 p-8 text-center">
+    <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col items-center justify-center gap-6 px-4 py-8 text-center sm:px-8">
       {heroFirstChoice && daysToExam != null && daysToExam >= 0 && (
         <p className="text-sm text-muted-foreground">
           {heroFirstChoice.name} まで
           <span className="mx-1 text-lg font-bold text-foreground">あと {daysToExam} 日</span>
         </p>
       )}
-      <h1 className="text-2xl font-bold sm:text-3xl">今日の学習を始めよう</h1>
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">今日の学習を始めよう</h1>
       <div id="study-start" className="scroll-mt-24">
         <StudySessionManager
           initialPlans={initialPlans}
@@ -83,7 +85,7 @@ const Home = async () => {
           variant="hero"
         />
       </div>
-      <Link href="/dashboard" className="mt-4 text-sm text-blue-600 hover:underline">
+      <Link href="/dashboard" className={cn(buttonVariants({ variant: "link" }), "mt-4")}>
         今日の予定・記録を見る →
       </Link>
     </main>
