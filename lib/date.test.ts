@@ -4,6 +4,7 @@ import {
   formatExamDate,
   ymdLocal,
   todayYmd,
+  todayYmdTokyo,
   ymdAfterDays,
 } from "./date";
 
@@ -88,5 +89,18 @@ describe("todayYmd / ymdAfterDays", () => {
   it("月をまたぐ加算も正しい", () => {
     vi.setSystemTime(new Date(2027, 0, 30, 9, 0, 0)); // 1/30
     expect(ymdAfterDays(3)).toBe("2027-02-02");
+  });
+});
+
+describe("todayYmdTokyo", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("UTCでは前日でも日本時間の今日を返す", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2027-01-01T15:30:00.000Z"));
+
+    expect(todayYmdTokyo()).toBe("2027-01-02");
   });
 });

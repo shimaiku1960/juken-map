@@ -29,7 +29,7 @@ const loggedInSession = { user: { id: "user-1", email: "me@example.com" } };
 const makeRequest = (body: unknown) =>
   ({ json: async () => body } as unknown as Request);
 
-const validBody = { date: "2027-02-20", minutes: 60, subject: "english" };
+const validBody = { date: "2026-02-20", minutes: 60, subject: "english" };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -84,7 +84,18 @@ describe("POST /api/study-logs", () => {
   it("入力が不正なら 400 を返す（minutes 欠落）", async () => {
     getSession.mockResolvedValue(loggedInSession);
 
-    const res = await POST(makeRequest({ date: "2027-02-20" }));
+    const res = await POST(makeRequest({ date: "2026-02-20" }));
+
+    expect(res.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("未来日の実績なら 400 を返す", async () => {
+    getSession.mockResolvedValue(loggedInSession);
+
+    const res = await POST(
+      makeRequest({ ...validBody, date: "2999-01-01" })
+    );
 
     expect(res.status).toBe(400);
     expect(create).not.toHaveBeenCalled();

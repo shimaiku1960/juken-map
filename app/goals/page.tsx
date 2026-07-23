@@ -43,11 +43,6 @@ const GoalsPage = async () => {
     status: g.status as Goal["status"],
   }));
 
-  const faculties = await prisma.faculty.findMany({
-    include: { university: true, tags: true },
-    orderBy: { id: "asc" },
-  });
-
   // 対策科目＝手持ち参考書を科目別に集計。志望校（受験日）→科目→参考書→
   // 今日のノルマ、という計画〜実行の因果をこのページからも辿れるようにする。
   const textbooks = await prisma.textbook.findMany({
@@ -138,7 +133,6 @@ const GoalsPage = async () => {
         <CardContent>
           <GoalList
             initialGoals={goals}
-            faculties={faculties}
             readOnly={session.user.email === DEMO_EMAIL}
           />
         </CardContent>

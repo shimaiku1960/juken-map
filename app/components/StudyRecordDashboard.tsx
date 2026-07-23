@@ -11,7 +11,6 @@ import { formatMinutes } from "@/lib/studyLog";
 import StreakBadge from "@/app/components/StreakBadge";
 import StudyHeatmap from "@/app/components/StudyHeatmap";
 import SubjectMinutesBars from "@/app/components/SubjectMinutesBars";
-import RecentStudyLogs from "@/app/components/RecentStudyLogs";
 import { Card, CardContent } from "@/components/ui/card";
 
 // 実績（StudyLog）まわりのダッシュボード。記録するとキャッシュ更新で
@@ -85,15 +84,6 @@ export default function StudyRecordDashboard({
         <Card>
           <CardContent className="py-5">
             <SubjectMinutesBars data={subjectMinutes} />
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">最近の記録</h2>
-        <Card>
-          <CardContent className="py-5">
-            <RecentStudyLogs logs={logs} readOnly={readOnly} />
           </CardContent>
         </Card>
       </section>

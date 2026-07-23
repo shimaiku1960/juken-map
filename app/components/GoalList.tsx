@@ -1,67 +1,24 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { goalSchema, type GoalInput } from "@/lib/validations/goal";
-import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "@/components/ui/form";
 import { toast } from "sonner";
 import { daysUntil, formatExamDate } from "@/lib/date";
-import { useGoals, goalsKey, type Goal, type Faculty } from "@/app/hooks/useGoals";
+import { useGoals, goalsKey, type Goal } from "@/app/hooks/useGoals";
 import { notifyDemoReadOnly } from "@/lib/demo-client";
-
 
 type Props = {
   initialGoals: Goal[];
-  faculties: Faculty[];
   readOnly?: boolean;
 };
 
 export default function GoalList({
   initialGoals,
-  faculties,
   readOnly = false,
 }: Props) {
   const queryClient = useQueryClient();
 
   // サーバー状態の取得。SSR で渡された initialGoals を初期キャッシュとして使う
   const { data: goals = [] } = useGoals(initialGoals);
-
-  const form = useForm<GoalInput>({
-    resolver: zodResolver(goalSchema),
-    defaultValues: {
-      facultyId: 0,
-    },
-  });
-
-  // 追加
-  const addMutation = useMutation({
-    mutationFn: async (data: GoalInput) => {
-      const res = await fetch("/api/goals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "追加に失敗しました");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: goalsKey });
-      form.reset();
-      toast.success("目標を追加しました");
-    },
-    onError: (error) => toast.error(error.message),
-  });
 
   // 削除
   const deleteMutation = useMutation({
@@ -127,19 +84,6 @@ export default function GoalList({
     }
     action();
   };
-
-  const onSubmit = (data: GoalInput) =>
-    runIfWritable(() => addMutation.mutate(data));
-
-  // 学部セレクトを大学ごとに optgroup でまとめる
-  const facultiesByUniversity = faculties.reduce<Record<string, Faculty[]>>(
-    (acc, faculty) => {
-      const key = faculty.university.name;
-      (acc[key] ??= []).push(faculty);
-      return acc;
-    },
-    {}
-  );
 
   const decided = goals.filter((goal) => goal.status === "decided");
   const candidates = goals.filter((goal) => goal.status === "candidate");
@@ -216,46 +160,6 @@ export default function GoalList({
 
   return (
     <div>
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex gap-2 mb-6 items-start"
-        >
-          <FormField
-            control={form.control}
-            name="facultyId"
-            render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormControl>
-                  <select
-                    value={field.value}
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                    className="border rounded px-3 py-2 w-full"
-                  >
-                    <option value={0}>志望学部を選択</option>
-                    {Object.entries(facultiesByUniversity).map(
-                      ([universityName, list]) => (
-                        <optgroup key={universityName} label={universityName}>
-                          {list.map((faculty) => (
-                            <option key={faculty.id} value={faculty.id}>
-                              {faculty.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )
-                    )}
-                  </select>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <Button type="submit" disabled={addMutation.isPending}>
-            追加
-          </Button>
-        </form>
-      </Form>
-
       <section className="mb-6">
         <h3 className="text-sm font-bold text-muted-foreground mb-2">第一志望</h3>
         {firstChoice ? (
