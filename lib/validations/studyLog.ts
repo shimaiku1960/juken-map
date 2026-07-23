@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SUBJECT_VALUES } from "@/lib/subjects";
 import { RANGE_UNIT_VALUES } from "@/lib/validations/studyPlan";
+import { todayYmdTokyo } from "@/lib/date";
 
 // 科目：固定リストの値 or null（未設定）
 const subjectField = z
@@ -12,7 +13,13 @@ const subjectField = z
 // 勉強「実績」1件分。時間（分）は必須、参考書＋範囲・メモ・科目は任意。
 export const createStudyLogSchema = z
   .object({
-    date: z.string().min(1, "日付を選択してください"), // "YYYY-MM-DD"
+    date: z
+      .string()
+      .min(1, "日付を選択してください")
+      .refine(
+        (date) => date <= todayYmdTokyo(),
+        "未来日は実績として記録できません"
+      ), // "YYYY-MM-DD"
     minutes: z
       .number({ message: "学習時間を入力してください" })
       .int("整数で入力してください")

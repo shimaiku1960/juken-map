@@ -108,15 +108,13 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
           );
         })}
 
-        {pathname !== "/" ? (
-          <Link
-            href="/#study-start"
-            className={cn(buttonVariants({ size: "lg" }), "ml-2 h-11 gap-2 px-4")}
-          >
-            <Play aria-hidden="true" className="size-4 fill-current" />
-            学習を始める
-          </Link>
-        ) : null}
+        <Link
+          href="/#study-start"
+          className={cn(buttonVariants({ size: "lg" }), "ml-2 h-11 gap-2 px-4")}
+        >
+          <Play aria-hidden="true" className="size-4 fill-current" />
+          学習を始める
+        </Link>
       </nav>
 
       <div ref={menuRef} className="relative">

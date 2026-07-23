@@ -13,7 +13,7 @@ import {
   useTextbookMasters,
   useUpdateTextbookProgress,
 } from "@/app/hooks/useTextbooks";
-import { todayYmd, ymdLocal } from "@/lib/date";
+import { todayYmdTokyo, ymdLocal } from "@/lib/date";
 import { RANGE_UNIT_VALUES } from "@/lib/validations/studyPlan";
 import type { UpdateTextbookProgressInput } from "@/lib/validations/textbook";
 import {
@@ -36,9 +36,9 @@ import {
 // クイック加算ボタンの候補（分）
 const QUICK_MINUTES = [15, 30, 60];
 
-// 空のフォーム初期値（日付は今日、時間は未入力）
-const emptyValues = () => ({
-  date: todayYmd(),
+// 空のフォーム初期値（指定がなければ今日、時間は未入力）
+const emptyValues = (initialDate = todayYmdTokyo()) => ({
+  date: initialDate,
   subject: null,
   textbookId: null,
   rangeStart: null,
@@ -49,9 +49,11 @@ const emptyValues = () => ({
 
 export default function StudyLogForm({
   variant = "full",
+  initialDate,
   onSuccess,
 }: {
   variant?: "full" | "quick";
+  initialDate?: string;
   onSuccess?: () => void;
 }) {
   const createLog = useCreateStudyLog();
@@ -61,7 +63,7 @@ export default function StudyLogForm({
 
   const form = useForm<CreateStudyLogInput>({
     resolver: zodResolver(createStudyLogSchema),
-    defaultValues: emptyValues(),
+    defaultValues: emptyValues(initialDate),
   });
   const selectedTextbookId = useWatch({
     control: form.control,
@@ -122,7 +124,12 @@ export default function StudyLogForm({
                 <FormItem>
                   <FormLabel>日付</FormLabel>
                   <FormControl>
-                    <Input type="date" className="h-9 w-40" {...field} />
+                    <Input
+                      type="date"
+                      max={todayYmdTokyo()}
+                      className="h-9 w-40"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -206,7 +213,7 @@ export default function StudyLogForm({
 
         {variant === "quick" && (
           <p className="text-sm text-muted-foreground">
-            今日の実績として記録します。科目は未選択でも保存できます。
+            科目は未選択でも保存できます。
           </p>
         )}
 
@@ -216,7 +223,7 @@ export default function StudyLogForm({
         >
           {variant === "quick" && (
             <summary className="cursor-pointer text-sm font-medium">
-              日付・参考書・範囲・メモを追加
+              {initialDate ? "参考書・範囲・メモを追加" : "日付・参考書・範囲・メモを追加"}
             </summary>
           )}
           <div
@@ -224,7 +231,7 @@ export default function StudyLogForm({
               variant === "quick" ? "mt-4 space-y-3" : "space-y-3"
             }
           >
-            {variant === "quick" && (
+            {variant === "quick" && initialDate == null && (
               <FormField
                 control={form.control}
                 name="date"
@@ -232,7 +239,12 @@ export default function StudyLogForm({
                   <FormItem>
                     <FormLabel>日付</FormLabel>
                     <FormControl>
-                      <Input type="date" className="h-11 w-44" {...field} />
+                      <Input
+                        type="date"
+                        max={todayYmdTokyo()}
+                        className="h-11 w-44"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

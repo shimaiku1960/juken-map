@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { StudyLog } from "@/app/hooks/useStudyLogs";
+import { toast } from "sonner";
+import {
+  type StudyLog,
+  useDeleteStudyLog,
+} from "@/app/hooks/useStudyLogs";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import StudyDayPlanPanel from "@/app/components/StudyDayPlanPanel";
+import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialog";
 import { computeHeatmap } from "@/lib/studyStats";
 import { formatMinutes, formatStudyRange } from "@/lib/studyLog";
 import { subjectColor, subjectLabel } from "@/lib/subjects";
@@ -60,9 +65,11 @@ export default function StudyHeatmap({
   today: string;
   readOnly: boolean;
 }) {
+  const deleteLog = useDeleteStudyLog();
   const currentMonth = `${today.slice(0, 7)}-01`;
   const [displayMonth, setDisplayMonth] = useState(currentMonth);
   const [selectedYmd, setSelectedYmd] = useState(today);
+  const [recordDate, setRecordDate] = useState<string | null>(null);
   const weeks = computeHeatmap(logs, displayMonth);
   const monthPlans = plans.filter((plan) =>
     planDate(plan).startsWith(displayMonth.slice(0, 7))
@@ -113,7 +120,7 @@ export default function StudyHeatmap({
   return (
     <div>
       <p className="mb-3 text-sm text-muted-foreground">
-        日付を選ぶと、未来の予定を追加・編集でき、過去の学習内容を確認できます。
+        日付を選ぶと、未来の予定を追加・編集でき、今日・過去の実績を追加できます。
       </p>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
@@ -302,20 +309,21 @@ export default function StudyHeatmap({
           />
         ) : null}
 
-        {!selectedIsPast && selectedLogs.length > 0 ? (
-          <h4 className="text-sm font-semibold text-foreground">学習実績</h4>
+        {selectedYmd <= today ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-foreground">学習実績</h4>
+            {!readOnly ? (
+              <Button type="button" size="sm" onClick={() => setRecordDate(selectedYmd)}>
+                {selectedIsToday ? "今日の実績を追加" : "この日に実績を追加"}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
 
         {selectedLogs.length === 0 ? (
           selectedIsPast || selectedIsToday ? (
             <div className="rounded-md bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
               <p>この日の学習実績はありません。</p>
-              <a
-                href="#study-actions"
-                className="mt-2 inline-flex font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                学習を記録する ↑
-              </a>
             </div>
           ) : null
         ) : (
@@ -339,9 +347,36 @@ export default function StudyHeatmap({
                         {subjectLabel(log.subject)}
                       </span>
                     </div>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
-                      {formatMinutes(log.minutes)}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span className="text-sm font-semibold tabular-nums text-foreground">
+                        {formatMinutes(log.minutes)}
+                      </span>
+                      {!readOnly ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="min-h-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={deleteLog.isPending}
+                          aria-label={`${dateLabel(selectedYmd)}の${subjectLabel(log.subject)}の実績を削除`}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                `${dateLabel(selectedYmd)}の${subjectLabel(log.subject)}（${formatMinutes(log.minutes)}）を削除しますか？`
+                              )
+                            ) {
+                              return;
+                            }
+                            deleteLog.mutate(log.id, {
+                              onSuccess: () => toast.success("学習実績を削除しました"),
+                              onError: (error) => toast.error(error.message),
+                            });
+                          }}
+                        >
+                          削除
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {log.textbook?.name || log.memo?.trim() || "教材・内容の記録なし"}
@@ -358,6 +393,14 @@ export default function StudyHeatmap({
           </ul>
         )}
       </div>
+
+      <QuickManualStudyLogDialog
+        open={recordDate !== null}
+        initialDate={recordDate ?? undefined}
+        onOpenChange={(open) => {
+          if (!open) setRecordDate(null);
+        }}
+      />
     </div>
   );
 }
