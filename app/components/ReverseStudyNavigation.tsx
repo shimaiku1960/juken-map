@@ -27,7 +27,7 @@ const unitLabel = (unit: string) =>
 
 const isProgressUnit = (
   value: string | null
-): value is UpdateTextbookProgressInput["rangeUnit"] =>
+): value is NonNullable<UpdateTextbookProgressInput["rangeUnit"]> =>
   RANGE_UNITS.some((unit) => unit.value === value);
 
 function TextbookNavigationItem({
@@ -47,7 +47,7 @@ function TextbookNavigationItem({
     textbook.totalAmount
   );
   const [rangeUnit, setRangeUnit] = useState<
-    UpdateTextbookProgressInput["rangeUnit"]
+    NonNullable<UpdateTextbookProgressInput["rangeUnit"]>
   >(
     isProgressUnit(textbook.rangeUnit)
       ? textbook.rangeUnit
@@ -105,7 +105,7 @@ function TextbookNavigationItem({
             value={rangeUnit}
             onChange={(event) => {
               const nextUnit =
-                event.target.value as UpdateTextbookProgressInput["rangeUnit"];
+                event.target.value as NonNullable<UpdateTextbookProgressInput["rangeUnit"]>;
               setRangeUnit(nextUnit);
               const metric = master?.metrics.find(
                 (candidate) => candidate.unit === nextUnit

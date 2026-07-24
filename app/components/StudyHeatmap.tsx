@@ -120,7 +120,7 @@ export default function StudyHeatmap({
   return (
     <div>
       <p className="mb-3 text-sm text-muted-foreground">
-        日付を選ぶと、未来の予定を追加・編集でき、今日・過去の実績を追加できます。
+        日付を選ぶと、その日の予定や学習実績を記録できます。
       </p>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
@@ -163,9 +163,6 @@ export default function StudyHeatmap({
                   const isFuture = cell.ymd > today;
                   const isToday = cell.ymd === today;
                   const selected = selectedYmd === cell.ymd;
-                  const pendingPlanCount = dayPlans.filter(
-                    (plan) => !plan.done
-                  ).length;
                   const planSubjects = Array.from(
                     new Set(dayPlans.map((plan) => plan.subject ?? "other"))
                   );
@@ -210,15 +207,7 @@ export default function StudyHeatmap({
                         ) : null}
                       </span>
                       <span className="self-center text-[9px] font-semibold tabular-nums sm:text-[10px]">
-                        {cell.minutes > 0
-                          ? (isToday && dayPlans.length > 0) || pendingPlanCount > 0
-                            ? `${compactMinutes(cell.minutes)}・予定${
-                                isToday ? dayPlans.length : pendingPlanCount
-                              }`
-                            : compactMinutes(cell.minutes)
-                          : dayPlans.length > 0
-                            ? `予定${dayPlans.length}`
-                            : ""}
+                        {cell.minutes > 0 ? compactMinutes(cell.minutes) : ""}
                       </span>
                       <span
                         className="flex h-1.5 w-full overflow-hidden rounded-full bg-card/70"
@@ -256,7 +245,7 @@ export default function StudyHeatmap({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1">
-            <span className="h-3 w-3 rounded-sm bg-success/75" /> 実績量
+            <span className="h-3 w-3 rounded-sm bg-success/75" /> 学習時間
           </span>
           <span className="inline-flex items-center gap-1">
             <span className="h-3 w-3 rounded-sm border border-dashed border-primary/60 bg-info/10" /> 予定
@@ -314,7 +303,7 @@ export default function StudyHeatmap({
             <h4 className="text-sm font-semibold text-foreground">学習実績</h4>
             {!readOnly ? (
               <Button type="button" size="sm" onClick={() => setRecordDate(selectedYmd)}>
-                {selectedIsToday ? "今日の実績を追加" : "この日に実績を追加"}
+                {selectedIsToday ? "今日の学習時間を記録" : "この日の学習時間を記録"}
               </Button>
             ) : null}
           </div>
@@ -323,7 +312,7 @@ export default function StudyHeatmap({
         {selectedLogs.length === 0 ? (
           selectedIsPast || selectedIsToday ? (
             <div className="rounded-md bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
-              <p>この日の学習実績はありません。</p>
+              <p>この日の学習時間はまだ記録されていません。</p>
             </div>
           ) : null
         ) : (

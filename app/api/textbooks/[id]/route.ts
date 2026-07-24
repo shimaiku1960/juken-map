@@ -38,13 +38,19 @@ export async function PATCH(
   const updated = await prisma.textbook.update({
     where: { id: textbookId },
     data: {
-      totalAmount: parsed.data.totalAmount,
-      rangeUnit: parsed.data.rangeUnit,
-      targetDate:
-        parsed.data.targetDate == null
-          ? null
-          : new Date(`${parsed.data.targetDate}T00:00:00.000Z`),
-      // subject は送られてきたときだけ更新（未指定なら現状維持）
+      // 送られてきた項目だけ更新（未指定なら現状維持）
+      ...(parsed.data.totalAmount !== undefined && {
+        totalAmount: parsed.data.totalAmount,
+      }),
+      ...(parsed.data.rangeUnit !== undefined && {
+        rangeUnit: parsed.data.rangeUnit,
+      }),
+      ...(parsed.data.targetDate !== undefined && {
+        targetDate:
+          parsed.data.targetDate == null
+            ? null
+            : new Date(`${parsed.data.targetDate}T00:00:00.000Z`),
+      }),
       ...(parsed.data.subject !== undefined && { subject: parsed.data.subject }),
     },
   });

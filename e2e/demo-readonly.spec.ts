@@ -11,3 +11,27 @@ test("デモアカウントの編集操作には閲覧専用トーストを表�
   ).toBeVisible();
   await expect(page.getByText("デモアカウントでは計測できません")).toBeVisible();
 });
+
+test("スマホのメニューからプロフィールを開ける", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAsDemo(page);
+
+  const mobileNav = page.getByRole("navigation", {
+    name: "モバイルナビゲーション",
+  });
+  const navBox = await mobileNav.boundingBox();
+  expect(navBox).not.toBeNull();
+  expect(navBox!.y).toBeGreaterThan(700);
+  expect(navBox!.y + navBox!.height).toBeGreaterThanOrEqual(840);
+
+  await mobileNav.getByRole("button", { name: "メニュー" }).click();
+  await page
+    .getByRole("link", { name: "プロフィール", exact: true })
+    .last()
+    .click();
+
+  await expect(page).toHaveURL(/\/profile$/);
+  await expect(
+    page.getByRole("heading", { name: "プロフィール" })
+  ).toBeVisible();
+});
