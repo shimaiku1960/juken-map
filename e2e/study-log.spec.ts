@@ -39,8 +39,12 @@ test("タイマーで学習した実績がダッシュボードに反映され�
 
   await page.getByRole("link", { name: "記録・予定" }).click();
 
-  // 「最近の記録」に 英語・45分 が現れる
-  await expect(page.getByText("英語・45分").first()).toBeVisible();
+  // その日の実績リストに「英語・45分」の記録が現れる（科目と時間は別要素で描画される）
+  const savedLog = page
+    .getByRole("listitem")
+    .filter({ hasText: "英語" })
+    .filter({ hasText: "45分" });
+  await expect(savedLog.first()).toBeVisible();
 
   // 今日の合計も、今回記録した45分ぶん増える
   await expect
