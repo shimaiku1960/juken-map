@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
-import { useTextbooks } from "@/app/hooks/useTextbooks";
+import { useTextbooks, useUpdateTextbookSubject } from "@/app/hooks/useTextbooks";
 import type { UpdateStudyPlanInput } from "@/lib/validations/studyPlan";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
 import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/subjects";
@@ -38,6 +38,7 @@ export default function StudyPlanEditDialog({
   onClose: () => void;
 }) {
   const { data: textbooks = [], isPending, isError, refetch } = useTextbooks();
+  const updateTextbookSubject = useUpdateTextbookSubject();
   const isTextbookPlan = plan.textbookId != null;
   const [date, setDate] = useState(plan.date.slice(0, 10));
   const [textbookId, setTextbookId] = useState(plan.textbookId);
@@ -60,13 +61,20 @@ export default function StudyPlanEditDialog({
     content: plan.content ?? "",
     subject: plan.subject,
   };
+  // 参考書予定の科目は参考書に紐づく。参考書側の科目を変えたら「保存」で
+  // この予定にも反映できるよう、差分として検知する。
+  const textbookSubjectChanged =
+    isTextbookPlan &&
+    selectedTextbook != null &&
+    selectedTextbook.subject !== plan.subject;
   const isDirty =
     date !== original.date ||
     textbookId !== original.textbookId ||
     rangeStart !== original.rangeStart ||
     rangeEnd !== original.rangeEnd ||
     content !== original.content ||
-    subject !== original.subject;
+    subject !== original.subject ||
+    textbookSubjectChanged;
 
   const requestClose = () => {
     if (isDirty && !window.confirm("変更内容を破棄して閉じますか？")) return;
@@ -103,7 +111,8 @@ export default function StudyPlanEditDialog({
         ? {
             date,
             textbookId: selectedTextbook.id,
-            subject: textbookChanged ? selectedTextbook.subject : plan.subject,
+            // 科目は参考書に紐づくため、常に参考書の現在の科目へ揃える
+            subject: selectedTextbook.subject,
             rangeStart: hasStart ? Number(rangeStart) : null,
             rangeEnd: hasEnd ? Number(rangeEnd) : null,
             rangeUnit: hasStart ? effectiveRangeUnit : null,
@@ -209,6 +218,35 @@ export default function StudyPlanEditDialog({
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
                       単位：{RANGE_UNITS.find((unit) => unit.value === effectiveRangeUnit)?.label ?? "ページ"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="mb-2 block">科目（任意）</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {SUBJECTS.map((item) => {
+                        const selected = selectedTextbook.subject === item.value;
+                        return (
+                          <button
+                            key={item.value}
+                            type="button"
+                            aria-pressed={selected}
+                            disabled={updateTextbookSubject.isPending}
+                            onClick={() =>
+                              updateTextbookSubject.mutate({
+                                id: selectedTextbook.id,
+                                subject: selected ? null : item.value,
+                              })
+                            }
+                            className="min-h-10 rounded-full border bg-card px-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                            style={selected ? { borderColor: subjectColor(item.value), color: subjectColor(item.value), backgroundColor: `${subjectColor(item.value)}12` } : undefined}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      科目は参考書ごとに設定され、この参考書を使う予定・記録にも反映されます。
                     </p>
                   </div>
                   <div>

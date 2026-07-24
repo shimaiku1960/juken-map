@@ -89,6 +89,43 @@ export function useUpdateTextbookProgress() {
   });
 }
 
+// 参考書の科目だけを更新するフック（逆算設定を持たない参考書でも科目を設定できる）。
+// 科目は参考書に紐づくため、更新するとその参考書を使う予定・実績すべてに反映される。
+export function useUpdateTextbookSubject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      subject,
+    }: {
+      id: number;
+      subject: string | null;
+    }): Promise<Textbook> => {
+      const res = await fetch(`/api/textbooks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(
+          typeof error.error === "string" ? error.error : "科目の設定に失敗しました"
+        );
+      }
+      return res.json();
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Textbook[]>(textbooksKey, (current = []) =>
+        current.map((textbook) =>
+          textbook.id === updated.id ? updated : textbook
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: textbooksKey });
+    },
+  });
+}
+
 // 参考書を新規追加するフック（成功したら一覧を再取得して選択肢を最新化）
 export function useCreateTextbook() {
   const queryClient = useQueryClient();

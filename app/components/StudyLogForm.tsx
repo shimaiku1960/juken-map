@@ -90,7 +90,7 @@ export default function StudyLogForm({
       id: selectedTextbook.id,
       data: {
         totalAmount: metric?.totalAmount ?? selectedTextbook.totalAmount,
-        rangeUnit: unit as UpdateTextbookProgressInput["rangeUnit"],
+        rangeUnit: unit as NonNullable<UpdateTextbookProgressInput["rangeUnit"]>,
         targetDate: selectedTextbook.targetDate
           ? ymdLocal(selectedTextbook.targetDate)
           : null,
