@@ -60,17 +60,17 @@ export default function ExamScheduleTimeline({
                     <span className="text-xs text-primary">あと{days}日</span>
                   )}
                   {entry.isFirstChoice && (
-                    <span className="rounded bg-info/10 px-1.5 py-0.5 text-xs text-primary">
+                    <span className="rounded-full bg-info/10 px-1.5 py-0.5 text-xs text-primary">
                       第一志望
                     </span>
                   )}
                   {entry.sameDayCount > 0 && (
-                    <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
+                    <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
                       同日に{entry.sameDayCount + 1}校
                     </span>
                   )}
                   {entry.sameDayCount === 0 && entry.backToBack && (
-                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">
+                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">
                       連戦
                     </span>
                   )}
@@ -83,7 +83,7 @@ export default function ExamScheduleTimeline({
                     {entry.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                        className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                       >
                         #{tag}
                       </span>

@@ -430,7 +430,7 @@ export default function StudyPlanCreateDialog({
                       event.target.value as (typeof RANGE_UNITS)[number]["value"]
                     )
                   }
-                  className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {RANGE_UNITS.map((unit) => <option key={unit.value} value={unit.value}>{unit.label}</option>)}
                 </select>

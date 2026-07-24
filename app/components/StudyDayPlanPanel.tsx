@@ -102,13 +102,13 @@ export default function StudyDayPlanPanel({
       </div>
 
       {plans.length === 0 ? (
-        <p className="rounded-md bg-info/10 px-3 py-4 text-sm text-info">
+        <p className="rounded-lg bg-info/10 px-3 py-4 text-sm text-info">
           この日の予定はまだありません。
         </p>
       ) : (
         <ul className="space-y-2">
           {plans.map((plan) => (
-            <li key={plan.id} className="rounded-md border px-3 py-3">
+            <li key={plan.id} className="rounded-lg border px-3 py-3">
               <div className="flex items-start gap-3">
                 <button
                   type="button"

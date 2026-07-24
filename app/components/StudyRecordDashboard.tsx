@@ -52,7 +52,7 @@ export default function StudyRecordDashboard({
         <Card>
           <CardContent className="px-3 py-5 sm:px-6">
             {plansError ? (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 <span>学習予定を更新できませんでした。表示が古い可能性があります。</span>
                 <button
                   type="button"
