@@ -1,82 +1,102 @@
 <!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# これはあなたの知っている Next.js ではない
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+このバージョンには破壊的変更があり、API・規約・ファイル構成のすべてが学習
+データと異なる可能性がある。コードを書く前に、必ず
+`node_modules/next/dist/docs/` の該当ガイドを読むこと。非推奨（deprecation）の
+注意書きにも従うこと。
 <!-- END:nextjs-agent-rules -->
 
-## Language
+## 言語
 
-Always respond to the user in Japanese (日本語), regardless of the language of
-these instructions or any documentation you read (including
-`node_modules/next/dist/docs/`). Code, identifiers, and commit messages follow
-each project's existing conventions, but all conversational replies to the user
-must be in Japanese.
+ユーザーへの応答は、この指示や読んだドキュメント（`node_modules/next/dist/docs/`
+を含む）の言語にかかわらず、常に日本語で行うこと。コード・識別子・コミット
+メッセージは各プロジェクトの既存の慣習に従うが、ユーザーへの会話としての返答は
+すべて日本語であること。
 
-## Project Memory
+## プロジェクトメモリ
 
-When resuming work, checking previous decisions, or reviewing the user's working
-preferences, treat Claude Code's auto-memory as the source of truth. Access it
-through the repo-local entry point (a gitignored symlink to the real external
-location):
+作業を再開するとき、過去の決定を確認するとき、ユーザーの作業上の好みを見直す
+ときは、Claude Code の auto-memory を正（source of truth）として扱うこと。
+アクセスは、リポジトリ内のエントリポイント（実体である外部の場所への
+gitignore 済みシンボリックリンク）を通じて行う：
 
 `./.agent-memory/MEMORY.md`
 
-Read only the relevant topic files referenced from that file when additional
-detail is needed. Do not use the repository-local `memory/MEMORY.md` as the
-normal project memory; it records Claude-to-Codex migration state.
+さらに詳細が必要なときだけ、そのファイルから参照されている該当トピックファイル
+を読むこと。通常のプロジェクトメモリとして、リポジトリ内の `memory/MEMORY.md`
+は使わないこと。あちらは Claude から Codex への移行状態を記録するものである。
 
-Claude Code owns the auto-memory directory. Claude Code and Codex may update
-files there only when the user directly asks to save or modify project memory,
-or when the automatic project-memory conditions below are satisfied.
+auto-memory ディレクトリは Claude Code が所有する。Claude Code と Codex は、
+ユーザーがプロジェクトメモリの保存・変更を直接依頼したとき、または後述の
+自動プロジェクトメモリ更新の条件を満たしたときに限り、そこにあるファイルを
+更新してよい。
 
-Whenever Claude Code or Codex adds or changes shared auto-memory, visibly
-attribute the changed content to the agent that wrote it and include an
-absolute date. Use `**記入者: Claude Code（YYYY-MM-DD）**` or
-`**記入者: Codex（YYYY-MM-DD）**` directly below a new heading. For an inline
-change, append `（Claude Code更新: YYYY-MM-DD）` or
-`（Codex更新: YYYY-MM-DD）`. Never relabel untouched content from the other
-agent.
+Claude Code または Codex が共有 auto-memory を追加・変更するときは、変更した
+内容を書いたエージェントを明示的に示し、絶対日付を含めること。新しい見出しの
+直下には `**記入者: Claude Code（YYYY-MM-DD）**` または
+`**記入者: Codex（YYYY-MM-DD）**` を使う。インラインの変更では
+`（Claude Code更新: YYYY-MM-DD）` または `（Codex更新: YYYY-MM-DD）` を末尾に
+付ける。もう一方のエージェントが書いた未変更の内容にラベルを付け替えないこと。
 
-When an agent other than Claude Code or Codex (for example the Cursor agent)
-records work on another agent's behalf — such as recovering a session that was
-interrupted by a usage limit — attribute the memory to the agent that actually
-did the work, and make clear that a different agent transcribed it. Use
+Claude Code でも Codex でもないエージェント（例えば Cursor のエージェント）が、
+別のエージェントの作業を代理で記録するとき——使用量上限で中断された
+セッションの復旧など——は、実際に作業を行ったエージェントに帰属させ、別の
+エージェントが書き起こしたことを明確にすること。新しい見出しの直下には
 `**記入者: <実作業エージェント>（<作業の性質>、<記録したエージェント>が履歴から代理記録: YYYY-MM-DD）**`
-below a new heading, e.g.
-`**記入者: Codex（ターミナル作業、Cursorが履歴から代理記録: 2026-07-11）**`.
-For an inline change, append
-`（<実作業エージェント>作業を<記録したエージェント>が代理記録: YYYY-MM-DD）`.
+を使う。例：
+`**記入者: Codex（ターミナル作業、Cursorが履歴から代理記録: 2026-07-11）**`。
+インラインの変更では
+`（<実作業エージェント>作業を<記録したエージェント>が代理記録: YYYY-MM-DD）`
+を末尾に付ける。
 
-## Automatic Project Memory Updates
+## タスク管理（GitHub Issues）
 
-This section is standing explicit authorization for Claude Code and Codex to
-update the shared project memory without asking for confirmation each time.
+「これからやるタスク」は auto-memory ではなく GitHub Issues で管理する。両
+エージェント（Claude Code / Codex）共通のルール：
 
-Before the final response, update project memory when a meaningful unit of work
-has been completed, such as:
+- **作業開始時**は `MEMORY.md` に加えて `gh issue list` でオープンな Issue も
+  確認し、残タスクの全体像を把握する。
+- **新しいタスクを追加するときは、memory に書かず `gh issue create` で Issue
+  化する**。エリアラベル（`area:infra` / `area:ui` / `area:api` / `area:db` /
+  `area:test` / `area:feature`）を付ける。ラベルが違う Issue 同士は git
+  worktree で並行作業できる目印。
+- memory に残すのは「決定・経緯・学び・次の一手の文脈」だけ。TODO そのものは
+  Issue へ寄せて二重管理しない。
+- PR を出すときは本文に `Fixes #N` を入れて Issue と紐付ける。
+- **脆弱性・セキュリティ穴は Issue（公開）ではなく GitHub Security Advisory
+  （非公開）で扱う**。本番リポジトリは public のため、脆弱性情報を Issue に
+  書かない。
+- 詳細は auto-memory の `task-workflow` トピックを参照。
 
-- implementing or fixing a feature;
-- making a durable architecture or product decision;
-- creating or merging a pull request; or
-- completing a deployment or another operational milestone.
+## 自動プロジェクトメモリ更新
 
-Do not update memory for answers to questions, read-only investigation, routine
-test runs, intermediate progress, or unfinished implementation.
+このセクションは、Claude Code と Codex が毎回の確認なしに共有プロジェクト
+メモリを更新してよいという、常設の明示的な許可である。
 
-When an automatic update is required, follow these rules:
+最終応答の前に、意味のあるひとまとまりの作業が完了したときは、プロジェクト
+メモリを更新すること。例えば：
 
-1. Treat the configured Claude Code auto-memory `MEMORY.md` as an index.
-2. Update the most relevant existing topic file. Create a new topic file only
-   when no suitable topic exists.
-3. Record only durable context needed in a later session: completed work,
-   decisions, verification results, remaining work, blockers, and warnings.
-4. Remove or rewrite stale TODOs and statements that conflict with repository
-   reality.
-5. Keep the `MEMORY.md` index concise and update its topic summary to reflect
-   the new current state.
-6. Follow the author and absolute-date attribution rules above for every
-   addition or modification. Attribute the change to the agent that actually
-   made it.
-7. If the configured external memory cannot be written, request the required
-   permission. Never fall back to the repository-local `memory/MEMORY.md`.
-8. In the final response, list the memory files that were updated.
+- 機能の実装や修正を行ったとき；
+- 恒久的なアーキテクチャ上・プロダクト上の決定を下したとき；
+- プルリクエストを作成またはマージしたとき；
+- デプロイやその他の運用マイルストーンを完了したとき。
+
+質問への回答、読み取り専用の調査、通常のテスト実行、途中経過、未完成の実装に
+ついては、メモリを更新しないこと。
+
+自動更新が必要なときは、次のルールに従うこと：
+
+1. 設定済みの Claude Code auto-memory `MEMORY.md` を索引（インデックス）として
+   扱う。
+2. 最も関連の深い既存のトピックファイルを更新する。適切なトピックが存在しない
+   ときに限り、新しいトピックファイルを作成する。
+3. 後のセッションで必要になる恒久的な文脈だけを記録する：完了した作業、決定、
+   検証結果、残タスク、ブロッカー、警告。
+4. 古くなった TODO や、リポジトリの実態と矛盾する記述は、削除または書き換える。
+5. `MEMORY.md` の索引は簡潔に保ち、そのトピック要約を最新の状態に反映する。
+6. 追加・変更のすべてについて、上記の記入者と絶対日付の帰属ルールに従う。変更を
+   実際に行ったエージェントに帰属させる。
+7. 設定済みの外部メモリに書き込めない場合は、必要な権限を求める。リポジトリ内の
+   `memory/MEMORY.md` に決してフォールバックしないこと。
+8. 最終応答で、更新したメモリファイルを列挙する。
