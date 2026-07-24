@@ -16,10 +16,10 @@
 
 ## プロジェクトメモリ
 
-作業を再開するとき、過去の決定を確認するとき、ユーザーの作業上の好みを見直す
-ときは、Claude Code の auto-memory を正（source of truth）として扱うこと。
-アクセスは、リポジトリ内のエントリポイント（実体である外部の場所への
-gitignore 済みシンボリックリンク）を通じて行う：
+過去の決定やユーザーの作業上の好みを確認するときは、Claude Code の
+auto-memory を正（source of truth）として扱うこと（作業再開時に何を確認するかは
+「タスク管理」セクションを参照）。アクセスは、リポジトリ内のエントリポイント
+（実体である外部の場所への gitignore 済みシンボリックリンク）を通じて行う：
 
 `./.agent-memory/MEMORY.md`
 
@@ -52,21 +52,13 @@ Claude Code でも Codex でもないエージェント（例えば Cursor の�
 
 ## タスク管理（GitHub Issues）
 
-「これからやるタスク」は auto-memory ではなく GitHub Issues で管理する。両
-エージェント（Claude Code / Codex）共通のルール：
+「これからやるタスク」は auto-memory ではなく GitHub Issues で管理する。両エージェント（Claude Code / Codex）共通のルール：
 
-- **作業開始時**は `MEMORY.md` に加えて `gh issue list` でオープンな Issue も
-  確認し、残タスクの全体像を把握する。
-- **新しいタスクを追加するときは、memory に書かず `gh issue create` で Issue
-  化する**。エリアラベル（`area:infra` / `area:ui` / `area:api` / `area:db` /
-  `area:test` / `area:feature`）を付ける。ラベルが違う Issue 同士は git
-  worktree で並行作業できる目印。
-- memory に残すのは「決定・経緯・学び・次の一手の文脈」だけ。TODO そのものは
-  Issue へ寄せて二重管理しない。
+- **作業開始時**は、まず auto-memory（`MEMORY.md` と関連トピックファイル）で決定・方針・次の一手の文脈を把握し、続けて `gh issue list` でオープンな Issue も確認して、残タスクの全体像をつかむ。
+- **新しいタスクを追加するときは、memory に書かず `gh issue create` で Issue 化する**。エリアラベル（`area:infra` / `area:ui` / `area:api` / `area:db` / `area:test` / `area:feature`）を付ける。ラベルが違う Issue 同士は git worktree で並行作業できる目印。
+- memory に残すのは「決定・経緯・学び・次の一手の文脈」だけ。TODO そのものは Issue へ寄せて二重管理しない。
 - PR を出すときは本文に `Fixes #N` を入れて Issue と紐付ける。
-- **脆弱性・セキュリティ穴は Issue（公開）ではなく GitHub Security Advisory
-  （非公開）で扱う**。本番リポジトリは public のため、脆弱性情報を Issue に
-  書かない。
+- **脆弱性・セキュリティ穴は Issue（公開）ではなく GitHub Security Advisory（非公開）で扱う**。本番リポジトリは public のため、脆弱性情報を Issue に書かない。
 - 詳細は auto-memory の `task-workflow` トピックを参照。
 
 ## 自動プロジェクトメモリ更新
@@ -92,7 +84,9 @@ Claude Code でも Codex でもないエージェント（例えば Cursor の�
 2. 最も関連の深い既存のトピックファイルを更新する。適切なトピックが存在しない
    ときに限り、新しいトピックファイルを作成する。
 3. 後のセッションで必要になる恒久的な文脈だけを記録する：完了した作業、決定、
-   検証結果、残タスク、ブロッカー、警告。
+   検証結果、残作業の文脈（次の一手）、ブロッカー、警告。個々の TODO 項目は
+   memory ではなく Issue 化する（「タスク管理」セクション参照）。memory に書くのは
+   Issue だけでは伝わらない方針・経緯・次の一手の文脈に限る。
 4. 古くなった TODO や、リポジトリの実態と矛盾する記述は、削除または書き換える。
 5. `MEMORY.md` の索引は簡潔に保ち、そのトピック要約を最新の状態に反映する。
 6. 追加・変更のすべてについて、上記の記入者と絶対日付の帰属ルールに従う。変更を
