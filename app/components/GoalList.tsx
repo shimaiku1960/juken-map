@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { daysUntil, formatExamDate } from "@/lib/date";
 import { useGoals, goalsKey, type Goal } from "@/app/hooks/useGoals";
 import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { Badge } from "@/components/ui/badge";
 
 type Props = {
   initialGoals: Goal[];
@@ -116,12 +117,9 @@ export default function GoalList({
           </p>
           <div className="flex flex-wrap gap-1">
             {goal.faculty.tags.map((tag) => (
-              <span
-                key={tag.name}
-                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-              >
+              <Badge key={tag.name} variant="secondary">
                 #{tag.name}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>
@@ -218,12 +216,9 @@ export default function GoalList({
                         <td className="py-3 pr-3">
                           <div className="flex flex-wrap gap-1">
                             {goal.faculty.tags.map((tag) => (
-                              <span
-                                key={tag.name}
-                                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                              >
+                              <Badge key={tag.name} variant="secondary">
                                 #{tag.name}
-                              </span>
+                              </Badge>
                             ))}
                           </div>
                         </td>

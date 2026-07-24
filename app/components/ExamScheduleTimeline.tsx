@@ -3,6 +3,7 @@
 import { useGoals, type Goal } from "@/app/hooks/useGoals";
 import { buildExamSchedule } from "@/lib/examSchedule";
 import { daysUntil, formatExamDate } from "@/lib/date";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
 // 受験校（decided）の入試日程を受験日順に俯瞰するタイムライン。
@@ -67,19 +68,15 @@ export default function ExamScheduleTimeline({
                     <span className="text-xs text-primary">あと{days}日</span>
                   )}
                   {entry.isFirstChoice && (
-                    <span className="rounded-full bg-info/10 px-1.5 py-0.5 text-xs text-primary">
-                      第一志望
-                    </span>
+                    <Badge variant="info">第一志望</Badge>
                   )}
                   {entry.sameDayCount > 0 && (
-                    <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
+                    <Badge variant="destructive">
                       同日に{entry.sameDayCount + 1}校
-                    </span>
+                    </Badge>
                   )}
                   {entry.sameDayCount === 0 && entry.backToBack && (
-                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">
-                      連戦
-                    </span>
+                    <Badge variant="warning">連戦</Badge>
                   )}
                 </div>
                 <p className="text-sm text-foreground">
@@ -88,12 +85,9 @@ export default function ExamScheduleTimeline({
                 {entry.tags.length > 0 && (
                   <div className="mt-0.5 flex flex-wrap gap-1">
                     {entry.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                      >
+                      <Badge key={tag} variant="secondary">
                         #{tag}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                 )}
