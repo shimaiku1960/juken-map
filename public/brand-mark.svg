@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">受験マップ</title>
+  <rect width="512" height="512" rx="144" fill="#007364"/>
+  <g fill="none" stroke="#f6fbfa" stroke-linecap="round" stroke-linejoin="round">
+    <path
+      d="M356 188c0 67-65 131-88 152a18 18 0 0 1-24 0c-23-21-88-85-88-152a100 100 0 0 1 200 0Z"
+      stroke-width="32"
+    />
+    <circle cx="256" cy="188" r="32" stroke-width="30"/>
+    <path
+      d="M192 326h-57c-9 0-16 5-19 14l-20 58c-4 11 4 22 16 22h288c12 0 20-11 16-22l-20-58c-3-9-10-14-19-14h-57"
+      stroke-width="30"
+    />
+  </g>
+</svg>
