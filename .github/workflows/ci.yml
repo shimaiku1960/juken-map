@@ -67,3 +67,71 @@ jobs:
             DATABASE_URL: mysql://u:p@localhost:3306/db
             BETTER_AUTH_SECRET: ecPTNJXeffEkIMhtDiAKQI8X/dv0xZ5PWupA15w9rVU=
             BETTER_AUTH_URL: http://localhost:3000
+
+  # E2E（Playwright）。使い捨ての MySQL 8.4 を立て、マイグレーション→seed→
+  # ビルド→next start で本番相当のアプリを起動し、実ブラウザで主要導線を検証する。
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: juken_map
+          MYSQL_USER: juken
+          MYSQL_PASSWORD: jukenpassword
+        ports:
+          - 3306:3306
+        # サービスが healthy になるまで GitHub が待ってからステップを実行する
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootpassword"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      # 使い捨て MySQL（ローカル Docker と同じ認証情報）へ接続する
+      DATABASE_URL: mysql://juken:jukenpassword@127.0.0.1:3306/juken_map?allowPublicKeyRetrieval=true
+      BETTER_AUTH_SECRET: ecPTNJXeffEkIMhtDiAKQI8X/dv0xZ5PWupA15w9rVU=
+      BETTER_AUTH_URL: http://localhost:3000
+      MICROCMS_SERVICE_DOMAIN: dummy
+      MICROCMS_API_KEY: dummy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run migrations
+        run: npx prisma migrate deploy
+
+      - name: Seed master data and demo user
+        run: npx tsx prisma/seed.ts
+
+      - name: Build
+        run: npx next build
+
+      # E2E 用ユーザーの投入は globalSetup（seed-e2e.ts）が、アプリ起動は
+      # playwright.config の webServer（CI では next start）が担当する
+      - name: Run E2E tests
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
