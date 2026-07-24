@@ -5,8 +5,11 @@ export const proxy = async (request: NextRequest) => {
   const sessionCookie = getSessionCookie(request);
   const { pathname } = request.nextUrl;
 
-  // 誰でも見れるページ（トップ "/" はアカウント持ちのみなので含めない）
+  // 誰でも見れるページ。トップ "/" は未ログインだと LP（ランディングページ）を
+  // 表示するので公開扱い。"/lp" は "/" への恒久リダイレクト用に公開しておく。
   const publicPaths = [
+    "/",
+    "/lp",
     "/login",
     "/signup",
     "/forgot-password",

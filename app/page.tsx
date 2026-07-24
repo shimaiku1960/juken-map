@@ -1,8 +1,9 @@
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import LandingPage from "@/app/components/LandingPage";
 import StudySessionManager from "@/app/components/StudySessionManager";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import { ymdLocal, todayYmd } from "@/lib/date";
@@ -10,9 +11,26 @@ import { DEMO_EMAIL } from "@/lib/demo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+// トップは未ログイン訪問者（Googlebot 含む）には LP を返す検索流入の入口。
+// メタデータ（title/description/OGP）は用意しておくが、公開の準備が整うまでは
+// ルートレイアウトの noindex を継承する。検索に載せたくなったら
+// `robots: { index: true, follow: true }` を追記すればインデックス可になる。
+export const metadata: Metadata = {
+  title: "今日の勉強を、合格までの積み上がりに。｜受験マップ",
+  description:
+    "学習の開始から時間記録、予定と実績の確認、科目別の振り返りまでをひとつにつなぐ、大学受験生向け学習管理アプリです。",
+  openGraph: {
+    title: "今日の勉強を、合格までの積み上がりに。｜受験マップ",
+    description:
+      "学習の開始から時間記録、予定と実績の確認、科目別の振り返りまでをひとつにつなぐ、大学受験生向け学習管理アプリです。",
+    type: "website",
+  },
+};
+
 const Home = async () => {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/login");
+  // 未ログインはログイン画面へ飛ばさず、トップで LP を見せる。
+  if (!session) return <LandingPage />;
 
   const todayStr = todayYmd();
   const [firstChoiceGoal, plans] = await Promise.all([
