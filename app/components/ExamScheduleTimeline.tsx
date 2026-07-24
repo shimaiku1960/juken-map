@@ -41,13 +41,20 @@ export default function ExamScheduleTimeline({
   return (
     <Card>
       <CardContent className="py-5">
-        <ol className="relative space-y-4 border-l border-border pl-5">
-          {schedule.map((entry) => {
+        <ol className="relative space-y-4 pl-5">
+          {schedule.map((entry, index) => {
             const days = daysUntil(entry.examDate);
             return (
               <li key={entry.id} className="relative">
+                {index < schedule.length - 1 && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -left-[21.5px] top-2.5 h-[calc(100%+1rem)] w-px bg-border"
+                  />
+                )}
                 {/* タイムラインの節点 */}
                 <span
+                  aria-hidden="true"
                   className={`absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-background ${
                     entry.isFirstChoice ? "bg-primary" : "bg-muted-foreground"
                   }`}
