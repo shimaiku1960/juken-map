@@ -1,6 +1,8 @@
 "use client";
 
+import { ArrowLeft } from "lucide-react";
 import StudyLogForm from "@/app/components/StudyLogForm";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,10 +15,12 @@ export default function QuickManualStudyLogDialog({
   open,
   onOpenChange,
   initialDate,
+  onBack,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialDate?: string;
+  onBack?: () => void;
 }) {
   const dateLabel = initialDate
     ? new Intl.DateTimeFormat("ja-JP", {
@@ -28,8 +32,20 @@ export default function QuickManualStudyLogDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="top-auto bottom-0 max-h-[90dvh] translate-y-0 overflow-y-auto rounded-b-none sm:top-1/2 sm:bottom-auto sm:max-w-lg sm:-translate-y-1/2 sm:rounded-xl">
+      <DialogContent className="top-auto bottom-0 max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] translate-y-0 overflow-hidden rounded-b-none sm:top-[15dvh] sm:bottom-auto sm:max-h-[80dvh] sm:max-w-lg sm:rounded-xl">
         <DialogHeader>
+          {onBack && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-2 w-fit"
+              onClick={onBack}
+            >
+              <ArrowLeft aria-hidden="true" />
+              学習を始めるに戻る
+            </Button>
+          )}
           <DialogTitle>学習を記録</DialogTitle>
           <DialogDescription>
             {dateLabel

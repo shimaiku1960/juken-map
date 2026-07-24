@@ -20,7 +20,6 @@ import {
   SubjectSelect,
   TextbookSelect,
   RangeUnitSelect,
-  NumberStepper,
 } from "@/app/components/StudyFields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,125 +112,24 @@ export default function StudyLogForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-        {/* 最初に毎日使う項目だけを見せる。クイック記録では日付は今日を既定にする。 */}
-        <div className="flex flex-wrap items-end gap-3">
-          {variant === "full" && (
-            <FormField
-              control={form.control}
-              name="date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>日付</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="date"
-                      max={todayYmdTokyo()}
-                      className="h-9 w-40"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-          <FormField
-            control={form.control}
-            name="subject"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel htmlFor={`study-log-subject-${variant}`}>
-                  科目
-                </FormLabel>
-                <FormControl>
-                  <div>
-                    <SubjectSelect
-                      id={`study-log-subject-${variant}`}
-                      ariaLabel="科目"
-                      className={variant === "quick" ? "h-11" : undefined}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="minutes"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>学習時間（分）</FormLabel>
-                <FormControl>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      type="number"
-                      min={1}
-                      placeholder="分"
-                      autoFocus={variant === "quick"}
-                      inputMode="numeric"
-                      className={
-                        variant === "quick"
-                          ? "h-11 w-24 text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          : "h-9 w-20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      }
-                      value={field.value ?? ""}
-                      onChange={(e) =>
-                        field.onChange(
-                          e.target.value === ""
-                            ? undefined
-                            : Number(e.target.value)
-                        )
-                      }
-                    />
-                    {QUICK_MINUTES.map((m) => (
-                      <Button
-                        key={m}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={variant === "quick" ? "h-11" : undefined}
-                        onClick={() =>
-                          field.onChange(
-                            variant === "quick" ? m : (field.value ?? 0) + m
-                          )
-                        }
-                      >
-                        {variant === "quick" ? `${m}分` : `+${m}`}
-                      </Button>
-                    ))}
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {variant === "quick" && (
-          <p className="text-sm text-muted-foreground">
-            科目は未選択でも保存できます。
-          </p>
-        )}
-
-        <details
-          open={variant === "full" ? true : undefined}
-          className={variant === "quick" ? "rounded-lg border p-3" : "contents"}
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className={
+          variant === "quick"
+            ? "flex min-h-0 flex-col gap-4"
+            : "space-y-3"
+        }
+      >
+        <div
+          className={
+            variant === "quick"
+              ? "min-h-0 space-y-4 overflow-y-auto px-1"
+              : "space-y-3"
+          }
         >
-          {variant === "quick" && (
-            <summary className="cursor-pointer text-sm font-medium">
-              {initialDate ? "参考書・範囲・メモを追加" : "日付・参考書・範囲・メモを追加"}
-            </summary>
-          )}
-          <div
-            className={
-              variant === "quick" ? "mt-4 space-y-3" : "space-y-3"
-            }
-          >
-            {variant === "quick" && initialDate == null && (
+          {/* 毎日使う学習時間を主役にし、補助項目は後から選べる順番にする。 */}
+          <div className="flex flex-wrap items-end gap-3">
+            {variant === "full" && (
               <FormField
                 control={form.control}
                 name="date"
@@ -242,7 +140,7 @@ export default function StudyLogForm({
                       <Input
                         type="date"
                         max={todayYmdTokyo()}
-                        className="h-11 w-44"
+                        className="h-9 w-40"
                         {...field}
                       />
                     </FormControl>
@@ -251,74 +149,255 @@ export default function StudyLogForm({
                 )}
               />
             )}
+            <FormField
+              control={form.control}
+              name="minutes"
+              render={({ field }) => (
+                <FormItem className={variant === "quick" ? "w-full" : undefined}>
+                  <FormLabel>学習時間（分）</FormLabel>
+                  <FormControl>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="分"
+                        autoFocus={variant === "quick"}
+                        inputMode="numeric"
+                        className={
+                          variant === "quick"
+                            ? "h-11 w-24 text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            : "h-9 w-20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        }
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === ""
+                              ? undefined
+                              : Number(e.target.value)
+                          )
+                        }
+                      />
+                      {QUICK_MINUTES.map((m) => (
+                        <Button
+                          key={m}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={variant === "quick" ? "h-11" : undefined}
+                          onClick={() =>
+                            field.onChange(
+                              variant === "quick" ? m : (field.value ?? 0) + m
+                            )
+                          }
+                        >
+                          {variant === "quick" ? `${m}分` : `+${m}`}
+                        </Button>
+                      ))}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="subject"
+              render={({ field }) => (
+                <FormItem className={variant === "quick" ? "w-full" : undefined}>
+                  <FormLabel htmlFor={`study-log-subject-${variant}`}>
+                    科目{variant === "quick" ? "（任意）" : ""}
+                  </FormLabel>
+                  <FormControl>
+                    <div>
+                      <SubjectSelect
+                        id={`study-log-subject-${variant}`}
+                        ariaLabel="科目"
+                        className={
+                          variant === "quick" ? "h-11 w-full" : undefined
+                        }
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
-            {/* 任意で参考書＋範囲 */}
-            <div className="flex flex-wrap items-center gap-2">
+          <details
+            open={variant === "full" ? true : undefined}
+            className={variant === "quick" ? "rounded-lg border p-3" : "contents"}
+          >
+            {variant === "quick" && (
+              <summary className="cursor-pointer text-sm font-medium">
+                {initialDate ? "教材・メモを追加" : "日付・教材・メモを追加"}
+              </summary>
+            )}
+            <div
+              className={
+                variant === "quick" ? "mt-4 space-y-4" : "space-y-3"
+              }
+            >
+              {variant === "quick" && initialDate == null && (
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>日付</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          max={todayYmdTokyo()}
+                          className="h-11 w-44"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               <FormField
                 control={form.control}
                 name="textbookId"
                 render={({ field }) => (
-                  <TextbookSelect
-                    value={field.value}
-                    onChange={(textbookId) => {
-                      field.onChange(textbookId);
-                      const textbook = textbooks.find(
-                        (candidate) => candidate.id === textbookId
-                      );
-                      if (textbook?.rangeUnit != null) {
-                        form.setValue("rangeUnit", textbook.rangeUnit, {
-                          shouldValidate: true,
-                        });
-                      }
-                    }}
-                  />
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="rangeStart"
-                render={({ field }) => (
                   <FormItem>
+                    <FormLabel>教材（任意）</FormLabel>
                     <FormControl>
-                      <NumberStepper
-                        placeholder="開始"
-                        value={field.value}
-                        onChange={field.onChange}
-                      />
+                      <div>
+                        <TextbookSelect
+                          className={
+                            variant === "quick" ? "h-11 w-full" : undefined
+                          }
+                          value={field.value}
+                          onChange={(textbookId) => {
+                            field.onChange(textbookId);
+                            if (textbookId == null) {
+                              form.setValue("rangeStart", null, {
+                                shouldValidate: true,
+                              });
+                              form.setValue("rangeEnd", null, {
+                                shouldValidate: true,
+                              });
+                              form.setValue("rangeUnit", null, {
+                                shouldValidate: true,
+                              });
+                              return;
+                            }
+                            const textbook = textbooks.find(
+                              (candidate) => candidate.id === textbookId
+                            );
+                            if (textbook?.rangeUnit != null) {
+                              form.setValue("rangeUnit", textbook.rangeUnit, {
+                                shouldValidate: true,
+                              });
+                            }
+                          }}
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <span className="text-sm text-muted-foreground">〜</span>
+
+              {selectedTextbookId != null && (
+                <div className="space-y-2">
+                  <FormLabel>学習範囲（任意）</FormLabel>
+                  <div className="flex flex-wrap items-start gap-2">
+                    <FormField
+                      control={form.control}
+                      name="rangeStart"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input
+                              aria-label="学習範囲の開始"
+                              type="number"
+                              min={1}
+                              inputMode="numeric"
+                              placeholder="開始"
+                              className="h-11 w-24 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              value={field.value ?? ""}
+                              onChange={(event) =>
+                                field.onChange(
+                                  event.target.value === ""
+                                    ? null
+                                    : Number(event.target.value)
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <span className="pt-3 text-sm text-muted-foreground">〜</span>
+                    <FormField
+                      control={form.control}
+                      name="rangeEnd"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input
+                              aria-label="学習範囲の終了"
+                              type="number"
+                              min={1}
+                              inputMode="numeric"
+                              placeholder="終了"
+                              className="h-11 w-24 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              value={field.value ?? ""}
+                              onChange={(event) =>
+                                field.onChange(
+                                  event.target.value === ""
+                                    ? null
+                                    : Number(event.target.value)
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="rangeUnit"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <RangeUnitSelect
+                              value={field.value}
+                              onChange={(unit) => {
+                                field.onChange(unit);
+                                applyUnitToTextbook(unit);
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+
               <FormField
                 control={form.control}
-                name="rangeEnd"
+                name="memo"
                 render={({ field }) => (
                   <FormItem>
+                    <FormLabel>メモ（任意）</FormLabel>
                     <FormControl>
-                      <NumberStepper
-                        placeholder="終了"
-                        value={field.value}
+                      <Input
+                        placeholder="学習内容や気づき"
+                        className={variant === "quick" ? "h-11" : undefined}
+                        value={field.value ?? ""}
                         onChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="rangeUnit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <RangeUnitSelect
-                        value={field.value}
-                        onChange={(unit) => {
-                          field.onChange(unit);
-                          applyUnitToTextbook(unit);
-                        }}
                       />
                     </FormControl>
                     <FormMessage />
@@ -326,32 +405,22 @@ export default function StudyLogForm({
                 )}
               />
             </div>
+          </details>
+        </div>
 
-            {/* 任意メモ */}
-            <FormField
-              control={form.control}
-              name="memo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <Input
-                      placeholder="メモ（任意）"
-                      className={variant === "quick" ? "h-11" : undefined}
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-        </details>
-        <div className="flex justify-end">
+        <div
+          className={
+            variant === "quick"
+              ? "-mx-4 -mb-4 shrink-0 border-t bg-popover px-4 pt-3 pb-4"
+              : "flex justify-end"
+          }
+        >
           <Button
             type="submit"
             className={
-              variant === "quick" ? "h-11 w-full sm:w-auto" : undefined
+              variant === "quick"
+                ? "h-11 w-full sm:w-auto sm:min-w-28"
+                : undefined
             }
             disabled={createLog.isPending}
           >

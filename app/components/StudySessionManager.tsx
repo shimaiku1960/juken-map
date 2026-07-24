@@ -640,6 +640,10 @@ export default function StudySessionManager({
       <QuickManualStudyLogDialog
         open={manualLogOpen}
         onOpenChange={setManualLogOpen}
+        onBack={() => {
+          setManualLogOpen(false);
+          setPickerOpen(true);
+        }}
       />
     </div>
   );
