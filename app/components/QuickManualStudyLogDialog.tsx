@@ -43,7 +43,7 @@ export default function QuickManualStudyLogDialog({
               onClick={onBack}
             >
               <ArrowLeft aria-hidden="true" />
-              学習を始めるに戻る
+              学習の選択に戻る
             </Button>
           )}
           <DialogTitle>学習を記録</DialogTitle>

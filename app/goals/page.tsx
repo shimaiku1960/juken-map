@@ -86,7 +86,7 @@ const GoalsPage = async () => {
       </section>
 
       <section className="mb-6">
-        <SectionHeader title="対策の科目" />
+        <SectionHeader title="対策科目" />
         <Card>
           <CardContent className="py-5">
             {subjectChips.length > 0 ? (
