@@ -339,7 +339,7 @@ export default function StudyPlanCalendar({
             {plans.map((plan) => (
               <li
                 key={plan.id}
-                className="border rounded px-4 py-3 flex items-center gap-3"
+                className="flex items-center gap-3 rounded-lg border px-4 py-3"
               >
                 <input
                   type="checkbox"
@@ -416,7 +416,7 @@ export default function StudyPlanCalendar({
               {dayPlans.map((plan) => (
                 <li
                   key={plan.id}
-                  className="flex items-center gap-3 border rounded px-3 py-2"
+                  className="flex items-center gap-3 rounded-lg border px-3 py-2"
                 >
                   <input
                     type="checkbox"
@@ -490,7 +490,7 @@ export default function StudyPlanCalendar({
                 {fields.map((f, index) => (
                   <div
                     key={f.id}
-                    className="space-y-2 rounded-md border p-3"
+                    className="space-y-2 rounded-lg border p-3"
                   >
                     {/* 上段：科目・参考書と、この1件の削除 */}
                     <div className="flex items-center gap-2">
@@ -816,7 +816,7 @@ export default function StudyPlanCalendar({
               <div className="space-y-1">
                 <label className="text-sm font-medium">メモ・備考</label>
                 <textarea
-                  className="w-full min-h-24 rounded-md border px-3 py-2 text-sm"
+                  className="min-h-24 w-full rounded-lg border px-3 py-2 text-sm"
                   placeholder="会場・持ち物・対策メモなど"
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}

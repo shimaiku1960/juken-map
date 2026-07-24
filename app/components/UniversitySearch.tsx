@@ -77,7 +77,7 @@ export default function UniversitySearch({ universities }: Props) {
 
   return (
     <div>
-      <div className="border rounded-lg p-4 space-y-4 mb-6">
+      <div className="mb-6 space-y-4 rounded-lg border p-4">
         <Input
           placeholder="大学名で探す"
           value={name}
@@ -91,7 +91,7 @@ export default function UniversitySearch({ universities }: Props) {
               key={t}
               type="button"
               onClick={() => toggleType(t)}
-              className={`rounded-md border px-4 py-2 text-sm transition-colors ${
+              className={`rounded-lg border px-4 py-2 text-sm transition-colors ${
                 selectedTypes.has(t)
                   ? "border-primary bg-primary text-primary-foreground"
                   : "bg-card text-foreground hover:bg-muted/50"
@@ -104,7 +104,7 @@ export default function UniversitySearch({ universities }: Props) {
           <PrefectureModal value={selectedPrefs} onChange={setSelectedPrefs}>
             <button
               type="button"
-              className="rounded-md border px-4 py-2 text-sm hover:bg-muted/50 flex items-center gap-2"
+              className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm hover:bg-muted/50"
             >
               都道府県を選ぶ
               {selectedPrefs.size > 0 && (
@@ -116,7 +116,7 @@ export default function UniversitySearch({ universities }: Props) {
           <FacultyTagModal value={selectedTags} onChange={setSelectedTags}>
             <button
               type="button"
-              className="rounded-md border px-4 py-2 text-sm hover:bg-muted/50 flex items-center gap-2"
+              className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm hover:bg-muted/50"
             >
               学部系統を選ぶ
               {selectedTags.size > 0 && (
@@ -129,13 +129,13 @@ export default function UniversitySearch({ universities }: Props) {
             type="button"
             disabled
             title="準備中（偏差値データは後日追加予定）"
-            className="rounded-md border px-4 py-2 text-sm text-muted-foreground cursor-not-allowed"
+            className="cursor-not-allowed rounded-lg border px-4 py-2 text-sm text-muted-foreground"
           >
             偏差値を選ぶ（準備中）
           </button>
         </div>
 
-        <div className="flex justify-between items-center pt-2 border-t">
+        <div className="flex items-center justify-between border-t pt-2">
           <p className="text-sm">
             対象 <span className="font-bold text-lg">{previewCount}</span> 校
           </p>
@@ -165,7 +165,7 @@ export default function UniversitySearch({ universities }: Props) {
             <li key={u.id}>
               <Link
                 href={`/explore/${u.id}`}
-                className="border rounded px-4 py-3 flex justify-between items-center hover:bg-muted/50"
+                className="flex items-center justify-between rounded-lg border px-4 py-3 hover:bg-muted/50"
               >
                 <div>
                   <p className="font-medium">{u.name}</p>

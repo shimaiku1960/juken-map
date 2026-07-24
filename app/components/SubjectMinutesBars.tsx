@@ -23,9 +23,9 @@ export default function SubjectMinutesBars({
       {data.map((d) => (
         <div key={d.value} className="flex items-center gap-3">
           <span className="w-10 shrink-0 text-sm text-muted-foreground">{d.label}</span>
-          <div className="h-4 flex-1 overflow-hidden rounded bg-muted">
+          <div className="h-4 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded"
+              className="h-full rounded-full"
               style={{
                 width: `${(d.minutes / max) * 100}%`,
                 backgroundColor: d.color,

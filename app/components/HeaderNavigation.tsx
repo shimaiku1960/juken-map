@@ -84,7 +84,7 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
       <nav aria-label="公開ページ" className="flex items-center gap-2">
         <Link
           href="/blog"
-          className="hidden rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
+          className="hidden rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
         >
           ブログ
         </Link>

@@ -36,7 +36,7 @@ export const SubjectSelect = ({
     value={value ?? ""}
     onChange={(e) => onChange(e.target.value || null)}
     className={cn(
-      "h-9 shrink-0 rounded-md border bg-transparent px-2 text-sm",
+      "h-9 shrink-0 rounded-lg border bg-transparent px-2 text-sm",
       className
     )}
   >
@@ -140,7 +140,7 @@ export const TextbookSelect = ({
       }}
       disabled={createTextbook.isPending}
       className={cn(
-        "h-9 min-w-0 rounded-md border bg-transparent px-2 text-sm",
+        "h-9 min-w-0 rounded-lg border bg-transparent px-2 text-sm",
         className
       )}
     >
@@ -183,7 +183,7 @@ export const RangeUnitSelect = ({
     value={value ?? ""}
     onChange={(e) => onChange(e.target.value || null)}
     disabled={disabled}
-    className="h-9 rounded-md border bg-transparent px-2 text-sm"
+    className="h-9 rounded-lg border bg-transparent px-2 text-sm"
   >
     <option value="">単位</option>
     {RANGE_UNITS.map((u) => (
@@ -238,7 +238,7 @@ export const NumberStepper = ({
           type="button"
           aria-label="1つ増やす"
           onClick={() => step(1)}
-          className="flex h-[18px] w-6 items-center justify-center rounded-t-md border text-[10px] leading-none hover:bg-accent"
+          className="flex h-[18px] w-6 items-center justify-center rounded-t-lg border text-[10px] leading-none hover:bg-accent"
         >
           ▲
         </button>
@@ -247,7 +247,7 @@ export const NumberStepper = ({
           type="button"
           aria-label="1つ減らす"
           onClick={() => step(-1)}
-          className="flex h-[18px] w-6 items-center justify-center rounded-b-md border border-t-0 text-[10px] leading-none hover:bg-accent"
+          className="flex h-[18px] w-6 items-center justify-center rounded-b-lg border border-t-0 text-[10px] leading-none hover:bg-accent"
         >
           ▼
         </button>

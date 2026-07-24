@@ -74,7 +74,7 @@ export default function FacultyList({
         return (
           <li
             key={faculty.id}
-            className="border rounded px-4 py-3 flex justify-between items-center"
+            className="flex items-center justify-between rounded-lg border px-4 py-3"
           >
             <div>
               <p className="font-medium">{faculty.name}</p>

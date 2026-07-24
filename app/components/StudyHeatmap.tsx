@@ -201,7 +201,7 @@ export default function StudyHeatmap({
                       <span className="flex w-full items-center justify-between gap-1">
                         <span>{Number(cell.ymd.slice(-2))}</span>
                         {isToday ? (
-                          <span className="rounded bg-info px-1 text-[8px] text-info-foreground">
+                          <span className="rounded-full bg-info px-1 text-[8px] text-info-foreground">
                             今日
                           </span>
                         ) : null}
@@ -311,7 +311,7 @@ export default function StudyHeatmap({
 
         {selectedLogs.length === 0 ? (
           selectedIsPast || selectedIsToday ? (
-            <div className="rounded-md bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-lg bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
               <p>この日の学習時間はまだ記録されていません。</p>
             </div>
           ) : null
@@ -324,7 +324,7 @@ export default function StudyHeatmap({
                 log.rangeUnit
               );
               return (
-                <li key={log.id} className="rounded-md border px-3 py-3">
+                <li key={log.id} className="rounded-lg border px-3 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <span

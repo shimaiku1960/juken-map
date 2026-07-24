@@ -102,7 +102,7 @@ export default function GoalList({
     return (
       <li
         key={goal.id}
-        className="border rounded px-4 py-3 flex justify-between items-start"
+        className="flex items-start justify-between rounded-lg border px-4 py-3"
       >
         <div className="space-y-1">
           <p className="font-medium">
@@ -118,7 +118,7 @@ export default function GoalList({
             {goal.faculty.tags.map((tag) => (
               <span
                 key={tag.name}
-                className="text-xs bg-muted text-muted-foreground rounded px-2 py-0.5"
+                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
               >
                 #{tag.name}
               </span>
@@ -220,7 +220,7 @@ export default function GoalList({
                             {goal.faculty.tags.map((tag) => (
                               <span
                                 key={tag.name}
-                                className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                               >
                                 #{tag.name}
                               </span>

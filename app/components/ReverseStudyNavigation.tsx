@@ -112,7 +112,7 @@ function TextbookNavigationItem({
               );
               if (metric) setTotalAmount(metric.totalAmount);
             }}
-            className="h-9 rounded-md border bg-transparent px-2 text-sm"
+            className="h-9 rounded-lg border bg-transparent px-2 text-sm"
           >
             {RANGE_UNITS.map((unit) => (
               <option key={unit.value} value={unit.value}>
@@ -123,7 +123,7 @@ function TextbookNavigationItem({
           <select
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
-            className="h-9 rounded-md border bg-transparent px-2 text-sm"
+            className="h-9 rounded-lg border bg-transparent px-2 text-sm"
             aria-label="対策科目"
           >
             <option value="">科目（未設定）</option>
@@ -184,7 +184,7 @@ function TextbookNavigationItem({
               <p className="font-medium">{textbook.name}</p>
               {textbook.subject && (
                 <span
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs"
+                  className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
                   style={{
                     backgroundColor: `${subjectColor(textbook.subject)}1a`,
                     color: subjectColor(textbook.subject),
