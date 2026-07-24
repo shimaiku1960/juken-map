@@ -21,7 +21,7 @@ const Header = async () => {
             <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <MapPinned aria-hidden="true" className="size-5" />
             </span>
-            <span className="text-lg sm:text-xl">受験マップ</span>
+            <span className="sr-only sm:not-sr-only sm:text-xl">受験マップ</span>
           </Link>
 
           <HeaderNavigation

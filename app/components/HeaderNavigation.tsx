@@ -88,8 +88,20 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
         >
           ブログ
         </Link>
-        <Link href="/login" className={buttonVariants({ size: "lg" })}>
+        <Link
+          href="/login"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "lg" }),
+            "h-11 px-2 sm:px-2.5"
+          )}
+        >
           ログイン
+        </Link>
+        <Link
+          href="/signup"
+          className={cn(buttonVariants({ size: "lg" }), "h-11 px-4")}
+        >
+          無料で始める
         </Link>
       </nav>
     );
