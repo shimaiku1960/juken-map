@@ -191,10 +191,10 @@ export default function StudyHeatmap({
                               cell.minutes >= 120 ? "text-success-foreground" : "text-foreground"
                             }`
                       } ${
-                        isToday ? "ring-2 ring-ring ring-inset" : ""
+                        isToday && !selected ? "ring-2 ring-ring ring-inset" : ""
                       } ${
                         selected
-                          ? "outline-2 outline-offset-1 outline-primary"
+                          ? "ring-2 ring-primary ring-inset"
                           : "hover:border-muted-foreground"
                       }`}
                     >
