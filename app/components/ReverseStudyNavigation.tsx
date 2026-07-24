@@ -18,6 +18,7 @@ import { todayYmd, ymdLocal } from "@/lib/date";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
 import { SUBJECTS, SUBJECT_VALUES, subjectColor, subjectLabel } from "@/lib/subjects";
 import type { UpdateTextbookProgressInput } from "@/lib/validations/textbook";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -183,15 +184,16 @@ function TextbookNavigationItem({
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium">{textbook.name}</p>
               {textbook.subject && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
+                <Badge
+                  variant="outline"
+                  className="border-transparent px-1.5 font-normal"
                   style={{
                     backgroundColor: `${subjectColor(textbook.subject)}1a`,
                     color: subjectColor(textbook.subject),
                   }}
                 >
                   {subjectLabel(textbook.subject)}
-                </span>
+                </Badge>
               )}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">

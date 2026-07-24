@@ -13,6 +13,7 @@ import { computeHeatmap } from "@/lib/studyStats";
 import { formatMinutes, formatStudyRange } from "@/lib/studyLog";
 import { subjectColor, subjectLabel } from "@/lib/subjects";
 import { ymdLocal } from "@/lib/date";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 function levelClass(minutes: number): string {
@@ -201,9 +202,12 @@ export default function StudyHeatmap({
                       <span className="flex w-full items-center justify-between gap-1">
                         <span>{Number(cell.ymd.slice(-2))}</span>
                         {isToday ? (
-                          <span className="rounded-full bg-info px-1 text-[8px] text-info-foreground">
+                          <Badge
+                            variant="info"
+                            className="h-auto bg-info px-1 py-0 text-[8px] font-normal text-info-foreground"
+                          >
                             今日
-                          </span>
+                          </Badge>
                         ) : null}
                       </span>
                       <span className="self-center text-[9px] font-semibold tabular-nums sm:text-[10px]">
