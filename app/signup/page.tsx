@@ -15,7 +15,9 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const authLoading = loading || socialLoading;
 
   const handleSignUp = async () => {
     setLoading(true);
@@ -34,6 +36,17 @@ export default function SignUpPage() {
     window.location.href = "/";
   };
 
+  // OAuth はサインイン＝サインアップ兼用。アカウントが無ければここで作成される。
+  const handleSocialSignUp = async (provider: "google" | "github") => {
+    setSocialLoading(true);
+    setErrorMessage(null);
+    const { error } = await authClient.signIn.social({ provider, callbackURL: "/" });
+    if (error) {
+      setErrorMessage(error.message ?? "外部サービスでの登録に失敗しました");
+      setSocialLoading(false);
+    }
+  };
+
   return (
     <PageShell className="max-w-md">
       <PageHeader title="新規登録" description="学習予定と記録を、自分のアカウントで管理しましょう。" />
@@ -47,17 +60,35 @@ export default function SignUpPage() {
           <Label htmlFor="signup-password">パスワード</Label>
           <Input id="signup-password" name="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
-        <Button type="submit" size="lg" className="h-11 w-full" disabled={loading}>
+        <Button type="submit" size="lg" className="h-11 w-full" disabled={authLoading}>
           {loading ? "登録中…" : "新規登録"}
         </Button>
       </form>
 
       <Link
         href="/login"
-        className="mt-6 block text-center text-sm text-primary hover:underline"
+        className="mt-4 block text-center text-sm text-primary hover:underline"
       >
         すでにアカウントをお持ちの方はこちら
       </Link>
+
+      <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">または</div>
+      <Button
+        className="w-full"
+        variant="outline"
+        disabled={authLoading}
+        onClick={() => void handleSocialSignUp("google")}
+      >
+        Googleで登録
+      </Button>
+      <Button
+        className="w-full mt-3"
+        variant="outline"
+        disabled={authLoading}
+        onClick={() => void handleSocialSignUp("github")}
+      >
+        GitHubで登録
+      </Button>
     </PageShell>
   );
 }
