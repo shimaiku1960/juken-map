@@ -92,49 +92,66 @@ const StudyFlowPreview = () => (
           aria-hidden="true"
           className="absolute inset-0 opacity-40 [background-image:linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [background-size:32px_32px]"
         />
-        <div className="relative">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-primary">
-                ひとつながりの学習記録
-              </p>
-              <p className="mt-1 text-lg font-bold sm:text-xl">
-                始めてから、振り返るまで。
-              </p>
-            </div>
-            <span className="rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-              4ステップ
-            </span>
-          </div>
-          <ol className="mt-8 grid gap-3 sm:grid-cols-4">
-            {[
-              { number: "01", label: "内容を選ぶ", icon: Clock3 },
-              { number: "02", label: "時間を計る", icon: TimerReset },
-              { number: "03", label: "そのまま保存", icon: Check },
-              { number: "04", label: "記録を振り返る", icon: CalendarDays },
-            ].map(({ number, label, icon: Icon }, index) => (
-              <li
-                key={number}
-                className="group relative flex items-center gap-4 rounded-lg border bg-card p-4 shadow-sm sm:block"
+        <div className="relative grid items-center gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-12">
+          <figure className="mx-auto w-full max-w-[18rem]">
+            <div className="overflow-hidden rounded-[2.3rem] border-[6px] border-foreground/90 bg-foreground shadow-2xl shadow-primary/20">
+              <video
+                className="block aspect-[606/1140] w-full bg-background object-cover"
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="metadata"
+                poster="/landing/study-flow-poster.jpg"
+                aria-label="学習内容を選び、タイマーで計測し、実績を保存してカレンダーで振り返る操作例"
               >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Icon aria-hidden="true" className="size-5" />
-                </div>
-                <div className="sm:mt-5">
-                  <p className="font-mono text-[11px] font-bold text-primary">
-                    STEP {number}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold">{label}</p>
-                </div>
-                {index < 3 ? (
-                  <ArrowRight
-                    aria-hidden="true"
-                    className="absolute -right-2.5 top-1/2 z-10 hidden size-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary sm:block"
-                  />
-                ) : null}
-              </li>
-            ))}
-          </ol>
+                <source src="/landing/study-flow.mp4" type="video/mp4" />
+                お使いのブラウザでは動画を再生できません。
+              </video>
+            </div>
+            <figcaption className="mt-3 text-center text-xs font-medium text-muted-foreground">
+              実際の操作画面
+            </figcaption>
+          </figure>
+
+          <div>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-primary">
+                  ひとつながりの学習記録
+                </p>
+                <p className="mt-1 text-lg font-bold sm:text-xl">
+                  始めてから、振り返るまで。
+                </p>
+              </div>
+              <span className="rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+                約13秒
+              </span>
+            </div>
+            <ol className="mt-8 grid gap-3 sm:grid-cols-2">
+              {[
+                { number: "01", label: "内容を選ぶ", icon: Clock3 },
+                { number: "02", label: "時間を計る", icon: TimerReset },
+                { number: "03", label: "そのまま保存", icon: Check },
+                { number: "04", label: "記録を振り返る", icon: CalendarDays },
+              ].map(({ number, label, icon: Icon }) => (
+                <li
+                  key={number}
+                  className="flex items-center gap-4 rounded-lg border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon aria-hidden="true" className="size-5" />
+                  </div>
+                  <div>
+                    <p className="font-mono text-[11px] font-bold text-primary">
+                      STEP {number}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">{label}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
         </div>
       </div>
     </div>
