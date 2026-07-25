@@ -13,6 +13,7 @@
     "test": "vitest run",
     "check": "npx prisma generate && npx eslint --max-warnings 0 && npx tsc --noEmit && npm test && npx next build",
     "e2e": "playwright test",
+    "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
     "lock:fix": "rm -rf node_modules package-lock.json && npm install"
   },
   "dependencies": {
