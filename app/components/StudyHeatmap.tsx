@@ -8,6 +8,7 @@ import {
 } from "@/app/hooks/useStudyLogs";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import StudyDayPlanPanel from "@/app/components/StudyDayPlanPanel";
+import StudyLogEditDialog from "@/app/components/StudyLogEditDialog";
 import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialog";
 import { computeHeatmap } from "@/lib/studyStats";
 import { formatMinutes, formatStudyRange } from "@/lib/studyLog";
@@ -71,6 +72,7 @@ export default function StudyHeatmap({
   const [displayMonth, setDisplayMonth] = useState(currentMonth);
   const [selectedYmd, setSelectedYmd] = useState(today);
   const [recordDate, setRecordDate] = useState<string | null>(null);
+  const [editingLog, setEditingLog] = useState<StudyLog | null>(null);
   const weeks = computeHeatmap(logs, displayMonth);
   const monthPlans = plans.filter((plan) =>
     planDate(plan).startsWith(displayMonth.slice(0, 7))
@@ -349,6 +351,18 @@ export default function StudyHeatmap({
                           type="button"
                           variant="ghost"
                           size="sm"
+                          className="min-h-11"
+                          aria-label={`${dateLabel(selectedYmd)}の${subjectLabel(log.subject)}の実績を編集`}
+                          onClick={() => setEditingLog(log)}
+                        >
+                          編集
+                        </Button>
+                      ) : null}
+                      {!readOnly ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
                           className="min-h-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           disabled={deleteLog.isPending}
                           aria-label={`${dateLabel(selectedYmd)}の${subjectLabel(log.subject)}の実績を削除`}
@@ -392,6 +406,12 @@ export default function StudyHeatmap({
         initialDate={recordDate ?? undefined}
         onOpenChange={(open) => {
           if (!open) setRecordDate(null);
+        }}
+      />
+      <StudyLogEditDialog
+        log={editingLog}
+        onOpenChange={(open) => {
+          if (!open) setEditingLog(null);
         }}
       />
     </div>

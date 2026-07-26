@@ -64,6 +64,37 @@ export function useCreateStudyLog() {
   });
 }
 
+// 実績を編集するフック（成功したらカレンダーと集計を再取得）
+export function useUpdateStudyLog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: CreateStudyLogInput;
+    }) => {
+      const res = await fetch(`/api/study-logs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(
+          typeof err.error === "string" ? err.error : "編集に失敗しました"
+        );
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studyLogsKey });
+    },
+  });
+}
+
 // 実績を削除するフック（成功したら一覧を再取得）
 export function useDeleteStudyLog() {
   const queryClient = useQueryClient();
