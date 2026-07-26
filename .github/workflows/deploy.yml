@@ -38,6 +38,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
     env:
       IMAGE_TAG: ${{ github.sha }}
     steps:
@@ -88,4 +91,3 @@ jobs:
             fi
             echo "smoke test passed"
             docker image prune -a -f --filter "until=24h"
-            
