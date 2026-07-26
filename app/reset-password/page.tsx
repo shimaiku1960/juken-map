@@ -4,7 +4,7 @@ import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
 import PageShell from "@/app/components/layout/PageShell";
@@ -42,7 +42,7 @@ function ResetPasswordForm() {
       {errorMessage ? <InlineFeedback variant="error">{errorMessage}</InlineFeedback> : null}
       <div className="space-y-2">
         <Label htmlFor="new-password">新しいパスワード</Label>
-        <Input id="new-password" name="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+        <PasswordInput id="new-password" name="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
       <Button type="submit" size="lg" className="h-11 w-full" disabled={loading}>{loading ? "再設定中…" : "パスワードを再設定する"}</Button>
     </form>

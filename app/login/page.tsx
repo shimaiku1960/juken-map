@@ -4,6 +4,7 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import Link from "next/link";
 import { Label } from "@/components/ui/label";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
@@ -69,14 +70,14 @@ export default function LoginPage() {
       <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void handleSignIn(); }}>
         <div className="space-y-2">
           <Label htmlFor="login-email">メールアドレス</Label>
-          <Input id="login-email" name="email" type="email" autoComplete="email" placeholder="name@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input id="login-email" name="email" type="email" autoComplete="email" placeholder="name@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11" />
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="login-password">パスワード</Label>
             <Link href="/forgot-password" className="text-sm text-primary hover:underline">パスワードを忘れた方</Link>
           </div>
-          <Input id="login-password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput id="login-password" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <Button type="submit" size="lg" className="h-11 w-full" disabled={authLoading}>
           {signInLoading ? "ログイン中…" : "ログイン"}
