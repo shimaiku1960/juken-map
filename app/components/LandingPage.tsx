@@ -96,7 +96,7 @@ const StudyFlowPreview = () => (
           <figure className="mx-auto w-full max-w-[18rem]">
             <div className="overflow-hidden rounded-[2.3rem] border-[6px] border-foreground/90 bg-foreground shadow-2xl shadow-primary/20">
               <video
-                className="block aspect-[606/1048] w-full bg-background object-cover"
+                className="block aspect-[606/1048] w-full bg-background object-contain"
                 autoPlay
                 loop
                 muted
