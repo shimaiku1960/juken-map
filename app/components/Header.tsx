@@ -28,7 +28,10 @@ const Header = async () => {
             user={
               user
                 ? {
-                    name: user.name,
+                    name:
+                      user.nickname?.trim() ||
+                      user.name.trim() ||
+                      user.email,
                     email: user.email,
                   }
                 : null

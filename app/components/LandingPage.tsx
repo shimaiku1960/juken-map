@@ -1,3 +1,4 @@
+import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -14,10 +15,15 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   AmbientOrb,
-  AnimatedBar,
   HeroReveal,
   Reveal,
 } from "@/app/components/landing/LandingMotion";
+// 画像は public/ ではなく import で読み込む。ビルド時にファイル名へコンテンツ
+// ハッシュが付くため、中身を差し替えれば URL が変わりキャッシュが自動で外れる。
+// width/height も import した値から自動で決まる。
+import studyCalendarImage from "@/app/components/landing/images/study-calendar.jpg";
+import studyStartDialogImage from "@/app/components/landing/images/study-start-dialog.jpg";
+import subjectStudyTimeImage from "@/app/components/landing/images/subject-study-time.png";
 
 const signupClassName = cn(
   buttonVariants({ size: "lg" }),
@@ -181,88 +187,30 @@ const StudyFlowPreview = () => (
   </div>
 );
 
-const CalendarMockup = () => {
-  const activity = [0, 1, 2, 0, 3, 1, 2, 3, 2, 0, 1, 3, 4, 2, 3, 1, 2, 4];
-
-  return (
-    <div className="rounded-xl border bg-card p-4 shadow-[0_24px_60px_-36px_color-mix(in_oklch,var(--primary)_60%,transparent)] sm:p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="font-semibold">学習カレンダー</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            今日の学習時間：2時間15分
-          </p>
-        </div>
-        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
-          8日連続
-        </span>
-      </div>
-      <div className="mt-5 grid grid-cols-7 gap-1.5">
-        {activity.map((level, index) => (
-          <div
-            // Static presentation data; index is stable.
-            key={index}
-            className={cn(
-              "aspect-square rounded-sm border",
-              level === 0 && "bg-muted/50",
-              level === 1 && "border-primary/10 bg-primary/15",
-              level === 2 && "border-primary/15 bg-primary/30",
-              level === 3 && "border-primary/20 bg-primary/55",
-              level === 4 && "border-primary/30 bg-primary/80"
-            )}
-          />
-        ))}
-      </div>
-      <div className="mt-5 rounded-lg bg-muted/60 p-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium">今日の実績</p>
-          <p className="text-sm font-bold">2時間15分</p>
-        </div>
-        <div className="mt-3 space-y-2 text-xs">
-          <div className="flex items-center justify-between">
-            <span>英語・英単語帳</span>
-            <span className="text-muted-foreground">30分</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>数学・二次関数</span>
-            <span className="text-muted-foreground">60分</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>国語・現代文</span>
-            <span className="text-muted-foreground">45分</span>
-          </div>
-        </div>
-      </div>
+const PhoneScreenshot = ({
+  src,
+  alt,
+}: {
+  src: StaticImageData;
+  alt: string;
+}) => (
+  <figure className="mx-auto w-full max-w-[18rem]">
+    <div className="overflow-hidden rounded-[2.3rem] border-[6px] border-foreground/90 bg-foreground shadow-2xl shadow-primary/15">
+      <Image src={src} alt={alt} sizes="18rem" className="block h-auto w-full" />
     </div>
-  );
-};
+  </figure>
+);
 
-const SubjectMockup = () => {
-  const subjects = [
-    { label: "英語", time: "5時間10分", width: "82%" },
-    { label: "数学", time: "4時間30分", width: "72%" },
-    { label: "国語", time: "2時間30分", width: "40%" },
-  ];
-
-  return (
-    <div className="rounded-xl border bg-card p-5 shadow-[0_24px_60px_-36px_color-mix(in_oklch,var(--primary)_60%,transparent)]">
-      <p className="font-semibold">直近7日間の科目別学習時間</p>
-      <div className="mt-6 space-y-5">
-        {subjects.map((subject, index) => (
-          <div key={subject.label}>
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-medium">{subject.label}</span>
-              <span className="text-muted-foreground">{subject.time}</span>
-            </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-              <AnimatedBar width={subject.width} delay={index * 0.1} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
+const SubjectStudyTimeScreenshot = () => (
+  <figure className="overflow-hidden rounded-xl border bg-card shadow-[0_24px_60px_-36px_color-mix(in_oklch,var(--primary)_60%,transparent)]">
+    <Image
+      src={subjectStudyTimeImage}
+      alt="直近7日間の科目別学習時間。英語3時間30分、数学4時間、国語2時間45分の実際の集計画面"
+      sizes="(min-width: 1024px) 50vw, 100vw"
+      className="block h-auto w-full"
+    />
+  </figure>
+);
 
 export default function LandingPage() {
   // 公開ランディングページ。未ログインで `/` にアクセスしたときに表示する。
@@ -392,40 +340,19 @@ export default function LandingPage() {
               </p>
             </div>
             <div className="rounded-xl border bg-gradient-to-br from-primary/10 to-secondary/70 p-6 shadow-inner">
-              <div className="mx-auto max-w-sm rounded-xl border bg-card p-5 shadow-xl shadow-primary/10">
-                <p className="text-sm text-muted-foreground">今日の予定</p>
-                <div className="mt-3 space-y-2">
-                  {["数学IA 二次関数", "英単語帳 1201〜1300", "その他の学習"].map(
-                    (item, index) => (
-                      <div
-                        key={item}
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg border p-3 text-sm",
-                          index === 0 && "border-primary bg-primary/5"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "size-3 rounded-full border",
-                            index === 0 && "border-primary bg-primary"
-                          )}
-                        />
-                        {item}
-                      </div>
-                    )
-                  )}
-                </div>
-                <div className="mt-4 flex h-10 items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground">
-                  <Play aria-hidden="true" className="size-4 fill-current" />
-                  計測を始める
-                </div>
-              </div>
+              <PhoneScreenshot
+                src={studyStartDialogImage}
+                alt="今日の予定から学習内容を選び、計測を開始する実際の画面"
+              />
             </div>
           </Reveal>
 
           <Reveal className="mt-28 grid items-center gap-10 lg:grid-cols-2 lg:gap-20">
             <div className="order-2 lg:order-1">
-              <CalendarMockup />
+              <PhoneScreenshot
+                src={studyCalendarImage}
+                alt="学習カレンダーで今日の予定と実績を確認する実際の画面"
+              />
             </div>
             <div className="order-1 lg:order-2">
               <div className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -454,7 +381,7 @@ export default function LandingPage() {
                 次に何をやるかを決められます。
               </p>
             </div>
-            <SubjectMockup />
+            <SubjectStudyTimeScreenshot />
           </Reveal>
         </div>
       </section>
