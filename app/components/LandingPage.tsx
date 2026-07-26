@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   Clock3,
+  type LucideIcon,
   MapPinned,
   Play,
   Target,
@@ -21,8 +22,8 @@ import {
 // 画像は public/ ではなく import で読み込む。ビルド時にファイル名へコンテンツ
 // ハッシュが付くため、中身を差し替えれば URL が変わりキャッシュが自動で外れる。
 // width/height も import した値から自動で決まる。
-import studyCalendarImage from "@/app/components/landing/images/study-calendar.jpg";
-import studyStartDialogImage from "@/app/components/landing/images/study-start-dialog.jpg";
+import studyCalendarImage from "@/app/components/landing/images/study-calendar.png";
+import studyStartDialogImage from "@/app/components/landing/images/study-start-dialog.png";
 import subjectStudyTimeImage from "@/app/components/landing/images/subject-study-time.png";
 
 const signupClassName = cn(
@@ -187,25 +188,51 @@ const StudyFlowPreview = () => (
   </div>
 );
 
-const PhoneScreenshot = ({
+// 機能セクションの説明側。points は隣のスクリーンショットの「読み方」を示す
+// 短い補足で、画像を見ただけでは伝わらない部分を言葉で補う。
+const FeatureText = ({
+  icon: Icon,
+  title,
+  description,
+  points,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  points: string[];
+}) => (
+  <div>
+    <div className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <Icon aria-hidden="true" className="size-5" />
+    </div>
+    <h3 className="mt-5 text-2xl font-bold">{title}</h3>
+    <p className="mt-4 leading-7 text-muted-foreground">{description}</p>
+    <ul className="mt-6 space-y-3">
+      {points.map((point) => (
+        <li key={point} className="flex items-start gap-3">
+          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Check aria-hidden="true" className="size-3" />
+          </span>
+          <span className="text-sm leading-6">{point}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
+// 機能セクションの実画面。デバイスの枠は見せず、該当箇所だけを切り抜いた
+// スクリーンショットを同じカードで並べて、3つの見せ方を揃える。
+const ScreenshotCard = ({
   src,
   alt,
 }: {
   src: StaticImageData;
   alt: string;
 }) => (
-  <figure className="mx-auto w-full max-w-[18rem]">
-    <div className="overflow-hidden rounded-[2.3rem] border-[6px] border-foreground/90 bg-foreground shadow-2xl shadow-primary/15">
-      <Image src={src} alt={alt} sizes="18rem" className="block h-auto w-full" />
-    </div>
-  </figure>
-);
-
-const SubjectStudyTimeScreenshot = () => (
   <figure className="overflow-hidden rounded-xl border bg-card shadow-[0_24px_60px_-36px_color-mix(in_oklch,var(--primary)_60%,transparent)]">
     <Image
-      src={subjectStudyTimeImage}
-      alt="直近7日間の科目別学習時間。英語3時間30分、数学4時間、国語2時間45分の実際の集計画面"
+      src={src}
+      alt={alt}
       sizes="(min-width: 1024px) 50vw, 100vw"
       className="block h-auto w-full"
     />
@@ -329,59 +356,58 @@ export default function LandingPage() {
           />
 
           <Reveal className="mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-20">
-            <div>
-              <div className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Clock3 aria-hidden="true" className="size-5" />
-              </div>
-              <h3 className="mt-5 text-2xl font-bold">すぐに始められる</h3>
-              <p className="mt-4 leading-7 text-muted-foreground">
-                今日の予定や学習内容を選んで、そのままタイマーを開始。
-                過去の学習も時間を選ぶだけで、すばやく記録できます。
-              </p>
-            </div>
-            <div className="rounded-xl border bg-gradient-to-br from-primary/10 to-secondary/70 p-6 shadow-inner">
-              <PhoneScreenshot
-                src={studyStartDialogImage}
-                alt="今日の予定から学習内容を選び、計測を開始する実際の画面"
-              />
-            </div>
+            <FeatureText
+              icon={Clock3}
+              title="すぐに始められる"
+              description="今日の予定や学習内容を選んで、そのままタイマーを開始。過去の学習も時間を選ぶだけで、すばやく記録できます。"
+              points={[
+                "「その他の学習」で予定外の勉強も記録",
+                "計測を止めたら、そのまま実績として保存",
+                "あとから記録するときは時間を選ぶだけ",
+              ]}
+            />
+            <ScreenshotCard
+              src={studyStartDialogImage}
+              alt="今日の予定「日本史 近現代 通史」を選んで計測を開始する実際の画面"
+            />
           </Reveal>
 
           <Reveal className="mt-28 grid items-center gap-10 lg:grid-cols-2 lg:gap-20">
             <div className="order-2 lg:order-1">
-              <PhoneScreenshot
+              <ScreenshotCard
                 src={studyCalendarImage}
-                alt="学習カレンダーで今日の予定と実績を確認する実際の画面"
+                alt="学習カレンダーで日ごとの学習時間と科目の内訳、選んだ日の学習予定を確認する実際の画面"
               />
             </div>
             <div className="order-1 lg:order-2">
-              <div className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <CalendarDays aria-hidden="true" className="size-5" />
-              </div>
-              <h3 className="mt-5 text-2xl font-bold">
-                予定と実績がつながる
-              </h3>
-              <p className="mt-4 leading-7 text-muted-foreground">
-                何を勉強する予定だったか、実際にどれだけ取り組んだかを、
-                ひとつのカレンダーで確認できます。
-              </p>
+              <FeatureText
+                icon={CalendarDays}
+                title="予定と実績がつながる"
+                description="何を勉強する予定だったか、実際にどれだけ取り組んだかを、ひとつのカレンダーで確認できます。"
+                points={[
+                  "色が濃い日ほど、その日の学習時間が長い",
+                  "日ごとのバーで科目の内訳がわかる",
+                  "予定だけの日と実績のある日を見分けられる",
+                ]}
+              />
             </div>
           </Reveal>
 
           <Reveal className="mt-28 grid items-center gap-10 lg:grid-cols-2 lg:gap-20">
-            <div>
-              <div className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <BarChart3 aria-hidden="true" className="size-5" />
-              </div>
-              <h3 className="mt-5 text-2xl font-bold">
-                科目ごとの積み重ねが見える
-              </h3>
-              <p className="mt-4 leading-7 text-muted-foreground">
-                学習時間、継続日数、科目ごとの配分を振り返って、
-                次に何をやるかを決められます。
-              </p>
-            </div>
-            <SubjectStudyTimeScreenshot />
+            <FeatureText
+              icon={BarChart3}
+              title="科目ごとの積み重ねが見える"
+              description="学習時間、継続日数、科目ごとの配分を振り返って、次に何をやるかを決められます。"
+              points={[
+                "直近7日間の合計を科目ごとに比較",
+                "記録がない科目は「—」ですぐ気づける",
+                "偏りを見て、次にやる科目を決められる",
+              ]}
+            />
+            <ScreenshotCard
+              src={subjectStudyTimeImage}
+              alt="直近7日間の科目別学習時間。英語3時間30分、数学4時間、国語2時間45分の実際の集計画面"
+            />
           </Reveal>
         </div>
       </section>
