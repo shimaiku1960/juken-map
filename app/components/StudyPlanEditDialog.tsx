@@ -132,7 +132,7 @@ export default function StudyPlanEditDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && requestClose()}>
-      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+      <DialogContent className="top-auto bottom-0 flex max-h-[90dvh] max-w-none translate-y-0 flex-col gap-0 overflow-hidden rounded-b-none p-0 sm:top-1/2 sm:bottom-auto sm:max-w-md sm:-translate-y-1/2 sm:rounded-xl">
         <DialogHeader className="border-b px-5 py-4 pr-12">
           <DialogTitle>学習予定を編集</DialogTitle>
           <DialogDescription>
@@ -297,7 +297,7 @@ export default function StudyPlanEditDialog({
           ) : null}
         </div>
 
-        <div className="border-t bg-card px-5 py-4">
+        <div className="border-t bg-card px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
           <Button type="button" className="min-h-11 w-full" onClick={submit} disabled={saving || !isDirty || (isTextbookPlan && !selectedTextbook)}>
             {saving ? "保存中…" : "変更を保存"}
           </Button>
