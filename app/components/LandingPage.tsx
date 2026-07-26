@@ -96,7 +96,7 @@ const StudyFlowPreview = () => (
           <figure className="mx-auto w-full max-w-[18rem]">
             <div className="overflow-hidden rounded-[2.3rem] border-[6px] border-foreground/90 bg-foreground shadow-2xl shadow-primary/20">
               <video
-                className="block aspect-[606/1140] w-full bg-background object-cover"
+                className="block aspect-[606/1048] w-full bg-background object-cover"
                 autoPlay
                 loop
                 muted
@@ -125,7 +125,7 @@ const StudyFlowPreview = () => (
                 </p>
               </div>
               <span className="rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-                約13秒
+                約18秒
               </span>
             </div>
             <ol className="mt-8 grid gap-3 sm:grid-cols-2">
