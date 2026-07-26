@@ -8,7 +8,6 @@ import {
   CalendarDays,
   ChevronDown,
   LogOut,
-  Menu,
   Newspaper,
   Play,
   Search,
@@ -163,12 +162,14 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
         </button>
 
         {menuOpen ? (
-          <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 hidden w-64 rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg md:block">
+          <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg">
             <div className="border-b px-3 py-2">
               <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {user.email}
-              </p>
+              {user.name.trim() !== user.email ? (
+                <p className="truncate text-xs text-muted-foreground">
+                  {user.email}
+                </p>
+              ) : null}
             </div>
             <div className="py-1">
               <MenuLink
@@ -212,7 +213,7 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
               <nav
                 aria-label="モバイルナビゲーション"
                 data-mobile-bottom-nav
-                className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-4 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+                className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
               >
                 {primaryLinks.map(({ href, label, icon: Icon, ...link }) => {
                   const active = isActivePath(
@@ -245,77 +246,8 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
                     </Link>
                   );
                 })}
-                <button
-                  type="button"
-                  aria-expanded={menuOpen}
-                  aria-controls="mobile-user-menu"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={() => setMenuOpen((open) => !open)}
-                  className={cn(
-                    "flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                    menuOpen
-                      ? "text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "rounded-full px-4 py-1",
-                      menuOpen && "bg-primary/12 text-primary"
-                    )}
-                  >
-                    <Menu aria-hidden="true" className="size-5" />
-                  </span>
-                  <span>メニュー</span>
-                </button>
               </nav>
 
-              {menuOpen ? (
-                <div
-                  id="mobile-user-menu"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  className="fixed inset-x-3 bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] z-50 rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg md:hidden"
-                >
-                  <div className="border-b px-3 py-2">
-                    <p className="truncate text-sm font-medium">{user.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {user.email}
-                    </p>
-                  </div>
-                  <div className="py-1">
-                    <MenuLink
-                      href="/explore"
-                      icon={Search}
-                      onNavigate={() => setMenuOpen(false)}
-                    >
-                      大学を探す
-                    </MenuLink>
-                    <MenuLink
-                      href="/profile"
-                      icon={UserRound}
-                      onNavigate={() => setMenuOpen(false)}
-                    >
-                      プロフィール
-                    </MenuLink>
-                    <MenuLink
-                      href="/blog"
-                      icon={Newspaper}
-                      onNavigate={() => setMenuOpen(false)}
-                    >
-                      ブログ
-                    </MenuLink>
-                  </div>
-                  <form action={logout} className="border-t pt-1">
-                    <button
-                      type="submit"
-                      className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <LogOut aria-hidden="true" className="size-4" />
-                      ログアウト
-                    </button>
-                  </form>
-                </div>
-              ) : null}
             </>,
             document.body
           )
