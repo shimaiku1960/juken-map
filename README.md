@@ -1,6 +1,6 @@
 # 受験マップ
 
-大学受験生のための志望校・併願校管理アプリ。全国の大学マスターから志望校を選んで管理し、受験日程をカレンダーで俯瞰、併願校を条件で探せます。
+大学受験生のための学習記録・志望校管理アプリ。学習内容を選んでタイマーを開始するだけで実績が残り、予定と実績を同じカレンダーで振り返れます。志望校は全国の大学マスターから選んで管理し、受験日程をカレンダーで俯瞰できます。
 
 🌐 **本番環境**: https://juken-map.com （AWS EC2 上でセルフホスト）
 
@@ -18,7 +18,9 @@
 | スタイリング | Tailwind CSS v4 |
 | フォーム | React Hook Form + Zod |
 | サーバー状態管理 | TanStack Query |
-| カレンダー | FullCalendar |
+| アニメーション | Motion（Client Component 境界を限定） |
+| カレンダー | FullCalendar（学習予定）/ Schedule-X（受験日程） |
+| PWA | Web App Manifest（ホーム画面・Dock へ追加可能） |
 | CMS | microCMS |
 | ORM | Prisma 7 |
 | データベース | MySQL 8.4（ローカル: Docker / 本番: AWS RDS） |
@@ -31,14 +33,19 @@
 
 ## 主な機能
 
+- **学習タイマー** — 今日の予定や「その他の学習」から学習内容を選んでタイマーを開始。終了すると内容と時間を確認してそのまま実績に保存され、開始・記録・振り返りが分断されない。過去の学習は時間を選ぶだけのクイック記録にも対応
+- **学習カレンダー（`/dashboard`）** — 予定と実績を同じ月間カレンダーで表示。日ごとの学習時間を色の濃淡で、科目の内訳をバーで示し、予定だけの日と実績のある日を見分けられる。継続日数（ストリーク）と直近7日間の科目別学習時間もダッシュボードに表示
+- **学習実績の編集** — 記録済みの実績の日付・時間・科目・教材・範囲・メモを後から修正可能。予定由来の実績は紐づきを保護し、過去の実績に現在の参考書設定を遡及しない
 - **志望校管理** — 全国の大学・学部マスターから志望校を選択。第一志望／併願を分けて管理し、同一学部の重複登録を多層防御（フロント／API／DB の3層）で防止。「探す」から気になる校（candidate）として仮登録し、受験校（decided）へ確定する2段階のステータス管理
 - **大学を探す** — 全国 823 大学のマスターから、大学名・都道府県・設置区分で絞り込み。学部詳細では学部系統タグを表示し、その場で志望校に追加
-- **学習予定カレンダー** — 日ごとの学習予定を FullCalendar に登録・編集（日クリックで「その日のダイアログ」に予定一覧＋追加を統合、ドラッグで日移動、完了チェック、科目で色分け、TanStack Query による楽観的更新）。予定には参考書・学習範囲（開始〜終了・単位）を紐づけ可能
+- **学習予定カレンダー（`/schedule`）** — 日ごとの学習予定を FullCalendar に登録・編集（日クリックで「その日のダイアログ」に予定一覧＋追加を統合、ドラッグで日移動、完了チェック、科目で色分け、TanStack Query による楽観的更新）。予定には参考書・学習範囲（開始〜終了・単位）を紐づけ可能
 - **参考書と学習範囲** — 参考書マスター（ISBN・出版社・複数単位の総量メトリクス）から自分の参考書を登録。単位（ページ／章など）は参考書ごとに切り替え可能で、総量はマスターから自動補完
 - **実績記録（逆算ナビ）** — 今日の予定から学習実績（学習時間・到達範囲・メモ）を記録し、予定完了と実績記録をトランザクションで同時反映。参考書の総量・目標日と最大到達位置から「今日やるべき範囲」を逆算して提示
 - **受験日程カレンダー** — 登録した志望校の受験日を学習予定と同じカレンダーに読み取り専用で重ねて表示。ダッシュボードには受験カウントダウン・今日の学習予定・志望校サマリーを表示
 - **ユーザー認証** — Better Auth による Google / GitHub / メール+パスワードの3方式ログイン。メール検証・パスワードリセット（Resend 経由）、ルート保護に対応
 - **デモ閲覧モード** — 登録不要でデータ入りの状態を体験できるデモユーザー。編集系操作はサーバー側ガードで読み取り専用に制限
+- **ランディングページ** — 未ログインでトップ `/` にアクセスすると公開 LP を表示。実際の画面を切り抜いたスクリーンショットと操作動画で、学習サイクルを紹介する
+- **PWA** — Web App Manifest により、スマートフォンのホーム画面や Mac の Dock にインストールして単独アプリのように起動できる
 - **プロフィール管理** — ニックネームの表示・編集
 - **ブログ** — microCMS で管理する記事の一覧・詳細表示
 
@@ -48,7 +55,8 @@
 - **バリデーションの single source of truth** — Zod スキーマ（`lib/validations`）をサーバー／クライアントで共通利用。フロント（UX）・API（門番）・DB（最後の砦）の多層防御
 - **Infrastructure as Code** — 本番の VPC / EC2 / RDS / セキュリティグループ / ECR / IAM を Terraform で import しコード管理（`terraform/`）
 - **コンテナ化 / デプロイ自動化** — マルチステージ Dockerfile（`output: "standalone"` / 非 root 実行 / 起動時マイグレーション）。CI でビルドしたイメージを ECR に push し、本番 EC2 が IAM インスタンスロール経由で pull して `docker run`。`main` への push で「ビルド → ECR push → EC2 でコンテナ入れ替え」まで一気通貫の自動デプロイ
-- **テスト** — Vitest によるユニットテスト（Zod スキーマ・純粋関数・API ルート）と Playwright による E2E。`npm run check` で Prisma 生成 / Lint / 型チェック / Vitest / build をまとめて実行
+- **テスト / CI** — Vitest によるユニットテスト（Zod スキーマ・純粋関数・API ルート）と Playwright による E2E を GitHub Actions で自動実行。CI は `lockfile`（Linux ネイティブ依存が package-lock.json に含まれるかの検査）/ `check`（Lint・型・Vitest・build）/ `e2e`（MySQL サービスコンテナ上で実行）の3ジョブ構成。ローカルでは `npm run check` で同じ内容を一括実行できる
+- **LP 画像の static import** — LP の画像は `public/` ではなく `app/components/landing/images/` に置き、`next/image` の static import で読み込む。ビルド時にファイル名へコンテンツハッシュが付くため、画像を差し替えると URL が変わりキャッシュが自動で外れる。`width` / `height` も import した値から決まるので、画像とコードの寸法を二重管理しなくて済む
 
 ## データソース
 
@@ -58,7 +66,7 @@
 
 ### 前提条件
 
-- Node.js 20 以上
+- Node.js 24（CI と同じバージョン）
 - Docker（ローカル DB = MySQL 8.4 を起動）
 - microCMS アカウント（ブログ管理用）
 - 各 OAuth / メール送信の資格情報（Google / GitHub OAuth、Resend）
@@ -92,11 +100,11 @@ MICROCMS_SERVICE_DOMAIN="your-service-domain"
 ### インストールと起動
 
 ```bash
-# ローカル DB（MySQL）を Docker で起動
-docker compose up -d db
-
 # 依存関係のインストール
 npm install
+
+# ローカル DB（MySQL）を Docker で起動（マイグレーション前に必要）
+npm run dev:infra
 
 # Prisma Client の生成
 npx prisma generate
@@ -107,13 +115,13 @@ npx prisma migrate deploy
 # 大学マスターなどの初期データ投入
 npx prisma db seed
 
-# 開発サーバーの起動
+# 開発サーバーの起動（DB コンテナの起動と待機も自動で行う）
 npm run dev
 ```
 
 http://localhost:3000 でアクセスできます。
 
-> ローカル開発はアプリを `npm run dev`、DB のみ Docker コンテナで動かす構成です。本番相当（standalone ビルド）で確認したいときは `docker compose up --build`（アプリも含めてコンテナ起動）を使います。
+> ローカル開発はアプリを `npm run dev`、DB のみ Docker コンテナで動かす構成です。`npm run dev` は内部で `docker compose up -d --wait db` を実行するため、2回目以降は DB の起動を意識する必要はありません。本番相当（standalone ビルド）で確認したいときは `docker compose up --build`（アプリも含めてコンテナ起動）を使います。
 
 ## npm scripts
 
@@ -127,6 +135,8 @@ http://localhost:3000 でアクセスできます。
 | `npm run test` | Vitest によるユニットテスト |
 | `npm run e2e` | Playwright による E2E テスト |
 | `npm run check` | Prisma 生成 / Lint / 型チェック / Vitest / build を一括実行（push 前チェック） |
+| `npm run capture:seed` | LP のスクリーンショット・動画撮影用ユーザーをローカル DB に投入（localhost 以外の DB では停止） |
+| `npm run lock:fix` | `node_modules` と `package-lock.json` を削除して再インストール（lockfile の不整合時のみ） |
 
 ## デプロイ / インフラ（AWS）
 
@@ -136,37 +146,45 @@ http://localhost:3000 でアクセスできます。
 - **RDS (MySQL 8.4)** をデータベースに使用（VPC 内からのみアクセス可）
 - **GitHub Actions** で `main` への push をトリガーに、**ビルド → ECR push → EC2 で pull & コンテナ入れ替え**を自動実行（1 ワークフローに統合し `needs` で順序を保証）
   - ビルド機（Actions ランナー）から ECR への push は **OIDC 認証**、実行機（EC2）から ECR の pull は **IAM インスタンスロール**。いずれもアクセスキーを持たせない短命トークン方式
+  - 短時間に複数の PR がマージされてもデプロイが競合しないよう、デプロイジョブに `concurrency` を設定して直列化
 - 本番インフラ（VPC / EC2 / RDS / セキュリティグループ / ECR / IAM）は **Terraform** でコード管理
 
 ## プロジェクト構成
 
 ```
 app/
-├── page.tsx              # ダッシュボード（受験日程カレンダー）
+├── page.tsx              # 未ログイン → LP / ログイン済み → 学習開始画面
+├── lp/                   # 旧 LP パス（"/" へ 308 リダイレクト）
+├── dashboard/            # 学習カレンダー・科目別集計・志望校サマリー
 ├── explore/              # 大学を探す
 │   ├── page.tsx          # 大学一覧（絞り込み検索）
 │   └── [universityId]/   # 大学詳細（学部一覧・志望校追加）
-├── goals/                # 志望校管理
+├── goals/                # 志望校管理（受験日程タイムライン・対策科目）
 ├── schedule/             # 学習予定カレンダー（FullCalendar）
 ├── profile/              # プロフィール
 ├── blog/ articles/[id]/  # ブログ一覧・記事詳細（microCMS）
 ├── login/ signup/        # 認証ページ
 ├── forgot-password/ reset-password/  # パスワードリセット
+├── manifest.ts           # PWA マニフェスト
+├── icon.png / apple-icon.png / favicon.ico  # アプリアイコン
 ├── api/
 │   ├── auth/[...all]/    # Better Auth ハンドラ
 │   ├── goals/            # 志望校 CRUD
-│   ├── study-plans/      # 学習予定 CRUD
+│   ├── study-plans/      # 学習予定 CRUD（完了操作を含む）
 │   ├── study-logs/       # 学習実績 CRUD
 │   ├── textbooks/        # 参考書 CRUD
 │   ├── textbook-masters/ # 参考書マスター
 │   └── profile/          # プロフィール更新
-├── hooks/useGoals.ts     # 志望校のサーバー状態フック（TanStack Query）
-├── hooks/useStudyPlans.ts  # 学習予定のサーバー状態フック（TanStack Query）
+├── hooks/                # サーバー状態フック（TanStack Query）
 ├── providers.tsx         # QueryClientProvider
-└── components/           # 画面コンポーネント
+└── components/
+    ├── LandingPage.tsx   # 公開 LP 本体
+    ├── landing/          # LP 専用（アニメーション境界・画像）
+    └── ...               # 画面コンポーネント
 
 lib/
 ├── auth.ts / auth-client.ts  # Better Auth（サーバー / クライアント）
+├── demo.ts                   # デモユーザーの編集系ガード
 ├── email.ts / resend.ts      # メール送信（Resend）
 ├── microcms.ts               # microCMS クライアント
 ├── prisma.ts                 # Prisma クライアント
@@ -175,9 +193,14 @@ lib/
 prisma/
 ├── schema.prisma         # データベーススキーマ
 ├── seed.ts               # 初期データ投入（大学マスター + デモユーザー）
-├── seed-demo.ts          # デモユーザーのみ投入する一回きりスクリプト（本番はトンネル経由で実行）
+├── seed-demo.ts          # デモユーザーのみ投入（本番はトンネル経由で実行）
+├── seed-e2e.ts           # E2E 用データ投入
+├── seed-capture.ts       # LP 撮影用ユーザー投入（ローカル DB 専用）
 └── migrations/           # マイグレーション
 
+proxy.ts                  # 認証によるルート保護（公開パスの許可リスト）
+types/next-image.d.ts     # 画像 static import の型（CI では next-env.d.ts が無いため必要）
+e2e/                      # Playwright の E2E テスト
 terraform/                # AWS リソースの IaC（VPC/EC2/RDS/SG/ECR/IAM）
 
 Dockerfile                # マルチステージ（standalone / 非 root / 起動時マイグレーション）
