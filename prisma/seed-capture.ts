@@ -73,36 +73,64 @@ async function main() {
   await prisma.studyPlan.deleteMany({ where: { userId: captureUser.id } });
   await prisma.finalGoal.deleteMany({ where: { userId: captureUser.id } });
 
-  const university = await prisma.university.findUnique({
-    where: { name: "早稲田大学" },
-  });
-  if (!university) {
-    throw new Error(
-      "大学マスターが見つかりません。先に通常のseedを実行してください"
-    );
-  }
-
-  const faculty = await prisma.faculty.findFirst({
-    where: {
-      universityId: university.id,
-      name: "政治経済学部",
-    },
-  });
-  if (!faculty) {
-    throw new Error(
-      "早稲田大学 政治経済学部が見つかりません。先に通常のseedを実行してください"
-    );
-  }
-
-  await prisma.finalGoal.create({
-    data: {
-      userId: captureUser.id,
-      facultyId: faculty.id,
+  // 受験日程は第一志望だけだと1行で寂しいため、LPの撮影用に併願校まで揃える。
+  // 受験日はマスター（Faculty.examDate）が持つので、ここでは大学・学部名だけ指定する。
+  const goalSpecs: {
+    university: string;
+    faculty: string;
+    isFirstChoice: boolean;
+    note: string;
+  }[] = [
+    {
+      university: "早稲田大学",
+      faculty: "政治経済学部",
       isFirstChoice: true,
-      status: "decided",
       note: "第一志望。英語と数学を重点的に取り組む。",
     },
-  });
+    {
+      university: "慶應義塾大学",
+      faculty: "経済学部",
+      isFirstChoice: false,
+      note: "併願校。小論文の対策を別途進める。",
+    },
+    {
+      university: "明治大学",
+      faculty: "政治経済学部",
+      isFirstChoice: false,
+      note: "併願校。英語の配点が高い。",
+    },
+  ];
+
+  for (const spec of goalSpecs) {
+    const university = await prisma.university.findUnique({
+      where: { name: spec.university },
+    });
+    if (!university) {
+      throw new Error(
+        `${spec.university} が見つかりません。先に通常のseedを実行してください`
+      );
+    }
+
+    const faculty = await prisma.faculty.findFirst({
+      where: { universityId: university.id, name: spec.faculty },
+    });
+    if (!faculty) {
+      throw new Error(
+        `${spec.university} ${spec.faculty} が見つかりません。先に通常のseedを実行してください`
+      );
+    }
+
+    await prisma.finalGoal.create({
+      data: {
+        userId: captureUser.id,
+        facultyId: faculty.id,
+        isFirstChoice: spec.isFirstChoice,
+        // decided かつ isFirstChoice=false が「併願校」として表示される。
+        status: "decided",
+        note: spec.note,
+      },
+    });
+  }
 
   // 動画開始時点は今日1時間45分。英語30分を保存すると、LPの訴求値と同じ
   // 「今日2時間15分・英語5時間10分・8日連続」になる。

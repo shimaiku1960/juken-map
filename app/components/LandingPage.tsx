@@ -8,8 +8,6 @@ import {
   Clock3,
   type LucideIcon,
   MapPinned,
-  Play,
-  Target,
   TimerReset,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
@@ -22,8 +20,10 @@ import {
 // 画像は public/ ではなく import で読み込む。ビルド時にファイル名へコンテンツ
 // ハッシュが付くため、中身を差し替えれば URL が変わりキャッシュが自動で外れる。
 // width/height も import した値から自動で決まる。
+import examScheduleImage from "@/app/components/landing/images/exam-schedule.png";
 import studyCalendarImage from "@/app/components/landing/images/study-calendar.png";
 import studyStartDialogImage from "@/app/components/landing/images/study-start-dialog.png";
+import studyStartHeroImage from "@/app/components/landing/images/study-start-hero.png";
 import subjectStudyTimeImage from "@/app/components/landing/images/subject-study-time.png";
 
 const signupClassName = cn(
@@ -57,37 +57,21 @@ const SectionHeading = ({
   </Reveal>
 );
 
-const PhoneMockup = () => (
+// ファーストビューの実画面。スマホ幅で撮った学習開始画面をそのまま見せる。
+// すぐ下の操作動画も同じスマホ枠なので、「実際の操作」を示す表現として揃える。
+const HeroScreenshot = () => (
   <figure className="relative mx-auto w-full max-w-[21rem]">
-    <div className="rounded-[2.5rem] border-[7px] border-foreground/90 bg-background p-2 shadow-[0_32px_80px_-28px_color-mix(in_oklch,var(--primary)_55%,transparent)]">
-    <div className="relative aspect-[9/18.5] overflow-hidden rounded-[1.9rem] bg-gradient-to-b from-primary/8 via-background to-secondary/60 px-5 py-8">
-      <div className="mx-auto h-1.5 w-16 rounded-full bg-foreground/15" />
-      <div className="flex h-full flex-col items-center justify-center text-center">
-        <div className="mb-8 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-          <MapPinned aria-hidden="true" className="size-6" />
-        </div>
-        <p className="text-xs text-muted-foreground">第一志望まで</p>
-        <p className="mt-1 text-sm font-medium">
-          早稲田大学 人間科学部
-          <span className="mx-1 text-lg font-bold">あと198日</span>
-        </p>
-        <p className="mt-12 text-xl font-bold">今日の学習を始めよう</p>
-        <div className="mt-6 flex h-12 items-center gap-2 rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm">
-          <Play aria-hidden="true" className="size-4 fill-current" />
-          学習を始める
-        </div>
-        <p className="mt-5 text-xs font-medium text-primary">
-          今日の予定・記録を見る →
-        </p>
-      </div>
-    </div>
+    <div className="overflow-hidden rounded-[2.5rem] border-[7px] border-foreground/90 bg-foreground shadow-[0_32px_80px_-28px_color-mix(in_oklch,var(--primary)_55%,transparent)]">
+      <Image
+        src={studyStartHeroImage}
+        alt="第一志望の早稲田大学 政治経済学部まであと209日と表示され、「学習を始める」から計測を開始できる実際の画面"
+        sizes="21rem"
+        className="block h-auto w-full"
+      />
     </div>
     <p className="absolute -right-3 top-20 rounded-full border bg-card/95 px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur">
       1タップで開始
     </p>
-    <figcaption className="sr-only">
-      受験マップの学習開始画面イメージ
-    </figcaption>
   </figure>
 );
 
@@ -290,7 +274,7 @@ export default function LandingPage() {
           </HeroReveal>
           <HeroReveal className="relative" delay={0.12}>
             <div className="absolute left-1/2 top-1/2 -z-10 size-[26rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl" />
-            <PhoneMockup />
+            <HeroScreenshot />
           </HeroReveal>
         </div>
       </section>
@@ -428,68 +412,10 @@ export default function LandingPage() {
               今日の勉強が何につながるのかを、見失わずに済みます。
             </p>
           </div>
-          <div className="rounded-xl border bg-card p-5 shadow-[0_24px_60px_-36px_color-mix(in_oklch,var(--primary)_60%,transparent)]">
-            <div className="flex flex-wrap items-center gap-3 border-b pb-5">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Target aria-hidden="true" className="size-5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">志望校までの予定</p>
-                <p className="font-semibold">受験スケジュール</p>
-              </div>
-              <p className="ml-auto whitespace-nowrap text-sm">
-                あと <span className="text-xl font-bold text-primary">198</span> 日
-              </p>
-            </div>
-            <ol className="mt-2 divide-y">
-              {[
-                {
-                  date: "2月9日",
-                  dateTime: "2027-02-09",
-                  school: "早稲田大学 人間科学部",
-                  role: "第一志望",
-                  primary: true,
-                },
-                {
-                  date: "2月12日",
-                  dateTime: "2027-02-12",
-                  school: "併願校 A",
-                  role: "併願",
-                  primary: false,
-                },
-                {
-                  date: "2月16日",
-                  dateTime: "2027-02-16",
-                  school: "併願校 B",
-                  role: "併願",
-                  primary: false,
-                },
-              ].map(({ date, dateTime, school, role, primary }) => (
-                <li
-                  key={school}
-                  className="grid grid-cols-[4.5rem_1fr] items-center gap-4 py-4 sm:grid-cols-[5rem_1fr_auto]"
-                >
-                  <time
-                    dateTime={dateTime}
-                    className="text-sm font-semibold tabular-nums text-foreground"
-                  >
-                    {date}
-                  </time>
-                  <p className="min-w-0 text-sm font-medium">{school}</p>
-                  <span
-                    className={cn(
-                      "col-start-2 w-fit rounded-full px-2.5 py-1 text-xs font-medium sm:col-start-auto",
-                      primary
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground"
-                    )}
-                  >
-                    {role}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </div>
+          <ScreenshotCard
+            src={examScheduleImage}
+            alt="受験日程の一覧。2月11日 明治大学 政治経済学部、2月13日 慶應義塾大学 経済学部、2月20日 早稲田大学 政治経済学部（第一志望）と、それぞれの残り日数が並ぶ実際の画面"
+          />
         </Reveal>
       </section>
 
