@@ -34,6 +34,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       position={isDesktop ? "top-right" : "bottom-right"}
       offset={isDesktop ? { top: "5rem" } : undefined}
       className="toaster group"
+      richColors
       icons={{
         success: (
           <CircleCheckIcon className="size-4" />
@@ -56,6 +57,18 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
+          "--success-bg": "color-mix(in oklch, var(--success) 12%, var(--popover))",
+          "--success-border": "color-mix(in oklch, var(--success) 35%, var(--border))",
+          "--success-text": "color-mix(in oklch, var(--success) 78%, var(--foreground))",
+          "--info-bg": "color-mix(in oklch, var(--info) 10%, var(--popover))",
+          "--info-border": "color-mix(in oklch, var(--info) 32%, var(--border))",
+          "--info-text": "color-mix(in oklch, var(--info) 76%, var(--foreground))",
+          "--warning-bg": "color-mix(in oklch, var(--warning) 13%, var(--popover))",
+          "--warning-border": "color-mix(in oklch, var(--warning) 38%, var(--border))",
+          "--warning-text": "color-mix(in oklch, var(--warning) 50%, var(--foreground))",
+          "--error-bg": "color-mix(in oklch, var(--destructive) 10%, var(--popover))",
+          "--error-border": "color-mix(in oklch, var(--destructive) 32%, var(--border))",
+          "--error-text": "color-mix(in oklch, var(--destructive) 76%, var(--foreground))",
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }
