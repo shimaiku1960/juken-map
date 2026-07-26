@@ -61,6 +61,15 @@ jobs:
             # 今動いているコンテナのイメージを退避（失敗時のロールバック先）
             PREV=$(docker inspect --format '{{.Config.Image}}' juken-map 2>/dev/null || true)
 
+            # pull の前に不要イメージを掃除して空き容量を確保する。
+            # 掃除が pull の後だと、一度ディスクが埋まった時点で pull が失敗し、
+            # 掃除まで到達できなくなる（実際に 2026-07-26 のデプロイがこれで失敗した）。
+            # この時点では旧コンテナがまだ稼働中なので、ロールバック先の $PREV は
+            # 「使用中」として保護される。until フィルタは付けない。1日に何度も
+            # デプロイすると当日分のイメージが対象外になり、掃除が効かないため。
+            docker image prune -a -f
+            df -h / | tail -1
+
             docker pull $REPO:$IMAGE_TAG
             docker stop juken-map || true
             docker rm juken-map || true
@@ -90,4 +99,7 @@ jobs:
               exit 1
             fi
             echo "smoke test passed"
-            docker image prune -a -f --filter "until=24h"
+
+            # 入れ替えで未使用になった旧イメージをここでも回収する。
+            # ロールバックは上の分岐で完了済みなので $PREV を残す必要はない。
+            docker image prune -a -f
