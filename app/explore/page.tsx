@@ -40,7 +40,7 @@ const ExplorePage = async () => {
 
   return (
     <PageShell>
-      <PageHeader title="大学を探す" description="地域や設置区分、学部系統から志望校候補を絞り込めます。" />
+      <PageHeader title="大学を探す" description="地域や国公立・私立、学部系統から志望校候補を絞り込めます。" />
       <UniversitySearch universities={universities} />
     </PageShell>
   );

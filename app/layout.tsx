@@ -18,7 +18,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "受験マップ",
-  description: "受験校の受験日程を管理する受験生向けサービス",
+  description:
+    "学習の開始から時間記録、予定と実績の確認、科目別の振り返りまでをひとつにつなぐ、大学受験生向け学習管理アプリです。",
   robots: { index: false, follow: false },
 };
 

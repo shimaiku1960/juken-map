@@ -240,8 +240,8 @@ function TextbookNavigationItem({
           {navigation.status === "expired" && (
             <p className="mt-1 font-bold text-destructive">
               {textbook.targetDate == null
-                ? "受験日を迎えています"
-                : "完了目標日を迎えています"}
+                ? "受験日を過ぎています"
+                : "完了目標日を過ぎています"}
             </p>
           )}
           <p className="mt-1 text-sm text-muted-foreground">

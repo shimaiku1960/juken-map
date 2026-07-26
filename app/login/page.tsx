@@ -112,10 +112,10 @@ export default function LoginPage() {
         id="demo-login"
         className="mt-6 scroll-mt-24 rounded-xl border border-dashed border-primary/35 bg-primary/5 p-4"
       >
-        <p className="font-medium">登録せずに試す</p>
+        <p className="font-medium">登録せずにデモを見る</p>
         <p className="mt-1 text-sm text-muted-foreground">志望校や学習予定が入ったデモ用アカウントを体験できます。</p>
         <Button className="mt-4 w-full" variant="secondary" onClick={handleDemoSignIn} disabled={authLoading}>
-          {demoLoading ? "ログイン中…" : "デモで試す"}
+          {demoLoading ? "ログイン中…" : "デモを見る"}
         </Button>
       </div>
     </PageShell>

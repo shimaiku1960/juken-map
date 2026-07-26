@@ -205,7 +205,7 @@ export default function StudyPlanEditDialog({
               {selectedTextbook ? (
                 <>
                   <div>
-                    <Label className="mb-2 block">どこまでやる？（任意）</Label>
+                    <Label className="mb-2 block">学習範囲（任意）</Label>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label htmlFor="edit-plan-range-start" className="text-xs text-muted-foreground">開始</Label>
@@ -259,7 +259,7 @@ export default function StudyPlanEditDialog({
           ) : (
             <>
               <div>
-                <Label htmlFor="edit-plan-content">何を勉強する？</Label>
+                <Label htmlFor="edit-plan-content">学習内容</Label>
                 <Input id="edit-plan-content" className="mt-2" value={content} onChange={(event) => setContent(event.target.value)} maxLength={500} />
               </div>
               <div>

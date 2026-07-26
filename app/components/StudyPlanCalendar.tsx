@@ -354,12 +354,12 @@ export default function StudyPlanCalendar({
                   }
                   aria-label={
                     plan.studyLogId != null
-                      ? "実績記録済みのため完了解除できません"
+                      ? "学習実績が記録されているため、完了を取り消せません"
                       : "予定のみ完了（学習時間は記録されません）"
                   }
                   title={
                     plan.studyLogId != null
-                      ? "実績記録済みのため完了解除できません"
+                      ? "学習実績が記録されているため、完了を取り消せません"
                       : "予定のみ完了（学習時間は記録されません）"
                   }
                 />
@@ -431,12 +431,12 @@ export default function StudyPlanCalendar({
                     }
                     aria-label={
                       plan.studyLogId != null
-                        ? "実績記録済みのため完了解除できません"
+                        ? "学習実績が記録されているため、完了を取り消せません"
                         : "予定のみ完了（学習時間は記録されません）"
                     }
                     title={
                       plan.studyLogId != null
-                        ? "実績記録済みのため完了解除できません"
+                        ? "学習実績が記録されているため、完了を取り消せません"
                         : "予定のみ完了（学習時間は記録されません）"
                     }
                   />
