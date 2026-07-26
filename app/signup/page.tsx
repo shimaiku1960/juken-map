@@ -5,6 +5,7 @@ import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
@@ -54,11 +55,11 @@ export default function SignUpPage() {
       <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void handleSignUp(); }}>
         <div className="space-y-2">
           <Label htmlFor="signup-email">メールアドレス</Label>
-          <Input id="signup-email" name="email" type="email" autoComplete="email" placeholder="name@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input id="signup-email" name="email" type="email" autoComplete="email" placeholder="name@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="signup-password">パスワード</Label>
-          <Input id="signup-password" name="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput id="signup-password" name="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <Button type="submit" size="lg" className="h-11 w-full" disabled={authLoading}>
           {loading ? "登録中…" : "新規登録"}
