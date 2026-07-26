@@ -265,11 +265,11 @@ export default function LandingPage() {
             <h1 className="mt-6 text-4xl font-bold leading-[1.15] tracking-[-0.035em] text-balance sm:text-5xl lg:text-[4rem]">
               今日の勉強を、
               <br />
-              <span className="text-primary">合格までの積み上がりに。</span>
+              <span className="text-primary">合格までの積み重ねに。</span>
             </h1>
             <p className="mx-auto mt-7 max-w-xl text-base leading-8 text-muted-foreground sm:text-lg lg:mx-0">
               学習を始めるときにタイマーを押すだけ。
-              勉強時間や予定、毎日の積み上がりをひとつのカレンダーで振り返れます。
+              勉強時間や予定、毎日の積み重ねをひとつのカレンダーで振り返れます。
             </p>
             <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center lg:justify-start">
               <Link href="/signup" className={signupClassName}>
@@ -287,7 +287,7 @@ export default function LandingPage() {
               </Link>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              無料で登録・すぐに始められます
+              登録は無料。すぐに始められます
             </p>
           </HeroReveal>
           <HeroReveal className="relative" delay={0.12}>
@@ -301,12 +301,12 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl">
           <SectionHeading
             eyebrow="こんな悩みはありませんか？"
-            title="勉強したはずなのに、積み上がりが見えない。"
+            title="勉強したはずなのに、積み重ねが見えない。"
           />
           <div className="mt-12 grid gap-4 md:grid-cols-3">
             {[
               "勉強時間を後から思い出して記録するのが面倒",
-              "予定を立てても、実績との違いが分からない",
+              "予定を立てても、そのとおりにできたか分からない",
               "最近どの科目に時間を使ったか把握できない",
             ].map((problem, index) => (
               <Reveal key={problem} delay={index * 0.08}>
@@ -321,7 +321,7 @@ export default function LandingPage() {
           </div>
           <Reveal delay={0.12}>
             <p className="mt-12 text-center text-lg font-semibold">
-              受験マップは、勉強を始める瞬間から記録をつなげます。
+              受験マップは、勉強を始めた瞬間から記録に残ります。
             </p>
           </Reveal>
         </div>
@@ -424,11 +424,11 @@ export default function LandingPage() {
                 <BarChart3 aria-hidden="true" className="size-5" />
               </div>
               <h3 className="mt-5 text-2xl font-bold">
-                科目ごとの積み上がりが分かる
+                科目ごとの積み重ねが見える
               </h3>
               <p className="mt-4 leading-7 text-muted-foreground">
-                学習時間、継続日数、科目ごとの配分を振り返り、
-                次に取り組むことを考えられます。
+                学習時間、継続日数、科目ごとの配分を振り返って、
+                次に何をやるかを決められます。
               </p>
             </div>
             <SubjectMockup />
@@ -449,7 +449,7 @@ export default function LandingPage() {
             </h2>
             <p className="mt-5 leading-8 text-muted-foreground">
               第一志望までの残り日数や受験日程を確認できます。
-              今日の勉強が何のためなのかを忘れずに、日々の学習を積み重ねられます。
+              今日の勉強が何につながるのかを、見失わずに済みます。
             </p>
           </div>
           <div className="rounded-xl border bg-card p-5 shadow-[0_24px_60px_-36px_color-mix(in_oklch,var(--primary)_60%,transparent)]">
@@ -525,7 +525,7 @@ export default function LandingPage() {
           />
           <ol className="mt-12 grid gap-5 md:grid-cols-3">
             {[
-              ["01", "無料で登録", "メールアドレスなどでアカウントを作成します。"],
+              ["01", "無料で登録", "メールアドレスか、Google・GitHubのアカウントで登録できます。"],
               ["02", "学習内容を選ぶ", "今日の予定や、これから勉強する内容を選びます。"],
               ["03", "タイマーを開始", "終了後は、学習時間がそのまま実績に残ります。"],
             ].map(([number, title, description], index) => (
@@ -558,7 +558,7 @@ export default function LandingPage() {
             今日の勉強を、記録に残そう。
           </h2>
           <p className="mx-auto mt-5 max-w-2xl leading-7 text-primary-foreground/80">
-            学習を始めるところから、毎日の積み上がりを振り返るところまで。
+            学習を始めるところから、毎日の積み重ねを振り返るところまで。
             受験マップで、今日から記録を始められます。
           </p>
           <div className="mt-8">
@@ -581,7 +581,7 @@ export default function LandingPage() {
             >
               サンプルデータ入りのデモ
             </Link>
-            をご利用いただけます。
+            をご覧ください。
           </p>
           </div>
         </Reveal>
@@ -598,7 +598,7 @@ export default function LandingPage() {
                 <span className="text-lg">受験マップ</span>
               </div>
               <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                今日の勉強を、合格までの積み上がりに。
+                今日の勉強を、合格までの積み重ねに。
                 大学受験生のための学習時間管理アプリです。
               </p>
             </div>

@@ -42,7 +42,7 @@ const ProfileEdit = ({
     });
 
     if (res.ok) {
-      toast.success("更新しました！");
+      toast.success("更新しました");
       setIsEditing(false);
       router.refresh();
     } else {
@@ -96,7 +96,7 @@ const ProfileEdit = ({
           )}
         />
         <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "保存中..." : "保存"}
+          {form.formState.isSubmitting ? "保存中…" : "保存"}
         </Button>
         <Button
           type="button"

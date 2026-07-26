@@ -338,7 +338,7 @@ export default function StudyPlanCreateDialog({
               {selectedTextbook ? (
                 <>
                   <div>
-                    <Label className="mb-2 block">どこまでやる？（任意）</Label>
+                    <Label className="mb-2 block">学習範囲（任意）</Label>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label htmlFor="plan-range-start" className="text-xs text-muted-foreground">開始</Label>
@@ -363,7 +363,7 @@ export default function StudyPlanCreateDialog({
           {view === "free" ? (
             <div className="space-y-5">
               <div>
-                <Label htmlFor="plan-free-content">何を勉強する？</Label>
+                <Label htmlFor="plan-free-content">学習内容</Label>
                 <Input id="plan-free-content" autoFocus className="mt-2" value={freeContent} onChange={(event) => setFreeContent(event.target.value)} placeholder="例：英文法の復習" maxLength={500} />
               </div>
               <div>

@@ -372,7 +372,7 @@ export default function StudyHeatmap({
                     </div>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {log.textbook?.name || log.memo?.trim() || "教材・内容の記録なし"}
+                    {log.textbook?.name || log.memo?.trim() || "教材・内容は未記録"}
                   </p>
                   {range ? (
                     <p className="mt-1 text-xs text-muted-foreground">学習範囲：{range}</p>

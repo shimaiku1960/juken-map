@@ -21,10 +21,10 @@ export async function fillMinutes(page: Page, value: string) {
   }).toPass({ timeout: 15_000 });
 }
 
-// 「デモで試す」ボタンでログインし、学習開始画面の表示まで待つ
+// 「デモを見る」ボタンでログインし、学習開始画面の表示まで待つ
 export async function loginAsDemo(page: Page) {
   await page.goto("/login");
-  await page.getByRole("button", { name: "デモで試す" }).click();
+  await page.getByRole("button", { name: "デモを見る" }).click();
   await expect(
     page.getByRole("heading", { name: "今日の学習を始めよう" })
   ).toBeVisible();

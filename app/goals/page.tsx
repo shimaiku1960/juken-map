@@ -66,14 +66,14 @@ const GoalsPage = async () => {
     <PageShell>
       <PageHeader
         title="志望校"
-        description="第一志望と併願校を俯瞰して、受験する大学・学部を決めましょう。"
+        description="第一志望と併願校を並べて見ながら、受験する大学・学部を決めましょう。"
         action={goals.length > 0 ? <Button asChild><Link href="/explore">大学を探す</Link></Button> : undefined}
       />
 
       {goals.length === 0 ? (
         <EmptyState
           icon={Target}
-          title="志望校を登録して受験計画を始めよう"
+          title="志望校を登録して、受験の計画を立てよう"
           description="大学・学部を登録すると、試験日や併願校、必要な対策をまとめて整理できます。"
           action={<Button asChild size="lg" className="h-11"><Link href="/explore">大学を探す</Link></Button>}
         />

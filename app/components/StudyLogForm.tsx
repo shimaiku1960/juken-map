@@ -424,7 +424,7 @@ export default function StudyLogForm({
             }
             disabled={createLog.isPending}
           >
-            {createLog.isPending ? "記録中..." : "記録する"}
+            {createLog.isPending ? "記録中…" : "記録する"}
           </Button>
         </div>
       </form>
