@@ -212,4 +212,12 @@
   body:has([data-mobile-bottom-nav]) {
     padding-bottom: calc(4rem + env(safe-area-inset-bottom));
   }
+
+  /* トーストがボトムナビに重なって読みにくいので、ナビのぶんだけ持ち上げる。
+     sonner はオフセットをインラインstyleで当てるため !important が要る。また
+     sonner 自身の mobileOffset は 600px 以下でしか効かず、ボトムナビが出る
+     600〜768px を取りこぼすので、プロップではなくここで一括して指定する。 */
+  body:has([data-mobile-bottom-nav]) [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: calc(4rem + env(safe-area-inset-bottom) + 0.75rem) !important;
+  }
 }
