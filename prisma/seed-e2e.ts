@@ -13,7 +13,8 @@ const prisma = new PrismaClient({
 async function main() {
   const user = await prisma.user.upsert({
     where: { email: E2E_EMAIL },
-    update: {},
+    // メール確認必須化後も E2E ログインが通るよう、既存行にも確認済みを保証する
+    update: { emailVerified: true },
     create: {
       email: E2E_EMAIL,
       name: "E2Eユーザー",

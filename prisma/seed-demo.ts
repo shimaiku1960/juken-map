@@ -18,7 +18,7 @@ async function main() {
   // 1. デモユーザー本体（面接官がワンクリックで体験する共有アカウント）
   const demoUser = await prisma.user.upsert({
     where: { email: DEMO_EMAIL },
-    update: {},
+    update: { emailVerified: true },
     create: {
       email: DEMO_EMAIL,
       name: "デモユーザー",
