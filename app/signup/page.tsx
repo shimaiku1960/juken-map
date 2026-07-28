@@ -27,14 +27,16 @@ export default function SignUpPage() {
       email,
       password,
       name: email,
+      callbackURL: "/dashboard",
     });
     if (error) {
       setErrorMessage(error.message ?? "登録に失敗しました");
       setLoading(false);
       return;
     }
-    toast.success("登録しました");
-    window.location.href = "/";
+    sessionStorage.setItem("pendingVerificationEmail", email);
+    toast.success("確認メールを送信しました");
+    window.location.href = "/verify-email";
   };
 
   // OAuth はサインイン＝サインアップ兼用。アカウントが無ければここで作成される。

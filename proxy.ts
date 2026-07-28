@@ -12,6 +12,7 @@ export const proxy = async (request: NextRequest) => {
     "/lp",
     "/login",
     "/signup",
+    "/verify-email",
     "/forgot-password",
     "/reset-password",
     "/blog",

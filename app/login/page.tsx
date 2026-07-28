@@ -17,8 +17,11 @@ export default function LoginPage() {
   const [demoLoading, setDemoLoading] = useState(false);
   const [signInLoading, setSignInLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const authLoading = demoLoading || signInLoading || socialLoading;
+  const authLoading =
+    demoLoading || signInLoading || socialLoading || resendLoading;
 
   const handleSocialSignIn = async (provider: "google" | "github") => {
     setSocialLoading(true);
@@ -33,16 +36,42 @@ export default function LoginPage() {
   const handleSignIn = async () => {
     setSignInLoading(true);
     setErrorMessage(null);
+    setNeedsVerification(false);
     const { error } = await authClient.signIn.email({
       email,
       password,
     });
     if (error) {
-      setErrorMessage(error.message ?? "ログインに失敗しました");
+      if (error.code === "EMAIL_NOT_VERIFIED") {
+        setNeedsVerification(true);
+        setErrorMessage(
+          "メールアドレスの確認が完了していません。確認メールをご確認ください。"
+        );
+      } else {
+        setErrorMessage(error.message ?? "ログインに失敗しました");
+      }
       setSignInLoading(false);
       return;
     }
     window.location.href = "/";
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    setErrorMessage(null);
+    const { error } = await authClient.sendVerificationEmail({
+      email,
+      callbackURL: "/dashboard",
+    });
+    if (error) {
+      setErrorMessage(error.message ?? "確認メールの再送に失敗しました");
+      setResendLoading(false);
+      return;
+    }
+    setErrorMessage(null);
+    setNeedsVerification(false);
+    sessionStorage.setItem("pendingVerificationEmail", email);
+    window.location.href = "/verify-email";
   };
 
   // 面接官などがアカウント登録なしで中身を体験できる共有デモアカウント
@@ -65,7 +94,23 @@ export default function LoginPage() {
     <PageShell className="max-w-md">
       <PageHeader title="ログイン" description="アカウント情報を入力してください。" />
 
-      {errorMessage ? <InlineFeedback variant="error" className="mb-4">{errorMessage}</InlineFeedback> : null}
+      {errorMessage ? (
+        <InlineFeedback variant="error" className="mb-4">
+          <p>{errorMessage}</p>
+          {needsVerification ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              disabled={authLoading}
+              onClick={() => void handleResendVerification()}
+            >
+              {resendLoading ? "再送中…" : "確認メールを再送"}
+            </Button>
+          ) : null}
+        </InlineFeedback>
+      ) : null}
 
       <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void handleSignIn(); }}>
         <div className="space-y-2">
