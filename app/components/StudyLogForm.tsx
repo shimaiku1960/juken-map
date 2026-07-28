@@ -52,6 +52,12 @@ const emptyValues = (initialDate = todayYmdTokyo()) => ({
   memo: "",
 });
 
+const previousYmd = (date: string) => {
+  const previousDate = new Date(`${date}T00:00:00Z`);
+  previousDate.setUTCDate(previousDate.getUTCDate() - 1);
+  return previousDate.toISOString().slice(0, 10);
+};
+
 export default function StudyLogForm({
   variant = "full",
   initialDate,
@@ -93,6 +99,8 @@ export default function StudyLogForm({
     (textbook) => textbook.id === selectedTextbookId
   );
   const isPlanLinked = initialLog?.studyPlanId != null;
+  const today = todayYmdTokyo();
+  const yesterday = previousYmd(today);
 
   // 逆算設定済みの参考書を選んで単位を変えたら、その参考書の「追跡単位」を切り替える。
   // マスタ参考書ならその単位の総量も自動反映。1参考書=1単位で逆算の一貫性を保つ。
@@ -233,6 +241,54 @@ export default function StudyLogForm({
                 </FormItem>
               )}
             />
+            {variant === "quick" &&
+              initialDate == null &&
+              initialLog == null && (
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem className="w-full">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <FormLabel>日付</FormLabel>
+                        <div
+                          className="flex gap-2"
+                          aria-label="記録する日を選択"
+                        >
+                          {[
+                            { label: "今日", value: today },
+                            { label: "昨日", value: yesterday },
+                          ].map((option) => {
+                            const selected = field.value === option.value;
+                            return (
+                              <Button
+                                key={option.value}
+                                type="button"
+                                variant={selected ? "secondary" : "outline"}
+                                size="sm"
+                                className="h-11"
+                                aria-pressed={selected}
+                                onClick={() => field.onChange(option.value)}
+                              >
+                                {option.label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          max={today}
+                          className="h-11 w-full text-base"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             <FormField
               control={form.control}
               name="subject"
@@ -282,9 +338,7 @@ export default function StudyLogForm({
               <summary className="cursor-pointer text-sm font-medium">
                 {initialLog
                   ? "日付・教材・メモを編集"
-                  : initialDate
-                    ? "教材・メモを追加"
-                    : "日付・教材・メモを追加"}
+                  : "教材・メモを追加"}
               </summary>
             )}
             <div
@@ -292,7 +346,7 @@ export default function StudyLogForm({
                 variant === "quick" ? "mt-4 space-y-4" : "space-y-3"
               }
             >
-              {variant === "quick" && (initialDate == null || initialLog) && (
+              {variant === "quick" && initialLog != null && (
                 <FormField
                   control={form.control}
                   name="date"
