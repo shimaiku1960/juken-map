@@ -83,7 +83,7 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
       <nav aria-label="公開ページ" className="flex items-center gap-2">
         <Link
           href="/blog"
-          className="hidden rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
+          className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors max-sm:hidden hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
         >
           ブログ
         </Link>
@@ -108,7 +108,10 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
 
   return (
     <>
-      <nav aria-label="メインナビゲーション" className="hidden items-center gap-1 md:flex">
+      <nav
+        aria-label="メインナビゲーション"
+        className="items-center gap-1 max-md:hidden md:flex"
+      >
         {primaryLinks.map(({ href, label, ...link }) => {
           const active = isActivePath(pathname, "activeHref" in link ? link.activeHref : href);
           return (
@@ -148,13 +151,13 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
           <span className="flex size-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
             {initialsFor(user)}
           </span>
-          <span className="hidden max-w-28 truncate text-sm font-medium lg:block">
+          <span className="max-w-28 truncate text-sm font-medium max-lg:hidden lg:block">
             {user.name}
           </span>
           <ChevronDown
             aria-hidden="true"
             className={cn(
-              "hidden size-4 text-muted-foreground transition-transform sm:block",
+              "size-4 text-muted-foreground transition-transform max-sm:hidden sm:block",
               menuOpen && "rotate-180"
             )}
           />
