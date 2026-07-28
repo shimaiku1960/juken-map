@@ -475,16 +475,17 @@ export default function StudySessionManager({
             )}
           </div>
 
-          <DialogFooter className="gap-2 sm:justify-between">
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
             <Button
               type="button"
               variant="ghost"
+              className="h-11 w-full sm:w-auto"
               onClick={() => {
                 setPickerOpen(false);
                 setManualLogOpen(true);
               }}
             >
-              過去の実績を手入力
+              あとから記録
             </Button>
             <Button type="button" className="h-11" onClick={beginSession}>
               <Play aria-hidden="true" />
