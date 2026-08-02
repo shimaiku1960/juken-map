@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
+import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ExamCountdown, { type CountdownGoal } from "@/app/components/ExamCountdown";
@@ -13,6 +15,9 @@ import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
+
+// ログイン必須のページなので検索結果には載せない。
+export const metadata: Metadata = { robots: NOINDEX };
 
 const DashboardPage = async () => {
   const session = await auth.api.getSession({ headers: await headers() });

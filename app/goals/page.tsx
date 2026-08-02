@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import GoalList from "@/app/components/GoalList";
@@ -18,6 +20,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 
 // 志望校ページ＝「受験戦略を俯瞰し、受験校を決める」場所。
 // 以前はプロフィール下部に埋もれていた GoalList をここへ独立させた。
+// ログイン必須のページなので検索結果には載せない。
+export const metadata: Metadata = { robots: NOINDEX };
+
 const GoalsPage = async () => {
   const session = await auth.api.getSession({
     headers: await headers(),

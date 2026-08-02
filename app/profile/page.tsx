@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { NOINDEX } from "@/lib/site";
 import Link from "next/link";
 import ProfileEdit from "@/app/components/ProfileEdit";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +11,9 @@ import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
+
+// ログイン必須のページなので検索結果には載せない。
+export const metadata: Metadata = { robots: NOINDEX };
 
 const ProfilePage = async () => {
     const session = await auth.api.getSession({

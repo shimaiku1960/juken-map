@@ -1,10 +1,15 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
 import UniversitySearch from "@/app/components/UniversitySearch";
 import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
+
+// ログイン必須のページなので検索結果には載せない。
+export const metadata: Metadata = { robots: NOINDEX };
 
 const ExplorePage = async () => {
   const session = await auth.api.getSession({

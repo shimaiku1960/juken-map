@@ -43,8 +43,11 @@ export const proxy = async (request: NextRequest) => {
   return NextResponse.next();
 };
 
+// robots.txt / sitemap.xml / opengraph-image は、未ログインのクローラーや SNS の
+// カード取得ボットが読むファイル。ここで除外しないと proxy が /login へ 307 で
+// 飛ばしてしまい、検索エンジンに sitemap が届かず OGP 画像も表示されない。
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|robots.txt|sitemap.xml|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4)$).*)",
   ],
 };
