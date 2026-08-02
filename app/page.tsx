@@ -12,9 +12,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 // トップは未ログイン訪問者（Googlebot 含む）には LP を返す検索流入の入口。
-// メタデータ（title/description/OGP）は用意しておくが、公開の準備が整うまでは
-// ルートレイアウトの noindex を継承する。検索に載せたくなったら
-// `robots: { index: true, follow: true }` を追記すればインデックス可になる。
+// ログイン後ページと認証ページは各ルート側で個別に noindex を指定する。
 export const metadata: Metadata = {
   title: "今日の勉強を、合格までの積み重ねに。｜受験マップ",
   description:
