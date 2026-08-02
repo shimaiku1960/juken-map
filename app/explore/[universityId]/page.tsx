@@ -1,10 +1,15 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { NOINDEX } from "@/lib/site";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import FacultyList from "@/app/components/FacultyList";
 import { DEMO_EMAIL } from "@/lib/demo";
+
+// ログイン必須のページなので検索結果には載せない。
+export const metadata: Metadata = { robots: NOINDEX };
 
 const UniversityDetailPage = async ({
   params,
