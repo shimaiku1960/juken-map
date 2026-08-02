@@ -43,63 +43,66 @@ jobs:
       cancel-in-progress: false
     env:
       IMAGE_TAG: ${{ github.sha }}
+      INSTANCE_ID: i-0eeb166295363e11d
     steps:
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          envs: IMAGE_TAG
-          script: |
-            set -e
-            REPO=961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map
-            ENV_FILE=/home/ubuntu/juken-map/.env
+          role-to-assume: arn:aws:iam::961457613174:role/github-actions-juken-map-ecr
+          aws-region: ap-northeast-1
 
-            aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com
+      - name: Deploy to EC2 via SSM Run Command
+        shell: bash
+        run: |
+          set -euo pipefail
 
-            # 今動いているコンテナのイメージを退避（失敗時のロールバック先）
-            PREV=$(docker inspect --format '{{.Config.Image}}' juken-map 2>/dev/null || true)
+          deploy_script_b64="$(base64 < .github/scripts/deploy-ec2.sh | tr -d '\n')"
+          remote_command="echo '$deploy_script_b64' | base64 -d | bash -s -- '$IMAGE_TAG'"
+          parameters="$(jq -cn --arg command "$remote_command" '{commands: [$command]}')"
 
-            # pull の前に不要イメージを掃除して空き容量を確保する。
-            # 掃除が pull の後だと、一度ディスクが埋まった時点で pull が失敗し、
-            # 掃除まで到達できなくなる（実際に 2026-07-26 のデプロイがこれで失敗した）。
-            # この時点では旧コンテナがまだ稼働中なので、ロールバック先の $PREV は
-            # 「使用中」として保護される。until フィルタは付けない。1日に何度も
-            # デプロイすると当日分のイメージが対象外になり、掃除が効かないため。
-            docker image prune -a -f
-            df -h / | tail -1
+          command_id="$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$parameters" \
+            --timeout-seconds 900 \
+            --comment "Deploy juken-map ${GITHUB_SHA}" \
+            --query 'Command.CommandId' \
+            --output text)"
 
-            docker pull $REPO:$IMAGE_TAG
-            docker stop juken-map || true
-            docker rm juken-map || true
-            docker run -d \
-              --name juken-map \
-              --restart always \
-              --env-file $ENV_FILE \
-              -p 3000:3000 \
-              $REPO:$IMAGE_TAG
+          echo "SSM command: $command_id"
 
-            # スモークテスト: /login が 200 を返すまで最大45秒待つ
-            ok=false
-            for i in $(seq 1 15); do
-              code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/login || true)
-              if [ "$code" = "200" ]; then ok=true; break; fi
-              sleep 3
-            done
+          # Run Commandは結果反映が即時でないため、終端状態までポーリングする。
+          for _ in $(seq 1 180); do
+            status="$(aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$INSTANCE_ID" \
+              --query 'Status' \
+              --output text 2>/dev/null || true)"
 
-            # 失敗なら前のイメージへロールバックし、デプロイを失敗(赤)にする
-            if [ "$ok" != "true" ]; then
-              echo "smoke test failed (last code: $code) -> rollback to $PREV"
-              docker stop juken-map || true
-              docker rm juken-map || true
-              if [ -n "$PREV" ]; then
-                docker run -d --name juken-map --restart always --env-file $ENV_FILE -p 3000:3000 "$PREV"
-              fi
-              exit 1
-            fi
-            echo "smoke test passed"
+            case "$status" in
+              Success|Cancelled|TimedOut|Failed|Cancelling)
+                break
+                ;;
+            esac
 
-            # 入れ替えで未使用になった旧イメージをここでも回収する。
-            # ロールバックは上の分岐で完了済みなので $PREV を残す必要はない。
-            docker image prune -a -f
+            sleep 5
+          done
+
+          result="$(aws ssm get-command-invocation \
+            --command-id "$command_id" \
+            --instance-id "$INSTANCE_ID" \
+            --output json)"
+
+          echo "$result" | jq -r '.StandardOutputContent'
+          echo "$result" | jq -r '.StandardErrorContent' >&2
+
+          status="$(echo "$result" | jq -r '.Status')"
+          response_code="$(echo "$result" | jq -r '.ResponseCode')"
+
+          if [ "$status" != "Success" ] || [ "$response_code" -ne 0 ]; then
+            echo "SSM deployment failed: status=$status response_code=$response_code" >&2
+            exit 1
+          fi
