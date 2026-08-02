@@ -13,8 +13,8 @@ resource "aws_db_instance" "db" {
   vpc_security_group_ids = [aws_security_group.default.id]
 
   # 破棄時にスナップショットを取らない設定（planには影響しない/destroy時の挙動）
-  skip_final_snapshot = true
-  storage_encrypted = true
+  skip_final_snapshot   = true
+  storage_encrypted     = true
   copy_tags_to_snapshot = true
   max_allocated_storage = 1000
 

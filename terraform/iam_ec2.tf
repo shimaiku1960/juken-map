@@ -27,3 +27,9 @@ resource "aws_iam_instance_profile" "ec2_ecr" {
   name = "juken-map-ec2-ecr"
   role = aws_iam_role.ec2_ecr.name
 }
+
+# EC2をSystems Manager Session Managerから操作するための権限
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2_ecr.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
