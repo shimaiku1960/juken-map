@@ -523,7 +523,15 @@ export default function LandingPage() {
               },
               {
                 heading: "もっと知る",
-                links: [{ href: "/blog", label: "ブログ" }],
+                links: [
+                  { href: "/blog", label: "ブログ" },
+                  { href: "/terms", label: "利用規約" },
+                  { href: "/privacy", label: "プライバシーポリシー" },
+                  {
+                    href: "mailto:waseda.no.takahashi@gmail.com",
+                    label: "お問い合わせ",
+                  },
+                ],
               },
             ].map((column) => (
               <nav key={column.heading} aria-label={column.heading}>
