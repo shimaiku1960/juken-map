@@ -92,6 +92,17 @@ export default function SignUpPage() {
       >
         GitHubで登録
       </Button>
+      <p className="mt-4 text-center text-xs leading-5 text-muted-foreground">
+        いずれかの方法で登録すると、
+        <Link href="/terms" className="text-primary hover:underline">
+          利用規約
+        </Link>
+        と
+        <Link href="/privacy" className="text-primary hover:underline">
+          プライバシーポリシー
+        </Link>
+        に同意したものとします。
+      </p>
     </PageShell>
   );
 }
