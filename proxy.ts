@@ -16,6 +16,8 @@ export const proxy = async (request: NextRequest) => {
     "/forgot-password",
     "/reset-password",
     "/blog",
+    "/terms",
+    "/privacy",
   ];
   // 動的ルート（/articles/xxx）は前方一致で公開判定
   const publicPrefixes = ["/articles"];
