@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { cache } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +41,7 @@ export const generateMetadata = async ({
   const blog = await getBlog(id);
   const description = createDescription(blog);
   const url = `${SITE_URL}/articles/${id}`;
+  const images = blog.eyecatch ? [blog.eyecatch.url] : undefined;
 
   return {
     title: `${blog.title}｜受験マップ`,
@@ -50,6 +52,7 @@ export const generateMetadata = async ({
       description,
       type: "article",
       url,
+      images,
       publishedTime: blog.createdAt,
       modifiedTime: blog.updatedAt,
     },
@@ -57,6 +60,7 @@ export const generateMetadata = async ({
       card: "summary_large_image",
       title: blog.title,
       description,
+      images,
     },
   };
 };
@@ -73,6 +77,16 @@ const ArticlePage = async ({ params }: ArticlePageProps) => {
           <time className="text-sm text-muted-foreground">
             {new Date(blog.createdAt).toLocaleDateString("ja-JP")}
           </time>
+          {blog.eyecatch && (
+            <Image
+              src={blog.eyecatch.url}
+              alt=""
+              width={blog.eyecatch.width ?? 1200}
+              height={blog.eyecatch.height ?? 630}
+              sizes="(max-width: 768px) calc(100vw - 4rem), 704px"
+              className="h-auto w-full rounded-lg"
+            />
+          )}
           <div
             className="prose"
             dangerouslySetInnerHTML={{ __html: blog.content }}
