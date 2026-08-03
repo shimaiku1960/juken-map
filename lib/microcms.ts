@@ -1,14 +1,15 @@
-import { createClient } from "microcms-js-sdk";                                                                                                            
-                                                                                                                                                             
-export const client = createClient({                                                                                                                       
+import { createClient } from "microcms-js-sdk";
+
+export const client = createClient({
   serviceDomain: process.env.MICROCMS_SERVICE_DOMAIN!,
-  apiKey: process.env.MICROCMS_API_KEY!,                                                                                                                   
+  apiKey: process.env.MICROCMS_API_KEY!,
 });
-                                                                                                                                                           
-export type Blog = {                                                                                                                                     
-  id: string;                                                                                                                                            
+
+export type Blog = {
+  id: string;
   title: string;
+  description?: string;
   content: string;
   createdAt: string;
-  updatedAt: string;                                                                                                                                       
+  updatedAt: string;
 };

@@ -1,28 +1,85 @@
-import { client, type Blog } from "@/lib/microcms";     
-import { Card, CardContent } from "@/components/ui/card";                                                                                                   
-                                                                                                                                                             
-const ArticlePage = async ({ params }: { params: Promise<{ id: string }> }) => {                                                                           
-  const { id } = await params;
-  const blog = await client.get<Blog>({                                                                                                                    
+import type { Metadata } from "next";
+import { cache } from "react";
+
+import { Card, CardContent } from "@/components/ui/card";
+import { client, type Blog } from "@/lib/microcms";
+import { SITE_URL } from "@/lib/site";
+
+type ArticlePageProps = {
+  params: Promise<{ id: string }>;
+};
+
+const getBlog = cache((id: string) =>
+  client.get<Blog>({
     endpoint: "blogs",
-    contentId: id,                                                                                                                                         
-  });                                                                                                                                                    
+    contentId: id,
+  })
+);
+
+const createDescription = (blog: Blog) => {
+  if (blog.description?.trim()) return blog.description.trim();
+
+  const plainText = blog.content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return plainText.slice(0, 120);
+};
+
+export const generateMetadata = async ({
+  params,
+}: ArticlePageProps): Promise<Metadata> => {
+  const { id } = await params;
+  const blog = await getBlog(id);
+  const description = createDescription(blog);
+  const url = `${SITE_URL}/articles/${id}`;
+
+  return {
+    title: `${blog.title}｜受験マップ`,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title: blog.title,
+      description,
+      type: "article",
+      url,
+      publishedTime: blog.createdAt,
+      modifiedTime: blog.updatedAt,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: blog.title,
+      description,
+    },
+  };
+};
+
+const ArticlePage = async ({ params }: ArticlePageProps) => {
+  const { id } = await params;
+  const blog = await getBlog(id);
 
   return (
-    <main className="w-full mx-auto max-w-3xl p-8">
-    <Card>
-      <CardContent className="space-y-4">
-        <h1 className="text-3xl font-bold">{blog.title}</h1>
-        <time className="text-sm text-muted-foreground">
-          {new Date(blog.createdAt).toLocaleDateString("ja-JP")}
-        </time>
-        <div
-          className="prose"
-          dangerouslySetInnerHTML={{ __html: blog.content }}
-        />
-      </CardContent>
-    </Card>
-  </main>                                                                                                                                       
+    <main className="mx-auto w-full max-w-3xl p-8">
+      <Card>
+        <CardContent className="space-y-4">
+          <h1 className="text-3xl font-bold">{blog.title}</h1>
+          <time className="text-sm text-muted-foreground">
+            {new Date(blog.createdAt).toLocaleDateString("ja-JP")}
+          </time>
+          <div
+            className="prose"
+            dangerouslySetInnerHTML={{ __html: blog.content }}
+          />
+        </CardContent>
+      </Card>
+    </main>
   );
 };
 
