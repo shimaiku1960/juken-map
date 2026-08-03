@@ -1,4 +1,4 @@
-import { createClient } from "microcms-js-sdk";
+import { createClient, type MicroCMSImage } from "microcms-js-sdk";
 
 export const client = createClient({
   serviceDomain: process.env.MICROCMS_SERVICE_DOMAIN!,
@@ -10,6 +10,7 @@ export type Blog = {
   title: string;
   description?: string;
   content: string;
+  eyecatch?: MicroCMSImage;
   createdAt: string;
   updatedAt: string;
 };
