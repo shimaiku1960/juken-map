@@ -15,6 +15,7 @@ import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
@@ -140,7 +141,10 @@ const DashboardPage = async () => {
                   {candidateCount > 0 && ` ・ 検討中：${candidateCount} 校`}
                 </p>
               </div>
-              <Link href="/goals" className={buttonVariants({ variant: "link" })}>
+              <Link
+                href="/goals"
+                className={cn(buttonVariants({ variant: "link", size: "lg" }), "h-11")}
+              >
                 志望校を設定 →
               </Link>
             </div>

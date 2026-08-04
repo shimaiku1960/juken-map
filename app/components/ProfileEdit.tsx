@@ -59,7 +59,8 @@ const ProfileEdit = ({
         <Button
           type="button"
           variant="outline"
-          size="sm"
+          size="lg"
+          className="h-11"
           title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
           onClick={() => {
             if (readOnly) {
@@ -95,13 +96,19 @@ const ProfileEdit = ({
             </FormItem>
           )}
         />
-        <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="h-11"
+          disabled={form.formState.isSubmitting}
+        >
           {form.formState.isSubmitting ? "保存中…" : "保存"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          size="sm"
+          size="lg"
+          className="h-11"
           onClick={() => setIsEditing(false)}
         >
           キャンセル

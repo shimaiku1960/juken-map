@@ -91,8 +91,9 @@ export default function StudyDayPlanPanel({
         {allowAdd ? (
           <Button
             type="button"
-            size="sm"
+            size="lg"
             variant="outline"
+            className="h-11"
             title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
             onClick={readOnly ? notifyDemoReadOnly : () => setAdding(true)}
           >

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { daysUntil, formatExamDate } from "@/lib/date";
 import { useGoals, goalsKey, type Goal } from "@/app/hooks/useGoals";
 import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { MoveHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 type Props = {
@@ -86,6 +87,15 @@ export default function GoalList({
     action();
   };
 
+  // 削除は元に戻せないうえ、スマホでは隣のボタンと近く誤タップしやすいので確認を挟む。
+  // 学習予定・実績の削除（StudyDayPlanPanel / StudyHeatmap）と同じ window.confirm に揃える。
+  const confirmAndDelete = (goal: Goal) =>
+    runIfWritable(() => {
+      const label = `${goal.faculty.university.name} ${goal.faculty.name}`;
+      if (!window.confirm(`${label}を削除しますか？`)) return;
+      deleteMutation.mutate(goal.id);
+    });
+
   const decided = goals.filter((goal) => goal.status === "decided");
   const candidates = goals.filter((goal) => goal.status === "candidate");
   // 比較テーブルは受験日の早い順に並べる（日程の比較をしやすく）
@@ -103,7 +113,9 @@ export default function GoalList({
     return (
       <li
         key={goal.id}
-        className="flex items-start justify-between rounded-lg border px-4 py-3"
+        // スマホでは大学名と操作ボタンを同じ行に詰めると名前が途中で折り返すため、
+        // 縦積みにして名前の幅を確保する。
+        className="flex flex-col gap-2 rounded-lg border px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
       >
         <div className="space-y-1">
           <p className="font-medium">
@@ -123,7 +135,8 @@ export default function GoalList({
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        {/* 指で押す領域を 44px 確保する。左右の padding が隣のボタンとの間隔も兼ねる。 */}
+        <div className="-mx-2 flex items-center sm:shrink-0">
           <button
             title={
               readOnly
@@ -140,14 +153,14 @@ export default function GoalList({
                 })
               )
             }
-            className="text-sm hover:underline"
+            className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
           </button>
           <button
             title={readOnly ? "デモアカウントは閲覧専用です" : undefined}
-            onClick={() => runIfWritable(() => deleteMutation.mutate(goal.id))}
-            className="text-destructive text-sm hover:underline"
+            onClick={() => confirmAndDelete(goal)}
+            className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             削除
           </button>
@@ -189,88 +202,97 @@ export default function GoalList({
             <p className="mb-2 text-xs text-muted-foreground">
               受験日順に並べて比較できます。決めたら「受験校にする」を押してください。
             </p>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="py-2 pr-3 font-medium">大学・学部</th>
-                    <th className="py-2 pr-3 font-medium">系統</th>
-                    <th className="py-2 pr-3 font-medium">受験日</th>
-                    <th className="py-2 pr-3 font-medium">区分</th>
-                    <th className="py-2 font-medium" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedCandidates.map((goal) => {
-                    const days = daysUntil(goal.faculty.examDate);
-                    return (
-                      <tr key={goal.id} className="border-b align-top">
-                        <td className="py-3 pr-3">
-                          <p className="font-medium">
-                            {goal.faculty.university.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {goal.faculty.name}
-                          </p>
-                        </td>
-                        <td className="py-3 pr-3">
-                          <div className="flex flex-wrap gap-1">
-                            {goal.faculty.tags.map((tag) => (
-                              <Badge key={tag.name} variant="secondary">
-                                #{tag.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="py-3 pr-3 whitespace-nowrap">
-                          {formatExamDate(goal.faculty.examDate)}
-                          {days >= 0 && (
-                            <span className="ml-1 text-xs text-primary">
-                              (あと{days}日)
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 pr-3 whitespace-nowrap text-muted-foreground">
-                          {goal.faculty.university.type || "—"}
-                        </td>
-                        <td className="py-3 whitespace-nowrap text-right">
-                          <button
-                            title={
-                              readOnly
-                                ? "デモアカウントは閲覧専用です"
-                                : undefined
-                            }
-                            onClick={() =>
-                              runIfWritable(() =>
-                                statusMutation.mutate(goal.id)
-                              )
-                            }
-                            disabled={statusMutation.isPending}
-                            className="text-sm text-primary hover:underline"
-                          >
-                            受験校にする
-                          </button>
-                          <button
-                            title={
-                              readOnly
-                                ? "デモアカウントは閲覧専用です"
-                                : undefined
-                            }
-                            onClick={() =>
-                              runIfWritable(() =>
-                                deleteMutation.mutate(goal.id)
-                              )
-                            }
-                            className="ml-3 text-sm text-destructive hover:underline"
-                          >
-                            削除
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* 表は 520px 必要なのでスマホでは全部映らない。横スクロールできることを明示する
+                （右端のフェードだけでは気づけず、「あと◯日」が読めないままになる）。 */}
+            <p className="mb-2 flex items-center gap-1 text-xs text-muted-foreground md:hidden">
+              <MoveHorizontal aria-hidden="true" className="size-3.5" />
+              表は横にスクロールできます
+            </p>
+            <div className="relative">
+              {/* スクロールできる端であることを視覚的にも示す薄いフェード。 */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent md:hidden"
+              />
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs text-muted-foreground">
+                      <th className="py-2 pr-3 font-medium">大学・学部</th>
+                      <th className="py-2 pr-3 font-medium">系統</th>
+                      <th className="py-2 pr-3 font-medium">受験日</th>
+                      <th className="py-2 pr-3 font-medium">区分</th>
+                      <th className="py-2 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedCandidates.map((goal) => {
+                      const days = daysUntil(goal.faculty.examDate);
+                      return (
+                        <tr key={goal.id} className="border-b align-top">
+                          <td className="py-3 pr-3">
+                            <p className="font-medium">
+                              {goal.faculty.university.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {goal.faculty.name}
+                            </p>
+                          </td>
+                          <td className="py-3 pr-3">
+                            <div className="flex flex-wrap gap-1">
+                              {goal.faculty.tags.map((tag) => (
+                                <Badge key={tag.name} variant="secondary">
+                                  #{tag.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-3 pr-3 whitespace-nowrap">
+                            {formatExamDate(goal.faculty.examDate)}
+                            {days >= 0 && (
+                              <span className="ml-1 text-xs text-primary">
+                                (あと{days}日)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 pr-3 whitespace-nowrap text-muted-foreground">
+                            {goal.faculty.university.type || "—"}
+                          </td>
+                          <td className="py-3 whitespace-nowrap text-right">
+                            <button
+                              title={
+                                readOnly
+                                  ? "デモアカウントは閲覧専用です"
+                                  : undefined
+                              }
+                              onClick={() =>
+                                runIfWritable(() =>
+                                  statusMutation.mutate(goal.id)
+                                )
+                              }
+                              disabled={statusMutation.isPending}
+                              className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              受験校にする
+                            </button>
+                            <button
+                              title={
+                                readOnly
+                                  ? "デモアカウントは閲覧専用です"
+                                  : undefined
+                              }
+                              onClick={() => confirmAndDelete(goal)}
+                              className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              削除
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         ) : (

@@ -50,7 +50,7 @@ export default function ExamCountdown({ goals }: { goals: CountdownGoal[] }) {
           <p className="text-muted-foreground">まだ志望校が登録されていません。</p>
           <Link
             href="/goals"
-            className="text-primary hover:underline text-sm"
+            className="inline-flex min-h-11 items-center text-sm text-primary hover:underline"
           >
             志望校を設定する →
           </Link>

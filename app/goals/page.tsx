@@ -72,7 +72,7 @@ const GoalsPage = async () => {
       <PageHeader
         title="志望校"
         description="第一志望と併願校を並べて見ながら、受験する大学・学部を決めましょう。"
-        action={goals.length > 0 ? <Button asChild><Link href="/explore">大学を探す</Link></Button> : undefined}
+        action={goals.length > 0 ? <Button asChild size="lg" className="h-11"><Link href="/explore">大学を探す</Link></Button> : undefined}
       />
 
       {goals.length === 0 ? (
