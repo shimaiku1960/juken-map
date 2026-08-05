@@ -24,11 +24,14 @@ export const SUPPORT_CONTACT_EMAIL = "waseda.no.takahashi@gmail.com";
 /** 面談申し込みメールの件名（メール申し込みへ切り替わったときに使う）。 */
 export const SUPPORT_MAIL_SUBJECT = "受験英語サポート 無料面談の申し込み";
 
-/** 30 日間の買い切り価格（税込）。自動更新はしない。 */
-export const SUPPORT_PRICE_TAX_INCLUDED = 3_980;
+/** 無料体験終了後に毎月請求する価格（税込）。 */
+export const SUPPORT_MONTHLY_PRICE_TAX_INCLUDED = 1_980;
 
-/** 決済日を 1 日目として数える提供期間（日）。 */
-export const SUPPORT_PERIOD_DAYS = 30;
+/** 無料体験の提供時間（7 日 × 24 時間）。 */
+export const SUPPORT_TRIAL_HOURS = 168;
+
+/** 画面表示用の無料体験日数。 */
+export const SUPPORT_TRIAL_DAYS = SUPPORT_TRIAL_HOURS / 24;
 
 /** 同時にサポートする人数の上限。達している間は無料面談の受付を止める。 */
 export const SUPPORT_CAPACITY = 5;
