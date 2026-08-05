@@ -16,7 +16,7 @@
  * 切り替わり、noindex ＋ sitemap から除外され、公開ナビゲーションにも出さない）。
  */
 export const SUPPORT_BOOKING_URL: string | null =
-  "https://calendar.app.google/ULCcr7QKQdRG29x48";
+  null;
 
 /** 申し込み・問い合わせ先。利用規約の運営者連絡先と揃える。 */
 export const SUPPORT_CONTACT_EMAIL = "waseda.no.takahashi@gmail.com";
