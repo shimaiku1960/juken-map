@@ -8,9 +8,11 @@ import {
   Clock3,
   type LucideIcon,
   MapPinned,
+  MessageCircleQuestion,
   TimerReset,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { SUPPORT_BOOKING_URL } from "@/lib/support";
 import { cn } from "@/lib/utils";
 import {
   AmbientOrb,
@@ -449,6 +451,41 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {SUPPORT_BOOKING_URL ? (
+        <section className="px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
+          <Reveal className="mx-auto max-w-6xl">
+            <div className="grid items-center gap-6 rounded-xl border bg-secondary/30 p-6 shadow-sm sm:p-8 md:grid-cols-[1fr_auto]">
+              <div className="flex items-start gap-4">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <MessageCircleQuestion aria-hidden="true" className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-primary">
+                    英語で迷ったときに
+                  </p>
+                  <h2 className="mt-1 text-xl font-bold sm:text-2xl">
+                    LINEで質問できる30日間のサポート
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
+                    参考書選びから目の前の1問まで。まず無料30分のオンライン面談で、相談内容と相性を確認できます。
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/support"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "lg" }),
+                  "h-11 w-full bg-background md:w-auto"
+                )}
+              >
+                詳細を見る
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            </div>
+          </Reveal>
+        </section>
+      ) : null}
+
       <section className="px-4 pb-24 sm:px-6 sm:pb-28 lg:px-8">
         <Reveal className="mx-auto max-w-6xl">
           <div className="relative isolate overflow-hidden rounded-xl bg-primary px-6 py-16 text-center text-primary-foreground shadow-[0_30px_80px_-36px_color-mix(in_oklch,var(--primary)_75%,transparent)] sm:px-12 sm:py-20">
@@ -524,6 +561,12 @@ export default function LandingPage() {
               {
                 heading: "もっと知る",
                 links: [
+                  // 予約ページの URL が入るまで /support は公開導線へ出さない。
+                  // lib/support.ts の SUPPORT_BOOKING_URL を入れると、この
+                  // リンク・sitemap・インデックス許可がまとめて有効になる。
+                  ...(SUPPORT_BOOKING_URL
+                    ? [{ href: "/support", label: "英語のLINE質問サポート" }]
+                    : []),
                   { href: "/blog", label: "ブログ" },
                   { href: "/terms", label: "利用規約" },
                   { href: "/privacy", label: "プライバシーポリシー" },
@@ -538,12 +581,14 @@ export default function LandingPage() {
                 <p className="text-sm font-semibold text-foreground">
                   {column.heading}
                 </p>
-                <ul className="mt-4 space-y-3 text-sm">
+                <ul className="mt-2 space-y-0 text-sm">
                   {column.links.map((link) => (
                     <li key={link.href}>
+                      {/* フッターは行間が詰まりやすいので、リンクごとに 44px の
+                          タップ領域を確保して隣を押しにくくする。 */}
                       <Link
                         href={link.href}
-                        className="text-muted-foreground transition-colors hover:text-foreground"
+                        className="inline-flex min-h-11 items-center text-muted-foreground transition-colors hover:text-foreground"
                       >
                         {link.label}
                       </Link>

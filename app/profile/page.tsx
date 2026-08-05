@@ -11,6 +11,7 @@ import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
@@ -61,7 +62,7 @@ const ProfilePage = async () => {
       </p>
       <Link
         href="/goals"
-        className={buttonVariants({ variant: "link" })}
+        className={cn(buttonVariants({ variant: "link", size: "lg" }), "h-11")}
       >
         志望校ページへ →
       </Link>

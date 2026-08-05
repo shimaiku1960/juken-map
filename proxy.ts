@@ -18,6 +18,8 @@ export const proxy = async (request: NextRequest) => {
     "/blog",
     "/terms",
     "/privacy",
+    // 受験英語 LINE 質問サポートの案内。未ログインの訪問者が読むページなので公開。
+    "/support",
   ];
   // 動的ルート（/articles/xxx）は前方一致で公開判定
   const publicPrefixes = ["/articles"];

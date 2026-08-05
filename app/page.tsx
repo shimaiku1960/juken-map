@@ -101,7 +101,10 @@ const Home = async () => {
           variant="hero"
         />
       </div>
-      <Link href="/dashboard" className={cn(buttonVariants({ variant: "link" }), "mt-4")}>
+      <Link
+        href="/dashboard"
+        className={cn(buttonVariants({ variant: "link", size: "lg" }), "mt-4 h-11")}
+      >
         今日の予定・記録を見る →
       </Link>
     </main>

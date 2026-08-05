@@ -70,14 +70,16 @@ export default function SignUpPage() {
 
       <Link
         href="/login"
-        className="mt-4 block text-center text-sm text-primary hover:underline"
+        className="mt-2 flex min-h-11 items-center justify-center text-sm text-primary hover:underline"
       >
         すでにアカウントをお持ちの方はこちら
       </Link>
 
       <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">または</div>
+      {/* 上の登録ボタンと同じ h-11 に揃える（既定の h-8 はスマホで押しにくい）。 */}
       <Button
-        className="w-full"
+        className="h-11 w-full"
+        size="lg"
         variant="outline"
         disabled={authLoading}
         onClick={() => void handleSocialSignUp("google")}
@@ -85,7 +87,8 @@ export default function SignUpPage() {
         Googleで登録
       </Button>
       <Button
-        className="w-full mt-3"
+        className="mt-3 h-11 w-full"
+        size="lg"
         variant="outline"
         disabled={authLoading}
         onClick={() => void handleSocialSignUp("github")}

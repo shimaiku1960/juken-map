@@ -120,7 +120,7 @@ export default function LoginPage() {
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="login-password">パスワード</Label>
-            <Link href="/forgot-password" className="text-sm text-primary hover:underline">パスワードを忘れた方</Link>
+            <Link href="/forgot-password" className="-my-2 inline-flex min-h-11 items-center text-sm text-primary hover:underline">パスワードを忘れた方</Link>
           </div>
           <PasswordInput id="login-password" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
@@ -131,14 +131,17 @@ export default function LoginPage() {
 
       <Link
         href="/signup"
-        className="mt-4 block text-center text-sm text-primary hover:underline"
+        className="mt-2 flex min-h-11 items-center justify-center text-sm text-primary hover:underline"
       >
         アカウントをお持ちでない方はこちら
       </Link>
 
       <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">または</div>
+      {/* 上のログインボタンと同じ h-11。ここだけ既定の h-8 だと
+          スマホで押しにくく、同じ画面内で高さも揃わない。 */}
       <Button
-        className="w-full"
+        className="h-11 w-full"
+        size="lg"
         variant="outline"
         disabled={authLoading}
         onClick={() => void handleSocialSignIn("google")}
@@ -146,7 +149,8 @@ export default function LoginPage() {
         Googleでログイン
       </Button>
       <Button
-        className="w-full mt-3"
+        className="mt-3 h-11 w-full"
+        size="lg"
         variant="outline"
         disabled={authLoading}
         onClick={() => void handleSocialSignIn("github")}
@@ -160,7 +164,7 @@ export default function LoginPage() {
       >
         <p className="font-medium">登録せずにデモを見る</p>
         <p className="mt-1 text-sm text-muted-foreground">志望校や学習予定が入ったデモ用アカウントを体験できます。</p>
-        <Button className="mt-4 w-full" variant="secondary" onClick={handleDemoSignIn} disabled={authLoading}>
+        <Button className="mt-4 h-11 w-full" size="lg" variant="secondary" onClick={handleDemoSignIn} disabled={authLoading}>
           {demoLoading ? "ログイン中…" : "デモを見る"}
         </Button>
       </div>

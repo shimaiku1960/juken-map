@@ -126,19 +126,20 @@ export default function StudyHeatmap({
         日付を選ぶと、その日の予定や学習実績を記録できます。
       </p>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        {/* 月送りはスマホで最もよく押す操作なので 44px の正方形にする。 */}
         <div className="flex items-center gap-1">
-          <Button type="button" size="sm" variant="ghost" onClick={() => moveMonth(-1)} aria-label="前の月">
+          <Button type="button" size="lg" variant="ghost" className="size-11" onClick={() => moveMonth(-1)} aria-label="前の月">
             ←
           </Button>
           <p className="min-w-28 text-center text-sm font-semibold text-foreground">
             {monthLabel(displayMonth)}
           </p>
-          <Button type="button" size="sm" variant="ghost" onClick={() => moveMonth(1)} aria-label="次の月">
+          <Button type="button" size="lg" variant="ghost" className="size-11" onClick={() => moveMonth(1)} aria-label="次の月">
             →
           </Button>
         </div>
         {displayMonth !== currentMonth || selectedYmd !== today ? (
-          <Button type="button" size="sm" variant="outline" onClick={returnToToday}>
+          <Button type="button" size="lg" variant="outline" className="h-11" onClick={returnToToday}>
             今日
           </Button>
         ) : null}
