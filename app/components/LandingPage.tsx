@@ -464,10 +464,10 @@ export default function LandingPage() {
                     英語で迷ったときに
                   </p>
                   <h2 className="mt-1 text-xl font-bold sm:text-2xl">
-                    LINEで質問できる30日間のサポート
+                    初回7日間無料のLINE質問サポート
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
-                    参考書選びから目の前の1問まで。まず無料30分のオンライン面談で、相談内容と相性を確認できます。
+                    参考書選びから目の前の1問まで。初回7日間は無料で、終了後は月額1,980円（税込）で自動更新されます。
                   </p>
                 </div>
               </div>

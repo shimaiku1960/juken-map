@@ -24,8 +24,9 @@ import { NOINDEX, SITE_URL } from "@/lib/site";
 import {
   SUPPORT_BOOKING_URL,
   SUPPORT_CONTACT_EMAIL,
-  SUPPORT_PERIOD_DAYS,
-  SUPPORT_PRICE_TAX_INCLUDED,
+  SUPPORT_MONTHLY_PRICE_TAX_INCLUDED,
+  SUPPORT_TRIAL_DAYS,
+  SUPPORT_TRIAL_HOURS,
   supportMailtoHref,
 } from "@/lib/support";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,7 @@ import brandIcon from "@/public/icon-512.png";
 
 const title = "受験英語のLINE質問サポート｜受験マップ";
 const description =
-  "受験英語で迷ったとき、早稲田大学 国際教養学部在学の運営者へLINEで質問できる30日間のサポートです。まず無料30分のオンライン面談で相性を確認できます。";
+  "受験英語で迷ったとき、早稲田大学 国際教養学部在学の運営者へLINEで質問できる月額サポートです。初回7日間は無料で体験できます。";
 const url = SITE_URL + "/support";
 
 export const metadata: Metadata = {
@@ -44,7 +45,7 @@ export const metadata: Metadata = {
   openGraph: { title, description, type: "website", url },
 };
 
-const price = SUPPORT_PRICE_TAX_INCLUDED.toLocaleString("ja-JP");
+const monthlyPrice = SUPPORT_MONTHLY_PRICE_TAX_INCLUDED.toLocaleString("ja-JP");
 
 const BookingButton = ({
   className,
@@ -107,8 +108,8 @@ const SectionHeading = ({
 );
 
 const facts = [
-  { value: price + "円", label: "税込・買い切り" },
-  { value: SUPPORT_PERIOD_DAYS + "日間", label: "決済日から利用" },
+  { value: monthlyPrice + "円", label: "月額・税込" },
+  { value: SUPPORT_TRIAL_DAYS + "日間", label: "初回無料体験" },
   { value: "上限なし", label: "質問回数" },
   { value: "24時間以内", label: "できる限りの返信目安" },
 ] as const;
@@ -166,7 +167,7 @@ const flowSteps = [
   {
     number: "04",
     title: "納得したときだけ始める",
-    body: "決済後にLINE公式アカウントを連携し、30日間の質問サポートが始まります。",
+    body: "決済情報を登録してLINE公式アカウントを連携すると、7日間の無料体験が始まります。",
   },
 ] as const;
 
@@ -185,6 +186,16 @@ const faqs = [
     question: "質問の回数に上限はありますか？",
     answer:
       "上限はありません。ただし大量の問題を丸ごと預けるのではなく、特に分からない問題へ絞って質問してください。",
+  },
+  {
+    question: "無料体験後は自動で料金が発生しますか？",
+    answer:
+      "はい。無料体験を開始した日時から168時間後に、初回の月額1,980円（税込）が請求されます。無料体験中に解約した場合、料金は発生しません。",
+  },
+  {
+    question: "いつでも解約できますか？",
+    answer:
+      "いつでも解約できます。無料体験中の解約後は体験終了まで、有料期間中の解約後は支払済み期間の終了まで利用できます。利用者都合の日割り返金はありません。",
   },
   {
     question: "面談の日程を変更・キャンセルしたいときは？",
@@ -245,15 +256,15 @@ const SupportPage = () => (
             <div className="flex items-end justify-between gap-4 border-b pb-5">
               <div>
                 <p className="text-sm font-semibold text-primary">
-                  30日間の質問サポート
+                  初回{SUPPORT_TRIAL_DAYS}日間の無料体験
                 </p>
                 <p className="mt-2 text-4xl font-bold tracking-tight">
-                  {price}
-                  <span className="ml-1 text-base font-semibold">円（税込）</span>
+                  {monthlyPrice}
+                  <span className="ml-1 text-base font-semibold">円／月（税込）</span>
                 </p>
               </div>
               <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                自動更新なし
+                いつでも解約可
               </span>
             </div>
             <dl className="mt-5 grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
@@ -268,7 +279,8 @@ const SupportPage = () => (
               ))}
             </dl>
             <p className="mt-4 text-xs leading-5 text-muted-foreground">
-              24時間以内は返信の目安であり、保証ではありません。質問は曜日・時間を問わず送れます。
+              無料体験は開始日時から{SUPPORT_TRIAL_HOURS}
+              時間です。終了後は月額料金が自動で請求されます。24時間以内は返信の目安であり、保証ではありません。
             </p>
           </div>
         </HeroReveal>
