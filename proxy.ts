@@ -22,7 +22,7 @@ export const proxy = async (request: NextRequest) => {
     "/support",
   ];
   // 動的ルート（/articles/xxx）は前方一致で公開判定
-  const publicPrefixes = ["/articles"];
+  const publicPrefixes = ["/articles", "/support/"];
   const isPublic =
     publicPaths.includes(pathname) ||
     publicPrefixes.some((prefix) => pathname.startsWith(prefix));

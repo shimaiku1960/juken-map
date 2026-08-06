@@ -36,6 +36,13 @@ export const SUPPORT_TRIAL_DAYS = SUPPORT_TRIAL_HOURS / 24;
 /** 同時にサポートする人数の上限。達している間は無料面談の受付を止める。 */
 export const SUPPORT_CAPACITY = 5;
 
+/** 最終確認画面で示す1年間の支払額目安（無料体験後に12回更新した場合）。 */
+export const SUPPORT_ANNUAL_PRICE_ESTIMATE =
+  SUPPORT_MONTHLY_PRICE_TAX_INCLUDED * 12;
+
+/** サービス提供者の公開上の名称。正式氏名等は請求窓口から遅滞なく開示する。 */
+export const SUPPORT_OPERATOR_NAME = "受験マップ運営（早稲田の高橋）";
+
 /** メール申し込み用の mailto リンク。 */
 export const supportMailtoHref = `mailto:${SUPPORT_CONTACT_EMAIL}?subject=${encodeURIComponent(
   SUPPORT_MAIL_SUBJECT

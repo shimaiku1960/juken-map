@@ -2,7 +2,6 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  ArrowRight,
   ArrowUpRight,
   BookOpenCheck,
   Check,
@@ -19,7 +18,7 @@ import {
   HeroReveal,
   Reveal,
 } from "@/app/components/landing/LandingMotion";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { NOINDEX, SITE_URL } from "@/lib/site";
 import {
   SUPPORT_BOOKING_URL,
@@ -27,7 +26,6 @@ import {
   SUPPORT_MONTHLY_PRICE_TAX_INCLUDED,
   SUPPORT_TRIAL_DAYS,
   SUPPORT_TRIAL_HOURS,
-  supportMailtoHref,
 } from "@/lib/support";
 import { cn } from "@/lib/utils";
 import brandIcon from "@/public/icon-512.png";
@@ -53,33 +51,37 @@ const BookingButton = ({
 }: {
   className?: string;
   variant?: "secondary";
-}) => (
-  <a
-    href={SUPPORT_BOOKING_URL ?? supportMailtoHref}
-    aria-label={
-      SUPPORT_BOOKING_URL
-        ? "無料面談の空き枠を見る（Googleカレンダーが新しいタブで開きます）"
-        : "メールで無料面談を申し込む"
-    }
-    {...(SUPPORT_BOOKING_URL
-      ? { target: "_blank", rel: "noopener noreferrer" }
-      : {})}
-    className={cn(
-      buttonVariants({ size: "lg", variant }),
-      "h-12 gap-2 px-6 text-base shadow-lg shadow-primary/15 transition-[transform,box-shadow,background-color] hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/20",
-      className
-    )}
-  >
-    {SUPPORT_BOOKING_URL
-      ? "無料面談の空き枠を見る"
-      : "メールで無料面談を申し込む"}
-    {SUPPORT_BOOKING_URL ? (
+}) => {
+  if (!SUPPORT_BOOKING_URL) {
+    return (
+      <Button
+        disabled
+        size="lg"
+        variant={variant}
+        className={cn("h-12 gap-2 px-6 text-base", className)}
+      >
+        現在準備中です
+      </Button>
+    );
+  }
+
+  return (
+    <a
+      href={SUPPORT_BOOKING_URL}
+      aria-label="無料面談の空き枠を見る（Googleカレンダーが新しいタブで開きます）"
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        buttonVariants({ size: "lg", variant }),
+        "h-12 gap-2 px-6 text-base shadow-lg shadow-primary/15 transition-[transform,box-shadow,background-color] hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/20",
+        className
+      )}
+    >
+      無料面談の空き枠を見る
       <ArrowUpRight aria-hidden="true" className="size-4" />
-    ) : (
-      <ArrowRight aria-hidden="true" className="size-4" />
-    )}
-  </a>
-);
+    </a>
+  );
+};
 
 const SectionHeading = ({
   eyebrow,
@@ -247,7 +249,14 @@ const SupportPage = () => (
               <p className="text-xs text-muted-foreground">
                 Googleカレンダーが新しいタブで開きます
               </p>
-            ) : null}
+            ) : (
+              <a
+                href={"mailto:" + SUPPORT_CONTACT_EMAIL}
+                className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4"
+              >
+                サービスについて問い合わせる
+              </a>
+            )}
           </div>
         </HeroReveal>
 
@@ -471,7 +480,9 @@ const SupportPage = () => (
         <Reveal className="mt-8 text-center">
           <BookingButton />
           <p className="mt-3 text-xs text-muted-foreground">
-            空き枠がない場合は{" "}
+            {SUPPORT_BOOKING_URL
+              ? "空き枠がない場合は"
+              : "受付開始時期など、サービスについてのご質問は"}{" "}
             <a
               href={"mailto:" + SUPPORT_CONTACT_EMAIL}
               className="underline underline-offset-4 hover:text-foreground"
@@ -537,6 +548,12 @@ const SupportPage = () => (
         <nav aria-label="サポートページの補助情報" className="flex flex-wrap gap-x-5 gap-y-3">
           <Link href="/terms" className="hover:text-foreground">
             利用規約
+          </Link>
+          <Link href="/support/terms" className="hover:text-foreground">
+            有料サポート利用特約
+          </Link>
+          <Link href="/support/commercial-transactions" className="hover:text-foreground">
+            特定商取引法に基づく表記
           </Link>
           <Link href="/privacy" className="hover:text-foreground">
             プライバシーポリシー
