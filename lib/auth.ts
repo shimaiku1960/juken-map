@@ -2,7 +2,11 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import prisma from "@/lib/prisma";
-import { sendVerificationEmail, sendPasswordResetEmail } from "@/lib/email";
+import {
+  notifyAdminOfNewUser,
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+} from "@/lib/email";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -13,6 +17,18 @@ export const auth = betterAuth({
       nickname: {
         type: "string",
         required: false,
+      },
+    },
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          // OAuthユーザーは作成時点でメール確認済み。メール登録は確認完了後に通知する。
+          if (user.emailVerified) {
+            await notifyAdminOfNewUser(user);
+          }
+        },
       },
     },
   },
@@ -28,6 +44,9 @@ export const auth = betterAuth({
       await sendVerificationEmail(user.email, url);
     },
     sendOnSignUp: true,
+    afterEmailVerification: async (user) => {
+      await notifyAdminOfNewUser(user);
+    },
   },
 
   socialProviders: {
