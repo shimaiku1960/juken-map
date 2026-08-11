@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CreditCard } from "lucide-react";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import SupportLineOnboarding from "@/app/components/SupportLineOnboarding";
 
 const statusLabels: Record<string, string> = {
   trialing: "無料体験中",
@@ -26,12 +28,20 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function statusBadgeVariant(status: string) {
+  if (status === "trialing" || status === "active") return "success" as const;
+  if (status === "past_due" || status === "unpaid") return "warning" as const;
+  return "secondary" as const;
+}
+
 type Props = {
   status: string;
   trialEndsAt: string | null;
   currentPeriodEndsAt: string | null;
   cancelAtPeriodEnd: boolean;
   cancelAt: string | null;
+  lineAccessEnabled: boolean;
+  lineLinked: boolean;
 };
 
 export default function SupportSubscriptionCard({
@@ -40,6 +50,8 @@ export default function SupportSubscriptionCard({
   currentPeriodEndsAt,
   cancelAtPeriodEnd,
   cancelAt,
+  lineAccessEnabled,
+  lineLinked,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +59,12 @@ export default function SupportSubscriptionCard({
   const periodEnd = formatDate(currentPeriodEndsAt);
   const scheduledCancellation = formatDate(cancelAt) ??
     (cancelAtPeriodEnd ? periodEnd : null);
+
+  useEffect(() => {
+    const resetLoading = () => setLoading(false);
+    window.addEventListener("pageshow", resetLoading);
+    return () => window.removeEventListener("pageshow", resetLoading);
+  }, []);
 
   const openPortal = async () => {
     setLoading(true);
@@ -71,44 +89,49 @@ export default function SupportSubscriptionCard({
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-5 py-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div>
-          <p className="font-medium">受験英語LINE質問サポート</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            状態：{statusLabels[status] ?? status}
-          </p>
-          {scheduledCancellation ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {scheduledCancellation}に解約予定です。
-            </p>
-          ) : status === "trialing" && trialEnd ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              無料体験は{trialEnd}までです。
-            </p>
-          ) : periodEnd ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              次回更新日は{periodEnd}です。
-            </p>
-          ) : null}
+      <CardContent className="space-y-5 py-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium">受験英語LINE質問サポート</p>
+              <Badge variant={statusBadgeVariant(status)}>
+                {statusLabels[status] ?? status}
+              </Badge>
+            </div>
+            {scheduledCancellation ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {scheduledCancellation}に解約予定です。
+              </p>
+            ) : status === "trialing" && trialEnd ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                無料体験は{trialEnd}までです。
+              </p>
+            ) : periodEnd ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                次回更新日は{periodEnd}です。
+              </p>
+            ) : null}
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 w-full shrink-0 sm:w-auto"
+            disabled={loading}
+            onClick={() => void openPortal()}
+          >
+            <CreditCard aria-hidden="true" />
+            {loading ? "契約管理画面を開いています…" : "契約・支払いを管理"}
+          </Button>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="min-h-11 shrink-0"
-          disabled={loading}
-          onClick={() => void openPortal()}
-        >
-          <CreditCard aria-hidden="true" />
-          {loading ? "準備中…" : "契約・支払いを管理"}
-        </Button>
-
         {error ? (
-          <div className="sm:basis-full">
+          <div>
             <InlineFeedback variant="error">{error}</InlineFeedback>
           </div>
         ) : null}
+
+        {lineAccessEnabled ? <SupportLineOnboarding linked={lineLinked} /> : null}
       </CardContent>
     </Card>
   );

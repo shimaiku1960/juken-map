@@ -17,6 +17,7 @@ import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import SupportSubscriptionCard from "@/app/components/SupportSubscriptionCard";
+import { hasSupportLineAccess } from "@/lib/support-line";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
@@ -25,7 +26,7 @@ const DashboardPage = async () => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
-  const [goals, plans, logsRaw, supportSubscription] = await Promise.all([
+  const [goals, plans, logsRaw, supportSubscription, supportLineConnection] = await Promise.all([
     prisma.finalGoal.findMany({
       where: { userId: session.user.id },
       include: { faculty: { include: { university: true } } },
@@ -50,6 +51,10 @@ const DashboardPage = async () => {
         cancelAtPeriodEnd: true,
         cancelAt: true,
       },
+    }),
+    prisma.supportLineConnection.findUnique({
+      where: { userId: session.user.id },
+      select: { linkedAt: true },
     }),
   ]);
 
@@ -146,6 +151,8 @@ const DashboardPage = async () => {
             }
             cancelAtPeriodEnd={supportSubscription.cancelAtPeriodEnd}
             cancelAt={supportSubscription.cancelAt?.toISOString() ?? null}
+            lineAccessEnabled={hasSupportLineAccess(supportSubscription.status)}
+            lineLinked={Boolean(supportLineConnection?.linkedAt)}
           />
         </section>
       ) : null}
