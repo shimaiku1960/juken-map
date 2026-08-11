@@ -21,6 +21,13 @@ export const SUPPORT_BOOKING_URL: string | null =
 /** 申し込み・問い合わせ先。利用規約の運営者連絡先と揃える。 */
 export const SUPPORT_CONTACT_EMAIL = "waseda.no.takahashi@gmail.com";
 
+/** 契約者が利用するLINE公式アカウントの友だち追加URL。 */
+export const SUPPORT_LINE_ADD_URL = "https://lin.ee/5ayqEg0";
+
+/** 連携済み契約者がLINE公式アカウントのトークを開くURL。 */
+export const SUPPORT_LINE_CHAT_URL =
+  "https://line.me/R/oaMessage/%40100ncdqf";
+
 /** 面談申し込みメールの件名（メール申し込みへ切り替わったときに使う）。 */
 export const SUPPORT_MAIL_SUBJECT = "受験英語サポート 無料面談の申し込み";
 

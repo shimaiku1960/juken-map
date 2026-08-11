@@ -8,6 +8,8 @@ import { NOINDEX } from "@/lib/site";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { reconcileSupportCheckoutSession } from "@/lib/support-subscription";
+import SupportLineOnboarding from "@/app/components/SupportLineOnboarding";
+import { hasSupportLineAccess } from "@/lib/support-line";
 
 export const metadata: Metadata = {
   title: "無料体験のお申し込み完了｜受験マップ",
@@ -53,6 +55,16 @@ export default async function SupportApplySuccessPage({
     );
   }
 
+  const lineConnection = session
+    ? await prisma.supportLineConnection.findUnique({
+        where: { userId: session.user.id },
+        select: { linkedAt: true },
+      })
+    : null;
+  const lineAccessEnabled = Boolean(
+    subscription && hasSupportLineAccess(subscription.status)
+  );
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-16 text-center">
       {subscription ? (
@@ -68,6 +80,14 @@ export default async function SupportApplySuccessPage({
           ? "無料体験終了後は、解約されない限り月額1,980円（税込）で自動更新されます。"
           : "契約状態を確認しています。反映まで少し時間がかかる場合があります。"}
       </p>
+      {lineAccessEnabled ? (
+        <div className="mt-8 rounded-xl border bg-card p-5 text-left">
+          <SupportLineOnboarding
+            linked={Boolean(lineConnection?.linkedAt)}
+            showDivider={false}
+          />
+        </div>
+      ) : null}
       <Link href="/dashboard" className={cn(buttonVariants({ size: "lg" }), "mt-8 min-h-11")}>
         ダッシュボードへ
       </Link>

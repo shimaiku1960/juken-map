@@ -19,6 +19,7 @@
     "e2e": "playwright test",
     "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
     "support:invite": "tsx --env-file=.env scripts/create-support-invitation.ts",
+    "support:line-link": "tsx --env-file=.env scripts/link-support-line-account.ts",
     "lock:linux": "bash scripts/generate-linux-lockfile.sh",
     "lock:fix": "npm run lock:linux"
   },
