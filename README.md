@@ -220,7 +220,8 @@ docker compose up --build
 | `npm run e2e` | PlaywrightのE2Eテストを実行する |
 | `npm run check` | Prisma生成、Lint、型チェック、Vitest、ビルドをまとめて実行する |
 | `npm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
-| `npm run lock:fix` | lockfileの不整合時に依存関係を再生成する |
+| `npm run lock:linux` | DockerのLinux環境でlockfileを更新し、`npm ci`まで検証する |
+| `npm run lock:fix` | `lock:linux`の互換エイリアス |
 
 ## テストとCI
 

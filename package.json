@@ -2,6 +2,10 @@
   "name": "juken-map",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "npm run dev:infra && next dev -p 3000",
     "dev:infra": "docker compose up -d --wait db",
@@ -15,7 +19,8 @@
     "e2e": "playwright test",
     "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
     "support:invite": "tsx --env-file=.env scripts/create-support-invitation.ts",
-    "lock:fix": "rm -rf node_modules package-lock.json && npm install"
+    "lock:linux": "bash scripts/generate-linux-lockfile.sh",
+    "lock:fix": "npm run lock:linux"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",
