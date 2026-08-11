@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Check, Clock3, LockKeyhole } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { headers } from "next/headers";
+import { ArrowLeft, Check, Clock3 } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import InlineFeedback from "@/app/components/feedback/InlineFeedback";
+import CheckoutForm from "@/app/support/apply/CheckoutForm";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import { NOINDEX } from "@/lib/site";
 import {
   SUPPORT_ANNUAL_PRICE_ESTIMATE,
@@ -11,6 +15,7 @@ import {
   SUPPORT_TRIAL_HOURS,
 } from "@/lib/support";
 import { cn } from "@/lib/utils";
+import { hashSupportInvitationToken } from "@/lib/support-subscription";
 
 export const metadata: Metadata = {
   title: "お申し込み内容の最終確認｜受験マップ",
@@ -28,7 +33,27 @@ const SummaryRow = ({ label, children }: { label: string; children: React.ReactN
   </div>
 );
 
-export default function SupportApplyPage() {
+export default async function SupportApplyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ invitation?: string }>;
+}) {
+  const { invitation: invitationToken } = await searchParams;
+  const session = await auth.api.getSession({ headers: await headers() });
+  const invitation = invitationToken
+    ? await prisma.supportCheckoutInvitation.findUnique({
+        where: { tokenHash: hashSupportInvitationToken(invitationToken) },
+      })
+    : null;
+  const invitationIsUsable = Boolean(
+    invitation && !invitation.usedAt && invitation.expiresAt > new Date()
+  );
+  const emailMatches = Boolean(
+    session?.user.email &&
+      invitation?.email.trim().toLowerCase() === session.user.email.trim().toLowerCase()
+  );
+  const canStartCheckout = invitationIsUsable && emailMatches && invitationToken;
+
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-8 sm:py-14">
       <Link
@@ -45,7 +70,8 @@ export default function SupportApplyPage() {
           お申し込み内容をご確認ください
         </h1>
         <p className="mt-4 leading-7 text-muted-foreground">
-          この画面は決済導入前の確認用です。現在は申し込みを確定できず、請求も発生しません。
+          条件をご確認のうえ、Stripeの安全な決済画面で支払い方法を登録してください。
+          本日の請求額は0円です。
         </p>
       </header>
 
@@ -53,10 +79,10 @@ export default function SupportApplyPage() {
         <div role="status" className="rounded-lg border border-primary/20 bg-primary/8 p-4 text-sm leading-6">
           <p className="flex items-center gap-2 font-semibold text-primary">
             <Clock3 aria-hidden="true" className="size-4" />
-            現在、決済と契約管理機能を準備中です
+            申込完了から7日間は無料です
           </p>
           <p className="mt-1 text-muted-foreground">
-            本番の申込画面では、無料体験終了日時と初回請求日時を日本時間で表示します。
+            無料体験の終了日と初回請求日は、次のStripe決済画面で確定前に表示されます。
           </p>
         </div>
 
@@ -104,24 +130,9 @@ export default function SupportApplyPage() {
             <CardTitle>確認事項</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <label className="flex min-h-11 items-start gap-3 text-sm leading-6 text-muted-foreground">
-              <Checkbox disabled aria-label="有料サポート特約と重要条件への同意（準備中）" className="mt-1" />
-              <span>
-                <Link href="/support/terms" className="font-medium text-primary underline underline-offset-4">
-                  有料サポート利用特約
-                </Link>
-                と上記の重要条件を確認し、同意します。
-              </span>
-            </label>
-            <label className="flex min-h-11 items-start gap-3 text-sm leading-6 text-muted-foreground">
-              <Checkbox disabled aria-label="プライバシーポリシーの確認（準備中）" className="mt-1" />
-              <span>
-                <Link href="/privacy" className="font-medium text-primary underline underline-offset-4">
-                  プライバシーポリシー
-                </Link>
-                を確認しました。
-              </span>
-            </label>
+            <p className="text-sm leading-6 text-muted-foreground">
+              下記の有料サポート利用特約、プライバシーポリシー、重要条件を確認後に同意欄が表示されます。
+            </p>
             <p className="text-sm text-muted-foreground">
               18歳未満の方は、申込前に法定代理人の同意確認が必要です。
             </p>
@@ -140,13 +151,23 @@ export default function SupportApplyPage() {
           </Link>
         </nav>
 
-        <Button disabled size="lg" className="h-12 w-full text-base">
-          <LockKeyhole aria-hidden="true" />
-          現在は申し込めません
-        </Button>
-        <p className="text-center text-sm text-muted-foreground">
-          このボタンを押せるようになるまで、契約や請求は発生しません。
-        </p>
+        {canStartCheckout ? (
+          <CheckoutForm invitationToken={invitationToken} />
+        ) : !session ? (
+          <InlineFeedback variant="info">
+            <p>面談後に案内されたメールアドレスでログインしてから、この招待URLをもう一度開いてください。</p>
+            <Link href="/login" className="mt-2 inline-flex min-h-11 items-center font-medium underline underline-offset-4">
+              ログインする
+            </Link>
+          </InlineFeedback>
+        ) : (
+          <InlineFeedback variant="error">
+            <p>
+              招待URLが無効、期限切れ、使用済み、またはログイン中のメールアドレスと一致しません。
+              運営者へお問い合わせください。
+            </p>
+          </InlineFeedback>
+        )}
       </div>
     </main>
   );
