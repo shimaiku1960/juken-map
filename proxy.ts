@@ -28,7 +28,11 @@ export const proxy = async (request: NextRequest) => {
     publicPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   // 未ログインで API を叩いたら 401
-  if (!sessionCookie && pathname.startsWith("/api/")) {
+  if (
+    !sessionCookie &&
+    pathname.startsWith("/api/") &&
+    pathname !== "/api/stripe/webhook"
+  ) {
     // Better Auth 自身のエンドポイントは除外
     if (!pathname.startsWith("/api/auth/")) {
       return NextResponse.json({ error: "未認証" }, { status: 401 });

@@ -26,11 +26,48 @@ model User {
   studyPlans    StudyPlan[]
   studyLogs     StudyLog[]
   textbooks     Textbook[]
+  supportCheckoutInvitations SupportCheckoutInvitation[]
+  supportSubscription SupportSubscription?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   emailVerified Boolean     @default(false)
 
   @@map("user")
+}
+
+model SupportCheckoutInvitation {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  email     String
+  expiresAt DateTime
+  usedAt    DateTime?
+  guardianConsentConfirmedAt DateTime?
+  checkoutSessionId String? @unique
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email(length: 191)])
+  @@index([userId(length: 191)])
+}
+
+model SupportSubscription {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String   @unique
+  stripeSubscriptionId String   @unique
+  status               String
+  trialUsed            Boolean  @default(false)
+  trialEndsAt          DateTime?
+  currentPeriodEndsAt  DateTime?
+  cancelAtPeriodEnd    Boolean  @default(false)
+  canceledAt           DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([status(length: 191)])
 }
 
 model Account {
