@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CreditCard } from "lucide-react";
+import { CreditCard, ExternalLink, MessageCircle } from "lucide-react";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import SupportLineOnboarding from "@/app/components/SupportLineOnboarding";
+import {
+  getSupportSubscriptionAvailabilityNotice,
+  getSupportSubscriptionDateLabel,
+} from "@/lib/support-subscription-display";
+import { SUPPORT_LINE_ADD_URL, SUPPORT_LINE_CHAT_URL } from "@/lib/support";
+import { cn } from "@/lib/utils";
 
 const statusLabels: Record<string, string> = {
   trialing: "無料体験中",
@@ -18,15 +24,6 @@ const statusLabels: Record<string, string> = {
   incomplete: "手続き未完了",
   incomplete_expired: "手続き期限切れ",
 };
-
-function formatDate(value: string | null) {
-  if (!value) return null;
-  return new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(value));
-}
 
 function statusBadgeVariant(status: string) {
   if (status === "trialing" || status === "active") return "success" as const;
@@ -55,10 +52,14 @@ export default function SupportSubscriptionCard({
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const trialEnd = formatDate(trialEndsAt);
-  const periodEnd = formatDate(currentPeriodEndsAt);
-  const scheduledCancellation = formatDate(cancelAt) ??
-    (cancelAtPeriodEnd ? periodEnd : null);
+  const dateLabel = getSupportSubscriptionDateLabel({
+    status,
+    trialEndsAt,
+    currentPeriodEndsAt,
+    cancelAtPeriodEnd,
+    cancelAt,
+  });
+  const availabilityNotice = getSupportSubscriptionAvailabilityNotice(status);
 
   useEffect(() => {
     const resetLoading = () => setLoading(false);
@@ -98,17 +99,9 @@ export default function SupportSubscriptionCard({
                 {statusLabels[status] ?? status}
               </Badge>
             </div>
-            {scheduledCancellation ? (
+            {dateLabel ? (
               <p className="mt-2 text-sm text-muted-foreground">
-                {scheduledCancellation}に解約予定です。
-              </p>
-            ) : status === "trialing" && trialEnd ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                無料体験は{trialEnd}までです。
-              </p>
-            ) : periodEnd ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                次回更新日は{periodEnd}です。
+                {dateLabel}
               </p>
             ) : null}
           </div>
@@ -129,6 +122,30 @@ export default function SupportSubscriptionCard({
           <div>
             <InlineFeedback variant="error">{error}</InlineFeedback>
           </div>
+        ) : null}
+
+        {availabilityNotice ? (
+          <InlineFeedback variant="info">
+            <p>{availabilityNotice}</p>
+            <a
+              href={SUPPORT_LINE_ADD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => {
+                if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                  event.currentTarget.href = SUPPORT_LINE_CHAT_URL;
+                }
+              }}
+              className={cn(
+                buttonVariants({ size: "lg" }),
+                "mt-3 min-h-11 w-full sm:w-auto"
+              )}
+            >
+              <MessageCircle aria-hidden="true" />
+              LINEで再申込みを相談する
+              <ExternalLink aria-hidden="true" />
+            </a>
+          </InlineFeedback>
         ) : null}
 
         {lineAccessEnabled ? <SupportLineOnboarding linked={lineLinked} /> : null}
