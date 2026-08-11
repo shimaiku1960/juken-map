@@ -18,6 +18,26 @@ function unixSecondsToDate(value: number | null | undefined) {
   return value == null ? null : new Date(value * 1000);
 }
 
+export function mapSupportSubscription(subscription: Stripe.Subscription) {
+  const customerId =
+    typeof subscription.customer === "string"
+      ? subscription.customer
+      : subscription.customer.id;
+  const item = subscription.items.data[0];
+
+  return {
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscription.id,
+    status: subscription.status,
+    trialUsed: subscription.trial_start != null,
+    trialEndsAt: unixSecondsToDate(subscription.trial_end),
+    currentPeriodEndsAt: unixSecondsToDate(item?.current_period_end),
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    cancelAt: unixSecondsToDate(subscription.cancel_at),
+    canceledAt: unixSecondsToDate(subscription.canceled_at),
+  };
+}
+
 export async function syncSupportSubscription(
   subscription: Stripe.Subscription,
   fallbackUserId?: string
@@ -27,22 +47,7 @@ export async function syncSupportSubscription(
     throw new Error(`Stripe subscription ${subscription.id} has no userId metadata`);
   }
 
-  const customerId =
-    typeof subscription.customer === "string"
-      ? subscription.customer
-      : subscription.customer.id;
-  const item = subscription.items.data[0];
-
-  const subscriptionData = {
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: subscription.id,
-    status: subscription.status,
-    trialUsed: subscription.trial_start != null,
-    trialEndsAt: unixSecondsToDate(subscription.trial_end),
-    currentPeriodEndsAt: unixSecondsToDate(item?.current_period_end),
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
-    canceledAt: unixSecondsToDate(subscription.canceled_at),
-  };
+  const subscriptionData = mapSupportSubscription(subscription);
 
   try {
     return await prisma.supportSubscription.upsert({
