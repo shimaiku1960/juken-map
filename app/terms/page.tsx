@@ -111,7 +111,7 @@ export default function TermsPage() {
           title: "お問い合わせ",
           content: (
             <>
-              <p>運営者：早稲田の高橋</p>
+              <p>運営者：受験マップ運営</p>
               <p>
                 本規約に関するお問い合わせは、
                 <a href="mailto:waseda.no.takahashi@gmail.com">

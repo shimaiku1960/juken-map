@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { logout } from "@/app/auth/actions";
 import { buttonVariants } from "@/components/ui/button";
-import { SUPPORT_BOOKING_URL } from "@/lib/support";
 import { cn } from "@/lib/utils";
 
 type HeaderUser = {
@@ -82,16 +81,6 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
   if (!user) {
     return (
       <nav aria-label="公開ページ" className="flex items-center gap-2">
-        {/* 予約ページの URL が入るまで /support は公開導線へ出さない（lib/support.ts）。
-            Tailwind v4 では `hidden` ＋ 画面幅で再表示は使わず `max-*:hidden` を使う。 */}
-        {SUPPORT_BOOKING_URL ? (
-          <Link
-            href="/support"
-            className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors max-md:hidden hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
-          >
-            英語サポート
-          </Link>
-        ) : null}
         <Link
           href="/blog"
           className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors max-sm:hidden hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"

@@ -265,8 +265,7 @@ app/
 ├── hooks/               # TanStack Queryのカスタムフック
 ├── login/               # ログイン
 ├── profile/             # プロフィール
-├── schedule/            # 学習予定
-└── support/             # 質問サポートと関連表示
+└── schedule/            # 学習予定
 
 components/ui/           # 共通UIコンポーネント
 e2e/                     # Playwright E2Eテスト

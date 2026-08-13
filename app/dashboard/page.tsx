@@ -16,8 +16,6 @@ import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import SupportSubscriptionCard from "@/app/components/SupportSubscriptionCard";
-import { hasSupportLineAccess } from "@/lib/support-line";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
@@ -26,7 +24,7 @@ const DashboardPage = async () => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
-  const [goals, plans, logsRaw, supportSubscription, supportLineConnection] = await Promise.all([
+  const [goals, plans, logsRaw] = await Promise.all([
     prisma.finalGoal.findMany({
       where: { userId: session.user.id },
       include: { faculty: { include: { university: true } } },
@@ -41,20 +39,6 @@ const DashboardPage = async () => {
       where: { userId: session.user.id },
       orderBy: { date: "desc" },
       include: { textbook: true },
-    }),
-    prisma.supportSubscription.findUnique({
-      where: { userId: session.user.id },
-      select: {
-        status: true,
-        trialEndsAt: true,
-        currentPeriodEndsAt: true,
-        cancelAtPeriodEnd: true,
-        cancelAt: true,
-      },
-    }),
-    prisma.supportLineConnection.findUnique({
-      where: { userId: session.user.id },
-      select: { linkedAt: true },
     }),
   ]);
 
@@ -139,23 +123,6 @@ const DashboardPage = async () => {
         initialPlans={initialPlans}
         readOnly={session.user.email === DEMO_EMAIL}
       />
-
-      {supportSubscription ? (
-        <section className="mb-8">
-          <SectionHeader title="英語質問サポート" />
-          <SupportSubscriptionCard
-            status={supportSubscription.status}
-            trialEndsAt={supportSubscription.trialEndsAt?.toISOString() ?? null}
-            currentPeriodEndsAt={
-              supportSubscription.currentPeriodEndsAt?.toISOString() ?? null
-            }
-            cancelAtPeriodEnd={supportSubscription.cancelAtPeriodEnd}
-            cancelAt={supportSubscription.cancelAt?.toISOString() ?? null}
-            lineAccessEnabled={hasSupportLineAccess(supportSubscription.status)}
-            lineLinked={Boolean(supportLineConnection?.linkedAt)}
-          />
-        </section>
-      ) : null}
 
       <section className="mb-8">
         <SectionHeader title="志望校" />
