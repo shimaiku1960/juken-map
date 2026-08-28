@@ -129,7 +129,10 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 
    ```bash
    npm ci
+   npm run hooks:install
    ```
+
+   `hooks:install`は、依存ファイルを含むpushの前だけLinux環境でlockfileを確認するGitフックを有効にします。
 
 3. 環境変数ファイルを作成します。
 
@@ -220,6 +223,8 @@ docker compose up --build
 | `npm run e2e` | PlaywrightのE2Eテストを実行する |
 | `npm run check` | Prisma生成、Lint、型チェック、Vitest、ビルドをまとめて実行する |
 | `npm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
+| `npm run hooks:install` | リポジトリ管理のGitフックを有効にする |
+| `npm run lock:check` | Linux環境でlockfileを非破壊検証する |
 | `npm run lock:linux` | DockerのLinux環境でlockfileを更新し、`npm ci`まで検証する |
 | `npm run lock:fix` | `lock:linux`の互換エイリアス |
 
@@ -230,6 +235,8 @@ docker compose up --build
 ```bash
 npm run check
 ```
+
+`package.json`または`package-lock.json`を含むpushでは、pre-pushフックが`npm run lock:check`を自動実行します。不整合がある場合はpushを中止するため、`npm run lock:linux`でlockfileを更新してコミットしてください。通常のコード変更では、この追加検査は実行しません。
 
 GitHub Actionsでは、次の3ジョブを実行します。
 

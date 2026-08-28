@@ -7,6 +7,13 @@
 注意書きにも従うこと。
 <!-- END:nextjs-agent-rules -->
 
+## 依存関係とlockfile
+
+`package.json`または依存関係を変更した場合、macOS上の`npm install`だけで
+`package-lock.json`を確定しないこと。必ず`npm run lock:linux`を実行し、Linux
+環境の`npm ci`成功後に、`package.json`と`package-lock.json`を一緒にコミットする。
+通常の確認には非破壊の`npm run lock:check`を使える。
+
 ## 言語
 
 ユーザーへの応答は、この指示や読んだドキュメント（`node_modules/next/dist/docs/`
