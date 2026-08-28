@@ -18,6 +18,8 @@
     "check": "npx prisma generate && npx eslint --max-warnings 0 && npx tsc --noEmit && npm test && npx next build",
     "e2e": "playwright test",
     "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "lock:check": "bash scripts/check-linux-lockfile.sh",
     "lock:linux": "bash scripts/generate-linux-lockfile.sh",
     "lock:fix": "npm run lock:linux"
   },
