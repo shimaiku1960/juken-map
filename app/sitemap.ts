@@ -2,7 +2,6 @@ import type { MetadataRoute } from "next";
 
 import { client, type Blog } from "@/lib/microcms";
 import { SITE_URL } from "@/lib/site";
-import { SUPPORT_BOOKING_URL } from "@/lib/support";
 
 // ブログ記事は microCMS から取るので、ビルド時に固めず毎回取得する。
 // （記事一覧 /blog も同じ方針。ビルド時に API キーが無い環境でも壊れない）
@@ -13,17 +12,6 @@ export const dynamic = "force-dynamic";
 const staticEntries: MetadataRoute.Sitemap = [
   { url: SITE_URL, changeFrequency: "weekly", priority: 1 },
   { url: `${SITE_URL}/blog`, changeFrequency: "weekly", priority: 0.6 },
-  // /support は面談の予約ページ URL が入るまで申し込みが完結しないので、
-  // それまでは sitemap に載せない（ページ側も同じ条件で noindex にしてある）。
-  ...(SUPPORT_BOOKING_URL
-    ? [
-        {
-          url: `${SITE_URL}/support`,
-          changeFrequency: "monthly" as const,
-          priority: 0.8,
-        },
-      ]
-    : []),
   { url: `${SITE_URL}/terms`, changeFrequency: "yearly", priority: 0.3 },
   { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.3 },
 ];

@@ -18,11 +18,9 @@ export const proxy = async (request: NextRequest) => {
     "/blog",
     "/terms",
     "/privacy",
-    // 受験英語 LINE 質問サポートの案内。未ログインの訪問者が読むページなので公開。
-    "/support",
   ];
   // 動的ルート（/articles/xxx）は前方一致で公開判定
-  const publicPrefixes = ["/articles", "/support/"];
+  const publicPrefixes = ["/articles"];
   const isPublic =
     publicPaths.includes(pathname) ||
     publicPrefixes.some((prefix) => pathname.startsWith(prefix));
@@ -30,8 +28,7 @@ export const proxy = async (request: NextRequest) => {
   // 未ログインで API を叩いたら 401
   if (
     !sessionCookie &&
-    pathname.startsWith("/api/") &&
-    pathname !== "/api/stripe/webhook"
+    pathname.startsWith("/api/")
   ) {
     // Better Auth 自身のエンドポイントは除外
     if (!pathname.startsWith("/api/auth/")) {
