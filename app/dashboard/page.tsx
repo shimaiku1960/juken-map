@@ -5,7 +5,6 @@ import prisma from "@/lib/prisma";
 import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import ExamCountdown, { type CountdownGoal } from "@/app/components/ExamCountdown";
 import StudyRecordDashboard from "@/app/components/StudyRecordDashboard";
 import type { StudyLog } from "@/app/hooks/useStudyLogs";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
@@ -43,13 +42,6 @@ const DashboardPage = async () => {
   ]);
 
   const decidedGoals = goals.filter((goal) => goal.status === "decided");
-  const countdownGoals: CountdownGoal[] = decidedGoals.map((goal) => ({
-    id: goal.id,
-    universityName: goal.faculty.university.name,
-    facultyName: goal.faculty.name,
-    examDate: goal.faculty.examDate,
-    isFirstChoice: goal.isFirstChoice,
-  }));
 
   const initialPlans: StudyPlan[] = plans.map((plan) => ({
     id: plan.id,
@@ -113,11 +105,6 @@ const DashboardPage = async () => {
     <PageShell>
       <PageHeader title="記録・予定" description="学習予定と実績をまとめて確認できます。" />
 
-      <section className="mb-8">
-        <SectionHeader title="受験カウントダウン" />
-        <ExamCountdown goals={countdownGoals} />
-      </section>
-
       <StudyRecordDashboard
         initialLogs={initialLogs}
         initialPlans={initialPlans}
@@ -151,10 +138,6 @@ const DashboardPage = async () => {
           </CardContent>
         </Card>
       </section>
-
-      <p className="text-sm text-muted-foreground">
-        ※ 表示している受験日は暫定です。正式な日程は各大学の募集要項で必ずご確認ください。
-      </p>
     </PageShell>
   );
 };
