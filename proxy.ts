@@ -24,11 +24,15 @@ export const proxy = async (request: NextRequest) => {
   const isPublic =
     publicPaths.includes(pathname) ||
     publicPrefixes.some((prefix) => pathname.startsWith(prefix));
+  // 定期実行APIはセッションCookieではなく、Route Handler内のBearer秘密値で認証する。
+  const usesServiceAuthentication =
+    pathname === "/api/cron/daily-study-notifications";
 
   // 未ログインで API を叩いたら 401
   if (
     !sessionCookie &&
-    pathname.startsWith("/api/")
+    pathname.startsWith("/api/") &&
+    !usesServiceAuthentication
   ) {
     // Better Auth 自身のエンドポイントは除外
     if (!pathname.startsWith("/api/auth/")) {

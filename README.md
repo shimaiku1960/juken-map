@@ -204,8 +204,9 @@ docker compose up --build
 | `BETTER_AUTH_URL` | Better AuthのベースURL |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | GitHub OAuth |
-| `RESEND_API_KEY` | メール確認・パスワード再設定・新規登録通知 |
+| `RESEND_API_KEY` | メール確認・パスワード再設定・各種メール通知 |
 | `ADMIN_NOTIFICATION_EMAIL` | 新規ユーザー登録の通知先メールアドレス |
+| `DAILY_NOTIFICATION_SECRET` | 朝・夜の学習通知APIを保護する秘密値（本番サーバーとGitHub Actionsで同じ値を設定） |
 | `MICROCMS_API_KEY` / `MICROCMS_SERVICE_DOMAIN` | ブログ記事の取得 |
 
 ## npm scripts

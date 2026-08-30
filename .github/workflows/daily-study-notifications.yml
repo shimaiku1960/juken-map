@@ -1,0 +1,47 @@
+name: Daily study notifications
+
+on:
+  schedule:
+    # GitHub cron is UTC. 22:00 UTC = 07:00 JST, 12:00 UTC = 21:00 JST.
+    - cron: "0 22 * * *"
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: Notification slot
+        required: true
+        type: choice
+        options:
+          - morning
+          - evening
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Select notification slot
+        id: slot
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_SLOT: ${{ inputs.slot }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "value=$MANUAL_SLOT" >> "$GITHUB_OUTPUT"
+          elif [ "$SCHEDULE" = "0 22 * * *" ]; then
+            echo "value=morning" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=evening" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send notifications
+        env:
+          DAILY_NOTIFICATION_SECRET: ${{ secrets.DAILY_NOTIFICATION_SECRET }}
+          SLOT: ${{ steps.slot.outputs.value }}
+        run: |
+          curl --fail-with-body --retry 2 \
+            --request POST \
+            --header "Authorization: Bearer $DAILY_NOTIFICATION_SECRET" \
+            --header "Content-Type: application/json" \
+            --data "{\"slot\":\"$SLOT\"}" \
+            https://juken-map.com/api/cron/daily-study-notifications
