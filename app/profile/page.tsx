@@ -12,6 +12,8 @@ import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import prisma from "@/lib/prisma";
+import NotificationPreferenceForm from "@/app/components/NotificationPreferenceForm";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
@@ -27,6 +29,11 @@ const ProfilePage = async () => {
 
     const user = session.user;
     const nickname = user.nickname ?? user.name ?? "ユーザー";
+    const notificationPreference =
+      await prisma.notificationPreference.findUnique({
+        where: { userId: user.id },
+        select: { morningEnabled: true, eveningEnabled: true },
+      });
 
       return (
         <PageShell>
@@ -68,6 +75,19 @@ const ProfilePage = async () => {
       </Link>
     </CardContent>
   </Card>
+  </section>
+
+  <section className="mt-10">
+    <SectionHeader title="メール通知" />
+    <Card>
+      <CardContent className="py-5">
+        <NotificationPreferenceForm
+          morningEnabled={notificationPreference?.morningEnabled ?? false}
+          eveningEnabled={notificationPreference?.eveningEnabled ?? false}
+          readOnly={user.email === DEMO_EMAIL}
+        />
+      </CardContent>
+    </Card>
   </section>
         </PageShell>
       );

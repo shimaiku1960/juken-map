@@ -20,17 +20,41 @@ model User {
   image    String?
   nickname String?
 
-  accounts      Account[]
-  sessions      Session[]
-  finalGoals    FinalGoal[]
-  studyPlans    StudyPlan[]
-  studyLogs     StudyLog[]
-  textbooks     Textbook[]
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  emailVerified Boolean     @default(false)
+  accounts               Account[]
+  sessions               Session[]
+  finalGoals             FinalGoal[]
+  studyPlans             StudyPlan[]
+  studyLogs              StudyLog[]
+  textbooks              Textbook[]
+  notificationPreference NotificationPreference?
+  notificationDeliveries NotificationDelivery[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  emailVerified          Boolean                 @default(false)
 
   @@map("user")
+}
+
+model NotificationPreference {
+  id             Int      @id @default(autoincrement())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  morningEnabled Boolean  @default(false)
+  eveningEnabled Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model NotificationDelivery {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  slot      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date, slot])
+  @@index([date, slot])
 }
 
 model Account {
