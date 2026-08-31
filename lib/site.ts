@@ -6,6 +6,9 @@
  */
 export const SITE_URL = "https://juken-map.com";
 
+/** LINE公式アカウントの友だち追加・トーク画面。Bot basic IDは公開情報。 */
+export const LINE_OFFICIAL_ACCOUNT_URL = "https://line.me/R/ti/p/@629pxqus";
+
 /**
  * 検索結果に載せないページ用の robots 設定。
  *

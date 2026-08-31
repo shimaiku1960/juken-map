@@ -56,10 +56,14 @@ export function buildDailyNotification(args: {
           .map((plan) => `<li>${escapeHtml(planLabel(plan))}</li>`)
           .join("")}</ul>`
       : "";
+    const textList = plans.length
+      ? `\n${plans.slice(0, 5).map((plan) => `・${planLabel(plan)}`).join("\n")}`
+      : "";
 
     return {
       subject: "【受験マップ】今日の学習予定",
       html: `<p>${safeName}さん、おはようございます。</p><p>${planText}</p>${planList}<p><a href="${SITE_URL}/dashboard">今日の学習を始める</a></p>`,
+      text: `${nickname}さん、おはようございます。\n${planText}${textList}\n\n今日の学習を始める\n${SITE_URL}/dashboard`,
     };
   }
 
@@ -77,5 +81,6 @@ export function buildDailyNotification(args: {
   return {
     subject: "【受験マップ】今日の学習振り返り",
     html: `<p>${safeName}さん、今日もおつかれさまでした。</p><p>${effort}</p><p>${achievement}</p><p><a href="${SITE_URL}/dashboard">今日を振り返る</a></p>`,
+    text: `${nickname}さん、今日もおつかれさまでした。\n${effort}\n${achievement}\n\n今日を振り返る\n${SITE_URL}/dashboard`,
   };
 }
