@@ -6,6 +6,7 @@ import {
   replyLineText,
   verifyLineSignature,
 } from "@/lib/line";
+import { SITE_URL } from "@/lib/site";
 
 type LineEvent = {
   type: string;
@@ -58,7 +59,7 @@ async function completeAccountLink(event: LineEvent) {
     await replyLineText(
       event.replyToken,
       linked
-        ? "受験マップとの連携が完了しました。プロフィールでLINE通知を選べます。"
+        ? `受験マップとの連携が完了しました。\n通知設定を続ける → ${SITE_URL}/profile#notification-settings`
         : "このLINEは別の受験マップアカウントに連携済みです。以前のアカウントでLINE連携を解除してから、もう一度お試しください。"
     );
   }

@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
 import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
+import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/app/hooks/useBrowserNavigation";
+import { isLineInAppBrowser } from "@/lib/browser";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -20,18 +22,18 @@ export default function LoginPage() {
   const [resendLoading, setResendLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isLineBrowser = useIsLineInAppBrowser();
+  const callbackURL = useSafeCallbackURL("/");
   const authLoading =
     demoLoading || signInLoading || socialLoading || resendLoading;
 
-  const callbackURL = () => {
-    const requested = new URLSearchParams(window.location.search).get("callbackURL");
-    return requested?.startsWith("/") && !requested.startsWith("//") ? requested : "/";
-  };
-
   const handleSocialSignIn = async (provider: "google" | "github") => {
+    if (provider === "google" && isLineInAppBrowser(window.navigator.userAgent)) {
+      return;
+    }
     setSocialLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.signIn.social({ provider, callbackURL: callbackURL() });
+    const { error } = await authClient.signIn.social({ provider, callbackURL });
     if (error) {
       setErrorMessage(error.message ?? "外部サービスでのログインに失敗しました");
       setSocialLoading(false);
@@ -58,7 +60,7 @@ export default function LoginPage() {
       setSignInLoading(false);
       return;
     }
-    window.location.href = callbackURL();
+    window.location.href = callbackURL;
   };
 
   const handleResendVerification = async () => {
@@ -66,7 +68,7 @@ export default function LoginPage() {
     setErrorMessage(null);
     const { error } = await authClient.sendVerificationEmail({
       email,
-      callbackURL: "/dashboard",
+      callbackURL,
     });
     if (error) {
       setErrorMessage(error.message ?? "確認メールの再送に失敗しました");
@@ -76,7 +78,9 @@ export default function LoginPage() {
     setErrorMessage(null);
     setNeedsVerification(false);
     sessionStorage.setItem("pendingVerificationEmail", email);
-    window.location.href = "/verify-email";
+    window.location.href = callbackURL === "/"
+      ? "/verify-email"
+      : `/verify-email?callbackURL=${encodeURIComponent(callbackURL)}`;
   };
 
   // 面接官などがアカウント登録なしで中身を体験できる共有デモアカウント
@@ -135,23 +139,31 @@ export default function LoginPage() {
       </form>
 
       <Link
-        href="/signup"
+        href={callbackURL === "/" ? "/signup" : `/signup?callbackURL=${encodeURIComponent(callbackURL)}`}
         className="mt-2 flex min-h-11 items-center justify-center text-sm text-primary hover:underline"
       >
         アカウントをお持ちでない方はこちら
       </Link>
 
       <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">または</div>
+      {isLineBrowser ? (
+        <InlineFeedback variant="warning" className="mb-4">
+          <p className="font-medium">GoogleログインはLINE内ブラウザでは利用できません</p>
+          <p className="mt-1">
+            LINEのブラウザメニューから「デフォルトのブラウザで開く」などの項目を選び、SafariまたはChromeで続けてください。
+          </p>
+        </InlineFeedback>
+      ) : null}
       {/* 上のログインボタンと同じ h-11。ここだけ既定の h-8 だと
           スマホで押しにくく、同じ画面内で高さも揃わない。 */}
       <Button
         className="h-11 w-full"
         size="lg"
         variant="outline"
-        disabled={authLoading}
+        disabled={authLoading || isLineBrowser}
         onClick={() => void handleSocialSignIn("google")}
       >
-        Googleでログイン
+        {isLineBrowser ? "Googleログインは外部ブラウザで利用" : "Googleでログイン"}
       </Button>
       <Button
         className="mt-3 h-11 w-full"
