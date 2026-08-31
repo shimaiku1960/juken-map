@@ -80,6 +80,8 @@ flowchart LR
 
 本番では、GitHub ActionsがDockerイメージをECRへpushします。デプロイ処理はSSM Run CommandでEC2上に実行し、EC2のIAMインスタンスロールを使ってイメージをpullします。SSHの22番ポートは公開していません。
 
+本番のLINE API秘密情報はAWS Secrets Managerの`juken-map/production/runtime`で管理します。デプロイスクリプトがEC2のIAMインスタンスロールで取得し、コンテナ起動時だけ一時的な環境変数ファイルとして渡します。秘密値はTerraform stateやGitHub Actionsへ保存しません。
+
 ## テックスタック
 
 | カテゴリ | 技術 |

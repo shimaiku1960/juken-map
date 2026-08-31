@@ -5,6 +5,26 @@ set -euo pipefail
 IMAGE_TAG="${1:?IMAGE_TAG is required}"
 REPO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map"
 ENV_FILE="/home/ubuntu/juken-map/.env"
+RUNTIME_SECRET_ID="juken-map/production/runtime"
+
+# Secrets Managerから取得した値はコンテナ作成時だけ一時ファイルに置く。
+# 既存.envから移行対象キーを除外し、同じ環境変数が重複しない状態でDockerへ渡す。
+RUNTIME_ENV_FILE="$(mktemp)"
+trap 'rm -f "$RUNTIME_ENV_FILE"' EXIT
+chmod 600 "$RUNTIME_ENV_FILE"
+grep -Ev '^(LINE_CHANNEL_SECRET|LINE_CHANNEL_ACCESS_TOKEN)=' "$ENV_FILE" > "$RUNTIME_ENV_FILE"
+
+secret_json="$(aws secretsmanager get-secret-value \
+  --secret-id "$RUNTIME_SECRET_ID" \
+  --region ap-northeast-1 \
+  --query SecretString \
+  --output text)"
+
+LINE_CHANNEL_SECRET="$(jq -er '.LINE_CHANNEL_SECRET | strings | select(length > 0)' <<<"$secret_json")"
+LINE_CHANNEL_ACCESS_TOKEN="$(jq -er '.LINE_CHANNEL_ACCESS_TOKEN | strings | select(length > 0)' <<<"$secret_json")"
+printf 'LINE_CHANNEL_SECRET=%s\n' "$LINE_CHANNEL_SECRET" >> "$RUNTIME_ENV_FILE"
+printf 'LINE_CHANNEL_ACCESS_TOKEN=%s\n' "$LINE_CHANNEL_ACCESS_TOKEN" >> "$RUNTIME_ENV_FILE"
+unset secret_json LINE_CHANNEL_SECRET LINE_CHANNEL_ACCESS_TOKEN
 
 aws ecr get-login-password --region ap-northeast-1 \
   | docker login --username AWS --password-stdin 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com
@@ -23,7 +43,7 @@ docker rm juken-map || true
 docker run -d \
   --name juken-map \
   --restart always \
-  --env-file "$ENV_FILE" \
+  --env-file "$RUNTIME_ENV_FILE" \
   -p 3000:3000 \
   "$REPO:$IMAGE_TAG"
 
@@ -48,7 +68,7 @@ if [ "$ok" != "true" ]; then
     docker run -d \
       --name juken-map \
       --restart always \
-      --env-file "$ENV_FILE" \
+      --env-file "$RUNTIME_ENV_FILE" \
       -p 3000:3000 \
       "$PREV"
   fi
