@@ -19,6 +19,7 @@ export const proxy = async (request: NextRequest) => {
     "/terms",
     "/privacy",
     "/line/link",
+    "/line/settings",
   ];
   // 動的ルート（/articles/xxx）は前方一致で公開判定
   const publicPrefixes = ["/articles"];
