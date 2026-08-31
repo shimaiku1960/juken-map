@@ -11,7 +11,7 @@ export default function PrivacyPage() {
     <LegalDocument
       title="プライバシーポリシー"
       description="受験マップがお預かりする情報と、その使い方を分かりやすくご説明します。"
-      effectiveDate="2026年8月13日"
+      effectiveDate="2026年8月30日"
       sections={[
         {
           title: "基本方針",
@@ -29,6 +29,7 @@ export default function PrivacyPage() {
               <ul>
                 <li><strong>アカウント情報：</strong>メールアドレス、表示名、プロフィール画像、メールアドレスの確認状況</li>
                 <li><strong>外部アカウント情報：</strong>GoogleまたはGitHubで登録・ログインした場合に、各サービスから提供される識別情報</li>
+                <li><strong>LINE連携情報：</strong>LINE通知を利用する場合のLINEユーザー識別子、連携状態、通知設定および配信記録</li>
                 <li><strong>学習に関する情報：</strong>志望校、学習予定、学習実績、学習時間、教材、学習範囲、メモ</li>
                 <li><strong>利用時の情報：</strong>IPアドレス、ブラウザや端末に関する情報、Cookie、セッション情報、アクセス日時、操作やエラーの記録</li>
                 <li><strong>お問い合わせ情報：</strong>お問い合わせの内容と、回答に必要な連絡先</li>
@@ -45,6 +46,7 @@ export default function PrivacyPage() {
                 <li>アカウントの登録、本人確認、ログイン機能を提供するため</li>
                 <li>学習予定・実績の保存や表示など、本サービスの機能を提供するため</li>
                 <li>メールアドレスの確認やパスワード再設定の案内を送るため</li>
+                <li>利用者が選択した場合に、学習予定や学習実績に関する通知をメールまたはLINEで送るため</li>
                 <li>お問い合わせへの回答や、重要なお知らせを行うため</li>
                 <li>不正利用の防止、障害の調査、セキュリティの確保のため</li>
                 <li>個人を直接特定できない形で利用状況を分析し、本サービスを改善するため</li>
@@ -69,6 +71,7 @@ export default function PrivacyPage() {
               <ul>
                 <li><strong>Google・GitHub：</strong>外部アカウントによる登録とログイン</li>
                 <li><strong>Resend：</strong>メールアドレスの確認やパスワード再設定メールの送信</li>
+                <li><strong>LINEヤフー株式会社：</strong>利用者が希望した場合のLINEアカウント連携と学習通知の送信</li>
                 <li><strong>Amazon Web Services：</strong>本サービスとデータベースの運用</li>
               </ul>
               <p>

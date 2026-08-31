@@ -28,6 +28,8 @@ model User {
   textbooks              Textbook[]
   notificationPreference NotificationPreference?
   notificationDeliveries NotificationDelivery[]
+  lineConnection         LineConnection?
+  lineLinkNonces         LineLinkNonce[]
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   emailVerified          Boolean                 @default(false)
@@ -36,13 +38,15 @@ model User {
 }
 
 model NotificationPreference {
-  id             Int      @id @default(autoincrement())
-  userId         String   @unique
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  morningEnabled Boolean  @default(false)
-  eveningEnabled Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 Int      @id @default(autoincrement())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  morningEnabled     Boolean  @default(false)
+  eveningEnabled     Boolean  @default(false)
+  lineMorningEnabled Boolean  @default(false)
+  lineEveningEnabled Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model NotificationDelivery {
@@ -51,10 +55,32 @@ model NotificationDelivery {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   slot      String
+  channel   String   @default("email")
   createdAt DateTime @default(now())
 
-  @@unique([userId, date, slot])
-  @@index([date, slot])
+  @@unique([userId, date, slot, channel])
+  @@index([date, slot, channel])
+}
+
+model LineConnection {
+  id         Int      @id @default(autoincrement())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lineUserId String   @unique
+  linkedAt   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model LineLinkNonce {
+  nonce     String   @id @db.VarChar(255)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Account {

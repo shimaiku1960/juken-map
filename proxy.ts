@@ -18,6 +18,7 @@ export const proxy = async (request: NextRequest) => {
     "/blog",
     "/terms",
     "/privacy",
+    "/line/link",
   ];
   // 動的ルート（/articles/xxx）は前方一致で公開判定
   const publicPrefixes = ["/articles"];
@@ -26,7 +27,8 @@ export const proxy = async (request: NextRequest) => {
     publicPrefixes.some((prefix) => pathname.startsWith(prefix));
   // 定期実行APIはセッションCookieではなく、Route Handler内のBearer秘密値で認証する。
   const usesServiceAuthentication =
-    pathname === "/api/cron/daily-study-notifications";
+    pathname === "/api/cron/daily-study-notifications" ||
+    pathname === "/api/line/webhook";
 
   // 未ログインで API を叩いたら 401
   if (

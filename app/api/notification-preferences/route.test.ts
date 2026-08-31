@@ -9,6 +9,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   default: {
     notificationPreference: { findUnique: vi.fn(), upsert: vi.fn() },
+    lineConnection: { findUnique: vi.fn() },
   },
 }));
 vi.mock("next/headers", () => ({
@@ -30,8 +31,10 @@ describe("GET /api/notification-preferences", () => {
     findUnique.mockResolvedValue(null);
 
     await expect((await GET()).json()).resolves.toEqual({
-      morningEnabled: false,
-      eveningEnabled: false,
+      emailMorningEnabled: false,
+      emailEveningEnabled: false,
+      lineMorningEnabled: false,
+      lineEveningEnabled: false,
     });
   });
 });
@@ -47,25 +50,33 @@ describe("PUT /api/notification-preferences", () => {
       user: { id: "demo", email: "demo@juken-map.com" },
     });
     expect(
-      (await PUT(request({ morningEnabled: true, eveningEnabled: true }))).status
+      (await PUT(request({ emailMorningEnabled: true, emailEveningEnabled: true, lineMorningEnabled: false, lineEveningEnabled: false }))).status
     ).toBe(403);
   });
 
   it("設定をupsertする", async () => {
     getSession.mockResolvedValue(session);
-    const preference = { morningEnabled: true, eveningEnabled: false };
-    upsert.mockResolvedValue(preference);
+    const input = { emailMorningEnabled: true, emailEveningEnabled: false, lineMorningEnabled: false, lineEveningEnabled: false };
+    upsert.mockResolvedValue({ morningEnabled: true, eveningEnabled: false, lineMorningEnabled: false, lineEveningEnabled: false });
 
-    const response = await PUT(request(preference));
+    const response = await PUT(request(input));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(preference);
+    await expect(response.json()).resolves.toEqual(input);
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: "user-1" },
-        create: { userId: "user-1", ...preference },
-        update: preference,
+        create: { userId: "user-1", morningEnabled: true, eveningEnabled: false, lineMorningEnabled: false, lineEveningEnabled: false },
+        update: { morningEnabled: true, eveningEnabled: false, lineMorningEnabled: false, lineEveningEnabled: false },
       })
     );
+  });
+
+  it("未連携ではLINE通知を有効化できない", async () => {
+    getSession.mockResolvedValue(session);
+    vi.mocked(prisma.lineConnection.findUnique).mockResolvedValue(null);
+    const response = await PUT(request({ emailMorningEnabled: false, emailEveningEnabled: false, lineMorningEnabled: true, lineEveningEnabled: false }));
+    expect(response.status).toBe(400);
+    expect(upsert).not.toHaveBeenCalled();
   });
 });

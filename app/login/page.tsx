@@ -23,10 +23,15 @@ export default function LoginPage() {
   const authLoading =
     demoLoading || signInLoading || socialLoading || resendLoading;
 
+  const callbackURL = () => {
+    const requested = new URLSearchParams(window.location.search).get("callbackURL");
+    return requested?.startsWith("/") && !requested.startsWith("//") ? requested : "/";
+  };
+
   const handleSocialSignIn = async (provider: "google" | "github") => {
     setSocialLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.signIn.social({ provider, callbackURL: "/" });
+    const { error } = await authClient.signIn.social({ provider, callbackURL: callbackURL() });
     if (error) {
       setErrorMessage(error.message ?? "外部サービスでのログインに失敗しました");
       setSocialLoading(false);
@@ -53,7 +58,7 @@ export default function LoginPage() {
       setSignInLoading(false);
       return;
     }
-    window.location.href = "/";
+    window.location.href = callbackURL();
   };
 
   const handleResendVerification = async () => {

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { NOINDEX } from "@/lib/site";
+import { LINE_OFFICIAL_ACCOUNT_URL, NOINDEX } from "@/lib/site";
 import Link from "next/link";
 import ProfileEdit from "@/app/components/ProfileEdit";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,8 +32,9 @@ const ProfilePage = async () => {
     const notificationPreference =
       await prisma.notificationPreference.findUnique({
         where: { userId: user.id },
-        select: { morningEnabled: true, eveningEnabled: true },
+        select: { morningEnabled: true, eveningEnabled: true, lineMorningEnabled: true, lineEveningEnabled: true },
       });
+    const lineConnection = await prisma.lineConnection.findUnique({ where: { userId: user.id }, select: { id: true } });
 
       return (
         <PageShell>
@@ -78,12 +79,16 @@ const ProfilePage = async () => {
   </section>
 
   <section className="mt-10">
-    <SectionHeader title="メール通知" />
+    <SectionHeader title="通知設定" />
     <Card>
       <CardContent className="py-5">
         <NotificationPreferenceForm
-          morningEnabled={notificationPreference?.morningEnabled ?? false}
-          eveningEnabled={notificationPreference?.eveningEnabled ?? false}
+          emailMorningEnabled={notificationPreference?.morningEnabled ?? false}
+          emailEveningEnabled={notificationPreference?.eveningEnabled ?? false}
+          lineMorningEnabled={notificationPreference?.lineMorningEnabled ?? false}
+          lineEveningEnabled={notificationPreference?.lineEveningEnabled ?? false}
+          initialLineConnected={Boolean(lineConnection)}
+          lineOfficialAccountUrl={LINE_OFFICIAL_ACCOUNT_URL}
           readOnly={user.email === DEMO_EMAIL}
         />
       </CardContent>

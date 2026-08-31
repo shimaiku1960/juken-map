@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/lib/prisma";
 import { getResend } from "@/lib/resend";
 import { sendDailyNotifications } from "@/lib/sendDailyNotifications";
+import { pushLineText } from "@/lib/line";
 
 vi.mock("@/lib/prisma", () => ({
   default: {
@@ -10,6 +11,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 vi.mock("@/lib/resend", () => ({ getResend: vi.fn() }));
+vi.mock("@/lib/line", () => ({ pushLineText: vi.fn() }));
 
 const findUsers = vi.mocked(prisma.user.findMany);
 const createDelivery = vi.mocked(prisma.notificationDelivery.create);
@@ -31,6 +33,8 @@ describe("sendDailyNotifications", () => {
         email: "me@example.com",
         name: "User",
         nickname: "育朗",
+        notificationPreference: { morningEnabled: false, eveningEnabled: true, lineMorningEnabled: false, lineEveningEnabled: false },
+        lineConnection: null,
         studyPlans: [],
         studyLogs: [{ minutes: 30 }],
       },
@@ -46,7 +50,7 @@ describe("sendDailyNotifications", () => {
     expect(result).toMatchObject({ sent: 1, skipped: 0, failed: 0 });
     expect(createDelivery).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ userId: "user-1", slot: "evening" }),
+        data: expect.objectContaining({ userId: "user-1", slot: "evening", channel: "email" }),
       })
     );
     expect(send).toHaveBeenCalledWith(
@@ -61,6 +65,8 @@ describe("sendDailyNotifications", () => {
         email: "me@example.com",
         name: "User",
         nickname: null,
+        notificationPreference: { morningEnabled: true, eveningEnabled: false, lineMorningEnabled: false, lineEveningEnabled: false },
+        lineConnection: null,
         studyPlans: [],
         studyLogs: [],
       },
@@ -80,6 +86,8 @@ describe("sendDailyNotifications", () => {
         email: "me@example.com",
         name: "User",
         nickname: null,
+        notificationPreference: { morningEnabled: true, eveningEnabled: false, lineMorningEnabled: false, lineEveningEnabled: false },
+        lineConnection: null,
         studyPlans: [],
         studyLogs: [],
       },
@@ -92,5 +100,28 @@ describe("sendDailyNotifications", () => {
 
     expect(result.failed).toBe(1);
     expect(deleteDelivery).toHaveBeenCalledWith({ where: { id: 10 } });
+  });
+
+  it("メールとLINEをそれぞれ独立して送信する", async () => {
+    findUsers.mockResolvedValue([{
+      id: "user-1",
+      email: "me@example.com",
+      name: "User",
+      nickname: null,
+      notificationPreference: { morningEnabled: true, eveningEnabled: false, lineMorningEnabled: true, lineEveningEnabled: false },
+      lineConnection: { lineUserId: "U123" },
+      studyPlans: [],
+      studyLogs: [],
+    }] as never);
+    createDelivery.mockResolvedValueOnce({ id: 10 } as never).mockResolvedValueOnce({ id: 11 } as never);
+    send.mockResolvedValue({ data: { id: "mail-1" }, error: null });
+    vi.mocked(pushLineText).mockResolvedValue(undefined);
+
+    const result = await sendDailyNotifications("morning");
+
+    expect(result).toMatchObject({ eligible: 2, sent: 2, failed: 0 });
+    expect(createDelivery).toHaveBeenNthCalledWith(1, expect.objectContaining({ data: expect.objectContaining({ channel: "email" }) }));
+    expect(createDelivery).toHaveBeenNthCalledWith(2, expect.objectContaining({ data: expect.objectContaining({ channel: "line" }) }));
+    expect(pushLineText).toHaveBeenCalledWith("U123", expect.stringContaining("おはようございます"));
   });
 });

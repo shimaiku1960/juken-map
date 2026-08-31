@@ -6,8 +6,10 @@ import prisma from "@/lib/prisma";
 import { notificationPreferenceSchema } from "@/lib/validations/notification";
 
 const DEFAULT_PREFERENCE = {
-  morningEnabled: false,
-  eveningEnabled: false,
+  emailMorningEnabled: false,
+  emailEveningEnabled: false,
+  lineMorningEnabled: false,
+  lineEveningEnabled: false,
 };
 
 export async function GET() {
@@ -18,10 +20,15 @@ export async function GET() {
 
   const preference = await prisma.notificationPreference.findUnique({
     where: { userId: session.user.id },
-    select: { morningEnabled: true, eveningEnabled: true },
+    select: { morningEnabled: true, eveningEnabled: true, lineMorningEnabled: true, lineEveningEnabled: true },
   });
 
-  return NextResponse.json(preference ?? DEFAULT_PREFERENCE);
+  return NextResponse.json(preference ? {
+    emailMorningEnabled: preference.morningEnabled,
+    emailEveningEnabled: preference.eveningEnabled,
+    lineMorningEnabled: preference.lineMorningEnabled,
+    lineEveningEnabled: preference.lineEveningEnabled,
+  } : DEFAULT_PREFERENCE);
 }
 
 export async function PUT(request: Request) {
@@ -41,12 +48,29 @@ export async function PUT(request: Request) {
     );
   }
 
+  if (result.data.lineMorningEnabled || result.data.lineEveningEnabled) {
+    const connection = await prisma.lineConnection.findUnique({ where: { userId: session.user.id }, select: { id: true } });
+    if (!connection) return NextResponse.json({ error: "LINEと連携してからLINE通知を選択してください" }, { status: 400 });
+  }
+
+  const data = {
+    morningEnabled: result.data.emailMorningEnabled,
+    eveningEnabled: result.data.emailEveningEnabled,
+    lineMorningEnabled: result.data.lineMorningEnabled,
+    lineEveningEnabled: result.data.lineEveningEnabled,
+  };
+
   const preference = await prisma.notificationPreference.upsert({
     where: { userId: session.user.id },
-    create: { userId: session.user.id, ...result.data },
-    update: result.data,
-    select: { morningEnabled: true, eveningEnabled: true },
+    create: { userId: session.user.id, ...data },
+    update: data,
+    select: { morningEnabled: true, eveningEnabled: true, lineMorningEnabled: true, lineEveningEnabled: true },
   });
 
-  return NextResponse.json(preference);
+  return NextResponse.json({
+    emailMorningEnabled: preference.morningEnabled,
+    emailEveningEnabled: preference.eveningEnabled,
+    lineMorningEnabled: preference.lineMorningEnabled,
+    lineEveningEnabled: preference.lineEveningEnabled,
+  });
 }
