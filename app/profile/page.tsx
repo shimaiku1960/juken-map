@@ -78,7 +78,7 @@ const ProfilePage = async () => {
   </Card>
   </section>
 
-  <section className="mt-10">
+  <section id="notification-settings" className="mt-10 scroll-mt-6">
     <SectionHeader title="通知設定" />
     <Card>
       <CardContent className="py-5">

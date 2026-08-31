@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
 import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
+import { useSafeCallbackURL } from "@/app/hooks/useBrowserNavigation";
 
 const subscribeToPendingEmail = () => () => {};
 const getPendingEmail = () =>
@@ -26,6 +27,7 @@ export default function VerifyEmailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const verificationEmail = email ?? pendingEmail;
+  const callbackURL = useSafeCallbackURL("/dashboard");
 
   const handleResend = async () => {
     setLoading(true);
@@ -33,7 +35,7 @@ export default function VerifyEmailPage() {
     setErrorMessage(null);
     const { error } = await authClient.sendVerificationEmail({
       email: verificationEmail,
-      callbackURL: "/dashboard",
+      callbackURL,
     });
     if (error) {
       setErrorMessage(error.message ?? "確認メールの再送に失敗しました");
@@ -49,7 +51,7 @@ export default function VerifyEmailPage() {
     <PageShell className="max-w-md">
       <PageHeader
         title="メールをご確認ください"
-        description="確認メール内のリンクを開くと登録が完了し、ダッシュボードへ移動します。"
+        description="確認メール内のリンクを開くと登録が完了し、受験マップへ移動します。"
       />
 
       <InlineFeedback variant="info" className="mb-4">
@@ -99,7 +101,7 @@ export default function VerifyEmailPage() {
       </form>
 
       <Link
-        href="/login"
+        href={callbackURL === "/dashboard" ? "/login" : `/login?callbackURL=${encodeURIComponent(callbackURL)}`}
         className="mt-4 block text-center text-sm text-primary hover:underline"
       >
         確認済みの方はログインへ

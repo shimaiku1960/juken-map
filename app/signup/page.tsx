@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
 import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
+import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/app/hooks/useBrowserNavigation";
+import { isLineInAppBrowser } from "@/lib/browser";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -18,6 +20,8 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isLineBrowser = useIsLineInAppBrowser();
+  const callbackURL = useSafeCallbackURL("/dashboard");
   const authLoading = loading || socialLoading;
 
   const handleSignUp = async () => {
@@ -27,7 +31,7 @@ export default function SignUpPage() {
       email,
       password,
       name: email,
-      callbackURL: "/dashboard",
+      callbackURL,
     });
     if (error) {
       setErrorMessage(error.message ?? "登録に失敗しました");
@@ -36,14 +40,19 @@ export default function SignUpPage() {
     }
     sessionStorage.setItem("pendingVerificationEmail", email);
     toast.success("確認メールを送信しました");
-    window.location.href = "/verify-email";
+    window.location.href = callbackURL === "/dashboard"
+      ? "/verify-email"
+      : `/verify-email?callbackURL=${encodeURIComponent(callbackURL)}`;
   };
 
   // OAuth はサインイン＝サインアップ兼用。アカウントが無ければここで作成される。
   const handleSocialSignUp = async (provider: "google" | "github") => {
+    if (provider === "google" && isLineInAppBrowser(window.navigator.userAgent)) {
+      return;
+    }
     setSocialLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.signIn.social({ provider, callbackURL: "/" });
+    const { error } = await authClient.signIn.social({ provider, callbackURL });
     if (error) {
       setErrorMessage(error.message ?? "外部サービスでの登録に失敗しました");
       setSocialLoading(false);
@@ -69,22 +78,30 @@ export default function SignUpPage() {
       </form>
 
       <Link
-        href="/login"
+        href={callbackURL === "/dashboard" ? "/login" : `/login?callbackURL=${encodeURIComponent(callbackURL)}`}
         className="mt-2 flex min-h-11 items-center justify-center text-sm text-primary hover:underline"
       >
         すでにアカウントをお持ちの方はこちら
       </Link>
 
       <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">または</div>
+      {isLineBrowser ? (
+        <InlineFeedback variant="warning" className="mb-4">
+          <p className="font-medium">Google登録はLINE内ブラウザでは利用できません</p>
+          <p className="mt-1">
+            LINEのブラウザメニューから「デフォルトのブラウザで開く」などの項目を選び、SafariまたはChromeで続けてください。
+          </p>
+        </InlineFeedback>
+      ) : null}
       {/* 上の登録ボタンと同じ h-11 に揃える（既定の h-8 はスマホで押しにくい）。 */}
       <Button
         className="h-11 w-full"
         size="lg"
         variant="outline"
-        disabled={authLoading}
+        disabled={authLoading || isLineBrowser}
         onClick={() => void handleSocialSignUp("google")}
       >
-        Googleで登録
+        {isLineBrowser ? "Google登録は外部ブラウザで利用" : "Googleで登録"}
       </Button>
       <Button
         className="mt-3 h-11 w-full"

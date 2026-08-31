@@ -82,6 +82,10 @@ describe("POST /api/line/webhook", () => {
       where: { nonce: "nonce-1" },
     });
     expect(replyLineText).toHaveBeenCalledWith("reply-token", expect.stringContaining("連携が完了"));
+    expect(replyLineText).toHaveBeenCalledWith(
+      "reply-token",
+      expect.stringContaining("https://juken-map.com/profile#notification-settings")
+    );
   });
 
   it("別ユーザーに連携済みなら解除方法を返信する", async () => {
