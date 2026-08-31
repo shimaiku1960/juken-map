@@ -19,6 +19,17 @@ type LineEvent = {
 async function sendLinkGuide(event: LineEvent) {
   const lineUserId = event.source?.userId;
   if (!lineUserId || !event.replyToken) return;
+  const connection = await prisma.lineConnection.findUnique({
+    where: { lineUserId },
+    select: { id: true },
+  });
+  if (connection) {
+    await replyLineText(
+      event.replyToken,
+      `受験マップとはすでに連携済みです。\n通知設定を確認する → ${SITE_URL}/line/settings`
+    );
+    return;
+  }
   const linkToken = await issueLineLinkToken(lineUserId);
   await replyLineText(
     event.replyToken,
@@ -59,7 +70,7 @@ async function completeAccountLink(event: LineEvent) {
     await replyLineText(
       event.replyToken,
       linked
-        ? `受験マップとの連携が完了しました。\n通知設定を続ける → ${SITE_URL}/profile#notification-settings`
+        ? `受験マップとの連携が完了しました。\n通知設定を続ける → ${SITE_URL}/line/settings`
         : "このLINEは別の受験マップアカウントに連携済みです。以前のアカウントでLINE連携を解除してから、もう一度お試しください。"
     );
   }

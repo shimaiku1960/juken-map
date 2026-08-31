@@ -16,6 +16,7 @@ const transactionPrisma = {
 vi.mock("@/lib/prisma", () => ({
   default: {
     $transaction: vi.fn((callback) => callback(transactionPrisma)),
+    lineConnection: { findUnique: vi.fn() },
     lineLinkNonce: { findUnique: vi.fn() },
   },
 }));
@@ -37,6 +38,7 @@ describe("POST /api/line/webhook", () => {
 
   it("連携メッセージへ公式Account Linking URLを返す", async () => {
     vi.mocked(verifyLineSignature).mockReturnValue(true);
+    vi.mocked(prisma.lineConnection.findUnique).mockResolvedValue(null);
     vi.mocked(issueLineLinkToken).mockResolvedValue("token");
     vi.mocked(replyLineText).mockResolvedValue(undefined);
 
@@ -50,6 +52,37 @@ describe("POST /api/line/webhook", () => {
     expect(response.status).toBe(200);
     expect(issueLineLinkToken).toHaveBeenCalledWith("U123");
     expect(replyLineText).toHaveBeenCalledWith("reply-token", expect.stringContaining("10分以内"));
+  });
+
+  it("連携済みなら再連携リンクを発行せず通知設定を案内する", async () => {
+    vi.mocked(verifyLineSignature).mockReturnValue(true);
+    vi.mocked(prisma.lineConnection.findUnique).mockResolvedValue({
+      id: 1,
+      userId: "user-1",
+      lineUserId: "U123",
+      linkedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    vi.mocked(replyLineText).mockResolvedValue(undefined);
+
+    const response = await POST(request([{
+      type: "message",
+      replyToken: "reply-token",
+      source: { type: "user", userId: "U123" },
+      message: { type: "text", text: "連携" },
+    }]));
+
+    expect(response.status).toBe(200);
+    expect(issueLineLinkToken).not.toHaveBeenCalled();
+    expect(replyLineText).toHaveBeenCalledWith(
+      "reply-token",
+      expect.stringContaining("すでに連携済み")
+    );
+    expect(replyLineText).toHaveBeenCalledWith(
+      "reply-token",
+      expect.stringContaining("https://juken-map.com/line/settings")
+    );
   });
 
   it("有効なnonceでアプリユーザーとLINEユーザーを連携する", async () => {
@@ -84,7 +117,7 @@ describe("POST /api/line/webhook", () => {
     expect(replyLineText).toHaveBeenCalledWith("reply-token", expect.stringContaining("連携が完了"));
     expect(replyLineText).toHaveBeenCalledWith(
       "reply-token",
-      expect.stringContaining("https://juken-map.com/profile#notification-settings")
+      expect.stringContaining("https://juken-map.com/line/settings")
     );
   });
 
