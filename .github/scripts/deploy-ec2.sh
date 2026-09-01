@@ -12,7 +12,7 @@ RUNTIME_SECRET_ID="juken-map/production/runtime"
 RUNTIME_ENV_FILE="$(mktemp)"
 trap 'rm -f "$RUNTIME_ENV_FILE"' EXIT
 chmod 600 "$RUNTIME_ENV_FILE"
-grep -Ev '^(LINE_CHANNEL_SECRET|LINE_CHANNEL_ACCESS_TOKEN)=' "$ENV_FILE" > "$RUNTIME_ENV_FILE"
+grep -Ev '^(LINE_CHANNEL_SECRET|LINE_CHANNEL_ACCESS_TOKEN|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET)=' "$ENV_FILE" > "$RUNTIME_ENV_FILE"
 
 secret_json="$(aws secretsmanager get-secret-value \
   --secret-id "$RUNTIME_SECRET_ID" \
@@ -22,9 +22,15 @@ secret_json="$(aws secretsmanager get-secret-value \
 
 LINE_CHANNEL_SECRET="$(jq -er '.LINE_CHANNEL_SECRET | strings | select(length > 0)' <<<"$secret_json")"
 LINE_CHANNEL_ACCESS_TOKEN="$(jq -er '.LINE_CHANNEL_ACCESS_TOKEN | strings | select(length > 0)' <<<"$secret_json")"
+LINE_LOGIN_CHANNEL_ID="$(jq -r '.LINE_LOGIN_CHANNEL_ID // empty' <<<"$secret_json")"
+LINE_LOGIN_CHANNEL_SECRET="$(jq -r '.LINE_LOGIN_CHANNEL_SECRET // empty' <<<"$secret_json")"
 printf 'LINE_CHANNEL_SECRET=%s\n' "$LINE_CHANNEL_SECRET" >> "$RUNTIME_ENV_FILE"
 printf 'LINE_CHANNEL_ACCESS_TOKEN=%s\n' "$LINE_CHANNEL_ACCESS_TOKEN" >> "$RUNTIME_ENV_FILE"
-unset secret_json LINE_CHANNEL_SECRET LINE_CHANNEL_ACCESS_TOKEN
+if [ -n "$LINE_LOGIN_CHANNEL_ID" ] && [ -n "$LINE_LOGIN_CHANNEL_SECRET" ]; then
+  printf 'LINE_LOGIN_CHANNEL_ID=%s\n' "$LINE_LOGIN_CHANNEL_ID" >> "$RUNTIME_ENV_FILE"
+  printf 'LINE_LOGIN_CHANNEL_SECRET=%s\n' "$LINE_LOGIN_CHANNEL_SECRET" >> "$RUNTIME_ENV_FILE"
+fi
+unset secret_json LINE_CHANNEL_SECRET LINE_CHANNEL_ACCESS_TOKEN LINE_LOGIN_CHANNEL_ID LINE_LOGIN_CHANNEL_SECRET
 
 aws ecr get-login-password --region ap-northeast-1 \
   | docker login --username AWS --password-stdin 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com

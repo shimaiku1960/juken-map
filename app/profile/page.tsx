@@ -18,7 +18,12 @@ import NotificationPreferenceForm from "@/app/components/NotificationPreferenceF
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
 
-const ProfilePage = async () => {
+const ProfilePage = async ({
+  searchParams,
+}: {
+  searchParams: Promise<{ line?: string }>;
+}) => {
+    const { line: lineResult } = await searchParams;
     const session = await auth.api.getSession({
         headers: await headers(),
     });
@@ -89,6 +94,7 @@ const ProfilePage = async () => {
           lineEveningEnabled={notificationPreference?.lineEveningEnabled ?? false}
           initialLineConnected={Boolean(lineConnection)}
           lineOfficialAccountUrl={LINE_OFFICIAL_ACCOUNT_URL}
+          lineResult={lineResult}
           readOnly={user.email === DEMO_EMAIL}
         />
       </CardContent>

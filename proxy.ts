@@ -30,12 +30,15 @@ export const proxy = async (request: NextRequest) => {
   const usesServiceAuthentication =
     pathname === "/api/cron/daily-study-notifications" ||
     pathname === "/api/line/webhook";
+  // LINE Loginのcallbackは、セッション切れ時の再ログイン導線もRoute Handler側で扱う。
+  const isPublicApi = pathname === "/api/line/oauth/callback";
 
   // 未ログインで API を叩いたら 401
   if (
     !sessionCookie &&
     pathname.startsWith("/api/") &&
-    !usesServiceAuthentication
+    !usesServiceAuthentication &&
+    !isPublicApi
   ) {
     // Better Auth 自身のエンドポイントは除外
     if (!pathname.startsWith("/api/auth/")) {

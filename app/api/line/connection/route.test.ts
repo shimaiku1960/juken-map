@@ -11,6 +11,7 @@ vi.mock("@/lib/prisma", () => ({
     notificationPreference: { updateMany: vi.fn() },
     lineConnection: { deleteMany: vi.fn() },
     lineLinkNonce: { deleteMany: vi.fn() },
+    lineOAuthAttempt: { deleteMany: vi.fn() },
   },
 }));
 vi.mock("next/headers", () => ({ headers: vi.fn(() => new Headers()) }));
@@ -31,6 +32,7 @@ describe("DELETE /api/line/connection", () => {
     vi.mocked(prisma.notificationPreference.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.lineConnection.deleteMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.lineLinkNonce.deleteMany).mockResolvedValue({ count: 0 });
+    vi.mocked(prisma.lineOAuthAttempt.deleteMany).mockResolvedValue({ count: 0 });
     vi.mocked(prisma.$transaction).mockResolvedValue([]);
 
     const response = await DELETE();
