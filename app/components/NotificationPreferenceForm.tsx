@@ -12,7 +12,19 @@ import type { NotificationPreferenceInput } from "@/lib/validations/notification
 type Props = NotificationPreferenceInput & {
   initialLineConnected: boolean;
   lineOfficialAccountUrl: string;
+  lineResult?: string;
   readOnly?: boolean;
+};
+
+const lineResultFeedback: Record<string, { variant: "success" | "info" | "error"; message: string }> = {
+  connected: { variant: "success", message: "LINEとの連携が完了しました。朝・夜のLINE通知を選べます。" },
+  cancelled: { variant: "info", message: "LINE連携をキャンセルしました。連携する場合は、もう一度お試しください。" },
+  "friend-required": { variant: "error", message: "通知を届けるには、受験マップ公式アカウントの友だち追加が必要です。" },
+  "already-used": { variant: "error", message: "このLINEアカウントは別の受験マップアカウントに連携済みです。" },
+  expired: { variant: "error", message: "LINE連携の有効期限が切れました。もう一度お試しください。" },
+  invalid: { variant: "error", message: "LINE連携情報を確認できませんでした。もう一度お試しください。" },
+  failed: { variant: "error", message: "LINE連携を完了できませんでした。時間をおいてもう一度お試しください。" },
+  unavailable: { variant: "error", message: "LINE連携は現在準備中です。設定完了後にもう一度お試しください。" },
 };
 
 const slots = [
@@ -22,6 +34,7 @@ const slots = [
 
 export default function NotificationPreferenceForm(props: Props) {
   const { lineOfficialAccountUrl, readOnly = false } = props;
+  const lineFeedback = props.lineResult ? lineResultFeedback[props.lineResult] : undefined;
   const initialPreference: NotificationPreferenceInput = {
     emailMorningEnabled: props.emailMorningEnabled,
     emailEveningEnabled: props.emailEveningEnabled,
@@ -86,6 +99,7 @@ export default function NotificationPreferenceForm(props: Props) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">朝・夜それぞれで、メールとLINEの両方または片方を選べます。いつでも停止できます。</p>
+      {lineFeedback ? <InlineFeedback variant={lineFeedback.variant}>{lineFeedback.message}</InlineFeedback> : null}
       {error ? <InlineFeedback variant="error">{error}</InlineFeedback> : null}
       <div className="divide-y rounded-lg border">
         {slots.map((slot) => {
@@ -122,8 +136,13 @@ export default function NotificationPreferenceForm(props: Props) {
           </div>
         ) : (
           <div className="mt-3 space-y-3">
-            <p className="text-sm text-muted-foreground">公式アカウントを友だち追加し、トークで「連携」と送ると安全な連携リンクが届きます。連携後にこのページを再読み込みしてください。</p>
-            <a href={lineOfficialAccountUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">LINEと連携する →</a>
+            <p className="text-sm text-muted-foreground">LINEで本人確認と公式アカウントの友だち追加を行います。トークでメッセージを送る必要はありません。</p>
+            <Button asChild size="lg" className="h-11">
+              <a href="/api/line/oauth/start">LINEと連携する</a>
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              直接連携できない場合は、<a href={lineOfficialAccountUrl} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">公式アカウントのトーク</a>で「連携」と送る方法も利用できます。
+            </p>
           </div>
         )}
       </div>

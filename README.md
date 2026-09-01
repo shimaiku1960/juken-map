@@ -211,6 +211,8 @@ docker compose up --build
 | `DAILY_NOTIFICATION_SECRET` | 朝・夜の学習通知APIを保護する秘密値（本番サーバーとGitHub Actionsで同じ値を設定） |
 | `LINE_CHANNEL_SECRET` | LINE Messaging APIのWebhook署名検証 |
 | `LINE_CHANNEL_ACCESS_TOKEN` | LINE公式アカウントからの通知送信・アカウント連携 |
+| `LINE_LOGIN_CHANNEL_ID` | プロフィールから直接LINE連携するLINE LoginチャネルID |
+| `LINE_LOGIN_CHANNEL_SECRET` | LINE Loginの認可コード交換 |
 | `MICROCMS_API_KEY` / `MICROCMS_SERVICE_DOMAIN` | ブログ記事の取得 |
 
 ## npm scripts

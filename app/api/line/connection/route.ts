@@ -17,6 +17,7 @@ export async function DELETE() {
     }),
     prisma.lineConnection.deleteMany({ where: { userId: session.user.id } }),
     prisma.lineLinkNonce.deleteMany({ where: { userId: session.user.id } }),
+    prisma.lineOAuthAttempt.deleteMany({ where: { userId: session.user.id } }),
   ]);
   return NextResponse.json({ connected: false });
 }
