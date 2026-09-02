@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     const origin = process.env.NODE_ENV === "production" ? SITE_URL : new URL(request.url).origin;
-    return NextResponse.redirect(new URL("/login?callbackURL=%2Fprofile%23notification-settings", origin));
+    return NextResponse.redirect(new URL("/login?callbackURL=%2Fprofile%23line-connection", origin));
   }
 
   try {
@@ -35,6 +35,6 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("[line-oauth] Failed to start LINE Login.", error);
     const origin = process.env.NODE_ENV === "production" ? SITE_URL : new URL(request.url).origin;
-    return NextResponse.redirect(new URL("/profile?line=unavailable#notification-settings", origin));
+    return NextResponse.redirect(new URL("/profile?line=unavailable#line-connection", origin));
   }
 }

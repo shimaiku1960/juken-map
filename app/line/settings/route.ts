@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { SITE_URL } from "@/lib/site";
 
-const NOTIFICATION_SETTINGS_PATH = "/profile#notification-settings";
+const NOTIFICATION_SETTINGS_PATH = "/profile#line-connection";
 
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() });

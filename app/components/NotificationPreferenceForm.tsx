@@ -35,6 +35,7 @@ const slots = [
 export default function NotificationPreferenceForm(props: Props) {
   const { lineOfficialAccountUrl, readOnly = false } = props;
   const lineFeedback = props.lineResult ? lineResultFeedback[props.lineResult] : undefined;
+  const lineConnectionFeedback = props.lineResult === "connected" ? undefined : lineFeedback;
   const initialPreference: NotificationPreferenceInput = {
     emailMorningEnabled: props.emailMorningEnabled,
     emailEveningEnabled: props.emailEveningEnabled,
@@ -99,7 +100,6 @@ export default function NotificationPreferenceForm(props: Props) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">朝・夜それぞれで、メールとLINEの両方または片方を選べます。いつでも停止できます。</p>
-      {lineFeedback ? <InlineFeedback variant={lineFeedback.variant}>{lineFeedback.message}</InlineFeedback> : null}
       {error ? <InlineFeedback variant="error">{error}</InlineFeedback> : null}
       <div className="divide-y rounded-lg border">
         {slots.map((slot) => {
@@ -125,11 +125,16 @@ export default function NotificationPreferenceForm(props: Props) {
           );
         })}
       </div>
-      <div className="rounded-lg border p-4">
+      <div id="line-connection" className="scroll-mt-24 rounded-lg border p-4">
         <p className="font-medium">LINE連携</p>
+        {lineConnectionFeedback ? <InlineFeedback variant={lineConnectionFeedback.variant} className="mt-3">{lineConnectionFeedback.message}</InlineFeedback> : null}
         {lineConnected ? (
           <div className="mt-3 space-y-3">
-            <InlineFeedback variant="success">連携済みです。このLINEアカウントで通知を受け取れます。</InlineFeedback>
+            <InlineFeedback variant="success">
+              {props.lineResult === "connected"
+                ? "LINEとの連携が完了しました。朝・夜のLINE通知を選べます。"
+                : "連携済みです。このLINEアカウントで通知を受け取れます。"}
+            </InlineFeedback>
             <Button type="button" variant="outline" size="lg" className="h-11" disabled={readOnly || busy} onClick={() => void disconnect()}>
               {isDisconnecting ? "解除中…" : "LINE連携を解除"}
             </Button>

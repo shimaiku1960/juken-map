@@ -10,7 +10,7 @@ function appOrigin(request: Request) {
 }
 
 function profileRedirect(request: Request, result: string) {
-  return NextResponse.redirect(new URL(`/profile?line=${result}#notification-settings`, appOrigin(request)));
+  return NextResponse.redirect(new URL(`/profile?line=${result}#line-connection`, appOrigin(request)));
 }
 
 export async function GET(request: Request) {

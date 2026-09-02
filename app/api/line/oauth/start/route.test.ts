@@ -35,7 +35,9 @@ describe("GET /api/line/oauth/start", () => {
   it("未ログインなら通知設定へ戻るログイン導線へ送る", async () => {
     getSession.mockResolvedValue(null);
     const response = await GET(new Request("http://localhost:3000/api/line/oauth/start"));
-    expect(response.headers.get("location")).toContain("/login?callbackURL=");
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/login?callbackURL=%2Fprofile%23line-connection"
+    );
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
