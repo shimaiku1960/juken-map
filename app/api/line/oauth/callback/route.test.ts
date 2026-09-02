@@ -49,7 +49,7 @@ describe("GET /api/line/oauth/callback", () => {
 
     const response = await GET(new Request("https://juken-map.com/api/line/oauth/callback?code=code&state=state-1"));
 
-    expect(response.headers.get("location")).toBe("https://juken-map.com/profile?line=connected#notification-settings");
+    expect(response.headers.get("location")).toBe("https://juken-map.com/profile?line=connected#line-connection");
     expect(prisma.lineOAuthAttempt.delete).toHaveBeenCalledWith({ where: { state: "state-1" } });
     expect(transactionPrisma.lineConnection.upsert).toHaveBeenCalledWith({
       where: { userId: "user-1" },
@@ -61,14 +61,14 @@ describe("GET /api/line/oauth/callback", () => {
   it("公式アカウントが友だちでなければ連携しない", async () => {
     vi.mocked(getLineFriendshipStatus).mockResolvedValue({ friendFlag: false });
     const response = await GET(new Request("https://juken-map.com/api/line/oauth/callback?code=code&state=state-1"));
-    expect(response.headers.get("location")).toContain("line=friend-required");
+    expect(response.headers.get("location")).toBe("https://juken-map.com/profile?line=friend-required#line-connection");
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("別ユーザーのstateは利用できない", async () => {
     vi.mocked(prisma.lineOAuthAttempt.findUnique).mockResolvedValue({ ...attempt, userId: "other-user" });
     const response = await GET(new Request("https://juken-map.com/api/line/oauth/callback?code=code&state=state-1"));
-    expect(response.headers.get("location")).toContain("line=expired");
+    expect(response.headers.get("location")).toBe("https://juken-map.com/profile?line=expired#line-connection");
     expect(exchangeLineLoginCode).not.toHaveBeenCalled();
   });
 
