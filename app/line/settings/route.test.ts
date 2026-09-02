@@ -17,7 +17,7 @@ describe("GET /line/settings", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "https://juken-map.com/profile#line-connection"
+      "https://juken-map.com/profile#notification-settings"
     );
   });
 
@@ -28,7 +28,7 @@ describe("GET /line/settings", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "https://juken-map.com/login?callbackURL=%2Fprofile%23line-connection"
+      "https://juken-map.com/login?callbackURL=%2Fprofile%23notification-settings"
     );
   });
 });

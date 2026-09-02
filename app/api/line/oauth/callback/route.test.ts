@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { GET } from "./route";
 import { auth } from "@/lib/auth";
+import { pushLineText } from "@/lib/line";
 import prisma from "@/lib/prisma";
 import { exchangeLineLoginCode, getLineFriendshipStatus, verifyLineIdToken } from "@/lib/lineLogin";
 
 vi.mock("@/lib/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
+vi.mock("@/lib/line", () => ({ pushLineText: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   default: {
     $transaction: vi.fn(),
@@ -38,6 +40,7 @@ beforeEach(() => {
   vi.mocked(exchangeLineLoginCode).mockResolvedValue({ access_token: "access", id_token: "id-token" });
   vi.mocked(verifyLineIdToken).mockResolvedValue({ sub: "U123", nonce: "nonce-1" });
   vi.mocked(getLineFriendshipStatus).mockResolvedValue({ friendFlag: true });
+  vi.mocked(pushLineText).mockResolvedValue(undefined);
 });
 
 describe("GET /api/line/oauth/callback", () => {
@@ -56,6 +59,61 @@ describe("GET /api/line/oauth/callback", () => {
       create: { userId: "user-1", lineUserId: "U123" },
       update: { lineUserId: "U123", linkedAt: expect.any(Date) },
     });
+    expect(pushLineText).toHaveBeenCalledWith(
+      "U123",
+      "受験マップとのLINE連携が完了しました！\n\n朝・夜の通知は、受験マップのプロフィールから設定できます。\nhttps://juken-map.com/line/settings",
+      expect.any(AbortSignal)
+    );
+  });
+
+  it("確認メッセージの送信に失敗しても連携は成功扱いにする", async () => {
+    const transactionPrisma = {
+      lineConnection: { findUnique: vi.fn().mockResolvedValue(null), upsert: vi.fn().mockResolvedValue({}) },
+    };
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(transactionPrisma as never));
+    vi.mocked(pushLineText).mockRejectedValue(new Error("LINE API unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await GET(new Request("https://juken-map.com/api/line/oauth/callback?code=code&state=state-1"));
+
+    expect(response.headers.get("location")).toBe("https://juken-map.com/profile?line=connected#line-connection");
+    expect(transactionPrisma.lineConnection.upsert).toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith(
+      "[line-oauth] LINE connection completed, but confirmation message failed.",
+      expect.any(Error)
+    );
+    consoleError.mockRestore();
+  });
+
+  it("確認メッセージが3秒以内に完了しなくても連携成功画面へ戻す", async () => {
+    vi.useFakeTimers();
+    const transactionPrisma = {
+      lineConnection: { findUnique: vi.fn().mockResolvedValue(null), upsert: vi.fn().mockResolvedValue({}) },
+    };
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(transactionPrisma as never));
+    let markPushStarted: () => void = () => {};
+    const pushStarted = new Promise<void>((resolve) => { markPushStarted = resolve; });
+    vi.mocked(pushLineText).mockImplementation((_lineUserId, _text, signal) => new Promise((_, reject) => {
+      markPushStarted();
+      signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const responsePromise = GET(new Request("https://juken-map.com/api/line/oauth/callback?code=code&state=state-1"));
+      await pushStarted;
+      await vi.advanceTimersByTimeAsync(3_000);
+      const response = await responsePromise;
+
+      expect(response.headers.get("location")).toBe("https://juken-map.com/profile?line=connected#line-connection");
+      expect(consoleError).toHaveBeenCalledWith(
+        "[line-oauth] LINE connection completed, but confirmation message failed.",
+        expect.objectContaining({ name: "AbortError" })
+      );
+    } finally {
+      consoleError.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("公式アカウントが友だちでなければ連携しない", async () => {
@@ -63,6 +121,7 @@ describe("GET /api/line/oauth/callback", () => {
     const response = await GET(new Request("https://juken-map.com/api/line/oauth/callback?code=code&state=state-1"));
     expect(response.headers.get("location")).toBe("https://juken-map.com/profile?line=friend-required#line-connection");
     expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(pushLineText).not.toHaveBeenCalled();
   });
 
   it("別ユーザーのstateは利用できない", async () => {
