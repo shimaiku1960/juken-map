@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { pushLineText } from "@/lib/line";
 import prisma from "@/lib/prisma";
 import { exchangeLineLoginCode, getLineFriendshipStatus, verifyLineIdToken } from "@/lib/lineLogin";
 import { SITE_URL } from "@/lib/site";
@@ -12,6 +13,14 @@ function appOrigin(request: Request) {
 function profileRedirect(request: Request, result: string) {
   return NextResponse.redirect(new URL(`/profile?line=${result}#line-connection`, appOrigin(request)));
 }
+
+const LINE_CONNECTION_COMPLETED_MESSAGE = [
+  "受験マップとのLINE連携が完了しました！",
+  "",
+  "朝・夜の通知は、受験マップのプロフィールから設定できます。",
+  new URL("/line/settings", SITE_URL).toString(),
+].join("\n");
+const LINE_CONFIRMATION_TIMEOUT_MS = 3_000;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -52,7 +61,18 @@ export async function GET(request: Request) {
       });
       return true;
     });
-    return profileRedirect(request, linked ? "connected" : "already-used");
+    if (!linked) return profileRedirect(request, "already-used");
+
+    const confirmationController = new AbortController();
+    const confirmationTimeout = setTimeout(() => confirmationController.abort(), LINE_CONFIRMATION_TIMEOUT_MS);
+    try {
+      await pushLineText(identity.sub, LINE_CONNECTION_COMPLETED_MESSAGE, confirmationController.signal);
+    } catch (error) {
+      console.error("[line-oauth] LINE connection completed, but confirmation message failed.", error);
+    } finally {
+      clearTimeout(confirmationTimeout);
+    }
+    return profileRedirect(request, "connected");
   } catch (error) {
     console.error("[line-oauth] Failed to complete LINE Login.", error);
     return profileRedirect(request, "failed");

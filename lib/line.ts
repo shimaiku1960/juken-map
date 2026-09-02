@@ -56,9 +56,10 @@ export async function replyLineText(replyToken: string, text: string) {
   });
 }
 
-export async function pushLineText(lineUserId: string, text: string) {
+export async function pushLineText(lineUserId: string, text: string, signal?: AbortSignal) {
   await lineRequest("/message/push", {
     method: "POST",
+    signal,
     body: JSON.stringify({
       to: lineUserId,
       messages: [{ type: "text", text }],
