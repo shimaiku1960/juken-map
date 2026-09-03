@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
 import { toast } from "sonner";
 import {
   type StudyLog,
@@ -10,6 +10,7 @@ import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import StudyDayPlanPanel from "@/app/components/StudyDayPlanPanel";
 import StudyLogEditDialog from "@/app/components/StudyLogEditDialog";
 import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialog";
+import StudyPlanCreateDialog from "@/app/components/StudyPlanCreateDialog";
 import { computeHeatmap } from "@/lib/studyStats";
 import { formatMinutes, formatStudyRange } from "@/lib/studyLog";
 import { subjectColor, subjectLabel } from "@/lib/subjects";
@@ -56,23 +57,28 @@ function planDate(plan: StudyPlan): string {
   return plan.date.slice(0, 10);
 }
 
-export default function StudyHeatmap({
-  logs,
-  plans,
-  today,
-  readOnly,
-}: {
+export type StudyHeatmapHandle = {
+  showToday: (openCreate: boolean) => void;
+};
+
+const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
   logs: StudyLog[];
   plans: StudyPlan[];
   today: string;
   readOnly: boolean;
-}) {
+}>(function StudyHeatmap({
+  logs,
+  plans,
+  today,
+  readOnly,
+}, ref) {
   const deleteLog = useDeleteStudyLog();
   const currentMonth = `${today.slice(0, 7)}-01`;
   const [displayMonth, setDisplayMonth] = useState(currentMonth);
   const [selectedYmd, setSelectedYmd] = useState(today);
   const [recordDate, setRecordDate] = useState<string | null>(null);
   const [editingLog, setEditingLog] = useState<StudyLog | null>(null);
+  const [addingTodayPlan, setAddingTodayPlan] = useState(false);
   const weeks = computeHeatmap(logs, displayMonth);
   const monthPlans = plans.filter((plan) =>
     planDate(plan).startsWith(displayMonth.slice(0, 7))
@@ -98,6 +104,14 @@ export default function StudyHeatmap({
       ...monthPlans.map((plan) => plan.subject ?? "other"),
     ])
   );
+
+  useImperativeHandle(ref, () => ({
+    showToday(openCreate) {
+      setDisplayMonth(currentMonth);
+      setSelectedYmd(today);
+      if (openCreate && !readOnly) setAddingTodayPlan(true);
+    },
+  }), [currentMonth, readOnly, today]);
 
   const moveMonth = (amount: number) => {
     const next = shiftMonth(displayMonth, amount);
@@ -409,6 +423,9 @@ export default function StudyHeatmap({
           if (!open) setRecordDate(null);
         }}
       />
+      {addingTodayPlan ? (
+        <StudyPlanCreateDialog date={today} onClose={() => setAddingTodayPlan(false)} />
+      ) : null}
       <StudyLogEditDialog
         log={editingLog}
         onOpenChange={(open) => {
@@ -417,4 +434,8 @@ export default function StudyHeatmap({
       />
     </div>
   );
-}
+});
+
+StudyHeatmap.displayName = "StudyHeatmap";
+
+export default StudyHeatmap;
