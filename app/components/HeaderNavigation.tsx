@@ -17,6 +17,7 @@ import {
 import { logout } from "@/app/auth/actions";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import TrackedSignupLink from "@/app/components/analytics/TrackedSignupLink";
 
 type HeaderUser = {
   name: string;
@@ -96,12 +97,12 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
         >
           ログイン
         </Link>
-        <Link
-          href="/signup"
+        <TrackedSignupLink
+          location="header"
           className={cn(buttonVariants({ size: "lg" }), "h-11 px-4")}
         >
           無料で始める
-        </Link>
+        </TrackedSignupLink>
       </nav>
     );
   }

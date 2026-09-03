@@ -77,19 +77,29 @@ export async function POST(request: Request) {
     }
   }
 
-  const created = await prisma.studyLog.create({
-    data: {
-      date: new Date(parsed.data.date),
-      minutes: parsed.data.minutes,
-      subject: parsed.data.subject ?? null,
-      textbookId: parsed.data.textbookId ?? null,
-      rangeStart: parsed.data.rangeStart ?? null,
-      rangeEnd: parsed.data.rangeEnd ?? null,
-      rangeUnit: parsed.data.rangeUnit ?? null,
-      memo: parsed.data.memo ?? null,
-      userId: session.user.id,
-    },
+  const { created, isFirstStudyLog } = await prisma.$transaction(async (tx) => {
+    const activation = await tx.user.updateMany({
+      where: { id: session.user.id, firstStudyLogAt: null },
+      data: { firstStudyLogAt: new Date() },
+    });
+    const created = await tx.studyLog.create({
+      data: {
+        date: new Date(parsed.data.date),
+        minutes: parsed.data.minutes,
+        subject: parsed.data.subject ?? null,
+        textbookId: parsed.data.textbookId ?? null,
+        rangeStart: parsed.data.rangeStart ?? null,
+        rangeEnd: parsed.data.rangeEnd ?? null,
+        rangeUnit: parsed.data.rangeUnit ?? null,
+        memo: parsed.data.memo ?? null,
+        userId: session.user.id,
+      },
+    });
+    return { created, isFirstStudyLog: activation.count === 1 };
   });
 
-  return NextResponse.json(created, { status: 201 });
+  return NextResponse.json(
+    { ...created, isFirstStudyLog },
+    { status: 201 }
+  );
 }

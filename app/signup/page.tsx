@@ -13,6 +13,7 @@ import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
 import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/app/hooks/useBrowserNavigation";
 import { isLineInAppBrowser } from "@/lib/browser";
+import { trackEvent } from "@/lib/analytics";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -25,6 +26,7 @@ export default function SignUpPage() {
   const authLoading = loading || socialLoading;
 
   const handleSignUp = async () => {
+    trackEvent("signup_method_submit", { method: "email" });
     setLoading(true);
     setErrorMessage(null);
     const { error } = await authClient.signUp.email({
@@ -50,6 +52,7 @@ export default function SignUpPage() {
     if (provider === "google" && isLineInAppBrowser(window.navigator.userAgent)) {
       return;
     }
+    trackEvent("signup_method_submit", { method: provider });
     setSocialLoading(true);
     setErrorMessage(null);
     const { error } = await authClient.signIn.social({ provider, callbackURL });

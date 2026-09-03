@@ -15,6 +15,7 @@ import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import RegistrationCompletionTracker from "@/app/components/analytics/RegistrationCompletionTracker";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
@@ -103,6 +104,7 @@ const DashboardPage = async () => {
 
   return (
     <PageShell>
+      <RegistrationCompletionTracker />
       <PageHeader title="記録・予定" description="学習予定と実績をまとめて確認できます。" />
 
       <StudyRecordDashboard
