@@ -11,7 +11,7 @@ export default function PrivacyPage() {
     <LegalDocument
       title="プライバシーポリシー"
       description="受験マップがお預かりする情報と、その使い方を分かりやすくご説明します。"
-      effectiveDate="2026年8月30日"
+      effectiveDate="2026年9月3日"
       sections={[
         {
           title: "基本方針",
@@ -59,7 +59,7 @@ export default function PrivacyPage() {
           title: "Cookieなどの利用",
           content: (
             <p>
-              本サービスでは、ログイン状態の維持や安全なサービス提供のためにCookieなどを使用します。ブラウザの設定でCookieを無効にできますが、その場合、ログインを含む一部の機能を利用できなくなることがあります。
+              本サービスでは、ログイン状態の維持、安全なサービス提供、および利用状況の分析によるサービス改善のためにCookieなどを使用します。ブラウザの設定でCookieを無効にできますが、その場合、ログインを含む一部の機能を利用できなくなることがあります。
             </p>
           ),
         },
@@ -73,6 +73,7 @@ export default function PrivacyPage() {
                 <li><strong>Resend：</strong>メールアドレスの確認やパスワード再設定メールの送信</li>
                 <li><strong>LINEヤフー株式会社：</strong>利用者が希望した場合のLINEアカウント連携と学習通知の送信</li>
                 <li><strong>Amazon Web Services：</strong>本サービスとデータベースの運用</li>
+                <li><strong>Google Analytics：</strong>アクセス状況や登録・学習記録に至る利用動向の分析。メールアドレス、学習内容、教材名、志望校など、利用者を直接特定する情報や学習内容そのものは送信しません。</li>
               </ul>
               <p>
                 各サービスでは、それぞれの提供者が定めるプライバシーポリシーに基づいて情報が取り扱われます。運営者は、委託先を適切に選び、必要な範囲で監督します。

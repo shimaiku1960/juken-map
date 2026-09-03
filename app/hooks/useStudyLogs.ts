@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Textbook } from "@/app/hooks/useStudyPlans";
 import type { CreateStudyLogInput } from "@/lib/validations/studyLog";
+import { trackEvent } from "@/lib/analytics";
 
 // studyLogs（勉強の「実績」＝サーバー状態）の型・取得・queryKey をここに集約する。
 export type StudyLog = {
@@ -56,9 +57,15 @@ export function useCreateStudyLog() {
           typeof err.error === "string" ? err.error : "記録に失敗しました"
         );
       }
-      return res.json();
+      return res.json() as Promise<StudyLog & { isFirstStudyLog: boolean }>;
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      trackEvent(
+        created.isFirstStudyLog
+          ? "first_study_log_created"
+          : "study_log_created",
+        { record_method: "manual" }
+      );
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
     },
   });

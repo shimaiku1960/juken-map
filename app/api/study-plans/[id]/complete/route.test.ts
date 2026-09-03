@@ -9,6 +9,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   default: {
+    user: { updateMany: vi.fn() },
     studyPlan: { findFirst: vi.fn(), update: vi.fn() },
     studyLog: { create: vi.fn() },
     $transaction: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("next/headers", () => ({
 const getSession = auth.api.getSession as unknown as Mock;
 const findPlan = prisma.studyPlan.findFirst as unknown as Mock;
 const createLog = prisma.studyLog.create as unknown as Mock;
+const markActivation = prisma.user.updateMany as unknown as Mock;
 const updatePlan = prisma.studyPlan.update as unknown as Mock;
 const transaction = prisma.$transaction as unknown as Mock;
 
@@ -47,9 +49,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   getSession.mockResolvedValue(session);
   findPlan.mockResolvedValue(plan);
+  markActivation.mockResolvedValue({ count: 0 });
   createLog.mockReturnValue(Promise.resolve({ id: 11 }));
   updatePlan.mockReturnValue(Promise.resolve({ ...plan, done: true }));
-  transaction.mockResolvedValue([{ id: 11 }, { ...plan, done: true }]);
+  transaction.mockImplementation((callback) => callback(prisma));
 });
 
 describe("POST /api/study-plans/[id]/complete", () => {

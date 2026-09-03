@@ -10,8 +10,10 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   default: {
+    user: { updateMany: vi.fn() },
     studyLog: { findMany: vi.fn(), create: vi.fn() },
     textbook: { findFirst: vi.fn() },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -22,6 +24,8 @@ vi.mock("next/headers", () => ({
 const getSession = auth.api.getSession as unknown as Mock;
 const findMany = prisma.studyLog.findMany as unknown as Mock;
 const create = prisma.studyLog.create as unknown as Mock;
+const markActivation = prisma.user.updateMany as unknown as Mock;
+const transaction = prisma.$transaction as unknown as Mock;
 const findTextbook = prisma.textbook.findFirst as unknown as Mock;
 
 const loggedInSession = { user: { id: "user-1", email: "me@example.com" } };
@@ -33,6 +37,8 @@ const validBody = { date: "2026-02-20", minutes: 60, subject: "english" };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  markActivation.mockResolvedValue({ count: 0 });
+  transaction.mockImplementation((callback) => callback(prisma));
 });
 
 describe("GET /api/study-logs", () => {
@@ -172,12 +178,32 @@ describe("POST /api/study-logs", () => {
     const res = await POST(makeRequest(validBody));
 
     expect(res.status).toBe(201);
-    await expect(res.json()).resolves.toEqual(created);
+    await expect(res.json()).resolves.toEqual({
+      ...created,
+      isFirstStudyLog: false,
+    });
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ minutes: 60, userId: "user-1" }),
       })
     );
+  });
+
+  it("最初の実績なら初回記録として返す", async () => {
+    getSession.mockResolvedValue(loggedInSession);
+    markActivation.mockResolvedValue({ count: 1 });
+    create.mockResolvedValue({ id: 5, minutes: 60, userId: "user-1" });
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({ isFirstStudyLog: true })
+    );
+    expect(markActivation).toHaveBeenCalledWith({
+      where: { id: "user-1", firstStudyLogAt: null },
+      data: { firstStudyLogAt: expect.any(Date) },
+    });
   });
 
   it("想定外のエラーはそのまま投げる（握りつぶさない）", async () => {

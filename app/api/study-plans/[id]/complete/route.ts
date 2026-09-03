@@ -69,8 +69,13 @@ export async function POST(
     );
   }
 
-  const [log, updatedPlan] = await prisma.$transaction([
-    prisma.studyLog.create({
+  const { log, updatedPlan, isFirstStudyLog } = await prisma.$transaction(
+    async (tx) => {
+      const activation = await tx.user.updateMany({
+        where: { id: session.user.id, firstStudyLogAt: null },
+        data: { firstStudyLogAt: new Date() },
+      });
+      const log = await tx.studyLog.create({
       data: {
         userId: session.user.id,
         studyPlanId: plan.id,
@@ -84,12 +89,21 @@ export async function POST(
         memo: parsed.data.memo ?? null,
       },
       include: { textbook: true },
-    }),
-    prisma.studyPlan.update({
-      where: { id: plan.id },
-      data: { done: true },
-    }),
-  ]);
+      });
+      const updatedPlan = await tx.studyPlan.update({
+        where: { id: plan.id },
+        data: { done: true },
+      });
+      return {
+        log,
+        updatedPlan,
+        isFirstStudyLog: activation.count === 1,
+      };
+    }
+  );
 
-  return NextResponse.json({ log, plan: updatedPlan }, { status: 201 });
+  return NextResponse.json(
+    { log, plan: updatedPlan, isFirstStudyLog },
+    { status: 201 }
+  );
 }

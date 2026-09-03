@@ -5,6 +5,7 @@ import Header from "./components/Header";
 import { Toaster } from "@/components/ui/sonner";
 import Providers from "./providers";
 import { SITE_URL } from "@/lib/site";
+import GoogleAnalytics from "@/app/components/analytics/GoogleAnalytics";
 
 const notoSansJp = Noto_Sans_JP({
   variable: "--font-noto-sans-jp",
@@ -31,6 +32,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const gaMeasurementId = process.env.GA_MEASUREMENT_ID;
+
   return (
     <html
       lang="ja"
@@ -40,6 +43,9 @@ export default function RootLayout({
       <Toaster />
       <Header />  
       <Providers>{children}</Providers>
+      {gaMeasurementId ? (
+        <GoogleAnalytics measurementId={gaMeasurementId} />
+      ) : null}
       </body>
     </html>
   );

@@ -17,6 +17,7 @@ import {
   HeroReveal,
   Reveal,
 } from "@/app/components/landing/LandingMotion";
+import TrackedSignupLink from "@/app/components/analytics/TrackedSignupLink";
 // 画像は public/ ではなく import で読み込む。ビルド時にファイル名へコンテンツ
 // ハッシュが付くため、中身を差し替えれば URL が変わりキャッシュが自動で外れる。
 // width/height も import した値から自動で決まる。
@@ -254,10 +255,10 @@ export default function LandingPage() {
               勉強時間や予定、毎日の積み重ねをひとつのカレンダーで振り返れます。
             </p>
             <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center lg:justify-start">
-              <Link href="/signup" className={signupClassName}>
+              <TrackedSignupLink location="hero" className={signupClassName}>
                 無料で始める
                 <ArrowRight aria-hidden="true" />
-              </Link>
+              </TrackedSignupLink>
               <Link
                 href="/login#demo-login"
                 className={cn(
@@ -323,10 +324,10 @@ export default function LandingPage() {
             <StudyFlowPreview />
           </Reveal>
           <Reveal className="mt-9 text-center" delay={0.12}>
-            <Link href="/signup" className={signupClassName}>
+            <TrackedSignupLink location="middle" className={signupClassName}>
               無料で始める
               <ArrowRight aria-hidden="true" />
-            </Link>
+            </TrackedSignupLink>
           </Reveal>
         </div>
       </section>
@@ -464,8 +465,8 @@ export default function LandingPage() {
             受験マップで、今日から記録を始められます。
           </p>
           <div className="mt-8">
-            <Link
-              href="/signup"
+            <TrackedSignupLink
+              location="final"
               className={cn(
                 buttonVariants({ variant: "secondary", size: "lg" }),
                 "h-12 px-6 text-base shadow-sm"
@@ -473,7 +474,7 @@ export default function LandingPage() {
             >
               無料で始める
               <ArrowRight aria-hidden="true" />
-            </Link>
+            </TrackedSignupLink>
           </div>
           <p className="mt-5 text-sm text-primary-foreground/75">
             まず操作を確認したい方は、{" "}
@@ -543,12 +544,21 @@ export default function LandingPage() {
                     <li key={link.href}>
                       {/* フッターは行間が詰まりやすいので、リンクごとに 44px の
                           タップ領域を確保して隣を押しにくくする。 */}
-                      <Link
-                        href={link.href}
-                        className="inline-flex min-h-11 items-center text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        {link.label}
-                      </Link>
+                      {link.href === "/signup" ? (
+                        <TrackedSignupLink
+                          location="footer"
+                          className="inline-flex min-h-11 items-center text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          {link.label}
+                        </TrackedSignupLink>
+                      ) : (
+                        <Link
+                          href={link.href}
+                          className="inline-flex min-h-11 items-center text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          {link.label}
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>

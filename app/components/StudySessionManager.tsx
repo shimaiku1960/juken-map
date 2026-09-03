@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Square } from "lucide-react";
 import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { trackEvent } from "@/lib/analytics";
 import { toast } from "sonner";
 import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialog";
 import {
@@ -274,6 +275,14 @@ export default function StudySessionManager({
         setSaveError(await responseError(response));
         return;
       }
+
+      const result = (await response.json()) as { isFirstStudyLog?: boolean };
+      trackEvent(
+        result.isFirstStudyLog
+          ? "first_study_log_created"
+          : "study_log_created",
+        { record_method: planId == null ? "timer" : "plan" }
+      );
 
       clearSession();
       setConfirmDiscard(false);
