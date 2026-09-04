@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { demoReadOnlyGuard } from "@/lib/demo";
 import { completeStudyPlanSchema } from "@/lib/validations/studyLog";
+import { Prisma } from "@/app/generated/prisma/client";
 
 export async function POST(
   request: Request,
@@ -69,41 +70,54 @@ export async function POST(
     );
   }
 
-  const { log, updatedPlan, isFirstStudyLog } = await prisma.$transaction(
-    async (tx) => {
-      const activation = await tx.user.updateMany({
-        where: { id: session.user.id, firstStudyLogAt: null },
-        data: { firstStudyLogAt: new Date() },
-      });
-      const log = await tx.studyLog.create({
-      data: {
-        userId: session.user.id,
-        studyPlanId: plan.id,
-        date: plan.date,
-        minutes: parsed.data.minutes,
-        subject: plan.subject,
-        textbookId: plan.textbookId,
-        rangeStart,
-        rangeEnd,
-        rangeUnit,
-        memo: parsed.data.memo ?? null,
-      },
-      include: { textbook: true },
-      });
-      const updatedPlan = await tx.studyPlan.update({
-        where: { id: plan.id },
-        data: { done: true },
-      });
-      return {
-        log,
-        updatedPlan,
-        isFirstStudyLog: activation.count === 1,
-      };
-    }
-  );
+  try {
+    const { log, updatedPlan, isFirstStudyLog } = await prisma.$transaction(
+      async (tx) => {
+        const activation = await tx.user.updateMany({
+          where: { id: session.user.id, firstStudyLogAt: null },
+          data: { firstStudyLogAt: new Date() },
+        });
+        const log = await tx.studyLog.create({
+          data: {
+            userId: session.user.id,
+            studyPlanId: plan.id,
+            date: plan.date,
+            minutes: parsed.data.minutes,
+            subject: plan.subject,
+            textbookId: plan.textbookId,
+            rangeStart,
+            rangeEnd,
+            rangeUnit,
+            memo: parsed.data.memo ?? null,
+          },
+          include: { textbook: true },
+        });
+        const updatedPlan = await tx.studyPlan.update({
+          where: { id: plan.id },
+          data: { done: true },
+        });
+        return {
+          log,
+          updatedPlan,
+          isFirstStudyLog: activation.count === 1,
+        };
+      }
+    );
 
-  return NextResponse.json(
-    { log, plan: updatedPlan, isFirstStudyLog },
-    { status: 201 }
-  );
+    return NextResponse.json(
+      { log, plan: updatedPlan, isFirstStudyLog },
+      { status: 201 }
+    );
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return NextResponse.json(
+        { error: "この予定の実績はすでに記録されています" },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
 }
