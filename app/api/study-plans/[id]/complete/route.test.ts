@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { POST } from "./route";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@/app/generated/prisma/client";
 
 vi.mock("@/lib/auth", () => ({
   auth: { api: { getSession: vi.fn() } },
@@ -136,5 +137,29 @@ describe("POST /api/study-plans/[id]/complete", () => {
       data: { done: true },
     });
     expect(transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("同時完了による重複作成（P2002）は409に変換する", async () => {
+    transaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "7.8.0",
+      })
+    );
+
+    const response = await POST(request({ minutes: 30 }), params);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "この予定の実績はすでに記録されています",
+    });
+  });
+
+  it("想定外のtransactionエラーはそのまま投げる", async () => {
+    transaction.mockRejectedValue(new Error("DB down"));
+
+    await expect(POST(request({ minutes: 30 }), params)).rejects.toThrow(
+      "DB down"
+    );
   });
 });
