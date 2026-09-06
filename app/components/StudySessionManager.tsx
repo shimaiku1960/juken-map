@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Square } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  Pause,
+  PencilLine,
+  Play,
+  Square,
+} from "lucide-react";
 import { notifyDemoReadOnly } from "@/lib/demo-client";
 import { trackEvent } from "@/lib/analytics";
 import { toast } from "sonner";
@@ -11,8 +18,6 @@ import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialo
 import {
   NumberStepper,
   RangeUnitSelect,
-  SubjectSelect,
-  TextbookSelect,
 } from "@/app/components/StudyFields";
 import { studyLogsKey } from "@/app/hooks/useStudyLogs";
 import {
@@ -20,9 +25,13 @@ import {
   useStudyPlans,
   type StudyPlan,
 } from "@/app/hooks/useStudyPlans";
-import { useTextbooks } from "@/app/hooks/useTextbooks";
+import {
+  useCreateTextbook,
+  useTextbooks,
+} from "@/app/hooks/useTextbooks";
 import { todayYmd } from "@/lib/date";
 import { studyPlanLabel } from "@/lib/studyPlan";
+import { SUBJECTS, subjectColor } from "@/lib/subjects";
 import {
   type ActiveStudySession,
   elapsedStudyMs,
@@ -35,6 +44,7 @@ import {
   startStudySession,
   studySessionStorageKey,
 } from "@/lib/studySession";
+import { RANGE_UNITS } from "@/lib/validations/studyPlan";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -56,6 +66,8 @@ const responseError = async (response: Response) => {
   return "実績を保存できませんでした";
 };
 
+type PickerView = "choose" | "textbook" | "free" | "new-textbook";
+
 export default function StudySessionManager({
   initialPlans,
   userId,
@@ -70,7 +82,13 @@ export default function StudySessionManager({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: textbooks = [] } = useTextbooks();
+  const {
+    data: textbooks = [],
+    isPending: textbooksPending,
+    isError: textbooksError,
+    refetch: refetchTextbooks,
+  } = useTextbooks();
+  const createTextbook = useCreateTextbook();
   const { data: studyPlans = [] } = useStudyPlans(initialPlans);
   const plans = useMemo(
     () =>
@@ -100,11 +118,20 @@ export default function StudySessionManager({
   const [session, setSession] = useState<ActiveStudySession | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerView, setPickerView] = useState<PickerView>("choose");
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const [manualLogOpen, setManualLogOpen] = useState(false);
-  const [selectedTarget, setSelectedTarget] = useState("manual");
+  const [selectedTarget, setSelectedTarget] = useState("");
   const [manualLabel, setManualLabel] = useState("");
   const [manualSubject, setManualSubject] = useState<string | null>(null);
   const [manualTextbookId, setManualTextbookId] = useState<number | null>(null);
+  const [newTextbookName, setNewTextbookName] = useState("");
+  const [newTextbookSubject, setNewTextbookSubject] = useState<string | null>(
+    null
+  );
+  const [newTextbookUnit, setNewTextbookUnit] = useState<
+    (typeof RANGE_UNITS)[number]["value"]
+  >("page");
   const [minutes, setMinutes] = useState(1);
   const [rangeStart, setRangeStart] = useState<number | null>(null);
   const [rangeEnd, setRangeEnd] = useState<number | null>(null);
@@ -167,13 +194,38 @@ export default function StudySessionManager({
   }, [session?.status]);
 
   const openPicker = () => {
+    setPickerView("choose");
+    setPickerError(null);
     setSelectedTarget(
-      selectablePlans[0] ? `plan:${selectablePlans[0].id}` : "manual"
+      selectablePlans[0] ? `plan:${selectablePlans[0].id}` : ""
     );
     setManualLabel("");
     setManualSubject(null);
     setManualTextbookId(null);
+    setNewTextbookName("");
+    setNewTextbookSubject(null);
+    setNewTextbookUnit("page");
     setPickerOpen(true);
+  };
+
+  const addNewTextbook = () => {
+    const name = newTextbookName.trim();
+    if (!name) {
+      setPickerError("参考書名を入力してください");
+      return;
+    }
+    setPickerError(null);
+    createTextbook.mutate(
+      { name, subject: newTextbookSubject, rangeUnit: newTextbookUnit },
+      {
+        onSuccess: (textbook) => {
+          setManualTextbookId(textbook.id);
+          setNewTextbookName("");
+          setPickerView("textbook");
+        },
+        onError: (error) => setPickerError(error.message),
+      }
+    );
   };
 
   const beginSession = () => {
@@ -196,18 +248,19 @@ export default function StudySessionManager({
           timestamp
         )
       );
-    } else {
+    } else if (pickerView === "textbook") {
       const textbook = textbooks.find((item) => item.id === manualTextbookId);
-      // 自由入力した「内容」を最優先。なければ参考書名 → その他の学習。
-      const trimmedLabel = manualLabel.trim();
-      const label = trimmedLabel || textbook?.name || "その他の学習";
+      if (!textbook) {
+        setPickerError("参考書を選んでください");
+        return;
+      }
       setSession(
         startStudySession(
           {
             planId: null,
-            label,
-            subject: manualSubject,
-            textbookId: manualTextbookId,
+            label: textbook.name,
+            subject: textbook.subject,
+            textbookId: textbook.id,
             rangeStart: null,
             rangeEnd: null,
             rangeUnit: textbook?.rangeUnit ?? null,
@@ -215,6 +268,29 @@ export default function StudySessionManager({
           timestamp
         )
       );
+    } else if (pickerView === "free") {
+      const trimmedLabel = manualLabel.trim();
+      if (!trimmedLabel) {
+        setPickerError("勉強する内容を入力してください");
+        return;
+      }
+      setSession(
+        startStudySession(
+          {
+            planId: null,
+            label: trimmedLabel,
+            subject: manualSubject,
+            textbookId: null,
+            rangeStart: null,
+            rangeEnd: null,
+            rangeUnit: null,
+          },
+          timestamp
+        )
+      );
+    } else {
+      setPickerError("勉強する内容を選んでください");
+      return;
     }
     setNow(timestamp);
     setPickerOpen(false);
@@ -403,104 +479,381 @@ export default function StudySessionManager({
       )}
 
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="top-auto bottom-0 max-h-[90dvh] translate-y-0 overflow-y-auto rounded-b-none sm:top-1/2 sm:bottom-auto sm:max-w-lg sm:-translate-y-1/2 sm:rounded-xl">
-          <DialogHeader>
-            <DialogTitle>何を勉強しますか？</DialogTitle>
+        <DialogContent className="top-auto bottom-0 flex max-h-[90dvh] max-w-none translate-y-0 flex-col gap-0 overflow-hidden rounded-b-none p-0 sm:top-1/2 sm:bottom-auto sm:max-w-md sm:-translate-y-1/2 sm:rounded-xl">
+          <DialogHeader className="border-b px-5 py-4 pr-12">
+            {pickerView !== "choose" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPickerError(null);
+                  if (pickerView === "new-textbook") {
+                    setPickerView("textbook");
+                  } else {
+                    setPickerView("choose");
+                    setSelectedTarget(
+                      selectablePlans[0]
+                        ? `plan:${selectablePlans[0].id}`
+                        : ""
+                    );
+                  }
+                }}
+                className="mb-2 inline-flex w-fit items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                戻る
+              </button>
+            ) : null}
+            <DialogTitle>
+              {pickerView === "textbook"
+                ? "参考書から選ぶ"
+                : pickerView === "free"
+                  ? "自由に入力する"
+                  : pickerView === "new-textbook"
+                    ? "新しい参考書を登録"
+                    : "何を勉強しますか？"}
+            </DialogTitle>
             <DialogDescription>
-              今日の予定またはその他の学習を選んで、時間計測を始めます。
+              {pickerView === "choose"
+                ? "今日の予定を選ぶか、学習内容を選びます。"
+                : pickerView === "new-textbook"
+                  ? "登録後、その参考書を選んだ状態に戻ります。"
+                  : "勉強する内容を決めて、時間計測を始めます。"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
-            {selectablePlans.length > 0 && (
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-medium">今日の予定</legend>
-                {selectablePlans.map((plan) => (
-                  <label
-                    key={plan.id}
-                    className="flex cursor-pointer gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:checked]:bg-info/10"
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            {pickerView === "choose" ? (
+              <div className="space-y-3">
+                {selectablePlans.length > 0 && (
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium">今日の予定</legend>
+                    {selectablePlans.map((plan) => (
+                      <label
+                        key={plan.id}
+                        className="flex min-h-12 cursor-pointer gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:checked]:bg-info/10"
+                      >
+                        <input
+                          type="radio"
+                          name="study-target"
+                          value={`plan:${plan.id}`}
+                          checked={selectedTarget === `plan:${plan.id}`}
+                          onChange={(event) =>
+                            setSelectedTarget(event.target.value)
+                          }
+                        />
+                        <span className="min-w-0 font-medium">
+                          {plan.content}
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+
+                {selectablePlans.length > 0 ? (
+                  <p className="pt-2 text-sm font-medium">予定以外の学習</p>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickerView("textbook");
+                    setSelectedTarget("");
+                    setPickerError(null);
+                  }}
+                  className="flex min-h-20 w-full items-center gap-4 rounded-xl border p-4 text-left transition hover:border-primary/60 hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="rounded-lg bg-info/15 p-2 text-primary">
+                    <BookOpen className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <span>
+                    <span className="block font-semibold text-foreground">
+                      参考書から選ぶ
+                    </span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      登録済みの教材を指定
+                    </span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickerView("free");
+                    setSelectedTarget("");
+                    setPickerError(null);
+                  }}
+                  className="flex min-h-20 w-full items-center gap-4 rounded-xl border p-4 text-left transition hover:border-primary/60 hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="rounded-lg bg-muted p-2 text-foreground">
+                    <PencilLine className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <span>
+                    <span className="block font-semibold text-foreground">
+                      自由に入力する
+                    </span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      復習、過去問、授業など
+                    </span>
+                  </span>
+                </button>
+              </div>
+            ) : null}
+
+            {pickerView === "textbook" ? (
+              <div>
+                <Label className="mb-2 block">参考書</Label>
+                {textbooksPending ? (
+                  <div
+                    className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground"
+                    role="status"
                   >
-                    <input
-                      type="radio"
-                      name="study-target"
-                      value={`plan:${plan.id}`}
-                      checked={selectedTarget === `plan:${plan.id}`}
-                      onChange={(event) => setSelectedTarget(event.target.value)}
-                    />
-                    <span className="min-w-0 font-medium">{plan.content}</span>
-                  </label>
-                ))}
-              </fieldset>
-            )}
+                    参考書を読み込んでいます…
+                  </div>
+                ) : textbooksError ? (
+                  <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                    <p>参考書を読み込めませんでした。</p>
+                    <button
+                      type="button"
+                      onClick={() => refetchTextbooks()}
+                      className="mt-2 font-medium underline"
+                    >
+                      再試行
+                    </button>
+                  </div>
+                ) : textbooks.length === 0 ? (
+                  <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
+                    <p>登録済みの参考書がありません。</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      autoFocus
+                      onClick={() => setPickerView("new-textbook")}
+                    >
+                      参考書を登録する
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2" aria-label="参考書を選択">
+                    {textbooks.map((textbook, index) => {
+                      const selected = manualTextbookId === textbook.id;
+                      return (
+                        <button
+                          key={textbook.id}
+                          type="button"
+                          autoFocus={
+                            manualTextbookId == null ? index === 0 : selected
+                          }
+                          aria-pressed={selected}
+                          onClick={() => {
+                            setManualTextbookId(textbook.id);
+                            setPickerError(null);
+                          }}
+                          className={`flex min-h-14 w-full items-center gap-3 rounded-lg border px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-info/10" : "hover:border-muted-foreground"}`}
+                        >
+                          <span
+                            className={`h-4 w-4 shrink-0 rounded-full border-2 ${selected ? "border-[5px] border-primary" : "border-border"}`}
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-foreground">
+                              {textbook.name}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              {SUBJECTS.find(
+                                (subject) => subject.value === textbook.subject
+                              )?.label ?? "科目なし"}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setPickerView("new-textbook")}
+                      className="mt-2 min-h-11 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      ＋ 新しい参考書を登録
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
-            <label className="flex cursor-pointer gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:checked]:bg-info/10">
-              <input
-                type="radio"
-                name="study-target"
-                value="manual"
-                checked={selectedTarget === "manual"}
-                onChange={(event) => setSelectedTarget(event.target.value)}
-              />
-              <span className="font-medium">その他の学習</span>
-            </label>
-
-            {selectedTarget === "manual" && (
-              <div className="grid gap-3 rounded-lg bg-muted p-3 sm:grid-cols-2">
-                <div className="space-y-1 sm:col-span-2">
-                  <Label htmlFor="session-activity">内容（任意）</Label>
+            {pickerView === "free" ? (
+              <div className="space-y-5">
+                <div>
+                  <Label htmlFor="session-activity">学習内容</Label>
                   <Input
                     id="session-activity"
-                    className="h-11"
-                    placeholder="例：英作文の添削、過去問演習"
+                    autoFocus
+                    className="mt-2 h-11"
+                    placeholder="例：英文法の復習"
                     maxLength={100}
                     value={manualLabel}
-                    onChange={(event) => setManualLabel(event.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    科目や参考書に当てはまらない学習も、ここに自由に書けます。
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="session-subject">科目</Label>
-                  <SubjectSelect
-                    id="session-subject"
-                    ariaLabel="科目"
-                    className="h-11 w-full"
-                    value={manualSubject}
-                    onChange={setManualSubject}
+                    onChange={(event) => {
+                      setManualLabel(event.target.value);
+                      setPickerError(null);
+                    }}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="session-textbook">参考書（任意）</Label>
-                  <TextbookSelect
-                    id="session-textbook"
-                    ariaLabel="参考書"
-                    className="h-11 w-full"
-                    value={manualTextbookId}
-                    onChange={setManualTextbookId}
-                  />
+                <div>
+                  <Label className="mb-2 block">科目（任意）</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SUBJECTS.map((subject) => {
+                      const selected = manualSubject === subject.value;
+                      return (
+                        <button
+                          key={subject.value}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setManualSubject(selected ? null : subject.value)
+                          }
+                          className={`min-h-10 rounded-full border bg-card px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "ring-1" : "text-foreground"}`}
+                          style={
+                            selected
+                              ? {
+                                  borderColor: subjectColor(subject.value),
+                                  color: subjectColor(subject.value),
+                                  backgroundColor: `${subjectColor(subject.value)}12`,
+                                }
+                              : undefined
+                          }
+                        >
+                          {subject.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            )}
+            ) : null}
+
+            {pickerView === "new-textbook" ? (
+              <div className="space-y-5">
+                <div>
+                  <Label htmlFor="session-new-textbook-name">参考書名</Label>
+                  <Input
+                    id="session-new-textbook-name"
+                    autoFocus
+                    className="mt-2"
+                    value={newTextbookName}
+                    onChange={(event) => {
+                      setNewTextbookName(event.target.value);
+                      setPickerError(null);
+                    }}
+                    placeholder="例：青チャートIA"
+                    maxLength={100}
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">科目（任意）</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SUBJECTS.map((subject) => {
+                      const selected = newTextbookSubject === subject.value;
+                      return (
+                        <button
+                          key={subject.value}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setNewTextbookSubject(
+                              selected ? null : subject.value
+                            )
+                          }
+                          className="min-h-10 rounded-full border px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          style={
+                            selected
+                              ? {
+                                  borderColor: subjectColor(subject.value),
+                                  color: subjectColor(subject.value),
+                                  backgroundColor: `${subjectColor(subject.value)}12`,
+                                }
+                              : undefined
+                          }
+                        >
+                          {subject.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="session-new-textbook-unit">
+                    範囲の単位
+                  </Label>
+                  <select
+                    id="session-new-textbook-unit"
+                    value={newTextbookUnit}
+                    onChange={(event) =>
+                      setNewTextbookUnit(
+                        event.target.value as (typeof RANGE_UNITS)[number]["value"]
+                      )
+                    }
+                    className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {RANGE_UNITS.map((unit) => (
+                      <option key={unit.value} value={unit.value}>
+                        {unit.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : null}
+
+            {pickerError ? (
+              <div
+                role="alert"
+                className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {pickerError}
+              </div>
+            ) : null}
           </div>
 
-          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 w-full sm:w-auto"
-              onClick={() => {
-                setPickerOpen(false);
-                setManualLogOpen(true);
-              }}
-            >
-              あとから記録
-            </Button>
-            <Button type="button" className="h-11" onClick={beginSession}>
-              <Play aria-hidden="true" />
-              計測を開始
-            </Button>
-          </DialogFooter>
+          <div className="flex flex-col gap-2 border-t bg-card px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:pb-4">
+            {pickerView === "new-textbook" ? (
+              <Button
+                type="button"
+                className="min-h-11 w-full"
+                onClick={addNewTextbook}
+                disabled={createTextbook.isPending}
+              >
+                {createTextbook.isPending
+                  ? "登録中…"
+                  : "参考書を登録して選択"}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-11 w-full sm:w-auto"
+                  onClick={() => {
+                    setPickerOpen(false);
+                    setManualLogOpen(true);
+                  }}
+                >
+                  あとから記録
+                </Button>
+                {(selectedTarget.startsWith("plan:") ||
+                  (pickerView === "textbook" &&
+                    manualTextbookId != null) ||
+                  pickerView === "free") && (
+                  <Button
+                    type="button"
+                    className="h-11 w-full sm:w-auto"
+                    onClick={beginSession}
+                  >
+                    <Play aria-hidden="true" />
+                    計測を開始
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

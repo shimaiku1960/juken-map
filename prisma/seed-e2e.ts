@@ -43,6 +43,19 @@ async function main() {
       },
     });
   }
+
+  await prisma.textbook.upsert({
+    where: {
+      userId_name: { userId: user.id, name: "E2E英語教材" },
+    },
+    update: { subject: "english", rangeUnit: "page" },
+    create: {
+      userId: user.id,
+      name: "E2E英語教材",
+      subject: "english",
+      rangeUnit: "page",
+    },
+  });
   console.log(`E2Eユーザーを投入: ${E2E_EMAIL}`);
 }
 

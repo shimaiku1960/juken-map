@@ -19,13 +19,11 @@ test("タイマーで学習した実績がダッシュボードに反映され�
   await page.getByRole("link", { name: "学習を始める" }).click();
 
   await page.getByRole("button", { name: "学習を始める" }).click();
-  const picker = page.getByRole("dialog", { name: "何を勉強しますか？" });
-  await picker.getByLabel("その他の学習").check();
-  const subjectSelect = picker
-    .locator("select")
-    .filter({ hasText: "科目なし" })
-    .first();
-  await subjectSelect.selectOption({ label: "英語" });
+  const chooser = page.getByRole("dialog", { name: "何を勉強しますか？" });
+  await chooser.getByRole("button", { name: /自由に入力する/ }).click();
+  const picker = page.getByRole("dialog", { name: "自由に入力する" });
+  await picker.getByLabel("学習内容").fill("過去問演習");
+  await picker.getByRole("button", { name: "英語" }).click();
   await picker.getByRole("button", { name: "計測を開始" }).click();
 
   await expect(page.getByText("● 計測中")).toBeVisible();
@@ -55,8 +53,10 @@ test("タイマーで学習した実績がダッシュボードに反映され�
 test("計測中に再読み込みしてもタイマーを復元できる", async ({ page }) => {
   await login(page, E2E_EMAIL, E2E_PASSWORD);
   await page.getByRole("button", { name: "学習を始める" }).click();
-  const picker = page.getByRole("dialog", { name: "何を勉強しますか？" });
-  await picker.getByLabel("その他の学習").check();
+  const chooser = page.getByRole("dialog", { name: "何を勉強しますか？" });
+  await chooser.getByRole("button", { name: /自由に入力する/ }).click();
+  const picker = page.getByRole("dialog", { name: "自由に入力する" });
+  await picker.getByLabel("学習内容").fill("復習");
   await picker.getByRole("button", { name: "計測を開始" }).click();
   await expect(page.getByText("● 計測中")).toBeVisible();
 
@@ -67,4 +67,38 @@ test("計測中に再読み込みしてもタイマーを復元できる", async
   await review.getByRole("button", { name: "保存せず終了" }).click();
   await review.getByRole("button", { name: "破棄する" }).click();
   await expect(page.getByRole("button", { name: "学習を始める" })).toBeVisible();
+});
+
+test("予定外の学習方法を選んで戻れる", async ({ page }) => {
+  await login(page, E2E_EMAIL, E2E_PASSWORD);
+  await page.getByRole("button", { name: "学習を始める" }).click();
+
+  const chooser = page.getByRole("dialog", { name: "何を勉強しますか？" });
+  await expect(
+    chooser.getByRole("button", { name: /参考書から選ぶ/ })
+  ).toBeVisible();
+  await expect(
+    chooser.getByRole("button", { name: /自由に入力する/ })
+  ).toBeVisible();
+
+  await chooser.getByRole("button", { name: /自由に入力する/ }).click();
+  const freeForm = page.getByRole("dialog", { name: "自由に入力する" });
+  await freeForm.getByRole("button", { name: "計測を開始" }).click();
+  await expect(freeForm.getByRole("alert")).toHaveText(
+    "勉強する内容を入力してください"
+  );
+
+  await freeForm.getByRole("button", { name: "戻る" }).click();
+  await chooser.getByRole("button", { name: /参考書から選ぶ/ }).click();
+  const textbookPicker = page.getByRole("dialog", { name: "参考書から選ぶ" });
+  await textbookPicker
+    .getByRole("button", { name: /E2E英語教材/ })
+    .click();
+  await textbookPicker.getByRole("button", { name: "計測を開始" }).click();
+  await expect(page.getByText("● 計測中")).toBeVisible();
+
+  await page.getByRole("button", { name: "学習を終了" }).click();
+  const review = page.getByRole("dialog", { name: "おつかれさまでした" });
+  await review.getByRole("button", { name: "保存せず終了" }).click();
+  await review.getByRole("button", { name: "破棄する" }).click();
 });
