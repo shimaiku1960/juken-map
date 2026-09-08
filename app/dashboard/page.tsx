@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth-session";
 import prisma from "@/lib/prisma";
 import { listStudyLogs } from "@/lib/services/study-log-service";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
@@ -23,7 +22,7 @@ import RegistrationCompletionTracker from "@/app/components/analytics/Registrati
 export const metadata: Metadata = { robots: NOINDEX };
 
 const DashboardPage = async () => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getCurrentSession();
   if (!session) redirect("/login");
 
   const [goals, plans, logsRaw] = await Promise.all([

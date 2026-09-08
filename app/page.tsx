@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth-session";
 import prisma from "@/lib/prisma";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
 import Link from "next/link";
@@ -27,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 const Home = async () => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getCurrentSession();
   // 未ログインはログイン画面へ飛ばさず、トップで LP を見せる。
   if (!session) return <LandingPage />;
 

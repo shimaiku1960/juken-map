@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth-session";
 import { listUniversitiesForExplore } from "@/lib/services/university-service";
 import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
@@ -12,7 +11,7 @@ import PageHeader from "@/app/components/layout/PageHeader";
 export const metadata: Metadata = { robots: NOINDEX };
 
 const ExplorePage = async () => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login");

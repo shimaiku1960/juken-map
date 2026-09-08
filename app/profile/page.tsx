@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth-session";
 import { redirect } from "next/navigation";
 import { LINE_OFFICIAL_ACCOUNT_URL, NOINDEX } from "@/lib/site";
 import Link from "next/link";
@@ -24,9 +23,7 @@ const ProfilePage = async ({
   searchParams: Promise<{ line?: string }>;
 }) => {
     const { line: lineResult } = await searchParams;
-    const session = await auth.api.getSession({
-        headers: await headers(),
-    });
+    const session = await getCurrentSession();
 
     if (!session) {
         redirect("/login");

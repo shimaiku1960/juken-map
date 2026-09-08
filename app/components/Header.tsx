@@ -1,13 +1,10 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { MapPinned } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth-session";
 import HeaderNavigation from "@/app/components/HeaderNavigation";
 
 const Header = async () => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
   const user = session?.user;
 
   return (

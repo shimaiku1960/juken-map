@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth-session";
 import prisma from "@/lib/prisma";
 import { NOINDEX } from "@/lib/site";
 import { redirect, notFound } from "next/navigation";
@@ -16,9 +15,7 @@ const UniversityDetailPage = async ({
 }: {
   params: Promise<{ universityId: string }>;
 }) => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login");

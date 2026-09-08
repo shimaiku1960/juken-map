@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth-session";
 import { NOINDEX } from "@/lib/site";
 import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
@@ -18,7 +17,7 @@ export default async function LineLinkPage({
   searchParams: Promise<{ linkToken?: string }>;
 }) {
   const { linkToken } = await searchParams;
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getCurrentSession();
 
   if (!linkToken) {
     return (
