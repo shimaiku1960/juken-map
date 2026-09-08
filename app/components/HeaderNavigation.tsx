@@ -14,7 +14,7 @@ import {
   Target,
   UserRound,
 } from "lucide-react";
-import { logout } from "@/app/auth/actions";
+import { authClient } from "@/lib/auth-client";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import TrackedSignupLink from "@/app/components/analytics/TrackedSignupLink";
@@ -54,6 +54,7 @@ const subscribeToHydration = () => () => {};
 const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const mounted = useSyncExternalStore(
     subscribeToHydration,
     () => true,
@@ -78,6 +79,18 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [menuOpen]);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    const result = await authClient.signOut();
+
+    if (result.error) {
+      setLoggingOut(false);
+      return;
+    }
+
+    window.location.assign("/login");
+  };
 
   if (!user) {
     return (
@@ -198,15 +211,17 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
                 ブログ
               </MenuLink>
             </div>
-            <form action={logout} className="border-t pt-1">
+            <div className="border-t pt-1">
               <button
-                type="submit"
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
                 className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <LogOut aria-hidden="true" className="size-4" />
-                ログアウト
+                {loggingOut ? "ログアウト中…" : "ログアウト"}
               </button>
-            </form>
+            </div>
           </div>
         ) : null}
       </div>
