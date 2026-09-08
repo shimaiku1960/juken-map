@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { listGoals } from "@/lib/services/goal-service";
 import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -24,23 +25,13 @@ import { Button, buttonVariants } from "@/components/ui/button";
 export const metadata: Metadata = { robots: NOINDEX };
 
 const GoalsPage = async () => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await auth.api.getSession({ headers: await headers() });
 
   if (!session) {
     redirect("/login");
   }
 
-  const goalsRaw = await prisma.finalGoal.findMany({
-    where: { userId: session.user.id },
-    include: {
-      faculty: {
-        include: { university: true, tags: true },
-      },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const goalsRaw = await listGoals(session.user.id);
 
   // Prisma の status(string) を Goal 型（"candidate" | "decided"）に揃える
   const goals: Goal[] = goalsRaw.map((g) => ({

@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import prisma  from "@/lib/prisma";
+import prisma from "@/lib/prisma";
 import { goalSchema } from "@/lib/validations/goal";
 import { Prisma } from "@/app/generated/prisma/client";
 import { demoReadOnlyGuard } from "@/lib/demo";
-
-
-
-
+import { listGoals } from "@/lib/services/goal-service";
 export async function GET() {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -18,15 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const goals = await prisma.finalGoal.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "asc" },
-    include: {
-      faculty: {
-        include: { university: true, tags: true },
-      },
-    },
-  });
+  const goals = await listGoals(session.user.id);
 
   return NextResponse.json(goals);
 }

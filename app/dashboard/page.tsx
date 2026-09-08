@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { listStudyLogs } from "@/lib/services/study-log-service";
+import { listStudyPlans } from "@/lib/services/study-plan-service";
 import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -30,16 +32,8 @@ const DashboardPage = async () => {
       include: { faculty: { include: { university: true } } },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.studyPlan.findMany({
-      where: { userId: session.user.id },
-      orderBy: { date: "asc" },
-      include: { textbook: true, studyLog: { select: { id: true } } },
-    }),
-    prisma.studyLog.findMany({
-      where: { userId: session.user.id },
-      orderBy: { date: "desc" },
-      include: { textbook: true },
-    }),
+    listStudyPlans(session.user.id),
+    listStudyLogs(session.user.id),
   ]);
 
   const decidedGoals = goals.filter((goal) => goal.status === "decided");

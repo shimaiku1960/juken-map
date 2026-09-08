@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createStudyLogSchema } from "@/lib/validations/studyLog";
 import { demoReadOnlyGuard } from "@/lib/demo";
+import { listStudyLogs } from "@/lib/services/study-log-service";
 
 export async function GET() {
   const session = await auth.api.getSession({
@@ -14,11 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const logs = await prisma.studyLog.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "desc" },
-    include: { textbook: true },
-  });
+  const logs = await listStudyLogs(session.user.id);
 
   return NextResponse.json(logs);
 }

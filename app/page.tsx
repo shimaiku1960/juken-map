@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { listStudyPlans } from "@/lib/services/study-plan-service";
 import Link from "next/link";
 import LandingPage from "@/app/components/LandingPage";
 import StudySessionManager from "@/app/components/StudySessionManager";
@@ -36,11 +37,7 @@ const Home = async () => {
       where: { userId: session.user.id, status: "decided", isFirstChoice: true },
       include: { faculty: { include: { university: true } } },
     }),
-    prisma.studyPlan.findMany({
-      where: { userId: session.user.id },
-      orderBy: { date: "asc" },
-      include: { textbook: true, studyLog: { select: { id: true } } },
-    }),
+    listStudyPlans(session.user.id),
   ]);
 
   const initialPlans: StudyPlan[] = plans.map((plan) => ({

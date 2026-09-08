@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { listUniversitiesForExplore } from "@/lib/services/university-service";
 import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
 import UniversitySearch from "@/app/components/UniversitySearch";
@@ -12,24 +12,13 @@ import PageHeader from "@/app/components/layout/PageHeader";
 export const metadata: Metadata = { robots: NOINDEX };
 
 const ExplorePage = async () => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await auth.api.getSession({ headers: await headers() });
 
   if (!session) {
     redirect("/login");
   }
 
-  const universitiesRaw = await prisma.university.findMany({
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      prefecture: true,
-      type: true,
-      faculties: { select: { tags: { select: { name: true } } } },
-    },
-  });
+  const universitiesRaw = await listUniversitiesForExplore();
 
   // 学部系統(タグ)で絞り込めるよう、大学ごとに学部数とタグ名を集約
   const universities = universitiesRaw.map((u) => ({

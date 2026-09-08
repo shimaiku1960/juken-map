@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createStudyPlansSchema } from "@/lib/validations/studyPlan";
 import { demoReadOnlyGuard } from "@/lib/demo";
+import { listStudyPlans } from "@/lib/services/study-plan-service";
 
 export async function GET() {
   const session = await auth.api.getSession({
@@ -14,11 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const plans = await prisma.studyPlan.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "asc" },
-    include: { textbook: true, studyLog: { select: { id: true } } },
-  });
+  const plans = await listStudyPlans(session.user.id);
 
   return NextResponse.json(
     plans.map(({ studyLog, ...plan }) => ({
