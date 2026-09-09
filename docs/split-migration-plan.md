@@ -40,7 +40,7 @@ ESLint ではなくネットワークそのものになる。**バックエン�
 移植元となる `src/backend/`（19本）は TASK 1〜7 でサービス層・DTO・infra に切り出し済みで、
 **ほぼそのまま Fastify へ持っていける。** 先の整理がここで効く。
 
-## 検証済み: 認証は移行できる（既存ユーザーの再登録は不要）
+## 認証は移行できる（Phase 0 で実証済み・2026-09-09）
 
 better-auth 1.6.22 は `better-auth/node` に **`toNodeHandler`** を提供している。Node 標準の
 `IncomingMessage` / `ServerResponse` を受けるハンドラなので、Fastify の `req.raw` / `res.raw` を
@@ -53,20 +53,53 @@ better-auth 1.6.22 は `better-auth/node` に **`toNodeHandler`** を提供し�
 Next.js 固有なのは `plugins: [nextCookies()]` の1行だけで、これは Server Actions 用なので
 落とせる（このリポジトリに Server Actions は既に0件）。
 
-**ただし机上の確認である。Phase 0 で実際に動かして確かめるまで確定としない。**
+**2026-09-09、Phase 0 で実際に動かして確認済み。** 詳細は下記 Phase 0 の節。
 
 ## 段階
 
 各段階は独立してデプロイでき、途中で止めても壊れない。一発切り替えはしない。
 
-### Phase 0 — 認証の実現可能性検証（本番に触れない）★最重要ゲート
+### ✅ Phase 0 — 認証の実現可能性検証（2026-09-09 完了・実証済み）
 
-ローカルで Fastify を立て、`toNodeHandler` と既存の Prisma schema を繋いで、
-**現在のDBにいる既存ユーザーでログインできること**を確認する。
+**結論: 移行できる。既存ユーザーの再登録もログアウトも発生しない。**
 
-- 完了条件: メール+パスワードでログインでき、セッション Cookie が発行され、
-  `getSession` 相当で認証済みユーザーを取得できる
-- ここが通らなければ計画自体を見直す。**他の何より先に行う**
+リポジトリ外の隔離ディレクトリに Fastify + better-auth のスパイクを作り（本番コードにも
+リポジトリにも変更なし）、**本番と同じローカル MySQL の既存ユーザー**に対して検証した。
+実装は `auth.ts` 28行 + `server.ts` 51行のみ。
+
+| 確認項目 | 結果 |
+|---|---|
+| 既存ユーザーでログイン（既存のパスワードハッシュ） | ✅ HTTP 200 |
+| セッション Cookie の発行（`better-auth.session_token`・HttpOnly） | ✅ |
+| `auth.api.getSession` で認証済みユーザーを取得 | ✅ `nickname` などの additionalFields も復元 |
+| セッションに紐づく Prisma クエリ | ✅ `studyLogCount: 22`（本番アプリでの実測と一致） |
+| Cookie 無しは拒否 | ✅ |
+| 誤パスワードは拒否 | ✅ HTTP 401 |
+| メール未確認ユーザーは拒否（`requireEmailVerification`） | ✅ HTTP 401 |
+| **Next.js が発行した Cookie を Fastify が受理** | ✅ **移行時にログアウトが起きない** |
+
+最後の項目が決定的である。Next.js（:3000）でログインして得た Cookie を、そのまま
+Fastify（:4000）へ送って認証が通った。**セッションテーブルも Cookie 形式も共通なので、
+切り替え時にユーザーはログインしたままでいられる。**
+
+#### 検証中に踏んだ2点（Phase 1 でそのまま効く）
+
+1. **Fastify のボディ解析が better-auth より先に走ると 400 になる。** better-auth は
+   Node のリクエストストリームを自分で読むが、Fastify は既定で `application/json` を
+   読み切ってしまう。`addContentTypeParser` を `parseAs: "string"` で挟んでも同じで、
+   ストリームが枯れる。**解決は `onRequest` フック**（ボディ解析より前に走る）で
+   `reply.hijack()` してから `toNodeHandler` に渡すこと。
+
+2. **`BETTER_AUTH_SECRET` が一致しないと、Cookie の署名検証に失敗して静かに未認証になる。**
+   エラーではなく「ログインしていない」として扱われるので原因が見えにくい。
+   Cookie は `トークン.署名` の形式で、署名はこの secret で作られる。**移行時は新旧で
+   同じ secret を使うこと**（別の値にすると全ユーザーが強制ログアウトになる）。
+
+#### Next.js 側との設定差
+
+本番の `src/backend/infra/auth.ts` から落としたのは `plugins: [nextCookies()]` の1行だけ
+（Server Actions 用で、このリポジトリに Server Actions は0件）。DB アダプタ・
+`additionalFields`・`emailAndPassword`・`trustedOrigins` はそのまま使えた。
 
 ### Phase 1 — API を Fastify へ（画面は無変更）
 
