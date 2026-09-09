@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { authClient } from "@/web/lib/auth-client";
+import { useSession } from "@/web/lib/auth-client";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { profileSchema, type ProfileInput } from "@/shared/validations/profile";
@@ -22,6 +22,7 @@ const ProfileEdit = ({
   currentNickname: string;
   readOnly?: boolean;
 }) => {
+  const { refetch } = useSession();
   const [isEditing, setIsEditing] = useState(false);
 
   const form = useForm<ProfileInput>({
@@ -41,9 +42,10 @@ const ProfileEdit = ({
     if (res.ok) {
       toast.success("更新しました");
       setIsEditing(false);
-      // Next.js では router.refresh() でサーバー再描画していた。SPA には相当物が無いので、
-      // ニックネームを表示している箇所（ヘッダー等）を更新するためセッションを取り直す。
-      await authClient.getSession({ query: { disableCookieCache: true } });
+      // Next.js では router.refresh() でサーバー再描画していた。SPA に相当物は無い。
+      // authClient.getSession() は単発取得で useSession の購読ストアを更新しないため、
+      // 表示が古いままになる（実際に踏んだ）。useSession の refetch を使うこと。
+      await refetch();
     } else {
       const result = await res.json();
       toast.error(result.error || "更新に失敗しました");
