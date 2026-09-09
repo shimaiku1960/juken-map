@@ -129,3 +129,32 @@ LINE・純粋ビルダーを束ねて1つの Route Handler（cron）から呼ば
    （class 名は HTML に残り、CSS だけが欠ける）
 6. データが0件だと描画経路を通らないので、e2e ユーザー（学習記録あり・志望校0件）と
    demo ユーザー（志望校4件）の両方で確認する
+
+## 境界の強制（ESLint）
+
+上記の依存の向きは、レビューでの気づきに頼らず `eslint.config.mjs` の
+`no-restricted-imports` で機械的に禁止している。CI（`.github/workflows/ci.yml`）でも
+`npx eslint --max-warnings 0` が走るので、違反したままマージされることはない。
+
+| 対象 | 禁止する import | 意図 |
+|---|---|---|
+| `src/shared/**` | `@/frontend/*`・`@/backend/*`・`@/app/*` | shared は最下層。何にも依存しない |
+| `src/frontend/**` | `@/backend/*`、Prisma 生成クライアント | UI から DB・外部連携へ直接触らせない |
+| `src/backend/**` | `@/frontend/*` | サーバー処理が画面都合に引きずられないようにする |
+| `app/**/page.tsx`・`layout.tsx`・`template.tsx` | Prisma 生成クライアント、`@/backend/infra/prisma` | 画面の入口は必ずサービス層を経由する |
+
+エラーメッセージは日本語で、禁止だけでなく**代わりに何をすべきか**を書いている
+（例:「データ取得は入口で行い、結果を props で渡してください」）。
+
+`app/api/**/route.ts` は対象外。Prisma のエラー型（`Prisma.PrismaClientKnownRequestError`
+を使った `P2002 → 409` の変換など）を扱うため、生成クライアントを参照する必要がある。
+`app/generated/**` は Prisma の生成物なので lint 対象から除外している。
+
+### 導入時に直した違反（1件）
+
+`src/frontend/components/Header.tsx` がセッションを自分で取得していた
+（`@/backend/infra/auth-session` を直接 import）。取得を入口の `app/layout.tsx` へ移し、
+Header は `user` を props で受け取る表示専用コンポーネントにした。Header は認証
+ライブラリの型ではなく構造的な型（`HeaderUser`）で受けるので、backend への依存は残らない。
+
+これで例外指定なしに境界が成立している。

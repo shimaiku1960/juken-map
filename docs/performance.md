@@ -604,3 +604,55 @@ frontend/lib だが、現状 DTO 変換のような重複は生んでいない�
 `login`（7）・`signup`（4）・`forgot-password`（3）・`reset-password`（2）・
 `verify-email`（1）。これらはフォームの状態管理であり、UI の責務そのもの。
 `page.tsx` が `"use client"` である以上ここにあるのが自然で、問題ではない。
+
+---
+
+## TASK 6: ESLint でレイヤー境界を強制（2026-09-09）
+
+ルールの内容と意図は `docs/architecture.md` の「境界の強制（ESLint）」に記録した。
+ここには導入時の実測だけ残す。
+
+### 既存コードの違反は1件だけだった
+
+`src/frontend/components/Header.tsx` が `@/backend/infra/auth-session` を直接呼んで
+セッションを取得していた。取得を `app/layout.tsx`（入口）へ移し、Header は props で
+`user` を受け取る表示専用コンポーネントに変更した。`RootLayout` は async になる。
+
+他は違反なし。shared → 他層が0件、backend → frontend が0件だったのは、TASK 5B で
+参照元を実測して配置を決めていたため。
+
+### ルールが実際に発火することを確認した
+
+「エラーが出ないルール」は書いても意味がないので、4つすべてに一時的な違反を入れて
+検出を確認し、その後削除した（作業ツリーに残っていないことも確認済み）。
+
+| 検証 | 結果 |
+|---|---|
+| `src/frontend/lib/utils.ts` から `@/backend/infra/prisma` | 検出 ✅ |
+| `src/shared/date.ts` から `@/backend/infra/prisma` | 検出 ✅ |
+| `app/goals/page.tsx` から `@/backend/infra/prisma` | 検出 ✅ |
+| `src/backend/services/goal-service.ts` から `@/frontend/lib/utils` | 検出 ✅ |
+| 正当な import（API Route の Prisma 型、study-mapper） | 誤検出なし ✅ |
+
+### CI
+
+`.github/workflows/ci.yml` に `npx eslint --max-warnings 0` が既にあり、追加は不要だった。
+
+### 検証
+
+Header の変更は全ページのヘッダーに影響するため、**未ログイン状態も含めて**前後比較した。
+
+| ページ | 状態 | DOM 行数 | 結果 |
+|---|---|---:|---|
+| `/dashboard` `/goals` `/profile` `/explore/1` `/` | e2e ログイン | 87〜557 | 完全一致 |
+| `/dashboard` | demo ログイン | 501 | 完全一致 |
+| `/`（LP） | **未ログイン** | 601 | 完全一致 |
+| `/login` | **未ログイン** | 105 | 完全一致 |
+
+`npm run check` 成功（ESLint、tsc、Vitest 34ファイル 240テスト、build）。
+
+### 完了条件の達成状況
+
+- ✅ 境界を破る import が ESLint で検出される（4ルール・発火確認済み）
+- ✅ CI で lint が実行される（既存）
+- ✅ 既存コードで新たなエラーが出ていない（違反1件は修正済み）

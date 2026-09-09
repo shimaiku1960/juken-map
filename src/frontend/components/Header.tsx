@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { MapPinned } from "lucide-react";
-import { getCurrentSession } from "@/backend/infra/auth-session";
 import HeaderNavigation from "@/frontend/components/HeaderNavigation";
 
-const Header = async () => {
-  const session = await getCurrentSession();
-  const user = session?.user;
+// セッションの取得は入口（app/layout.tsx）が行い、ここは表示だけを受け持つ。
+// frontend から backend を直接呼ばないためで、この境界は ESLint で強制している。
+// 構造的な型で受けるので、認証ライブラリの型に依存しない。
+export type HeaderUser = {
+  nickname?: string | null;
+  name: string;
+  email: string;
+};
 
+const Header = ({ user }: { user: HeaderUser | null }) => {
   return (
     <>
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
