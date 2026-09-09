@@ -237,12 +237,22 @@ Step 2 で具体化する。
   役目を終えたと考えてよい。Phase 1 相当（Fastify + メモリ保存の CRUD、PATCH/DELETE 込み）
   まで実装済みだが未コミットで残っている
 
-## 要確認（リポジトリ管理外）
+## ✅ リバースプロキシの実態（2026-09-09 確認済み）
 
-**HTTPS を終端しているリバースプロキシの設定が、リポジトリに存在しない。** 現在の
-デプロイは `docker run -p 3000:3000` のみで、その前段（nginx 等）は EC2 ホスト上に
-手で置かれていると思われる。Step 3 で切り替える前に、SSM で接続して実機の設定を確認し、可能なら
-リポジトリ管理下へ持ってくる。
+Step 3 の前提として、SSM 経由で本番 EC2 から実物を読み取った。**内容は
+`infra/nginx/README.md` に記録済み。**
+
+- **nginx 1.28.3（Ubuntu）** が 80/443 を持ち、Docker が 3000 を持つ
+- 設定は `/etc/nginx/sites-enabled/default`。Ubuntu の既定ファイルを直接編集した形で、
+  実質的な中身は `location / { proxy_pass http://localhost:3000; }` だけ
+- HTTPS は Let's Encrypt。`certbot.timer` が動いており自動更新されている
+- 80 番は Certbot が入れた 301 で HTTPS へ寄せているだけ
+
+Step 3 では `location /api` を Fastify（:4000）へ、`location /` を SPA の静的ファイルへ
+振り分ける。SPA はクライアントルーティングなので `try_files $uri /index.html;` が要る
+（無いと `/dashboard` の直接アクセスが 404 になる）。
+
+**切り戻しは設定を戻して `nginx -s reload` するだけ。** Step 3 が低リスクなのはこのため。
 
 ## 進め方の制約（TASK 1〜7 から引き継ぐ）
 
