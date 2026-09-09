@@ -1,35 +1,23 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { NOINDEX } from "@/lib/site";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { listUniversitiesForExplore } from "@/backend/services/university-service";
+import { NOINDEX } from "@/shared/site";
 import { redirect } from "next/navigation";
-import UniversitySearch from "@/app/components/UniversitySearch";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
+import UniversitySearch from "@/frontend/components/UniversitySearch";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
 
 const ExplorePage = async () => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login");
   }
 
-  const universitiesRaw = await prisma.university.findMany({
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      prefecture: true,
-      type: true,
-      faculties: { select: { tags: { select: { name: true } } } },
-    },
-  });
+  const universitiesRaw = await listUniversitiesForExplore();
 
   // 学部系統(タグ)で絞り込めるよう、大学ごとに学部数とタグ名を集約
   const universities = universitiesRaw.map((u) => ({

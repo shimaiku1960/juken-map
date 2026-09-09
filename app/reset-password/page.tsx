@@ -2,13 +2,13 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { PasswordInput } from "@/components/ui/password-input";
-import { Label } from "@/components/ui/label";
-import InlineFeedback from "@/app/components/feedback/InlineFeedback";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
+import { authClient } from "@/frontend/lib/auth-client";
+import { Button } from "@/frontend/components/ui/button";
+import { PasswordInput } from "@/frontend/components/ui/password-input";
+import { Label } from "@/frontend/components/ui/label";
+import InlineFeedback from "@/frontend/components/feedback/InlineFeedback";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
 
 function ResetPasswordForm() {
   const router = useRouter();

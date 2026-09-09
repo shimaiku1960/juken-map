@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { sendDailyNotifications } from "@/lib/sendDailyNotifications";
+import { sendDailyNotifications } from "@/backend/services/sendDailyNotifications";
 
 const bodySchema = z.object({ slot: z.enum(["morning", "evening"]) });
 

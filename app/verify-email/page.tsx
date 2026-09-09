@@ -2,14 +2,14 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import InlineFeedback from "@/app/components/feedback/InlineFeedback";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
-import { useSafeCallbackURL } from "@/app/hooks/useBrowserNavigation";
+import { authClient } from "@/frontend/lib/auth-client";
+import { Button } from "@/frontend/components/ui/button";
+import { Input } from "@/frontend/components/ui/input";
+import { Label } from "@/frontend/components/ui/label";
+import InlineFeedback from "@/frontend/components/feedback/InlineFeedback";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
+import { useSafeCallbackURL } from "@/frontend/hooks/useBrowserNavigation";
 
 const subscribeToPendingEmail = () => () => {};
 const getPendingEmail = () =>

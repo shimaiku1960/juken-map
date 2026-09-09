@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { createStudyPlansSchema } from "@/lib/validations/studyPlan";
-import { demoReadOnlyGuard } from "@/lib/demo";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
+import { createStudyPlansSchema } from "@/shared/validations/studyPlan";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
+import { toStudyPlanDTO } from "@/backend/dto/study-mapper";
+import { listStudyPlans } from "@/backend/services/study-plan-service";
 
 export async function GET() {
   const session = await auth.api.getSession({
@@ -14,18 +16,9 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const plans = await prisma.studyPlan.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "asc" },
-    include: { textbook: true, studyLog: { select: { id: true } } },
-  });
+  const plans = await listStudyPlans(session.user.id);
 
-  return NextResponse.json(
-    plans.map(({ studyLog, ...plan }) => ({
-      ...plan,
-      studyLogId: studyLog?.id ?? null,
-    }))
-  );
+  return NextResponse.json(plans.map(toStudyPlanDTO));
 }
 
 export async function POST(request: Request) {

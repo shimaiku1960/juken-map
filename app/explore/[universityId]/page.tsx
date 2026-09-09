@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { NOINDEX } from "@/lib/site";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { listGoalFacultyIds } from "@/backend/services/goal-service";
+import { findUniversityDetail } from "@/backend/services/university-service";
+import { NOINDEX } from "@/shared/site";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import FacultyList from "@/app/components/FacultyList";
-import { DEMO_EMAIL } from "@/lib/demo";
+import FacultyList from "@/frontend/components/FacultyList";
+import { DEMO_EMAIL } from "@/shared/demo";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
@@ -16,9 +16,7 @@ const UniversityDetailPage = async ({
 }: {
   params: Promise<{ universityId: string }>;
 }) => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login");
@@ -30,24 +28,13 @@ const UniversityDetailPage = async ({
     notFound();
   }
 
-  const university = await prisma.university.findUnique({
-    where: { id },
-    include: {
-      faculties: {
-        include: { tags: true },
-        orderBy: { id: "asc" },
-      },
-    },
-  });
+  const university = await findUniversityDetail(id);
 
   if (!university) {
     notFound();
   }
 
-  const goals = await prisma.finalGoal.findMany({
-    where: { userId: session.user.id },
-    select: { facultyId: true },
-  });
+  const goals = await listGoalFacultyIds(session.user.id);
   const registeredFacultyIds = goals.map((g) => g.facultyId);
 
   return (

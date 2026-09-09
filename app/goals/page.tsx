@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { NOINDEX } from "@/lib/site";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { listGoals } from "@/backend/services/goal-service";
+import { listTextbookSubjects } from "@/backend/services/textbook-service";
+import { NOINDEX } from "@/shared/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import GoalList from "@/app/components/GoalList";
-import ExamScheduleTimeline from "@/app/components/ExamScheduleTimeline";
-import type { Goal } from "@/app/hooks/useGoals";
-import { Card, CardContent } from "@/components/ui/card";
-import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/subjects";
-import { DEMO_EMAIL } from "@/lib/demo";
+import GoalList from "@/frontend/components/GoalList";
+import ExamScheduleTimeline from "@/frontend/components/ExamScheduleTimeline";
+import type { Goal } from "@/frontend/hooks/useGoals";
+import { Card, CardContent } from "@/frontend/components/ui/card";
+import { SUBJECTS, subjectColor, subjectLabel } from "@/shared/subjects";
+import { DEMO_EMAIL } from "@/shared/demo";
 import { Target } from "lucide-react";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
-import SectionHeader from "@/app/components/layout/SectionHeader";
-import EmptyState from "@/app/components/feedback/EmptyState";
-import { Button, buttonVariants } from "@/components/ui/button";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
+import SectionHeader from "@/frontend/components/layout/SectionHeader";
+import EmptyState from "@/frontend/components/feedback/EmptyState";
+import { Button, buttonVariants } from "@/frontend/components/ui/button";
 
 // 志望校ページ＝「受験戦略を俯瞰し、受験校を決める」場所。
 // 以前はプロフィール下部に埋もれていた GoalList をここへ独立させた。
@@ -24,23 +24,13 @@ import { Button, buttonVariants } from "@/components/ui/button";
 export const metadata: Metadata = { robots: NOINDEX };
 
 const GoalsPage = async () => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login");
   }
 
-  const goalsRaw = await prisma.finalGoal.findMany({
-    where: { userId: session.user.id },
-    include: {
-      faculty: {
-        include: { university: true, tags: true },
-      },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const goalsRaw = await listGoals(session.user.id);
 
   // Prisma の status(string) を Goal 型（"candidate" | "decided"）に揃える
   const goals: Goal[] = goalsRaw.map((g) => ({
@@ -50,10 +40,7 @@ const GoalsPage = async () => {
 
   // 対策科目＝手持ち参考書を科目別に集計。志望校（受験日）→科目→参考書→
   // 今日のノルマ、という計画〜実行の因果をこのページからも辿れるようにする。
-  const textbooks = await prisma.textbook.findMany({
-    where: { userId: session.user.id },
-    select: { subject: true },
-  });
+  const textbooks = await listTextbookSubjects(session.user.id);
   const subjectCounts = new Map<string, number>();
   for (const textbook of textbooks) {
     if (textbook.subject) {

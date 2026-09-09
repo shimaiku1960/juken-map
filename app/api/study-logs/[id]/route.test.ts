@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { DELETE, PATCH } from "./route";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
 
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/backend/infra/auth", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/lib/prisma", () => ({
+vi.mock("@/backend/infra/prisma", () => ({
   default: {
     studyLog: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
     textbook: { findFirst: vi.fn() },

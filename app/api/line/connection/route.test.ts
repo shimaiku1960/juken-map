@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { DELETE } from "./route";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
 
-vi.mock("@/lib/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-vi.mock("@/lib/demo", () => ({ demoReadOnlyGuard: vi.fn(() => null) }));
-vi.mock("@/lib/prisma", () => ({
+vi.mock("@/backend/infra/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
+vi.mock("@/backend/demo-guard", () => ({ demoReadOnlyGuard: vi.fn(() => null) }));
+vi.mock("@/backend/infra/prisma", () => ({
   default: {
     $transaction: vi.fn(),
     notificationPreference: { updateMany: vi.fn() },

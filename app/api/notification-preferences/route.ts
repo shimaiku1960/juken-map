@@ -1,9 +1,13 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { demoReadOnlyGuard } from "@/lib/demo";
-import prisma from "@/lib/prisma";
-import { notificationPreferenceSchema } from "@/lib/validations/notification";
+import { auth } from "@/backend/infra/auth";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
+import prisma from "@/backend/infra/prisma";
+import {
+  findLineConnection,
+  findNotificationPreference,
+} from "@/backend/services/notification-service";
+import { notificationPreferenceSchema } from "@/shared/validations/notification";
 
 const DEFAULT_PREFERENCE = {
   emailMorningEnabled: false,
@@ -18,10 +22,7 @@ export async function GET() {
     return NextResponse.json({ error: "未認証" }, { status: 401 });
   }
 
-  const preference = await prisma.notificationPreference.findUnique({
-    where: { userId: session.user.id },
-    select: { morningEnabled: true, eveningEnabled: true, lineMorningEnabled: true, lineEveningEnabled: true },
-  });
+  const preference = await findNotificationPreference(session.user.id);
 
   return NextResponse.json(preference ? {
     emailMorningEnabled: preference.morningEnabled,
@@ -49,7 +50,7 @@ export async function PUT(request: Request) {
   }
 
   if (result.data.lineMorningEnabled || result.data.lineEveningEnabled) {
-    const connection = await prisma.lineConnection.findUnique({ where: { userId: session.user.id }, select: { id: true } });
+    const connection = await findLineConnection(session.user.id);
     if (!connection) return NextResponse.json({ error: "LINEと連携してからLINE通知を選択してください" }, { status: 400 });
   }
 

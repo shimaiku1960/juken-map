@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { GET } from "./route";
-import { auth } from "@/lib/auth";
+import { auth } from "@/backend/infra/auth";
 
-vi.mock("@/lib/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
+vi.mock("@/backend/infra/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock("next/headers", () => ({ headers: vi.fn(() => new Headers()) }));
 
 const getSession = auth.api.getSession as unknown as Mock;

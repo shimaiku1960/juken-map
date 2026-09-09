@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { createStudyLogSchema } from "@/lib/validations/studyLog";
-import { demoReadOnlyGuard } from "@/lib/demo";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
+import { createStudyLogSchema } from "@/shared/validations/studyLog";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
+import { toStudyLogDTO } from "@/backend/dto/study-mapper";
+import { listStudyLogs } from "@/backend/services/study-log-service";
 
 export async function GET() {
   const session = await auth.api.getSession({
@@ -14,13 +16,9 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const logs = await prisma.studyLog.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "desc" },
-    include: { textbook: true },
-  });
+  const logs = await listStudyLogs(session.user.id);
 
-  return NextResponse.json(logs);
+  return NextResponse.json(logs.map(toStudyLogDTO));
 }
 
 export async function POST(request: Request) {

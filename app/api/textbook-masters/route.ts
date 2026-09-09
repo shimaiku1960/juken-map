@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/backend/infra/auth";
+import { listTextbookMasters } from "@/backend/services/textbook-service";
 
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -9,10 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const masters = await prisma.textbookMaster.findMany({
-    include: { metrics: { orderBy: { id: "asc" } } },
-    orderBy: { id: "asc" },
-  });
+  const masters = await listTextbookMasters();
 
   return NextResponse.json(masters);
 }

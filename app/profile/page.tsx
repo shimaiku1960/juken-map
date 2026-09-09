@@ -1,19 +1,21 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getCurrentSession } from "@/backend/infra/auth-session";
 import { redirect } from "next/navigation";
-import { LINE_OFFICIAL_ACCOUNT_URL, NOINDEX } from "@/lib/site";
+import { LINE_OFFICIAL_ACCOUNT_URL, NOINDEX } from "@/shared/site";
 import Link from "next/link";
-import ProfileEdit from "@/app/components/ProfileEdit";
-import { Card, CardContent } from "@/components/ui/card";
-import { DEMO_EMAIL } from "@/lib/demo";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
-import SectionHeader from "@/app/components/layout/SectionHeader";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import prisma from "@/lib/prisma";
-import NotificationPreferenceForm from "@/app/components/NotificationPreferenceForm";
+import ProfileEdit from "@/frontend/components/ProfileEdit";
+import { Card, CardContent } from "@/frontend/components/ui/card";
+import { DEMO_EMAIL } from "@/shared/demo";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
+import SectionHeader from "@/frontend/components/layout/SectionHeader";
+import { buttonVariants } from "@/frontend/components/ui/button";
+import { cn } from "@/frontend/lib/utils";
+import {
+  findLineConnection,
+  findNotificationPreference,
+} from "@/backend/services/notification-service";
+import NotificationPreferenceForm from "@/frontend/components/NotificationPreferenceForm";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
@@ -24,9 +26,7 @@ const ProfilePage = async ({
   searchParams: Promise<{ line?: string }>;
 }) => {
     const { line: lineResult } = await searchParams;
-    const session = await auth.api.getSession({
-        headers: await headers(),
-    });
+    const session = await getCurrentSession();
 
     if (!session) {
         redirect("/login");
@@ -34,12 +34,8 @@ const ProfilePage = async ({
 
     const user = session.user;
     const nickname = user.nickname ?? user.name ?? "ユーザー";
-    const notificationPreference =
-      await prisma.notificationPreference.findUnique({
-        where: { userId: user.id },
-        select: { morningEnabled: true, eveningEnabled: true, lineMorningEnabled: true, lineEveningEnabled: true },
-      });
-    const lineConnection = await prisma.lineConnection.findUnique({ where: { userId: user.id }, select: { id: true } });
+    const notificationPreference = await findNotificationPreference(user.id);
+    const lineConnection = await findLineConnection(user.id);
 
       return (
         <PageShell>

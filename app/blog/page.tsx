@@ -1,8 +1,8 @@
-import { client, type Blog } from "@/lib/microcms";
+import { client, type Blog } from "@/backend/infra/microcms";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
+import { Card, CardContent } from "@/frontend/components/ui/card";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
 
 export const dynamic = "force-dynamic";
 

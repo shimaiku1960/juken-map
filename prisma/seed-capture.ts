@@ -4,7 +4,7 @@
 import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { hashPassword } from "better-auth/crypto";
-import { ymdAfterDays } from "../lib/date";
+import { ymdAfterDays } from "../src/shared/date";
 
 const CAPTURE_EMAIL = "capture@juken-map.com";
 const CAPTURE_PASSWORD = "capturepass1234";

@@ -1,102 +1,42 @@
 import type { Metadata } from "next";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import prisma from "@/lib/prisma";
-import { NOINDEX } from "@/lib/site";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { toStudyLogDTO, toStudyPlanDTO } from "@/backend/dto/study-mapper";
+import { listGoalsWithFaculty } from "@/backend/services/goal-service";
+import { listStudyLogs } from "@/backend/services/study-log-service";
+import { listStudyPlans } from "@/backend/services/study-plan-service";
+import { NOINDEX } from "@/shared/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import StudyRecordDashboard from "@/app/components/StudyRecordDashboard";
-import type { StudyLog } from "@/app/hooks/useStudyLogs";
-import type { StudyPlan } from "@/app/hooks/useStudyPlans";
-import { Card, CardContent } from "@/components/ui/card";
-import { DEMO_EMAIL } from "@/lib/demo";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
-import SectionHeader from "@/app/components/layout/SectionHeader";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import RegistrationCompletionTracker from "@/app/components/analytics/RegistrationCompletionTracker";
+import StudyRecordDashboard from "@/frontend/components/StudyRecordDashboard";
+import type { StudyLog } from "@/frontend/hooks/useStudyLogs";
+import type { StudyPlan } from "@/frontend/hooks/useStudyPlans";
+import { Card, CardContent } from "@/frontend/components/ui/card";
+import { DEMO_EMAIL } from "@/shared/demo";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
+import SectionHeader from "@/frontend/components/layout/SectionHeader";
+import { buttonVariants } from "@/frontend/components/ui/button";
+import { cn } from "@/frontend/lib/utils";
+import RegistrationCompletionTracker from "@/frontend/components/analytics/RegistrationCompletionTracker";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };
 
 const DashboardPage = async () => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getCurrentSession();
   if (!session) redirect("/login");
 
   const [goals, plans, logsRaw] = await Promise.all([
-    prisma.finalGoal.findMany({
-      where: { userId: session.user.id },
-      include: { faculty: { include: { university: true } } },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.studyPlan.findMany({
-      where: { userId: session.user.id },
-      orderBy: { date: "asc" },
-      include: { textbook: true, studyLog: { select: { id: true } } },
-    }),
-    prisma.studyLog.findMany({
-      where: { userId: session.user.id },
-      orderBy: { date: "desc" },
-      include: { textbook: true },
-    }),
+    listGoalsWithFaculty(session.user.id),
+    listStudyPlans(session.user.id),
+    listStudyLogs(session.user.id),
   ]);
 
   const decidedGoals = goals.filter((goal) => goal.status === "decided");
 
-  const initialPlans: StudyPlan[] = plans.map((plan) => ({
-    id: plan.id,
-    userId: plan.userId,
-    date: plan.date.toISOString(),
-    content: plan.content,
-    subject: plan.subject,
-    done: plan.done,
-    studyLogId: plan.studyLog?.id ?? null,
-    textbookId: plan.textbookId,
-    textbook: plan.textbook
-      ? {
-          id: plan.textbook.id,
-          masterId: plan.textbook.masterId,
-          name: plan.textbook.name,
-          totalAmount: plan.textbook.totalAmount,
-          rangeUnit: plan.textbook.rangeUnit,
-          targetDate: plan.textbook.targetDate?.toISOString() ?? null,
-          subject: plan.textbook.subject,
-        }
-      : null,
-    rangeStart: plan.rangeStart,
-    rangeEnd: plan.rangeEnd,
-    rangeUnit: plan.rangeUnit,
-    createdAt: plan.createdAt.toISOString(),
-    updatedAt: plan.updatedAt.toISOString(),
-  }));
+  const initialPlans: StudyPlan[] = plans.map(toStudyPlanDTO);
 
-  const initialLogs: StudyLog[] = logsRaw.map((log) => ({
-    id: log.id,
-    userId: log.userId,
-    date: log.date.toISOString(),
-    minutes: log.minutes,
-    subject: log.subject,
-    textbookId: log.textbookId,
-    textbook: log.textbook
-      ? {
-          id: log.textbook.id,
-          masterId: log.textbook.masterId,
-          name: log.textbook.name,
-          totalAmount: log.textbook.totalAmount,
-          rangeUnit: log.textbook.rangeUnit,
-          targetDate: log.textbook.targetDate?.toISOString() ?? null,
-          subject: log.textbook.subject,
-        }
-      : null,
-    rangeStart: log.rangeStart,
-    rangeEnd: log.rangeEnd,
-    rangeUnit: log.rangeUnit,
-    memo: log.memo,
-    studyPlanId: log.studyPlanId,
-    createdAt: log.createdAt.toISOString(),
-    updatedAt: log.updatedAt.toISOString(),
-  }));
+  const initialLogs: StudyLog[] = logsRaw.map(toStudyLogDTO);
 
   const firstChoice = decidedGoals.find((goal) => goal.isFirstChoice) ?? null;
   const otherCount = decidedGoals.filter((goal) => !goal.isFirstChoice).length;

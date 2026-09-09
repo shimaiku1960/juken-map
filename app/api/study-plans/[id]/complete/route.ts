@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { demoReadOnlyGuard } from "@/lib/demo";
-import { completeStudyPlanSchema } from "@/lib/validations/studyLog";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
+import { completeStudyPlanSchema } from "@/shared/validations/studyLog";
 import { Prisma } from "@/app/generated/prisma/client";
 
 export async function POST(

@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import prisma from "@/lib/prisma";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { toStudyPlanDTO } from "@/backend/dto/study-mapper";
+import { findFirstChoiceGoal } from "@/backend/services/goal-service";
+import { listStudyPlans } from "@/backend/services/study-plan-service";
 import Link from "next/link";
-import LandingPage from "@/app/components/LandingPage";
-import StudySessionManager from "@/app/components/StudySessionManager";
-import type { StudyPlan } from "@/app/hooks/useStudyPlans";
-import { ymdLocal, todayYmd } from "@/lib/date";
-import { DEMO_EMAIL } from "@/lib/demo";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import LandingPage from "@/frontend/components/LandingPage";
+import StudySessionManager from "@/frontend/components/StudySessionManager";
+import type { StudyPlan } from "@/frontend/hooks/useStudyPlans";
+import { ymdLocal, todayYmd } from "@/shared/date";
+import { DEMO_EMAIL } from "@/shared/demo";
+import { buttonVariants } from "@/frontend/components/ui/button";
+import { cn } from "@/frontend/lib/utils";
 
 // トップは未ログイン訪問者（Googlebot 含む）には LP を返す検索流入の入口。
 // ログイン後ページと認証ページは各ルート側で個別に noindex を指定する。
@@ -26,49 +27,17 @@ export const metadata: Metadata = {
 };
 
 const Home = async () => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getCurrentSession();
   // 未ログインはログイン画面へ飛ばさず、トップで LP を見せる。
   if (!session) return <LandingPage />;
 
   const todayStr = todayYmd();
   const [firstChoiceGoal, plans] = await Promise.all([
-    prisma.finalGoal.findFirst({
-      where: { userId: session.user.id, status: "decided", isFirstChoice: true },
-      include: { faculty: { include: { university: true } } },
-    }),
-    prisma.studyPlan.findMany({
-      where: { userId: session.user.id },
-      orderBy: { date: "asc" },
-      include: { textbook: true, studyLog: { select: { id: true } } },
-    }),
+    findFirstChoiceGoal(session.user.id),
+    listStudyPlans(session.user.id),
   ]);
 
-  const initialPlans: StudyPlan[] = plans.map((plan) => ({
-    id: plan.id,
-    userId: plan.userId,
-    date: plan.date.toISOString(),
-    content: plan.content,
-    subject: plan.subject,
-    done: plan.done,
-    studyLogId: plan.studyLog?.id ?? null,
-    textbookId: plan.textbookId,
-    textbook: plan.textbook
-      ? {
-          id: plan.textbook.id,
-          masterId: plan.textbook.masterId,
-          name: plan.textbook.name,
-          totalAmount: plan.textbook.totalAmount,
-          rangeUnit: plan.textbook.rangeUnit,
-          targetDate: plan.textbook.targetDate?.toISOString() ?? null,
-          subject: plan.textbook.subject,
-        }
-      : null,
-    rangeStart: plan.rangeStart,
-    rangeEnd: plan.rangeEnd,
-    rangeUnit: plan.rangeUnit,
-    createdAt: plan.createdAt.toISOString(),
-    updatedAt: plan.updatedAt.toISOString(),
-  }));
+  const initialPlans: StudyPlan[] = plans.map(toStudyPlanDTO);
 
   const heroFirstChoice = firstChoiceGoal
     ? {

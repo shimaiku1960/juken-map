@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import LegalDocument from "@/app/components/legal/LegalDocument";
+import LegalDocument from "@/frontend/components/legal/LegalDocument";
 
 export const metadata: Metadata = {
   title: "プライバシーポリシー｜受験マップ",

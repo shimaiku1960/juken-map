@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import { NOINDEX } from "@/lib/site";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
-import InlineFeedback from "@/app/components/feedback/InlineFeedback";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { NOINDEX } from "@/shared/site";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
+import InlineFeedback from "@/frontend/components/feedback/InlineFeedback";
+import { buttonVariants } from "@/frontend/components/ui/button";
+import { cn } from "@/frontend/lib/utils";
 import LineAccountLinkButton from "./LineAccountLinkButton";
 
 export const metadata: Metadata = { robots: NOINDEX };
@@ -18,7 +17,7 @@ export default async function LineLinkPage({
   searchParams: Promise<{ linkToken?: string }>;
 }) {
   const { linkToken } = await searchParams;
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getCurrentSession();
 
   if (!linkToken) {
     return (
