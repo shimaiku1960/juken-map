@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { registerAnalyticsRoutes } from "./analytics.ts";
+import { registerBlogRoutes } from "./blog.ts";
 import { registerCronRoutes } from "./cron.ts";
 import { registerGoalRoutes } from "./goals.ts";
 import { registerHomeRoutes } from "./home.ts";
@@ -15,6 +16,7 @@ import { registerUniversityRoutes } from "./universities.ts";
 
 export function registerRoutes(app: FastifyInstance) {
   registerAnalyticsRoutes(app);
+  registerBlogRoutes(app);
   registerCronRoutes(app);
   registerGoalRoutes(app);
   registerHomeRoutes(app);
