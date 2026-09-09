@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getCurrentSession } from "@/lib/auth-session";
-import prisma from "@/lib/prisma";
 import { listGoals } from "@/lib/services/goal-service";
+import { listTextbookSubjects } from "@/lib/services/textbook-service";
 import { NOINDEX } from "@/lib/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -40,10 +40,7 @@ const GoalsPage = async () => {
 
   // 対策科目＝手持ち参考書を科目別に集計。志望校（受験日）→科目→参考書→
   // 今日のノルマ、という計画〜実行の因果をこのページからも辿れるようにする。
-  const textbooks = await prisma.textbook.findMany({
-    where: { userId: session.user.id },
-    select: { subject: true },
-  });
+  const textbooks = await listTextbookSubjects(session.user.id);
   const subjectCounts = new Map<string, number>();
   for (const textbook of textbooks) {
     if (textbook.subject) {

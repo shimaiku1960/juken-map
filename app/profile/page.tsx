@@ -11,7 +11,10 @@ import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import prisma from "@/lib/prisma";
+import {
+  findLineConnection,
+  findNotificationPreference,
+} from "@/lib/services/notification-service";
 import NotificationPreferenceForm from "@/app/components/NotificationPreferenceForm";
 
 // ログイン必須のページなので検索結果には載せない。
@@ -31,12 +34,8 @@ const ProfilePage = async ({
 
     const user = session.user;
     const nickname = user.nickname ?? user.name ?? "ユーザー";
-    const notificationPreference =
-      await prisma.notificationPreference.findUnique({
-        where: { userId: user.id },
-        select: { morningEnabled: true, eveningEnabled: true, lineMorningEnabled: true, lineEveningEnabled: true },
-      });
-    const lineConnection = await prisma.lineConnection.findUnique({ where: { userId: user.id }, select: { id: true } });
+    const notificationPreference = await findNotificationPreference(user.id);
+    const lineConnection = await findLineConnection(user.id);
 
       return (
         <PageShell>

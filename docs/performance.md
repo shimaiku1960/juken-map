@@ -256,3 +256,101 @@ localhost の Docker では 5 本で約 3ms。
 - 再検討のトリガー: 原因B の `IN` 句サイズが実データで肥大した場合（学習記録が数千件規模の
   ユーザーが出た場合）、または `/dashboard` の応答時間が実測で問題になった場合。
 
+---
+
+## TASK 3: UI層からの Prisma 直接呼び出しをサービス層へ移す（2026-09-09）
+
+### やったこと
+
+`app/**/*.tsx`（Server Components）からの `prisma.` 直接呼び出し 7 箇所 5 ファイルを、
+すべて `lib/services/` 経由に置き換えた。追加したサービス関数は 6 つで、全て `measured()`
+でラップしている。
+
+| 移動元 | 追加した関数 | 置き場所 |
+|---|---|---|
+| `app/page.tsx` | `findFirstChoiceGoal(userId)` | `goal-service.ts` |
+| `app/goals/page.tsx` | `listTextbookSubjects(userId)` | `textbook-service.ts` |
+| `app/explore/[universityId]/page.tsx` | `findUniversityDetail(id)` | `university-service.ts` |
+| `app/explore/[universityId]/page.tsx` | `listGoalFacultyIds(userId)` | `goal-service.ts` |
+| `app/dashboard/page.tsx` | `listGoalsWithFaculty(userId)` | `goal-service.ts` |
+| `app/profile/page.tsx` | `findNotificationPreference(userId)` | `notification-service.ts`（新設） |
+| `app/profile/page.tsx` | `findLineConnection(userId)` | `notification-service.ts`（新設） |
+
+あわせて、手順書が「1文字違わず同一」と指摘していた重複を解消した。
+`app/api/notification-preferences/route.ts` の GET と PUT も、上の
+`findNotificationPreference` ／ `findLineConnection` を使うように変更している。
+同ルートの `upsert`（書き込み）は TASK 3 の範囲外なので `prisma` 直呼びのまま残した。
+
+### 判断: dashboard は `listGoals` を使わず専用関数を新設した（ユーザー判断）
+
+手順書は「`app/dashboard/page.tsx` の `finalGoal.findMany` は既存の `listGoals` に
+置き換えること」としていたが、**そのままでは完了条件「クエリ本数が増えていないこと」を
+満たせない**ため、選択肢を提示してユーザー判断を仰いだ。
+
+- `listGoals` の `include` は `faculty → university, tags`。`Faculty.tags` は
+  `Tag[]` ↔ `Faculty[]` の**暗黙的多対多**なので、Prisma が中間テーブル経由で
+  **追加 1 本**を発行する（TASK 2 の実測で listGoals = 4 本、dashboard の直呼び = 3 本）。
+- dashboard の画面に tags は出てこない。純粋な over-fetch ＋ SQL 1 本増になる。
+- 結論: tags を含まない `listGoalsWithFaculty(userId)` を新設した。tags を実際に使うのは
+  志望校ページだけなので、`listGoals`（tags あり）はそちらの専用として残す。
+
+### 計測結果（e2e ユーザー・2回実施して再現性を確認）
+
+計測前にログが 4 秒間伸びなくなるまで待ってクラスタ混線を防いだ（前任者が踏んだ罠の対策）。
+
+| ページ | prisma:query | 応答時間（1回目 / 2回目） |
+|---|---:|---|
+| `/dashboard` | **10 本**（TASK 1 後のベースラインと同じ） | 100.6ms / 94.2ms |
+| `/`（トップ） | 8 本 | 80.0ms / 77.0ms |
+| `/goals` | 7 本 | 84.8ms / 82.4ms |
+| `/profile` | 4 本 | 149.2ms / 79.1ms |
+| `/explore/1` | 6 本 | 88.0ms / 69.5ms |
+
+**クエリ本数は増えていない。** `/dashboard` は TASK 1 完了時点の 10 本を維持している。
+この TASK は責務の移動が目的で、本数削減は狙っていない（削減は TASK 2 で「何もしない」と
+決定済み）。
+
+新しいサービス関数が実際に計測ログへ出ていることも確認した（例）:
+
+```
+{"operation":"goal.findFirstChoice","duration_ms":17.07,"success":true}
+{"operation":"goal.listWithFaculty","duration_ms":21.15,"success":true}
+{"operation":"goal.listFacultyIds","duration_ms":2.44,"success":true}
+{"operation":"textbook.listSubjects","duration_ms":2.72,"success":true}
+{"operation":"university.findDetail","duration_ms":11.11,"success":true}
+{"operation":"notificationPreference.find","duration_ms":6.62,"success":true}
+{"operation":"lineConnection.find","duration_ms":2.66,"success":true}
+```
+
+### 表示が変わっていないことの検証
+
+「目視で同じに見える」ではなく、**変更前後の HTML を実際に取得して差分を取った**。
+変更を `git stash` して同じ dev server から before を取得し、pop して after と比較した。
+
+`<script>`（RSC ペイロード）と `<style>` を除いた**表示 DOM** で比較:
+
+| ページ | データ | DOM 行数 | 結果 |
+|---|---|---:|---|
+| `/dashboard` | e2e（志望校 0 件） | 557 | 完全一致 |
+| `/goals` | e2e | 107 | 完全一致 |
+| `/profile` | e2e | 183 | 完全一致 |
+| `/explore/1` | e2e | 87 | 完全一致 |
+| `/`（トップ） | e2e | 89 | 完全一致 |
+| `/dashboard` | **demo（志望校 4 件）** | 501 | 完全一致 |
+| `/goals` | **demo（志望校 4 件）** | 324 | 完全一致 |
+
+e2e ユーザーは志望校が 0 件で dashboard の志望校描画を通らないため、**志望校を持つ demo
+ユーザーでも追加検証した**（`listGoalsWithFaculty` で tags を落とした影響がここに出る）。
+demo でも `/dashboard` は 10 本のままで、DOM も完全一致。
+
+RSC ペイロード内には差分が出るが、内容は `self.__next_r`（リクエストごとのランダム ID）と
+flight payload の内部参照番号（`$176` → `$177` 等、import 順の変化によるインデックスずれ）
+だけで、表示内容ではない。
+
+### 完了条件の達成状況
+
+- ✅ 7 箇所すべてがサービス層経由
+- ✅ `grep -rn "prisma\." app/ --include="*.tsx" | grep -v "/api/"` が **0 件**
+- ✅ 各ページの表示が変わっていない（HTML 差分で確認・上表）
+- ✅ クエリ本数が増えていない（`/dashboard` 10 本を維持）
+- ✅ `npm run check` 成功（ESLint、tsc、Vitest 34 ファイル 240 テスト、production build）

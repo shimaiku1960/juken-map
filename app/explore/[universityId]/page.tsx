@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getCurrentSession } from "@/lib/auth-session";
-import prisma from "@/lib/prisma";
+import { listGoalFacultyIds } from "@/lib/services/goal-service";
+import { findUniversityDetail } from "@/lib/services/university-service";
 import { NOINDEX } from "@/lib/site";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
@@ -27,24 +28,13 @@ const UniversityDetailPage = async ({
     notFound();
   }
 
-  const university = await prisma.university.findUnique({
-    where: { id },
-    include: {
-      faculties: {
-        include: { tags: true },
-        orderBy: { id: "asc" },
-      },
-    },
-  });
+  const university = await findUniversityDetail(id);
 
   if (!university) {
     notFound();
   }
 
-  const goals = await prisma.finalGoal.findMany({
-    where: { userId: session.user.id },
-    select: { facultyId: true },
-  });
+  const goals = await listGoalFacultyIds(session.user.id);
   const registeredFacultyIds = goals.map((g) => g.facultyId);
 
   return (

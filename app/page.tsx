@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getCurrentSession } from "@/lib/auth-session";
-import prisma from "@/lib/prisma";
+import { findFirstChoiceGoal } from "@/lib/services/goal-service";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
 import Link from "next/link";
 import LandingPage from "@/app/components/LandingPage";
@@ -32,10 +32,7 @@ const Home = async () => {
 
   const todayStr = todayYmd();
   const [firstChoiceGoal, plans] = await Promise.all([
-    prisma.finalGoal.findFirst({
-      where: { userId: session.user.id, status: "decided", isFirstChoice: true },
-      include: { faculty: { include: { university: true } } },
-    }),
+    findFirstChoiceGoal(session.user.id),
     listStudyPlans(session.user.id),
   ]);
 

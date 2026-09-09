@@ -15,3 +15,18 @@ export function listUniversitiesForExplore() {
     })
   );
 }
+
+// 大学詳細ページ用。学部と、絞り込みに使うタグまで一度に引く。
+export function findUniversityDetail(id: number) {
+  return measured("university.findDetail", () =>
+    prisma.university.findUnique({
+      where: { id },
+      include: {
+        faculties: {
+          include: { tags: true },
+          orderBy: { id: "asc" },
+        },
+      },
+    })
+  );
+}

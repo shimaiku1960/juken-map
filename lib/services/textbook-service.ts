@@ -9,3 +9,13 @@ export function listTextbookMasters() {
     })
   );
 }
+
+// 志望校ページの「対策科目」チップ用。集計に必要な subject だけを引く。
+export function listTextbookSubjects(userId: string) {
+  return measured("textbook.listSubjects", () =>
+    prisma.textbook.findMany({
+      where: { userId },
+      select: { subject: true },
+    })
+  );
+}

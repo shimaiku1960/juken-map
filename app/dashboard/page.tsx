@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getCurrentSession } from "@/lib/auth-session";
-import prisma from "@/lib/prisma";
+import { listGoalsWithFaculty } from "@/lib/services/goal-service";
 import { listStudyLogs } from "@/lib/services/study-log-service";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
 import { NOINDEX } from "@/lib/site";
@@ -26,11 +26,7 @@ const DashboardPage = async () => {
   if (!session) redirect("/login");
 
   const [goals, plans, logsRaw] = await Promise.all([
-    prisma.finalGoal.findMany({
-      where: { userId: session.user.id },
-      include: { faculty: { include: { university: true } } },
-      orderBy: { createdAt: "asc" },
-    }),
+    listGoalsWithFaculty(session.user.id),
     listStudyPlans(session.user.id),
     listStudyLogs(session.user.id),
   ]);
