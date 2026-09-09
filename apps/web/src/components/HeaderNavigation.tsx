@@ -1,0 +1,294 @@
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { Link } from "react-router";
+import { useLocation } from "react-router";
+import {
+  CalendarDays,
+  ChevronDown,
+  LogOut,
+  Newspaper,
+  Play,
+  Search,
+  Target,
+  UserRound,
+} from "lucide-react";
+import { authClient } from "@/web/lib/auth-client";
+import { buttonVariants } from "@/web/components/ui/button";
+import { cn } from "@/web/lib/utils";
+import TrackedSignupLink from "@/web/components/analytics/TrackedSignupLink";
+
+type HeaderUser = {
+  name: string;
+  email: string;
+};
+
+type HeaderNavigationProps = {
+  user: HeaderUser | null;
+};
+
+const primaryLinks = [
+  { href: "/#study-start", activeHref: "/", label: "学習", mobileLabel: "学習開始", icon: Play },
+  {
+    href: "/dashboard",
+    label: "記録・予定",
+    mobileLabel: "カレンダー",
+    icon: CalendarDays,
+  },
+  { href: "/goals", label: "志望校", icon: Target },
+] as const;
+
+const isActivePath = (pathname: string, href: string) =>
+  href === "/"
+    ? pathname === href
+    : pathname === href || pathname.startsWith(`${href}/`);
+
+const initialsFor = (user: HeaderUser) => {
+  const source = user.name.trim() || user.email;
+  return source.slice(0, 1).toUpperCase();
+};
+
+const subscribeToHydration = () => () => {};
+
+const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
+  const pathname = useLocation().pathname;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const mounted = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false
+  );
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    const result = await authClient.signOut();
+
+    if (result.error) {
+      setLoggingOut(false);
+      return;
+    }
+
+    window.location.assign("/login");
+  };
+
+  if (!user) {
+    return (
+      <nav aria-label="公開ページ" className="flex items-center gap-2">
+        <Link
+          to="/blog"
+          className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors max-sm:hidden hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
+        >
+          ブログ
+        </Link>
+        <Link
+          to="/login"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "lg" }),
+            "h-11 px-2 sm:px-2.5"
+          )}
+        >
+          ログイン
+        </Link>
+        <TrackedSignupLink
+          location="header"
+          className={cn(buttonVariants({ size: "lg" }), "h-11 px-4")}
+        >
+          無料で始める
+        </TrackedSignupLink>
+      </nav>
+    );
+  }
+
+  return (
+    <>
+      <nav
+        aria-label="メインナビゲーション"
+        className="items-center gap-1 max-md:hidden md:flex"
+      >
+        {primaryLinks.map(({ href, label, ...link }) => {
+          const active = isActivePath(pathname, "activeHref" in link ? link.activeHref : href);
+          return (
+            <Link
+              key={href}
+              to={href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                active
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              )}
+            >
+              {label}
+            </Link>
+          );
+        })}
+
+        <Link
+          to="/#study-start"
+          className={cn(buttonVariants({ size: "lg" }), "ml-2 h-11 gap-2 px-4")}
+        >
+          <Play aria-hidden="true" className="size-4 fill-current" />
+          学習を始める
+        </Link>
+      </nav>
+
+      <div ref={menuRef} className="relative">
+        <button
+          type="button"
+          aria-expanded={menuOpen}
+          aria-haspopup="true"
+          onClick={() => setMenuOpen((open) => !open)}
+          className="flex min-h-11 items-center gap-2 rounded-xl px-1.5 py-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="flex size-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
+            {initialsFor(user)}
+          </span>
+          <span className="max-w-28 truncate text-sm font-medium max-lg:hidden lg:block">
+            {user.name}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              "size-4 text-muted-foreground transition-transform max-sm:hidden sm:block",
+              menuOpen && "rotate-180"
+            )}
+          />
+          <span className="sr-only">ユーザーメニュー</span>
+        </button>
+
+        {menuOpen ? (
+          <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg">
+            <div className="border-b px-3 py-2">
+              <p className="truncate text-sm font-medium">{user.name}</p>
+              {user.name.trim() !== user.email ? (
+                <p className="truncate text-xs text-muted-foreground">
+                  {user.email}
+                </p>
+              ) : null}
+            </div>
+            <div className="py-1">
+              <MenuLink
+                href="/explore"
+                icon={Search}
+                onNavigate={() => setMenuOpen(false)}
+              >
+                大学を探す
+              </MenuLink>
+              <MenuLink
+                href="/profile"
+                icon={UserRound}
+                onNavigate={() => setMenuOpen(false)}
+              >
+                プロフィール
+              </MenuLink>
+              <MenuLink
+                href="/blog"
+                icon={Newspaper}
+                onNavigate={() => setMenuOpen(false)}
+              >
+                ブログ
+              </MenuLink>
+            </div>
+            <div className="border-t pt-1">
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <LogOut aria-hidden="true" className="size-4" />
+                {loggingOut ? "ログアウト中…" : "ログアウト"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {mounted
+        ? createPortal(
+            <>
+              <nav
+                aria-label="モバイルナビゲーション"
+                data-mobile-bottom-nav
+                className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+              >
+                {primaryLinks.map(({ href, label, icon: Icon, ...link }) => {
+                  const active = isActivePath(
+                    pathname,
+                    "activeHref" in link ? link.activeHref : href
+                  );
+                  return (
+                    <Link
+                      key={href}
+                      to={href}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                        active
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "rounded-full px-4 py-1",
+                          active && "bg-primary/12 text-primary"
+                        )}
+                      >
+                        <Icon aria-hidden="true" className="size-5" />
+                      </span>
+                      <span className="truncate">
+                        {"mobileLabel" in link ? link.mobileLabel : label}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </nav>
+
+            </>,
+            document.body
+          )
+        : null}
+    </>
+  );
+};
+
+type MenuLinkProps = {
+  href: string;
+  icon: typeof Search;
+  onNavigate: () => void;
+  children: React.ReactNode;
+};
+
+const MenuLink = ({ href, icon: Icon, onNavigate, children }: MenuLinkProps) => (
+  <Link
+    to={href}
+    onClick={onNavigate}
+    className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+  >
+    <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
+    {children}
+  </Link>
+);
+
+export default HeaderNavigation;

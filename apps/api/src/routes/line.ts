@@ -16,6 +16,7 @@ import {
   lineLoginAuthorizationUrl,
   verifyLineIdToken,
 } from "@/backend/infra/lineLogin";
+import { findLineConnection } from "@/backend/services/notification-service";
 import { SITE_URL } from "@/shared/site";
 import { denyDemoWrite, getSession, requireSession } from "../context.ts";
 
@@ -134,6 +135,16 @@ export function registerLineRoutes(app: FastifyInstance) {
     redirectUrl.searchParams.set("linkToken", result.data.linkToken);
     redirectUrl.searchParams.set("nonce", nonce);
     return { redirectUrl: redirectUrl.toString() };
+  });
+
+  // Next.js では Server Component が findLineConnection を直接呼んでいたため
+  // GET が無かった。SPA のプロフィール画面が連携状態を知る必要があるので新設する。
+  app.get("/api/line/connection", async (request, reply) => {
+    const session = await requireSession(request, reply);
+    if (!session) return;
+
+    const connection = await findLineConnection(session.user.id);
+    return { connected: Boolean(connection) };
   });
 
   app.delete("/api/line/connection", async (request, reply) => {

@@ -61,3 +61,6 @@ memory/
 /blob-report
 /playwright/.cache
 /e2e/.auth
+
+# Vite のビルド成果物
+/apps/web/dist
