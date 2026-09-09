@@ -1,13 +1,13 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/infra/auth";
-import { demoReadOnlyGuard } from "@/lib/demo/guard";
-import prisma from "@/lib/infra/prisma";
+import { auth } from "@/backend/infra/auth";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
+import prisma from "@/backend/infra/prisma";
 import {
   findLineConnection,
   findNotificationPreference,
-} from "@/lib/services/notification-service";
-import { notificationPreferenceSchema } from "@/lib/validations/notification";
+} from "@/backend/services/notification-service";
+import { notificationPreferenceSchema } from "@/shared/validations/notification";
 
 const DEFAULT_PREFERENCE = {
   emailMorningEnabled: false,

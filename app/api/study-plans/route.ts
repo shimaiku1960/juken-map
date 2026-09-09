@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/infra/auth";
-import prisma from "@/lib/infra/prisma";
-import { createStudyPlansSchema } from "@/lib/validations/studyPlan";
-import { demoReadOnlyGuard } from "@/lib/demo/guard";
-import { toStudyPlanDTO } from "@/lib/dto/study";
-import { listStudyPlans } from "@/lib/services/study-plan-service";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
+import { createStudyPlansSchema } from "@/shared/validations/studyPlan";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
+import { toStudyPlanDTO } from "@/backend/dto/study-mapper";
+import { listStudyPlans } from "@/backend/services/study-plan-service";
 
 export async function GET() {
   const session = await auth.api.getSession({

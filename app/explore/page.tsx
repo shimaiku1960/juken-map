@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { getCurrentSession } from "@/lib/infra/auth-session";
-import { listUniversitiesForExplore } from "@/lib/services/university-service";
-import { NOINDEX } from "@/lib/config/site";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { listUniversitiesForExplore } from "@/backend/services/university-service";
+import { NOINDEX } from "@/shared/site";
 import { redirect } from "next/navigation";
-import UniversitySearch from "@/app/components/UniversitySearch";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
+import UniversitySearch from "@/frontend/components/UniversitySearch";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };

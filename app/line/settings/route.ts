@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/infra/auth";
-import { SITE_URL } from "@/lib/config/site";
+import { auth } from "@/backend/infra/auth";
+import { SITE_URL } from "@/shared/site";
 
 const NOTIFICATION_SETTINGS_PATH = "/profile#notification-settings";
 

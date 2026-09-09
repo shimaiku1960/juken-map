@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import InlineFeedback from "@/app/components/feedback/InlineFeedback";
+import { Button } from "@/frontend/components/ui/button";
+import InlineFeedback from "@/frontend/components/feedback/InlineFeedback";
 
 export default function LineAccountLinkButton({ linkToken }: { linkToken: string }) {
   const [isLinking, setIsLinking] = useState(false);

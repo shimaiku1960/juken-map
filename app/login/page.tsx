@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { authClient } from "@/lib/ui/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
+import { authClient } from "@/frontend/lib/auth-client";
+import { Button } from "@/frontend/components/ui/button";
+import { Input } from "@/frontend/components/ui/input";
+import { PasswordInput } from "@/frontend/components/ui/password-input";
 import Link from "next/link";
-import { Label } from "@/components/ui/label";
-import InlineFeedback from "@/app/components/feedback/InlineFeedback";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
-import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/app/hooks/useBrowserNavigation";
-import { isLineInAppBrowser } from "@/lib/ui/browser";
+import { Label } from "@/frontend/components/ui/label";
+import InlineFeedback from "@/frontend/components/feedback/InlineFeedback";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
+import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/frontend/hooks/useBrowserNavigation";
+import { isLineInAppBrowser } from "@/frontend/lib/browser";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");

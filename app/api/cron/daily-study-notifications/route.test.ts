@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
-import { sendDailyNotifications } from "@/lib/services/sendDailyNotifications";
+import { sendDailyNotifications } from "@/backend/services/sendDailyNotifications";
 
-vi.mock("@/lib/services/sendDailyNotifications", () => ({
+vi.mock("@/backend/services/sendDailyNotifications", () => ({
   sendDailyNotifications: vi.fn(),
 }));
 

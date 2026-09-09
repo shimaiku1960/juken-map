@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { cache } from "react";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { client, type Blog } from "@/lib/infra/microcms";
-import { SITE_URL } from "@/lib/config/site";
+import { Card, CardContent } from "@/frontend/components/ui/card";
+import { client, type Blog } from "@/backend/infra/microcms";
+import { SITE_URL } from "@/shared/site";
 
 type ArticlePageProps = {
   params: Promise<{ id: string }>;

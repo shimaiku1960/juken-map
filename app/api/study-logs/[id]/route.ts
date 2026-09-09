@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/infra/auth";
-import prisma from "@/lib/infra/prisma";
-import { demoReadOnlyGuard } from "@/lib/demo/guard";
-import { createStudyLogSchema } from "@/lib/validations/studyLog";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
+import { createStudyLogSchema } from "@/shared/validations/studyLog";
 
 async function findOwnedTextbook(
   textbookId: number,

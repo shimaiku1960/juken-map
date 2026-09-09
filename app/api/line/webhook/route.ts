@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/infra/prisma";
+import prisma from "@/backend/infra/prisma";
 import {
   issueLineLinkToken,
   lineAccountLinkUrl,
   replyLineText,
   verifyLineSignature,
-} from "@/lib/infra/line";
-import { SITE_URL } from "@/lib/config/site";
+} from "@/backend/infra/line";
+import { SITE_URL } from "@/shared/site";
 
 type LineEvent = {
   type: string;

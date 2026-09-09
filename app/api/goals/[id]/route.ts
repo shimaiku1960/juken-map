@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/infra/auth";
-import prisma from "@/lib/infra/prisma";
-import { updateGoalSchema, patchGoalSchema } from "@/lib/validations/goal";
-import { demoReadOnlyGuard } from "@/lib/demo/guard";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
+import { updateGoalSchema, patchGoalSchema } from "@/shared/validations/goal";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
 
 export async function PUT(
   request: Request,

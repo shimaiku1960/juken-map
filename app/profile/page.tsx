@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
-import { getCurrentSession } from "@/lib/infra/auth-session";
+import { getCurrentSession } from "@/backend/infra/auth-session";
 import { redirect } from "next/navigation";
-import { LINE_OFFICIAL_ACCOUNT_URL, NOINDEX } from "@/lib/config/site";
+import { LINE_OFFICIAL_ACCOUNT_URL, NOINDEX } from "@/shared/site";
 import Link from "next/link";
-import ProfileEdit from "@/app/components/ProfileEdit";
-import { Card, CardContent } from "@/components/ui/card";
-import { DEMO_EMAIL } from "@/lib/demo/constants";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
-import SectionHeader from "@/app/components/layout/SectionHeader";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/ui/utils";
+import ProfileEdit from "@/frontend/components/ProfileEdit";
+import { Card, CardContent } from "@/frontend/components/ui/card";
+import { DEMO_EMAIL } from "@/shared/demo";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
+import SectionHeader from "@/frontend/components/layout/SectionHeader";
+import { buttonVariants } from "@/frontend/components/ui/button";
+import { cn } from "@/frontend/lib/utils";
 import {
   findLineConnection,
   findNotificationPreference,
-} from "@/lib/services/notification-service";
-import NotificationPreferenceForm from "@/app/components/NotificationPreferenceForm";
+} from "@/backend/services/notification-service";
+import NotificationPreferenceForm from "@/frontend/components/NotificationPreferenceForm";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };

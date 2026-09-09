@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { GET, PUT } from "./route";
-import { auth } from "@/lib/infra/auth";
-import prisma from "@/lib/infra/prisma";
+import { auth } from "@/backend/infra/auth";
+import prisma from "@/backend/infra/prisma";
 
-vi.mock("@/lib/infra/auth", () => ({
+vi.mock("@/backend/infra/auth", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
-vi.mock("@/lib/infra/prisma", () => ({
+vi.mock("@/backend/infra/prisma", () => ({
   default: {
     notificationPreference: { findUnique: vi.fn(), upsert: vi.fn() },
     lineConnection: { findUnique: vi.fn() },

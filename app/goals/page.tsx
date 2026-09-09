@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
-import { getCurrentSession } from "@/lib/infra/auth-session";
-import { listGoals } from "@/lib/services/goal-service";
-import { listTextbookSubjects } from "@/lib/services/textbook-service";
-import { NOINDEX } from "@/lib/config/site";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { listGoals } from "@/backend/services/goal-service";
+import { listTextbookSubjects } from "@/backend/services/textbook-service";
+import { NOINDEX } from "@/shared/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import GoalList from "@/app/components/GoalList";
-import ExamScheduleTimeline from "@/app/components/ExamScheduleTimeline";
-import type { Goal } from "@/app/hooks/useGoals";
-import { Card, CardContent } from "@/components/ui/card";
-import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/domain/subjects";
-import { DEMO_EMAIL } from "@/lib/demo/constants";
+import GoalList from "@/frontend/components/GoalList";
+import ExamScheduleTimeline from "@/frontend/components/ExamScheduleTimeline";
+import type { Goal } from "@/frontend/hooks/useGoals";
+import { Card, CardContent } from "@/frontend/components/ui/card";
+import { SUBJECTS, subjectColor, subjectLabel } from "@/shared/subjects";
+import { DEMO_EMAIL } from "@/shared/demo";
 import { Target } from "lucide-react";
-import PageShell from "@/app/components/layout/PageShell";
-import PageHeader from "@/app/components/layout/PageHeader";
-import SectionHeader from "@/app/components/layout/SectionHeader";
-import EmptyState from "@/app/components/feedback/EmptyState";
-import { Button, buttonVariants } from "@/components/ui/button";
+import PageShell from "@/frontend/components/layout/PageShell";
+import PageHeader from "@/frontend/components/layout/PageHeader";
+import SectionHeader from "@/frontend/components/layout/SectionHeader";
+import EmptyState from "@/frontend/components/feedback/EmptyState";
+import { Button, buttonVariants } from "@/frontend/components/ui/button";
 
 // 志望校ページ＝「受験戦略を俯瞰し、受験校を決める」場所。
 // 以前はプロフィール下部に埋もれていた GoalList をここへ独立させた。

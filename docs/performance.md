@@ -531,3 +531,76 @@ TASK 4 と違いロジックを変えていないので、API 応答はキー順
 - ✅ `npm run build` が通る
 - ✅ 既存テストが全て通る（240件）
 - ✅ テストファイルは隣接配置（`domain/date.ts` の横に `domain/date.test.ts`）
+
+---
+
+## TASK 5B: フロントエンド / バックエンドでフォルダを分ける（2026-09-09）
+
+配置の判断根拠は `docs/architecture.md` に記録した。ここには検証結果だけ残す。
+
+`lib/` を廃止し、`src/frontend`（65本）/ `src/backend`（19本）/ `src/shared`（12本）へ
+再配置した。`app/components/`（68本）・`app/hooks/`（5本）・root の `components/`
+（shadcn 10本）も frontend へ移動している。
+
+### 検証（TASK 3〜5 と同じ前後比較 ＋ CSS 比較を追加）
+
+| 対象 | 結果 |
+|---|---|
+| 表示 DOM 8ページ（e2e 6・demo 2） | すべて完全一致 |
+| API 応答 4本（0件・22件・8件・17件） | バイト単位で完全一致 |
+| **生成 CSS** | 215,974 bytes で**内容まで完全一致** |
+| デモの閲覧専用ガード（POST /api/study-logs） | 403 |
+| `npm run check` | 成功（240テスト・ESLint・tsc・build） |
+
+**生成 CSS の比較を今回から追加した。** Tailwind v4 は `@source` 指定がなく自動で
+プロジェクトを走査するため、ディレクトリを動かすと class が検出されなくなる可能性が
+ある。これは**HTML 差分では絶対に検出できない**（class 名は HTML に残り、CSS だけが
+欠ける）。実測の結果、`src/` は自動的に走査対象に入っていた。
+
+### 移動中に踏んだもの
+
+- `app/layout.tsx` が `./components/Header` という**相対パス**で参照していた。
+  `@/` 形式の一括置換では拾えず、tsc が検出した
+- `components.json`（shadcn/ui）の `aliases` 5件すべてが旧パスを指していた。
+  TASK 5 に続き2度目で、ディレクトリ移動のたびに確認が要る
+- `tsconfig.json` に `@/frontend/*`・`@/backend/*`・`@/shared/*` を追加した。
+  既存の `@/*: ["./*"]` と併存するが、TypeScript は最長一致を選ぶので衝突しない
+  （build とテストの成功で確認済み）
+- `git mv` 後に空ディレクトリが残る。`lib/` を消すには明示的な `rmdir` が必要だった
+
+### STEP 3: app/ の薄化チェック（報告のみ・修正はしていない）
+
+`app/` の `page.tsx` / `layout.tsx` / `route.ts` にロジックが残っていないかを機械的に
+確認した。**page.tsx 側は概ね薄いが、route.ts 側には多く残っている。**
+
+**① Route Handler の Prisma 直呼び（24ファイル中16ファイル）**
+
+TASK 3 は UI 層（`.tsx`）だけを対象にしたので、API 側は手つかずのまま。件数の多い順:
+
+| ファイル | prisma 直呼び |
+|---|---:|
+| `app/api/goals/[id]/route.ts` | 10 |
+| `app/api/study-plans/[id]/route.ts` | 6 |
+| `app/api/study-logs/[id]/route.ts` | 5 |
+| `app/api/line/connection/route.ts` | 4 |
+| `app/api/textbooks/route.ts` / `app/api/line/oauth/callback/route.ts` | 各 3 |
+| 他10ファイル | 各 1〜2 |
+
+読み取り37件・書き込み53箇所ぶんが Route Handler に直書きされている。書き込みは
+Zod 検証・所有者チェック・`demoReadOnlyGuard`・`P2002 → 409` の変換が絡むので、
+サービス層へ移すなら設計判断が要る。
+
+**② Server Component に残る整形処理（2件・いずれも軽微）**
+
+- `app/goals/page.tsx`: `status` を `Goal["status"]` にキャストする3行の map と、
+  参考書を科目別に数える集計（`new Map` で7行）
+- `app/explore/page.tsx`: 大学ごとに学部数とタグ名を集約する map（9行）
+
+どちらもその画面専用の整形で、他から再利用されていない。移すなら shared か
+frontend/lib だが、現状 DTO 変換のような重複は生んでいない。
+
+**③ クライアントページの `useState` / `useEffect`**
+
+`login`（7）・`signup`（4）・`forgot-password`（3）・`reset-password`（2）・
+`verify-email`（1）。これらはフォームの状態管理であり、UI の責務そのもの。
+`page.tsx` が `"use client"` である以上ここにあるのが自然で、問題ではない。

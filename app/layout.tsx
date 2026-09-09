@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
-import Header from "./components/Header";
-import { Toaster } from "@/components/ui/sonner";
+import Header from "@/frontend/components/Header";
+import { Toaster } from "@/frontend/components/ui/sonner";
 import Providers from "./providers";
-import { SITE_URL } from "@/lib/config/site";
-import GoogleAnalytics from "@/app/components/analytics/GoogleAnalytics";
+import { SITE_URL } from "@/shared/site";
+import GoogleAnalytics from "@/frontend/components/analytics/GoogleAnalytics";
 
 const notoSansJp = Noto_Sans_JP({
   variable: "--font-noto-sans-jp",

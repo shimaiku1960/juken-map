@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { hashPassword } from "better-auth/crypto";
-import { ymdAfterDays } from "../lib/domain/date";
+import { ymdAfterDays } from "../src/shared/date";
 
 const prisma = new PrismaClient({
   adapter: new PrismaMariaDb( process.env.DATABASE_URL! ),

@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/infra/auth";
-import { demoReadOnlyGuard } from "@/lib/demo/guard";
-import prisma from "@/lib/infra/prisma";
+import { auth } from "@/backend/infra/auth";
+import { demoReadOnlyGuard } from "@/backend/demo-guard";
+import prisma from "@/backend/infra/prisma";
 
 export async function DELETE() {
   const session = await auth.api.getSession({ headers: await headers() });

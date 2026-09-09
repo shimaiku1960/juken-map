@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { getCurrentSession } from "@/lib/infra/auth-session";
-import { toStudyPlanDTO } from "@/lib/dto/study";
-import { findFirstChoiceGoal } from "@/lib/services/goal-service";
-import { listStudyPlans } from "@/lib/services/study-plan-service";
+import { getCurrentSession } from "@/backend/infra/auth-session";
+import { toStudyPlanDTO } from "@/backend/dto/study-mapper";
+import { findFirstChoiceGoal } from "@/backend/services/goal-service";
+import { listStudyPlans } from "@/backend/services/study-plan-service";
 import Link from "next/link";
-import LandingPage from "@/app/components/LandingPage";
-import StudySessionManager from "@/app/components/StudySessionManager";
-import type { StudyPlan } from "@/app/hooks/useStudyPlans";
-import { ymdLocal, todayYmd } from "@/lib/domain/date";
-import { DEMO_EMAIL } from "@/lib/demo/constants";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/ui/utils";
+import LandingPage from "@/frontend/components/LandingPage";
+import StudySessionManager from "@/frontend/components/StudySessionManager";
+import type { StudyPlan } from "@/frontend/hooks/useStudyPlans";
+import { ymdLocal, todayYmd } from "@/shared/date";
+import { DEMO_EMAIL } from "@/shared/demo";
+import { buttonVariants } from "@/frontend/components/ui/button";
+import { cn } from "@/frontend/lib/utils";
 
 // トップは未ログイン訪問者（Googlebot 含む）には LP を返す検索流入の入口。
 // ログイン後ページと認証ページは各ルート側で個別に noindex を指定する。

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { SITE_URL } from "@/lib/config/site";
+import { SITE_URL } from "@/shared/site";
 
 /**
  * robots.txt を生成する。
