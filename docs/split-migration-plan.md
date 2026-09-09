@@ -118,7 +118,49 @@ Fastify（:4000）へ送って認証が通った。**セッションテーブル
 （Server Actions 用で、このリポジトリに Server Actions は0件）。DB アダプタ・
 `additionalFields`・`emailAndPassword`・`trustedOrigins` はそのまま使えた。
 
-### Step 1 — `apps/api`（Fastify）を作る
+### ✅ Step 1 — `apps/api`（Fastify）を作る（2026-09-09 完了）
+
+**20本すべて移植済み。** Next.js と両方を起動して突き合わせ、GET 6本はバイト単位で一致、
+未認証 401・デモの書き込み 403・不正 JSON 401・LINE Webhook の署名なし 401 まで一致した。
+Fastify 経由で学習記録を作成→更新→削除する一巡も通り、同じ DB を見ていることも確認済み。
+既存アプリは 233テスト通過で無傷。
+
+`apps/api` は **npm workspaces にせず独立パッケージ**にした。Dockerfile が
+`package.json` と `package-lock.json` だけをコピーして `npm ci` するため、ルートに
+workspaces を足すと既存のデプロイが壊れる。ルートの `package.json` は変更していない。
+
+#### 移植中に踏んだ3点
+
+1. **`src/backend/infra/prisma.ts` の default export。** ルートに `"type": "module"` が
+   無くこのファイルが CommonJS 扱いになるため、`"type": "module"` の `apps/api` から読むと
+   `{ default: ... }` に包まれ、better-auth が「user モデルが存在しない」と誤判定した。
+   名前付きエクスポートを併記して解決（default は Next.js のために残している）。
+2. **不正な JSON のときのステータス。** Fastify はハンドラに入る前にボディを解析するので
+   既定では認証チェックより先に 400 を返すが、Next.js は `request.json()` がハンドラ内なので
+   401 が先に返る。認証を先に効かせるため、解析に失敗しても例外にせず body を `undefined` に
+   するパーサへ差し替えた。
+3. **LINE Webhook の生ボディ。** 署名検証にパース前の生ボディが要るので、その経路だけ
+   別プラグインにしてパーサを入れ替える。アプリ全体のパーサと二重登録になると起動時に
+   `FST_ERR_CTP_ALREADY_PRESENT` で落ちるため、スコープ内で `removeContentTypeParser`
+   してから登録すること。
+
+#### 副次的に必要だった設定変更
+
+ルートの `tsconfig` / ESLint / Vitest から `apps` を除外した。特に **Vitest の `exclude` は
+`"node_modules"` だとルート直下しか効かず**、`apps/api/node_modules` 配下の依存パッケージの
+テストまで拾って 228ファイル 2,799テストになっていたため glob に直した。`.gitignore` も
+同じ理由で `**/node_modules` を追加している。
+
+#### LINE のリダイレクト先
+
+リダイレクト先は画面なので、分離後は API のオリジンではなく**フロントのオリジン**へ返す
+必要がある。`WEB_ORIGIN` で上書きでき、既定は `SITE_URL`（本番は nginx で同一オリジン）。
+
+---
+
+以下は着手時の設計メモ。
+
+#### （旧）Step 1 の想定
 
 `src/backend`（19本・809行）と `src/shared`（12本）を **そのままコピー**し、HTTP の入口
 20本（1,439行）だけを Fastify 形式に書き換える。
