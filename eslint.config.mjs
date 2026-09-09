@@ -96,6 +96,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Prisma の生成物。自動生成コードは対象外。
     "app/generated/**",
+    // apps/ は独自の tsconfig と lint 設定を持つ別パッケージ。
+    "apps/**",
   ]),
 ]);
 
