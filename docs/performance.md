@@ -354,3 +354,100 @@ flight payload の内部参照番号（`$176` → `$177` 等、import 順の変�
 - ✅ 各ページの表示が変わっていない（HTML 差分で確認・上表）
 - ✅ クエリ本数が増えていない（`/dashboard` 10 本を維持）
 - ✅ `npm run check` 成功（ESLint、tsc、Vitest 34 ファイル 240 テスト、production build）
+
+---
+
+## TASK 4: DTO変換の重複を解消（2026-09-09）
+
+### 事実: 重複は2箇所ではなく4箇所だった
+
+手順書は「app/page.tsx と app/dashboard/page.tsx に約25行がほぼ同一」としていたが、実際は
+**同じ DTO を4箇所が別々に作っていた**。
+
+| 場所 | 変換対象 | 書き方 |
+|---|---|---|
+| `app/page.tsx` | StudyPlan | 26行を手書き |
+| `app/dashboard/page.tsx` | StudyPlan | **1文字違わず同じ26行** |
+| `app/dashboard/page.tsx` | StudyLog | 同じ構造の25行 |
+| `app/api/study-plans/route.ts` | StudyPlan | `studyLogId` の平坦化だけ手書き、`Date → ISO 文字列`は`JSON.stringify`任せ |
+
+4番目が重要で、API は**変換を書いていないのに結果の形が一致していた**。`NextResponse.json()`
+が内部で呼ぶ `JSON.stringify` が Date を暗黙に ISO 文字列へ変えるため。つまり形の一致が
+**偶然に依存**しており、フィールドを1つ足すと4箇所が黙ってずれる状態だった。
+
+`app/api/study-logs/route.ts` に至っては `NextResponse.json(logs)` とサービス層の戻り値を
+そのまま渡しており、変換は完全に暗黙だった。
+
+### 判断: `lib/dto/study.ts` に型と変換を両方置く（ユーザー承認済み）
+
+置き場所の決め手は**依存の向き**だった。`StudyPlan` 型は `app/hooks/useStudyPlans.ts`
+（TanStack Query 用のクライアントフック）に定義され、**14ファイル**が import している。
+変換関数だけを `lib/` へ移すと `lib/` が `app/hooks/` の型を参照し、依存が逆流する。
+TASK 6 で「ESLint によるレイヤー境界の強制」を入れる予定なので、ここで逆流を残すと
+TASK 6 でやり直しになる。
+
+そこで**型と変換をセットで `lib/dto/study.ts` へ置き**、`app/hooks/` 側は re-export だけに
+した。既存14ファイルの import は1行も変えていない。
+
+```
+lib/dto/study.ts       … Textbook / StudyPlan / StudyLog 型 ＋ toStudyPlanDTO / toStudyLogDTO
+app/hooks/useStudyPlans.ts … export type { Textbook, StudyPlan } from "@/lib/dto/study";
+app/hooks/useStudyLogs.ts  … export type { StudyLog } from "@/lib/dto/study";
+```
+
+変換の入力型は `Prisma.StudyPlanGetPayload<{ include: ... }>` で Prisma から導出している。
+schema や include を変えると変換側が型エラーになるので、直し忘れに気づける。
+
+### API Route も同じ変換を通した
+
+`study-plans` / `study-logs` の GET を `toStudyPlanDTO` / `toStudyLogDTO` 経由にした。
+これで「JSON.stringify が暗黙に変換してくれている」という依存が消え、画面と API の応答形が
+**1つの関数で保証される**ようになった。
+
+### 検証: API 応答の値が変わっていないこと
+
+TASK 3 と同じ方法（`git stash` で変更前に戻して同じ dev server から取得 → pop して比較）で
+4つの API 応答を比較した。
+
+| 応答 | 件数 | 値の一致 | キー順 |
+|---|---:|:--:|---|
+| `/api/study-plans`（e2e） | 0 | ✅ | 一致 |
+| `/api/study-logs`（e2e） | 22 | ✅ | 相違 |
+| `/api/study-plans`（demo） | 8 | ✅ | 相違 |
+| `/api/study-logs`（demo） | 17 | ✅ | 相違 |
+
+**値はすべて完全一致。** キーの並び順だけが変わっている（従来は `...plan` のスプレッドで
+Prisma の列順、現在は DTO 関数が組み立てる順）。JSON の消費側はプロパティ名でアクセスする
+ため意味に影響はなく、クライアントコードは無変更。
+
+### 検証: 表示 DOM
+
+| ページ | データ | DOM 行数 | 結果 |
+|---|---|---:|---|
+| `/dashboard` | e2e | 557 | 完全一致 |
+| `/goals` | e2e | 107 | 完全一致 |
+| `/profile` | e2e | 183 | 完全一致 |
+| `/explore/1` | e2e | 87 | 完全一致 |
+| `/`（トップ） | e2e | 89 | 完全一致 |
+| `/dashboard` | demo | 501 | 完全一致 |
+| `/`（トップ） | demo | 92 | 完全一致 |
+
+クエリ本数も変化なし（`/dashboard` 10本、`/` 8本）。
+
+### テストを1件修正した（実装のバグではない）
+
+`app/api/study-logs/route.test.ts` の「ログイン済みなら自分の実績を 200 で返す」が
+`Cannot read properties of undefined (reading 'toISOString')` で落ちた。
+
+原因は**モックが実際の Prisma では返り得ない部分的な行**
+（`{ id: 1, minutes: 60, userId: "user-1" }`）を返していたこと。変換を通さない旧実装
+だったから通っていただけで、実データでは全スカラー列が必ず返る。モックを実際の行に揃え、
+**日付が ISO 文字列になって返ることまで検証する**アサーションに変更した。
+テストが1段強くなっている。
+
+### 完了条件の達成状況
+
+- ✅ 重複が解消（4箇所 → `lib/dto/study.ts` の2関数）
+- ✅ 両ページの表示が変わっていない（DOM 差分・上表）
+- ✅ API 応答の値も変わっていない（4応答すべて一致）
+- ✅ `npm run check` 成功（ESLint、tsc、Vitest 34ファイル 240テスト、production build）

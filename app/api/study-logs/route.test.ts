@@ -53,13 +53,49 @@ describe("GET /api/study-logs", () => {
 
   it("ログイン済みなら自分の実績を 200 で返す", async () => {
     getSession.mockResolvedValue(loggedInSession);
-    const logs = [{ id: 1, minutes: 60, userId: "user-1" }];
-    findMany.mockResolvedValue(logs);
+    // Prisma は必ず全スカラー列を返すので、モックも実際の行に揃える。
+    // GET は DTO 変換（Date → ISO 文字列）を通すため、部分的な行では再現にならない。
+    findMany.mockResolvedValue([
+      {
+        id: 1,
+        userId: "user-1",
+        date: new Date("2026-02-20T00:00:00.000Z"),
+        minutes: 60,
+        subject: "english",
+        textbookId: null,
+        textbook: null,
+        rangeStart: null,
+        rangeEnd: null,
+        rangeUnit: null,
+        memo: null,
+        studyPlanId: null,
+        createdAt: new Date("2026-02-20T01:00:00.000Z"),
+        updatedAt: new Date("2026-02-20T02:00:00.000Z"),
+      },
+    ]);
 
     const res = await GET();
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual(logs);
+    // 日付が ISO 文字列になって返ることまで検証する（クライアントはこの形を期待する）。
+    await expect(res.json()).resolves.toEqual([
+      {
+        id: 1,
+        userId: "user-1",
+        date: "2026-02-20T00:00:00.000Z",
+        minutes: 60,
+        subject: "english",
+        textbookId: null,
+        textbook: null,
+        rangeStart: null,
+        rangeEnd: null,
+        rangeUnit: null,
+        memo: null,
+        studyPlanId: null,
+        createdAt: "2026-02-20T01:00:00.000Z",
+        updatedAt: "2026-02-20T02:00:00.000Z",
+      },
+    ]);
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: "user-1" } })
     );

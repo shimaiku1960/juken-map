@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createStudyLogSchema } from "@/lib/validations/studyLog";
 import { demoReadOnlyGuard } from "@/lib/demo";
+import { toStudyLogDTO } from "@/lib/dto/study";
 import { listStudyLogs } from "@/lib/services/study-log-service";
 
 export async function GET() {
@@ -17,7 +18,7 @@ export async function GET() {
 
   const logs = await listStudyLogs(session.user.id);
 
-  return NextResponse.json(logs);
+  return NextResponse.json(logs.map(toStudyLogDTO));
 }
 
 export async function POST(request: Request) {

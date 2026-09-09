@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createStudyPlansSchema } from "@/lib/validations/studyPlan";
 import { demoReadOnlyGuard } from "@/lib/demo";
+import { toStudyPlanDTO } from "@/lib/dto/study";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
 
 export async function GET() {
@@ -17,12 +18,7 @@ export async function GET() {
 
   const plans = await listStudyPlans(session.user.id);
 
-  return NextResponse.json(
-    plans.map(({ studyLog, ...plan }) => ({
-      ...plan,
-      studyLogId: studyLog?.id ?? null,
-    }))
-  );
+  return NextResponse.json(plans.map(toStudyPlanDTO));
 }
 
 export async function POST(request: Request) {

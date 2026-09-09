@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getCurrentSession } from "@/lib/auth-session";
+import { toStudyLogDTO, toStudyPlanDTO } from "@/lib/dto/study";
 import { listGoalsWithFaculty } from "@/lib/services/goal-service";
 import { listStudyLogs } from "@/lib/services/study-log-service";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
@@ -33,59 +34,9 @@ const DashboardPage = async () => {
 
   const decidedGoals = goals.filter((goal) => goal.status === "decided");
 
-  const initialPlans: StudyPlan[] = plans.map((plan) => ({
-    id: plan.id,
-    userId: plan.userId,
-    date: plan.date.toISOString(),
-    content: plan.content,
-    subject: plan.subject,
-    done: plan.done,
-    studyLogId: plan.studyLog?.id ?? null,
-    textbookId: plan.textbookId,
-    textbook: plan.textbook
-      ? {
-          id: plan.textbook.id,
-          masterId: plan.textbook.masterId,
-          name: plan.textbook.name,
-          totalAmount: plan.textbook.totalAmount,
-          rangeUnit: plan.textbook.rangeUnit,
-          targetDate: plan.textbook.targetDate?.toISOString() ?? null,
-          subject: plan.textbook.subject,
-        }
-      : null,
-    rangeStart: plan.rangeStart,
-    rangeEnd: plan.rangeEnd,
-    rangeUnit: plan.rangeUnit,
-    createdAt: plan.createdAt.toISOString(),
-    updatedAt: plan.updatedAt.toISOString(),
-  }));
+  const initialPlans: StudyPlan[] = plans.map(toStudyPlanDTO);
 
-  const initialLogs: StudyLog[] = logsRaw.map((log) => ({
-    id: log.id,
-    userId: log.userId,
-    date: log.date.toISOString(),
-    minutes: log.minutes,
-    subject: log.subject,
-    textbookId: log.textbookId,
-    textbook: log.textbook
-      ? {
-          id: log.textbook.id,
-          masterId: log.textbook.masterId,
-          name: log.textbook.name,
-          totalAmount: log.textbook.totalAmount,
-          rangeUnit: log.textbook.rangeUnit,
-          targetDate: log.textbook.targetDate?.toISOString() ?? null,
-          subject: log.textbook.subject,
-        }
-      : null,
-    rangeStart: log.rangeStart,
-    rangeEnd: log.rangeEnd,
-    rangeUnit: log.rangeUnit,
-    memo: log.memo,
-    studyPlanId: log.studyPlanId,
-    createdAt: log.createdAt.toISOString(),
-    updatedAt: log.updatedAt.toISOString(),
-  }));
+  const initialLogs: StudyLog[] = logsRaw.map(toStudyLogDTO);
 
   const firstChoice = decidedGoals.find((goal) => goal.isFirstChoice) ?? null;
   const otherCount = decidedGoals.filter((goal) => !goal.isFirstChoice).length;

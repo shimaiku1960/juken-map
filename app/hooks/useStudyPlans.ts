@@ -3,32 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 // studyPlans（サーバー状態）の型・取得・queryKey をここに集約する。
 // フォーム/カレンダー/リストで共有し、鍵や取得処理の二重定義を防ぐ。
 
-export type Textbook = {
-  id: number;
-  masterId: number | null;
-  name: string;
-  totalAmount: number | null;
-  rangeUnit: string | null;
-  targetDate: string | null;
-  subject: string | null;
-};
-
-export type StudyPlan = {
-  id: number;
-  userId: string;
-  date: string; // ISO 文字列（JSON 経由で来るため）
-  content: string | null;
-  subject: string | null;
-  done: boolean;
-  studyLogId: number | null;
-  textbookId: number | null;
-  textbook: Textbook | null; // include で取得（表示用。名前だけ使う）
-  rangeStart: number | null;
-  rangeEnd: number | null;
-  rangeUnit: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+// 型は lib/dto/study.ts が正。ここは既存の import 元を変えずに済ませるための re-export。
+// 変換関数もそこにあり、Server Component / API Route / 画面がすべて同じ形を共有する。
+export type { Textbook, StudyPlan } from "@/lib/dto/study";
+import type { StudyPlan } from "@/lib/dto/study";
 
 // studyPlans キャッシュの唯一の住所。invalidate も含め全員がこれを参照する。
 export const studyPlansKey = ["studyPlans"] as const;

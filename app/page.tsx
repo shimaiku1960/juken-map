@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getCurrentSession } from "@/lib/auth-session";
+import { toStudyPlanDTO } from "@/lib/dto/study";
 import { findFirstChoiceGoal } from "@/lib/services/goal-service";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
 import Link from "next/link";
@@ -36,32 +37,7 @@ const Home = async () => {
     listStudyPlans(session.user.id),
   ]);
 
-  const initialPlans: StudyPlan[] = plans.map((plan) => ({
-    id: plan.id,
-    userId: plan.userId,
-    date: plan.date.toISOString(),
-    content: plan.content,
-    subject: plan.subject,
-    done: plan.done,
-    studyLogId: plan.studyLog?.id ?? null,
-    textbookId: plan.textbookId,
-    textbook: plan.textbook
-      ? {
-          id: plan.textbook.id,
-          masterId: plan.textbook.masterId,
-          name: plan.textbook.name,
-          totalAmount: plan.textbook.totalAmount,
-          rangeUnit: plan.textbook.rangeUnit,
-          targetDate: plan.textbook.targetDate?.toISOString() ?? null,
-          subject: plan.textbook.subject,
-        }
-      : null,
-    rangeStart: plan.rangeStart,
-    rangeEnd: plan.rangeEnd,
-    rangeUnit: plan.rangeUnit,
-    createdAt: plan.createdAt.toISOString(),
-    updatedAt: plan.updatedAt.toISOString(),
-  }));
+  const initialPlans: StudyPlan[] = plans.map(toStudyPlanDTO);
 
   const heroFirstChoice = firstChoiceGoal
     ? {

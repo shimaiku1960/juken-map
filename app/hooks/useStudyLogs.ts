@@ -1,25 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Textbook } from "@/app/hooks/useStudyPlans";
 import type { CreateStudyLogInput } from "@/lib/validations/studyLog";
 import { trackEvent } from "@/lib/analytics";
 
 // studyLogs（勉強の「実績」＝サーバー状態）の型・取得・queryKey をここに集約する。
-export type StudyLog = {
-  id: number;
-  userId: string;
-  date: string; // ISO 文字列（JSON 経由で来るため）
-  minutes: number;
-  subject: string | null;
-  textbookId: number | null;
-  textbook: Textbook | null; // include で取得（表示用。名前だけ使う）
-  rangeStart: number | null;
-  rangeEnd: number | null;
-  rangeUnit: string | null;
-  memo: string | null;
-  studyPlanId: number | null;
-  createdAt: string;
-  updatedAt: string;
-};
+// 型は lib/dto/study.ts が正（re-export）。理由は useStudyPlans.ts のコメント参照。
+export type { StudyLog } from "@/lib/dto/study";
+import type { StudyLog } from "@/lib/dto/study";
 
 // studyLogs キャッシュの唯一の住所。invalidate も含め全員がこれを参照する。
 export const studyLogsKey = ["studyLogs"] as const;
