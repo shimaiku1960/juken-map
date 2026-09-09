@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+# apps/ 配下の各パッケージも独自の node_modules を持つ（先頭の / はルート直下しか
+# 効かないため、別途 glob で除外する）
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -58,3 +61,6 @@ memory/
 /blob-report
 /playwright/.cache
 /e2e/.auth
+
+# Vite のビルド成果物
+/apps/web/dist
