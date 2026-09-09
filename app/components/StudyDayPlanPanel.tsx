@@ -8,10 +8,10 @@ import { studyPlansKey } from "@/app/hooks/useStudyPlans";
 import type { UpdateStudyPlanInput } from "@/lib/validations/studyPlan";
 import StudyPlanCreateDialog from "@/app/components/StudyPlanCreateDialog";
 import StudyPlanEditDialog from "@/app/components/StudyPlanEditDialog";
-import { studyPlanLabel } from "@/lib/studyPlan";
-import { subjectColor, subjectLabel } from "@/lib/subjects";
+import { studyPlanLabel } from "@/lib/domain/studyPlan";
+import { subjectColor, subjectLabel } from "@/lib/domain/subjects";
 import { Button } from "@/components/ui/button";
-import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { notifyDemoReadOnly } from "@/lib/demo/client";
 
 export default function StudyDayPlanPanel({
   date,

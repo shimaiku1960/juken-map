@@ -11,7 +11,7 @@ import {
   TimerReset,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 import {
   AmbientOrb,
   HeroReveal,

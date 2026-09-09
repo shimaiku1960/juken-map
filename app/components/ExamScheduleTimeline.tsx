@@ -1,8 +1,8 @@
 "use client";
 
 import { useGoals, type Goal } from "@/app/hooks/useGoals";
-import { buildExamSchedule } from "@/lib/examSchedule";
-import { daysUntil, formatExamDate } from "@/lib/date";
+import { buildExamSchedule } from "@/lib/domain/examSchedule";
+import { daysUntil, formatExamDate } from "@/lib/domain/date";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 

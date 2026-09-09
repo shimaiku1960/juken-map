@@ -11,10 +11,10 @@ import StudyDayPlanPanel from "@/app/components/StudyDayPlanPanel";
 import StudyLogEditDialog from "@/app/components/StudyLogEditDialog";
 import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialog";
 import StudyPlanCreateDialog from "@/app/components/StudyPlanCreateDialog";
-import { computeHeatmap } from "@/lib/studyStats";
-import { formatMinutes, formatStudyRange } from "@/lib/studyLog";
-import { subjectColor, subjectLabel } from "@/lib/subjects";
-import { ymdLocal } from "@/lib/date";
+import { computeHeatmap } from "@/lib/domain/studyStats";
+import { formatMinutes, formatStudyRange } from "@/lib/domain/studyLog";
+import { subjectColor, subjectLabel } from "@/lib/domain/subjects";
+import { ymdLocal } from "@/lib/domain/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 

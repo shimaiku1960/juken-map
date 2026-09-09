@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildExamSchedule, type ExamScheduleInput } from "@/lib/examSchedule";
+import { buildExamSchedule, type ExamScheduleInput } from "@/lib/domain/examSchedule";
 
 const make = (
   id: number,

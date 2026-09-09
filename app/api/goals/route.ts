@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/lib/infra/auth";
+import prisma from "@/lib/infra/prisma";
 import { goalSchema } from "@/lib/validations/goal";
 import { Prisma } from "@/app/generated/prisma/client";
-import { demoReadOnlyGuard } from "@/lib/demo";
+import { demoReadOnlyGuard } from "@/lib/demo/guard";
 import { listGoals } from "@/lib/services/goal-service";
 export async function GET() {
   const session = await auth.api.getSession({

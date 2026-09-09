@@ -1,5 +1,5 @@
-import { ymdLocal } from "@/lib/date";
-import { SUBJECTS } from "@/lib/subjects";
+import { ymdLocal } from "@/lib/domain/date";
+import { SUBJECTS } from "@/lib/domain/subjects";
 
 // 集計に必要な最小限の形（実績＝日付・学習時間・科目だけ見る）
 export type StatLog = {

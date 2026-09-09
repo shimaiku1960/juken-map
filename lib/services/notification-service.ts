@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma";
+import prisma from "@/lib/infra/prisma";
 import { measured } from "@/lib/observability/measured";
 
 // プロフィール画面（Server Component）と通知設定 API の両方から使う。

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { isLineInAppBrowser, safeCallbackURL } from "@/lib/browser";
+import { isLineInAppBrowser, safeCallbackURL } from "@/lib/ui/browser";
 
 const subscribeToBrowserNavigation = (onStoreChange: () => void) => {
   window.addEventListener("pageshow", onStoreChange);

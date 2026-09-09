@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getCurrentSession } from "@/lib/auth-session";
-import { NOINDEX } from "@/lib/site";
+import { getCurrentSession } from "@/lib/infra/auth-session";
+import { NOINDEX } from "@/lib/config/site";
 import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 import LineAccountLinkButton from "./LineAccountLinkButton";
 
 export const metadata: Metadata = { robots: NOINDEX };

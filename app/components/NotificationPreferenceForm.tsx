@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import InlineFeedback from "@/app/components/feedback/InlineFeedback";
-import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { notifyDemoReadOnly } from "@/lib/demo/client";
 import type { NotificationPreferenceInput } from "@/lib/validations/notification";
 
 type Props = NotificationPreferenceInput & {

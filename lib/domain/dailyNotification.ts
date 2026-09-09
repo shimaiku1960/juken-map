@@ -1,4 +1,4 @@
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL } from "@/lib/config/site";
 
 export type NotificationSlot = "morning" | "evening";
 

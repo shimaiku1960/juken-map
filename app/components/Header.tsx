@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MapPinned } from "lucide-react";
-import { getCurrentSession } from "@/lib/auth-session";
+import { getCurrentSession } from "@/lib/infra/auth-session";
 import HeaderNavigation from "@/app/components/HeaderNavigation";
 
 const Header = async () => {

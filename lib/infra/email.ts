@@ -1,4 +1,4 @@
-import { getResend } from "@/lib/resend";
+import { getResend } from "@/lib/infra/resend";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
 

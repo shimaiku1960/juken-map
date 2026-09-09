@@ -6,15 +6,15 @@ import { useStudyPlans, type StudyPlan } from "@/app/hooks/useStudyPlans";
 import {
   computeStreak,
   computeSubjectMinutes,
-} from "@/lib/studyStats";
-import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/date";
-import { formatMinutes } from "@/lib/studyLog";
+} from "@/lib/domain/studyStats";
+import { ymdLocal, todayYmd, ymdAfterDays } from "@/lib/domain/date";
+import { formatMinutes } from "@/lib/domain/studyLog";
 import StreakBadge from "@/app/components/StreakBadge";
 import StudyHeatmap, { type StudyHeatmapHandle } from "@/app/components/StudyHeatmap";
 import SubjectMinutesBars from "@/app/components/SubjectMinutesBars";
 import TodayStudyPlans from "@/app/components/TodayStudyPlans";
 import { Card, CardContent } from "@/components/ui/card";
-import { studyPlanLabel } from "@/lib/studyPlan";
+import { studyPlanLabel } from "@/lib/domain/studyPlan";
 
 // 実績（StudyLog）まわりのダッシュボード。記録するとキャッシュ更新で
 // ストリーク・ヒートマップ・科目別バーが即座に伸びる（クライアントで集計）。

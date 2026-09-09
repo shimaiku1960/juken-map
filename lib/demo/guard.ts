@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
-// デモアカウント（面接官向け・閲覧専用）
-export const DEMO_EMAIL = "demo@juken-map.com";
+import { DEMO_EMAIL } from "@/lib/demo/constants";
 
 // デモユーザーの編集系リクエストなら 403 を返す。そうでなければ null。
 // 各 API ルートで「if (!session) 401」の直後に呼ぶ想定。

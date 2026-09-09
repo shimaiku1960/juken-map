@@ -11,8 +11,8 @@ import {
   Play,
   Square,
 } from "lucide-react";
-import { notifyDemoReadOnly } from "@/lib/demo-client";
-import { trackEvent } from "@/lib/analytics";
+import { notifyDemoReadOnly } from "@/lib/demo/client";
+import { trackEvent } from "@/lib/ui/analytics";
 import { toast } from "sonner";
 import QuickManualStudyLogDialog from "@/app/components/QuickManualStudyLogDialog";
 import {
@@ -29,9 +29,9 @@ import {
   useCreateTextbook,
   useTextbooks,
 } from "@/app/hooks/useTextbooks";
-import { todayYmd } from "@/lib/date";
-import { studyPlanLabel } from "@/lib/studyPlan";
-import { SUBJECTS, subjectColor } from "@/lib/subjects";
+import { todayYmd } from "@/lib/domain/date";
+import { studyPlanLabel } from "@/lib/domain/studyPlan";
+import { SUBJECTS, subjectColor } from "@/lib/domain/subjects";
 import {
   type ActiveStudySession,
   elapsedStudyMs,
@@ -43,7 +43,7 @@ import {
   reviewStudySession,
   startStudySession,
   studySessionStorageKey,
-} from "@/lib/studySession";
+} from "@/lib/domain/studySession";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
 import { Button } from "@/components/ui/button";
 import {

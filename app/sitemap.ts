@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
-import { client, type Blog } from "@/lib/microcms";
-import { SITE_URL } from "@/lib/site";
+import { client, type Blog } from "@/lib/infra/microcms";
+import { SITE_URL } from "@/lib/config/site";
 
 // ブログ記事は microCMS から取るので、ビルド時に固めず毎回取得する。
 // （記事一覧 /blog も同じ方針。ビルド時に API キーが無い環境でも壊れない）

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { getCurrentSession } from "@/lib/auth-session";
+import { getCurrentSession } from "@/lib/infra/auth-session";
 import { listUniversitiesForExplore } from "@/lib/services/university-service";
-import { NOINDEX } from "@/lib/site";
+import { NOINDEX } from "@/lib/config/site";
 import { redirect } from "next/navigation";
 import UniversitySearch from "@/app/components/UniversitySearch";
 import PageShell from "@/app/components/layout/PageShell";

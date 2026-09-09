@@ -5,7 +5,7 @@ import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import { useTextbooks, useUpdateTextbookSubject } from "@/app/hooks/useTextbooks";
 import type { UpdateStudyPlanInput } from "@/lib/validations/studyPlan";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
-import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/subjects";
+import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/domain/subjects";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { GET } from "./route";
-import { auth } from "@/lib/auth";
-import { pushLineText } from "@/lib/line";
-import prisma from "@/lib/prisma";
-import { exchangeLineLoginCode, getLineFriendshipStatus, verifyLineIdToken } from "@/lib/lineLogin";
+import { auth } from "@/lib/infra/auth";
+import { pushLineText } from "@/lib/infra/line";
+import prisma from "@/lib/infra/prisma";
+import { exchangeLineLoginCode, getLineFriendshipStatus, verifyLineIdToken } from "@/lib/infra/lineLogin";
 
-vi.mock("@/lib/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-vi.mock("@/lib/line", () => ({ pushLineText: vi.fn() }));
-vi.mock("@/lib/prisma", () => ({
+vi.mock("@/lib/infra/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
+vi.mock("@/lib/infra/line", () => ({ pushLineText: vi.fn() }));
+vi.mock("@/lib/infra/prisma", () => ({
   default: {
     $transaction: vi.fn(),
     lineOAuthAttempt: { findUnique: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
     lineConnection: { findUnique: vi.fn(), upsert: vi.fn() },
   },
 }));
-vi.mock("@/lib/lineLogin", () => ({
+vi.mock("@/lib/infra/lineLogin", () => ({
   exchangeLineLoginCode: vi.fn(),
   getLineFriendshipStatus: vi.fn(),
   verifyLineIdToken: vi.fn(),

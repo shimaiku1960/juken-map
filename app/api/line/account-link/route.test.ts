@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { POST } from "./route";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/lib/infra/auth";
+import prisma from "@/lib/infra/prisma";
 
-vi.mock("@/lib/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-vi.mock("@/lib/prisma", () => ({
+vi.mock("@/lib/infra/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
+vi.mock("@/lib/infra/prisma", () => ({
   default: {
     $transaction: vi.fn(),
     lineLinkNonce: { create: vi.fn(), deleteMany: vi.fn() },

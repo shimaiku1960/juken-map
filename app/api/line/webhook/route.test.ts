@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
-import { issueLineLinkToken, replyLineText, verifyLineSignature } from "@/lib/line";
-import prisma from "@/lib/prisma";
+import { issueLineLinkToken, replyLineText, verifyLineSignature } from "@/lib/infra/line";
+import prisma from "@/lib/infra/prisma";
 
-vi.mock("@/lib/line", () => ({
+vi.mock("@/lib/infra/line", () => ({
   verifyLineSignature: vi.fn(),
   issueLineLinkToken: vi.fn(),
   lineAccountLinkUrl: vi.fn(() => "https://juken-map.com/line/link?linkToken=token"),
@@ -13,7 +13,7 @@ const transactionPrisma = {
   lineConnection: { findUnique: vi.fn(), upsert: vi.fn() },
   lineLinkNonce: { delete: vi.fn() },
 };
-vi.mock("@/lib/prisma", () => ({
+vi.mock("@/lib/infra/prisma", () => ({
   default: {
     $transaction: vi.fn((callback) => callback(transactionPrisma)),
     lineConnection: { findUnique: vi.fn() },

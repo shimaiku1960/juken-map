@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 
 const viewport = { once: true, amount: 0.2 } as const;
 

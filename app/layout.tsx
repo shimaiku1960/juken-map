@@ -4,7 +4,7 @@ import "./globals.css";
 import Header from "./components/Header";
 import { Toaster } from "@/components/ui/sonner";
 import Providers from "./providers";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL } from "@/lib/config/site";
 import GoogleAnalytics from "@/app/components/analytics/GoogleAnalytics";
 
 const notoSansJp = Noto_Sans_JP({

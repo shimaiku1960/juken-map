@@ -1,4 +1,4 @@
-import { ymdLocal } from "@/lib/date";
+import { ymdLocal } from "@/lib/domain/date";
 
 export type NavigationLog = {
   textbookId: number | null;

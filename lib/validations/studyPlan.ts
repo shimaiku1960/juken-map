@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SUBJECT_VALUES } from "@/lib/subjects";
+import { SUBJECT_VALUES } from "@/lib/domain/subjects";
 
 // 範囲の単位（固定リスト）
 export const RANGE_UNITS = [

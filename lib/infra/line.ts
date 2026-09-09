@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL } from "@/lib/config/site";
 
 const LINE_API_BASE = "https://api.line.me/v2/bot";
 

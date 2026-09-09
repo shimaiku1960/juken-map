@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { GET, POST } from "./route";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/lib/infra/auth";
+import prisma from "@/lib/infra/prisma";
 import { Prisma } from "@/app/generated/prisma/client";
 
 // 外部境界だけを差し替える（DB・認証・リクエストヘッダー）。門番ロジック本体は実物を動かす。
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/lib/infra/auth", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/lib/prisma", () => ({
+vi.mock("@/lib/infra/prisma", () => ({
   default: {
     finalGoal: { findMany: vi.fn(), create: vi.fn() },
   },

@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import Link from "next/link";
-import { trackEvent } from "@/lib/analytics";
+import { trackEvent } from "@/lib/ui/analytics";
 
 type Props = Omit<ComponentProps<typeof Link>, "href" | "onClick"> & {
   location: "header" | "hero" | "middle" | "final" | "footer";

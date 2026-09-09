@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { SUBJECTS } from "@/lib/subjects";
+import { SUBJECTS } from "@/lib/domain/subjects";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
 import {
   useTextbooks,
@@ -11,7 +11,7 @@ import {
 } from "@/app/hooks/useTextbooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 
 // 学習予定（StudyPlan）と学習実績（StudyLog）のフォームで共有する入力部品。
 // 科目セレクト・参考書セレクト・範囲単位セレクト・数値ステッパー。

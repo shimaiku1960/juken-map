@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { REGIONS } from "@/lib/prefectures";
+import { REGIONS } from "@/lib/domain/prefectures";
 
 type Props = {
   value: Set<string>;

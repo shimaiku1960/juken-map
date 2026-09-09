@@ -18,10 +18,10 @@ import {
   useTextbookMasters,
   useUpdateTextbookProgress,
 } from "@/app/hooks/useTextbooks";
-import { todayYmdTokyo, ymdLocal } from "@/lib/date";
+import { todayYmdTokyo, ymdLocal } from "@/lib/domain/date";
 import { RANGE_UNIT_VALUES } from "@/lib/validations/studyPlan";
 import type { UpdateTextbookProgressInput } from "@/lib/validations/textbook";
-import { subjectLabel } from "@/lib/subjects";
+import { subjectLabel } from "@/lib/domain/subjects";
 import {
   SubjectSelect,
   TextbookSelect,

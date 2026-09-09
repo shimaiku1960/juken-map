@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CreateStudyLogInput } from "@/lib/validations/studyLog";
-import { trackEvent } from "@/lib/analytics";
+import { trackEvent } from "@/lib/ui/analytics";
 
 // studyLogs（勉強の「実績」＝サーバー状態）の型・取得・queryKey をここに集約する。
 // 型は lib/dto/study.ts が正（re-export）。理由は useStudyPlans.ts のコメント参照。

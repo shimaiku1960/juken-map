@@ -3,8 +3,8 @@ import Image from "next/image";
 import { cache } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { client, type Blog } from "@/lib/microcms";
-import { SITE_URL } from "@/lib/site";
+import { client, type Blog } from "@/lib/infra/microcms";
+import { SITE_URL } from "@/lib/config/site";
 
 type ArticlePageProps = {
   params: Promise<{ id: string }>;

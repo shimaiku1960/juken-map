@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useGoals, goalsKey } from "@/app/hooks/useGoals";
-import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { notifyDemoReadOnly } from "@/lib/demo/client";
 
 type Tag = { id: number; name: string };
 

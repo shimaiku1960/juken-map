@@ -14,9 +14,9 @@ import {
   Target,
   UserRound,
 } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@/lib/ui/auth-client";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 import TrackedSignupLink from "@/app/components/analytics/TrackedSignupLink";
 
 type HeaderUser = {

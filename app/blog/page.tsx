@@ -1,4 +1,4 @@
-import { client, type Blog } from "@/lib/microcms";
+import { client, type Blog } from "@/lib/infra/microcms";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import PageShell from "@/app/components/layout/PageShell";

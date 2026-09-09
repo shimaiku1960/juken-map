@@ -13,10 +13,10 @@ import type { TextbookMaster } from "@/app/hooks/useTextbooks";
 import {
   computeCurrentAmount,
   computeStudyNavigation,
-} from "@/lib/reverseStudyNavigation";
-import { todayYmd, ymdLocal } from "@/lib/date";
+} from "@/lib/domain/reverseStudyNavigation";
+import { todayYmd, ymdLocal } from "@/lib/domain/date";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
-import { SUBJECTS, SUBJECT_VALUES, subjectColor, subjectLabel } from "@/lib/subjects";
+import { SUBJECTS, SUBJECT_VALUES, subjectColor, subjectLabel } from "@/lib/domain/subjects";
 import type { UpdateTextbookProgressInput } from "@/lib/validations/textbook";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

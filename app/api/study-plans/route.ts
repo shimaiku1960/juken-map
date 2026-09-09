@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/lib/infra/auth";
+import prisma from "@/lib/infra/prisma";
 import { createStudyPlansSchema } from "@/lib/validations/studyPlan";
-import { demoReadOnlyGuard } from "@/lib/demo";
+import { demoReadOnlyGuard } from "@/lib/demo/guard";
 import { toStudyPlanDTO } from "@/lib/dto/study";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
 

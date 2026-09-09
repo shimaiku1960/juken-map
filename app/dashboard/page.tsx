@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
-import { getCurrentSession } from "@/lib/auth-session";
+import { getCurrentSession } from "@/lib/infra/auth-session";
 import { toStudyLogDTO, toStudyPlanDTO } from "@/lib/dto/study";
 import { listGoalsWithFaculty } from "@/lib/services/goal-service";
 import { listStudyLogs } from "@/lib/services/study-log-service";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
-import { NOINDEX } from "@/lib/site";
+import { NOINDEX } from "@/lib/config/site";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import StudyRecordDashboard from "@/app/components/StudyRecordDashboard";
 import type { StudyLog } from "@/app/hooks/useStudyLogs";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
 import { Card, CardContent } from "@/components/ui/card";
-import { DEMO_EMAIL } from "@/lib/demo";
+import { DEMO_EMAIL } from "@/lib/demo/constants";
 import PageShell from "@/app/components/layout/PageShell";
 import PageHeader from "@/app/components/layout/PageHeader";
 import SectionHeader from "@/app/components/layout/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 import RegistrationCompletionTracker from "@/app/components/analytics/RegistrationCompletionTracker";
 
 // ログイン必須のページなので検索結果には載せない。

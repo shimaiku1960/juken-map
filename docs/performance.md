@@ -451,3 +451,83 @@ Prisma の列順、現在は DTO 関数が組み立てる順）。JSON の消費
 - ✅ 両ページの表示が変わっていない（DOM 差分・上表）
 - ✅ API 応答の値も変わっていない（4応答すべて一致）
 - ✅ `npm run check` 成功（ESLint、tsc、Vitest 34ファイル 240テスト、production build）
+
+---
+
+## TASK 5: lib/ 直下の整理（2026-09-09）
+
+構造のみの変更で、ロジックは1行も書き換えていない。計測値に影響する変更ではないが、
+検証のため TASK 3〜4 と同じ前後比較を行った。
+
+### 手順書の記述との相違（実測で2点を訂正）
+
+1. **`dailyNotification.ts` は「バックエンド専用」ではなく純粋関数だった。** 依存は
+   `@/lib/site`（定数）のみで、Prisma もネットワークも触らない。メッセージ組み立てと
+   日付範囲計算だけなので `domain/` に分類した。
+2. `site.ts` がクライアントから import されていないことは手順書どおり。調査の途中で
+   「5件ある」と誤認したが、原因は `grep -rl '"use client"'` が**コメント内の文字列**
+   （`// page.tsx が "use client" のため〜`）を拾っていたこと。ディレクティブは先頭の
+   文字列リテラルなので、コメントと空行を除いた先頭で判定し直して確認した。
+
+### 採用した構成（案A・現行ファイル名を維持／ユーザー承認済み）
+
+```
+lib/
+├── domain/         純粋ロジック（10本）DB・ネットワーク・ブラウザAPIに触れない
+│     date, subjects, prefectures, studyLog, studyPlan, studyStats,
+│     studySession, examSchedule, reverseStudyNavigation, dailyNotification
+├── infra/          サーバー専用（8本）外部システムとの接続
+│     prisma, resend, email, microcms, line, auth, auth-session, lineLogin
+├── ui/             ブラウザ側（4本）
+│     browser, analytics, utils, auth-client
+├── demo/           constants（定数）/ guard（サーバー）/ client（"use client"）
+├── config/         site
+├── services/       既存5本 ＋ sendDailyNotifications
+└── dto/ validations/ observability/   （既存のまま）
+```
+
+ファイル名は現行のまま移動した（`git mv` で履歴を保持）。差分が「移動」だけになり、
+レビューと切り戻しが楽なため。既存 `services/` `dto/` は kebab-case、移動分は camelCase
+のままなので、lib 内で命名は混在している（今回は変えない判断）。
+
+### 判断が必要だった2点
+
+**`demo.ts` の分割 → `lib/demo/` に3ファイル。** 参照元を実測すると、`DEMO_EMAIL` は
+Server Component 5ファイル、`demoReadOnlyGuard` は API Route 12ファイルが使い、
+**両方を使うファイルは1つも無かった**ため分割は安全と判断した。`guard.ts` は
+`next/server` に依存するサーバー専用モジュールなので、定数を `constants.ts` へ分けて
+画面から参照できるようにしている。既存の `demo-client.ts` も `demo/client.ts` へ寄せた。
+
+**`sendDailyNotifications.ts` → `lib/services/`。** Prisma・Resend・LINE・純粋ビルダー
+（`dailyNotification.ts`）を束ねて1つの Route Handler から呼ばれており、役割は
+アプリケーションサービスそのもの。純粋な `dailyNotification.ts` は `domain/` に分けた。
+
+### import パスの更新
+
+`@/lib/xxx` 形式を機械置換（121ファイル）。加えて手作業で拾ったもの:
+
+- `@/lib/demo` は分割したので、import する識別子（`DEMO_EMAIL` / `demoReadOnlyGuard`）で
+  `constants` と `guard` に振り分けた（17ファイル）
+- `vi.mock("@/lib/demo", ...)` が1件残っていた（import 文ではないので一括置換の対象外）
+- `prisma/seed*.ts` の3件が `from "../lib/date"` という**相対パス**で参照しており、
+  `@/lib/` を対象にした置換では拾えなかった。tsc が検出した
+- **`components.json`（shadcn/ui の設定）の `"utils": "@/lib/utils"`。** これを直さないと
+  今後 `npx shadcn add` が生成するコンポーネントの import が壊れる。`@/lib/ui/utils` に更新した
+
+### 検証
+
+| 対象 | 結果 |
+|---|---|
+| 表示 DOM 7ページ（e2e 5・demo 2） | すべて完全一致 |
+| API 応答 4本（0件・22件・8件・17件） | **バイト単位で完全一致** |
+| デモの閲覧専用ガード（demo で POST /api/study-logs） | 403（分割後も機能） |
+| `npm run check` | 成功（ESLint、tsc、Vitest 34ファイル 240テスト、build） |
+
+TASK 4 と違いロジックを変えていないので、API 応答はキー順まで含めて一致している。
+
+### 完了条件の達成状況
+
+- ✅ `lib/` 直下に平置きファイルが残っていない（本番コード25本・テスト14本すべて移動）
+- ✅ `npm run build` が通る
+- ✅ 既存テストが全て通る（240件）
+- ✅ テストファイルは隣接配置（`domain/date.ts` の横に `domain/date.test.ts`）

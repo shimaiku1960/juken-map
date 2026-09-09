@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 
 export default function PageShell({ className, ...props }: ComponentProps<"main">) {
   return (

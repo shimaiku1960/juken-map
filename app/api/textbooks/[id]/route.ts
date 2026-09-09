@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { demoReadOnlyGuard } from "@/lib/demo";
+import { auth } from "@/lib/infra/auth";
+import prisma from "@/lib/infra/prisma";
+import { demoReadOnlyGuard } from "@/lib/demo/guard";
 import { updateTextbookProgressSchema } from "@/lib/validations/textbook";
 
 export async function PATCH(

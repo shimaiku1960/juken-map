@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { SUBJECT_VALUES } from "@/lib/subjects";
+import { SUBJECT_VALUES } from "@/lib/domain/subjects";
 import { RANGE_UNIT_VALUES } from "@/lib/validations/studyPlan";
-import { todayYmdTokyo } from "@/lib/date";
+import { todayYmdTokyo } from "@/lib/domain/date";
 
 // 科目：固定リストの値 or null（未設定）
 const subjectField = z

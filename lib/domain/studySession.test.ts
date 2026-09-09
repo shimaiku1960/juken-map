@@ -9,7 +9,7 @@ import {
   reviewStudySession,
   startStudySession,
   studySessionStorageKey,
-} from "@/lib/studySession";
+} from "@/lib/domain/studySession";
 
 const target = {
   planId: 1,

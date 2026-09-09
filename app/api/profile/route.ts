@@ -1,9 +1,9 @@
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/lib/infra/auth";
+import prisma from "@/lib/infra/prisma";
 import { NextResponse } from "next/server";
 import { profileSchema } from "@/lib/validations/profile";
-import { demoReadOnlyGuard } from "@/lib/demo";
+import { demoReadOnlyGuard } from "@/lib/demo/guard";
 
 export const PUT = async (request: Request) => {
   const session = await auth.api.getSession({

@@ -15,7 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { toast } from "sonner";
-import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { notifyDemoReadOnly } from "@/lib/demo/client";
 
 const ProfileEdit = ({
   currentNickname,

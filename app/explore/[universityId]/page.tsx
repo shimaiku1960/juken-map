@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { getCurrentSession } from "@/lib/auth-session";
+import { getCurrentSession } from "@/lib/infra/auth-session";
 import { listGoalFacultyIds } from "@/lib/services/goal-service";
 import { findUniversityDetail } from "@/lib/services/university-service";
-import { NOINDEX } from "@/lib/site";
+import { NOINDEX } from "@/lib/config/site";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import FacultyList from "@/app/components/FacultyList";
-import { DEMO_EMAIL } from "@/lib/demo";
+import { DEMO_EMAIL } from "@/lib/demo/constants";
 
 // ログイン必須のページなので検索結果には載せない。
 export const metadata: Metadata = { robots: NOINDEX };

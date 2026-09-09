@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { studyPlanLabel } from "@/lib/studyPlan";
+import { studyPlanLabel } from "@/lib/domain/studyPlan";
 
 // studyPlanLabel の引数（省略分は null 埋め）を作るヘルパー
 const plan = (over: {

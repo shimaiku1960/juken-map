@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { demoReadOnlyGuard, DEMO_EMAIL } from "./demo";
+import { demoReadOnlyGuard } from "./guard";
+import { DEMO_EMAIL } from "./constants";
 
 // デモ閲覧専用ガード（各 API ルートの mutation 手前で呼ぶ門番）の単体テスト。
 // 外部依存は無く、email の一致だけで挙動が決まる純粋な分岐なのでモック不要。

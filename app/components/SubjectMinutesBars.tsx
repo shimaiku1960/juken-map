@@ -1,5 +1,5 @@
-import type { SubjectMinutes } from "@/lib/studyStats";
-import { formatMinutes } from "@/lib/studyLog";
+import type { SubjectMinutes } from "@/lib/domain/studyStats";
+import { formatMinutes } from "@/lib/domain/studyLog";
 
 // 科目別の学習時間を横棒で可視化（外部ライブラリ不要・div 幅％の自作バー）。
 export default function SubjectMinutesBars({

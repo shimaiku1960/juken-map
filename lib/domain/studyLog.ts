@@ -1,5 +1,5 @@
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
-import { subjectLabel } from "@/lib/subjects";
+import { subjectLabel } from "@/lib/domain/subjects";
 
 // 分 → 「1時間30分」「45分」のような表示に整形する。
 export function formatMinutes(total: number): string {

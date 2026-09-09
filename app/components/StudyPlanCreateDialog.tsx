@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { studyPlansKey } from "@/app/hooks/useStudyPlans";
 import { useCreateTextbook, useTextbooks } from "@/app/hooks/useTextbooks";
 import { RANGE_UNITS } from "@/lib/validations/studyPlan";
-import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/subjects";
+import { SUBJECTS, subjectColor, subjectLabel } from "@/lib/domain/subjects";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

@@ -2,8 +2,8 @@ import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { auth } from "@/lib/infra/auth";
+import prisma from "@/lib/infra/prisma";
 
 const inputSchema = z.object({ linkToken: z.string().min(1).max(255) });
 

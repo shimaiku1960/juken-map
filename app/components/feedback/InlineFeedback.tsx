@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { AlertCircle, CheckCircle2, Info, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 
 const variants = {
   info: { icon: Info, className: "border-info/25 bg-info/10 text-info" },

@@ -17,8 +17,8 @@ import {
   type StudyPlan,
 } from "@/app/hooks/useStudyPlans";
 import { useGoals, goalsKey, type Goal } from "@/app/hooks/useGoals";
-import { subjectColor, subjectLabel } from "@/lib/subjects";
-import { studyPlanLabel } from "@/lib/studyPlan";
+import { subjectColor, subjectLabel } from "@/lib/domain/subjects";
+import { studyPlanLabel } from "@/lib/domain/studyPlan";
 import {
   SubjectSelect,
   TextbookSelect,

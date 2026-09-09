@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import TodayProgressRing from "@/app/components/TodayProgressRing";
-import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { notifyDemoReadOnly } from "@/lib/demo/client";
 
 export type TodayPlan = {
   id: number;

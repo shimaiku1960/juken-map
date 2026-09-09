@@ -1,9 +1,9 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { createLineOAuthValues, lineLoginAuthorizationUrl } from "@/lib/lineLogin";
-import { SITE_URL } from "@/lib/site";
+import { auth } from "@/lib/infra/auth";
+import prisma from "@/lib/infra/prisma";
+import { createLineOAuthValues, lineLoginAuthorizationUrl } from "@/lib/infra/lineLogin";
+import { SITE_URL } from "@/lib/config/site";
 
 const CALLBACK_PATH = "/api/line/oauth/callback";
 

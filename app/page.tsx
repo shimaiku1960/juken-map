@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCurrentSession } from "@/lib/auth-session";
+import { getCurrentSession } from "@/lib/infra/auth-session";
 import { toStudyPlanDTO } from "@/lib/dto/study";
 import { findFirstChoiceGoal } from "@/lib/services/goal-service";
 import { listStudyPlans } from "@/lib/services/study-plan-service";
@@ -7,10 +7,10 @@ import Link from "next/link";
 import LandingPage from "@/app/components/LandingPage";
 import StudySessionManager from "@/app/components/StudySessionManager";
 import type { StudyPlan } from "@/app/hooks/useStudyPlans";
-import { ymdLocal, todayYmd } from "@/lib/date";
-import { DEMO_EMAIL } from "@/lib/demo";
+import { ymdLocal, todayYmd } from "@/lib/domain/date";
+import { DEMO_EMAIL } from "@/lib/demo/constants";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/utils";
 
 // トップは未ログイン訪問者（Googlebot 含む）には LP を返す検索流入の入口。
 // ログイン後ページと認証ページは各ルート側で個別に noindex を指定する。

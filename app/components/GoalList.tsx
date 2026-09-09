@@ -2,9 +2,9 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { daysUntil, formatExamDate } from "@/lib/date";
+import { daysUntil, formatExamDate } from "@/lib/domain/date";
 import { useGoals, goalsKey, type Goal } from "@/app/hooks/useGoals";
-import { notifyDemoReadOnly } from "@/lib/demo-client";
+import { notifyDemoReadOnly } from "@/lib/demo/client";
 import { MoveHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 

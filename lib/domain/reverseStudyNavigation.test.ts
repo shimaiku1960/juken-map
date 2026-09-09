@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeCurrentAmount,
   computeStudyNavigation,
-} from "@/lib/reverseStudyNavigation";
+} from "@/lib/domain/reverseStudyNavigation";
 
 describe("computeCurrentAmount", () => {
   it("同じ参考書・単位の最大到達位置を返す", () => {

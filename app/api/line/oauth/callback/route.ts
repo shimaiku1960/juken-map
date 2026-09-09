@@ -1,10 +1,10 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { pushLineText } from "@/lib/line";
-import prisma from "@/lib/prisma";
-import { exchangeLineLoginCode, getLineFriendshipStatus, verifyLineIdToken } from "@/lib/lineLogin";
-import { SITE_URL } from "@/lib/site";
+import { auth } from "@/lib/infra/auth";
+import { pushLineText } from "@/lib/infra/line";
+import prisma from "@/lib/infra/prisma";
+import { exchangeLineLoginCode, getLineFriendshipStatus, verifyLineIdToken } from "@/lib/infra/lineLogin";
+import { SITE_URL } from "@/lib/config/site";
 
 function appOrigin(request: Request) {
   return process.env.NODE_ENV === "production" ? SITE_URL : new URL(request.url).origin;

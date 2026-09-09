@@ -4,7 +4,7 @@ import {
   computeHeatmap,
   computeSubjectMinutes,
   type StatLog,
-} from "@/lib/studyStats";
+} from "@/lib/domain/studyStats";
 
 // date + minutes（+ subject）だけの実績を作るヘルパー
 const l = (date: string, minutes: number, subject?: string): StatLog => ({

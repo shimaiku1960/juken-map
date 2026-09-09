@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/infra/auth";
 import { listTextbookMasters } from "@/lib/services/textbook-service";
 
 export async function GET() {
