@@ -4,7 +4,13 @@ import { defineConfig, devices } from "@playwright/test";
 // ローカル: dev サーバ（＋ローカル Docker MySQL）に対して実行する。
 // CI: 使い捨て MySQL にマイグレーション/seed を流し、ビルド済みアプリを
 //     `next start` で起動して実行する（docker compose は使わない）。
+//
+// SPA 移行中の暫定運用: E2E_BASE_URL を渡すと、その URL に対して実行する。
+// apps/web（Vite）と apps/api（Fastify）は別々に起動しておく必要があるため、
+// このときは webServer を立てずに既存のサーバへつなぐ。
+//   例: E2E_BASE_URL=http://localhost:5173 npm run e2e
 const isCI = !!process.env.CI;
+const externalBaseURL = process.env.E2E_BASE_URL;
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -15,14 +21,16 @@ export default defineConfig({
   retries: isCI ? 1 : 0, // CI の一時的なゆらぎに備えて1回だけ再試行
   reporter: isCI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: externalBaseURL ?? "http://localhost:3000",
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: {
-    command: isCI ? "npx next start" : "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !isCI,
-    timeout: 120_000,
-  },
+  webServer: externalBaseURL
+    ? undefined
+    : {
+        command: isCI ? "npx next start" : "npm run dev",
+        url: "http://localhost:3000",
+        reuseExistingServer: !isCI,
+        timeout: 120_000,
+      },
 });
