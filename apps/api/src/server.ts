@@ -1,7 +1,47 @@
-import Fastify from "fastify";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import Fastify, { type FastifyInstance } from "fastify";
+import fastifyCompress from "@fastify/compress";
+import fastifyStatic from "@fastify/static";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth.ts";
 import { registerRoutes } from "./routes/index.ts";
+
+// 本番では SPA のビルド成果物を API と同じプロセスから配る。nginx は :3000 へ丸ごと
+// 流すだけなので、本番ホストの設定を触らずに Next.js と入れ替えられる（切り戻しも
+// 既存のイメージ単位の自動ロールバックがそのまま効く）。
+// 開発では Vite(:5173) が配って /api だけこちらへプロキシするため、ここは通らない。
+function registerSpa(app: FastifyInstance, root: string) {
+  // Next.js は応答を既定で圧縮していたが、Fastify は何もしない。SPA のバンドルは
+  // 800KB 超あり、無圧縮のまま配ると回線の細い端末で目に見えて遅くなる。
+  // nginx 側で gzip を足す手もあるが、本番ホストを触らない方針なのでアプリで持つ。
+  app.register(fastifyCompress, { global: true, encodings: ["br", "gzip", "deflate"] });
+
+  app.register(fastifyStatic, {
+    root,
+    // ワイルドカードを切り、実ファイルが無いものは下の notFound ハンドラへ落とす。
+    // 有効なままだと /dashboard のようなクライアント側ルートが 404 になる。
+    wildcard: false,
+    setHeaders(res, filePath) {
+      // Vite が出す assets/* はファイル名にハッシュが入るので永久キャッシュしてよい。
+      // index.html はデプロイのたびに中身が変わるため、必ず再検証させる。
+      if (path.basename(filePath) === "index.html") {
+        res.header("Cache-Control", "no-cache");
+      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.header("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  });
+
+  app.setNotFoundHandler((request, reply) => {
+    // API の 404 まで index.html を返すと、JSON を期待しているクライアントが壊れる。
+    // 存在しない API は API のまま 404 を返す。
+    if (request.url.startsWith("/api/")) {
+      return reply.code(404).send({ error: "Not Found" });
+    }
+    return reply.sendFile("index.html");
+  });
+}
 
 export function buildServer() {
   const app = Fastify({ logger: false });
@@ -42,6 +82,11 @@ export function buildServer() {
   app.get("/api/health", async () => ({ ok: true }));
 
   registerRoutes(app);
+
+  const webDist = process.env.WEB_DIST_DIR;
+  if (webDist && existsSync(path.join(webDist, "index.html"))) {
+    registerSpa(app, webDist);
+  }
 
   return app;
 }

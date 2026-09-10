@@ -1,4 +1,4 @@
-import { type Page, expect } from "@playwright/test";
+import { type Locator, type Page, expect } from "@playwright/test";
 
 // メール＋パスワードでログインし、学習開始画面の表示まで待つ
 export async function login(page: Page, email: string, password: string) {
@@ -28,4 +28,36 @@ export async function loginAsDemo(page: Page) {
   await expect(
     page.getByRole("heading", { name: "今日の学習を始めよう" })
   ).toBeVisible();
+}
+
+// 集計表示（例: 「今日の学習時間：2時間15分」）から分を読む。
+export function displayedMinutes(text: string | null) {
+  const hours = Number(text?.match(/(\d+)時間/)?.[1] ?? 0);
+  const minutes = Number(text?.match(/(\d+)分/)?.[1] ?? 0);
+  return hours * 60 + minutes;
+}
+
+// 集計の基準値を、実績の取得が終わってから読む。
+//
+// ダッシュボードは取得中 logs=[] で描くため、待たずに読むと 0 分を掴む。
+// SSR だった Next.js 版では起きなかったが、SPA の本番ビルドは初回描画が
+// フェッチより速いので露出する（dev サーバーではモジュール読み込みが遅く隠れていた）。
+// 「読み込み中」を示す DOM が無いので、値が2回続けて同じになったら確定とみなす。
+export async function settledMinutes(locator: Locator) {
+  let previous: number | null = null;
+  let current = 0;
+
+  await expect
+    .poll(
+      async () => {
+        current = displayedMinutes(await locator.textContent());
+        const settled = previous === current;
+        previous = current;
+        return settled;
+      },
+      { intervals: [250, 250, 250, 250, 250], timeout: 10_000 }
+    )
+    .toBe(true);
+
+  return current;
 }

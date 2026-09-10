@@ -1,12 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { login } from "./utils";
+import { login, displayedMinutes, settledMinutes } from "./utils";
 import { E2E_EMAIL, E2E_PASSWORD } from "./credentials";
-
-const displayedMinutes = (text: string | null) => {
-  const hours = Number(text?.match(/(\d+)時間/)?.[1] ?? 0);
-  const minutes = Number(text?.match(/(\d+)分/)?.[1] ?? 0);
-  return hours * 60 + minutes;
-};
 
 // 毎日ループの正常系：開始 → 計測 → 終了 → 実績保存 → 可視化更新。
 test("タイマーで学習した実績がダッシュボードに反映される", async ({ page }) => {
@@ -14,7 +8,7 @@ test("タイマーで学習した実績がダッシュボードに反映され�
 
   await page.getByRole("link", { name: "記録・予定" }).click();
   const todayMinutes = page.getByText(/今日の学習時間：/);
-  const beforeMinutes = displayedMinutes(await todayMinutes.textContent());
+  const beforeMinutes = await settledMinutes(todayMinutes);
 
   await page.getByRole("link", { name: "学習を始める" }).click();
 
