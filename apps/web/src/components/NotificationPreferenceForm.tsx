@@ -40,6 +40,9 @@ export default function NotificationPreferenceForm(props: Props) {
     lineMorningEnabled: props.lineMorningEnabled,
     lineEveningEnabled: props.lineEveningEnabled,
   };
+  // initial* はマウント時の値で固定される（あとから props が変わっても追従しない）。
+  // 画面側は取得が終わってからこの部品を描くこと。取得前の既定値を渡すと、それが
+  // 焼き付いて直らない。実際 LINE の連携状態でそれが起きた。
   const [preference, setPreference] = useState(initialPreference);
   const [savedPreference, setSavedPreference] = useState(initialPreference);
   const [lineConnected, setLineConnected] = useState(props.initialLineConnected);
