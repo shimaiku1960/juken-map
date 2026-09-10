@@ -1,0 +1,11 @@
+User-Agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /schedule
+Disallow: /goals
+Disallow: /profile
+Disallow: /explore
+
+Host: https://juken-map.com
+Sitemap: https://juken-map.com/sitemap.xml
