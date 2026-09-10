@@ -4,11 +4,14 @@ vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/api/infra/prisma", () => ({
-  prisma: { notificationPreference: { upsert: vi.fn() } },
-}));
+vi.mock("@/api/infra/prisma", () => {
+  const client = { notificationPreference: { upsert: vi.fn() } };
+  return { prisma: client, default: client };
+});
 
-vi.mock("@/api/services/notification-service", () => ({
+vi.mock("@/api/services/notification-service", async (importOriginal) => ({
+  // 読み取りだけ差し替え、保存は実物を通して prisma の呼び出しを確かめる。
+  ...(await importOriginal<object>()),
   findNotificationPreference: vi.fn(),
   findLineConnection: vi.fn(),
 }));

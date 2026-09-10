@@ -1,10 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/api/infra/prisma";
 import { Prisma } from "@/api/generated/prisma/client";
 import {
   createTextbookSchema,
   updateTextbookProgressSchema,
 } from "@/shared/validations/textbook";
+import {
+  createTextbook,
+  findOwnedTextbook,
+  findTextbookMaster,
+  listTextbooks,
+  updateTextbookProgress,
+} from "@/api/services/textbook-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
 type IdParams = { id: string };
@@ -14,10 +20,7 @@ export function registerTextbookRoutes(app: FastifyInstance) {
     const session = await requireSession(request, reply);
     if (!session) return;
 
-    return prisma.textbook.findMany({
-      where: { userId: session.user.id },
-      orderBy: { name: "asc" },
-    });
+    return listTextbooks(session.user.id);
   });
 
   app.post("/api/textbooks", async (request, reply) => {
@@ -41,10 +44,7 @@ export function registerTextbookRoutes(app: FastifyInstance) {
       };
 
       if ("masterId" in parsed.data) {
-        const master = await prisma.textbookMaster.findUnique({
-          where: { id: parsed.data.masterId },
-          include: { metrics: true },
-        });
+        const master = await findTextbookMaster(parsed.data.masterId);
         if (!master) {
           return reply.code(404).send({ error: "参考書マスターが見つかりません" });
         }
@@ -71,7 +71,7 @@ export function registerTextbookRoutes(app: FastifyInstance) {
         };
       }
 
-      const textbook = await prisma.textbook.create({ data: textbookData });
+      const textbook = await createTextbook(textbookData);
       return reply.code(201).send(textbook);
     } catch (error) {
       if (
@@ -99,31 +99,11 @@ export function registerTextbookRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: parsed.error.issues });
     }
 
-    const textbook = await prisma.textbook.findFirst({
-      where: { id: textbookId, userId: session.user.id },
-    });
+    const textbook = await findOwnedTextbook(textbookId, session.user.id);
     if (!textbook) {
       return reply.code(404).send({ error: "参考書が見つかりません" });
     }
 
-    return prisma.textbook.update({
-      where: { id: textbookId },
-      data: {
-        // 送られてきた項目だけ更新（未指定なら現状維持）
-        ...(parsed.data.totalAmount !== undefined && {
-          totalAmount: parsed.data.totalAmount,
-        }),
-        ...(parsed.data.rangeUnit !== undefined && {
-          rangeUnit: parsed.data.rangeUnit,
-        }),
-        ...(parsed.data.targetDate !== undefined && {
-          targetDate:
-            parsed.data.targetDate == null
-              ? null
-              : new Date(`${parsed.data.targetDate}T00:00:00.000Z`),
-        }),
-        ...(parsed.data.subject !== undefined && { subject: parsed.data.subject }),
-      },
-    });
+    return updateTextbookProgress(textbookId, parsed.data);
   });
 }

@@ -9,11 +9,17 @@ const transactionPrisma = {
   lineLinkNonce: { delete: vi.fn() },
 };
 
-vi.mock("@/api/infra/prisma", () => ({
-  prisma: {
+vi.mock("@/api/infra/prisma", () => {
+  // routes は名前付き、services は default で import している。同じ実体を返す。
+  const client = {
     $transaction: vi.fn(),
-    lineConnection: { findUnique: vi.fn(), deleteMany: vi.fn() },
-    lineLinkNonce: { findUnique: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
+    lineConnection: { findUnique: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+    lineLinkNonce: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     lineOAuthAttempt: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -21,8 +27,9 @@ vi.mock("@/api/infra/prisma", () => ({
       deleteMany: vi.fn(),
     },
     notificationPreference: { updateMany: vi.fn() },
-  },
-}));
+  };
+  return { prisma: client, default: client };
+});
 
 vi.mock("@/api/infra/line", () => ({
   verifyLineSignature: vi.fn(),
@@ -408,7 +415,9 @@ describe("GET /api/line/oauth/callback", () => {
     expect(res.headers.location).toBe(
       `${ORIGIN}/profile?line=connected#line-connection`
     );
-    expect(prisma.lineOAuthAttempt.delete).toHaveBeenCalledWith({
+    // state は使い捨て。取得と削除の間に別リクエストが消していても落ちないよう
+    // deleteMany を使う（delete は該当行が無いと例外になる）。
+    expect(prisma.lineOAuthAttempt.deleteMany).toHaveBeenCalledWith({
       where: { state: "state-1" },
     });
     expect(tx.lineConnection.upsert).toHaveBeenCalledWith({

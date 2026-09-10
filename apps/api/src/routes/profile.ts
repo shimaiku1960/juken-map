@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/api/infra/prisma";
 import { profileSchema } from "@/shared/validations/profile";
+import { updateProfile } from "@/api/services/user-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
 export function registerProfileRoutes(app: FastifyInstance) {
@@ -14,9 +14,6 @@ export function registerProfileRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: result.error.issues[0].message });
     }
 
-    return prisma.user.update({
-      where: { id: session.user.id },
-      data: { nickname: result.data.nickname },
-    });
+    return updateProfile(session.user.id, { nickname: result.data.nickname });
   });
 }

@@ -26,3 +26,28 @@ export function findLineConnection(userId: string) {
     })
   );
 }
+
+/** 通知設定を保存する。無ければ作り、あれば置き換える。 */
+export function saveNotificationPreference(
+  userId: string,
+  data: {
+    morningEnabled: boolean;
+    eveningEnabled: boolean;
+    lineMorningEnabled: boolean;
+    lineEveningEnabled: boolean;
+  }
+) {
+  return measured("notificationPreference.save", () =>
+    prisma.notificationPreference.upsert({
+      where: { userId },
+      create: { userId, ...data },
+      update: data,
+      select: {
+        morningEnabled: true,
+        eveningEnabled: true,
+        lineMorningEnabled: true,
+        lineEveningEnabled: true,
+      },
+    })
+  );
+}

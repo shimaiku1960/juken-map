@@ -1,34 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/api/infra/prisma";
 import { createStudyLogSchema } from "@/shared/validations/studyLog";
+import { textbookRangeError } from "@/api/domain/textbookRange";
+import {
+  deleteStudyLog,
+  findOwnedStudyLog,
+  updateStudyLog,
+} from "@/api/services/study-log-service";
+import { findOwnedTextbook } from "@/api/services/textbook-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
 type IdParams = { id: string };
-
-function findOwnedTextbook(textbookId: number, userId: string) {
-  return prisma.textbook.findFirst({ where: { id: textbookId, userId } });
-}
-
-function textbookValidationError(
-  textbook: { rangeUnit: string | null; totalAmount: number | null },
-  data: { rangeEnd?: number | null; rangeUnit?: string | null }
-) {
-  if (
-    data.rangeEnd != null &&
-    textbook.rangeUnit != null &&
-    data.rangeUnit !== textbook.rangeUnit
-  ) {
-    return "範囲の単位を参考書の逆算設定に合わせてください";
-  }
-  if (
-    data.rangeEnd != null &&
-    textbook.totalAmount != null &&
-    data.rangeEnd > textbook.totalAmount
-  ) {
-    return `終了位置は参考書の総量（${textbook.totalAmount}）以下にしてください`;
-  }
-  return null;
-}
 
 export function registerStudyLogItemRoutes(app: FastifyInstance) {
   app.patch<{ Params: IdParams }>("/api/study-logs/:id", async (request, reply) => {
@@ -37,8 +18,8 @@ export function registerStudyLogItemRoutes(app: FastifyInstance) {
     if (denyDemoWrite(session, reply)) return;
 
     const logId = Number(request.params.id);
-    const log = await prisma.studyLog.findUnique({ where: { id: logId } });
-    if (!log || log.userId !== session.user.id) {
+    const log = await findOwnedStudyLog(logId, session.user.id);
+    if (!log) {
       return reply.code(404).send({ error: "Not found" });
     }
 
@@ -62,27 +43,13 @@ export function registerStudyLogItemRoutes(app: FastifyInstance) {
       if (!textbook) {
         return reply.code(400).send({ error: "不正な参考書です" });
       }
-      const validationError = textbookValidationError(textbook, parsed.data);
-      if (validationError) {
-        return reply.code(400).send({ error: validationError });
+      const rangeError = textbookRangeError(textbook, parsed.data);
+      if (rangeError) {
+        return reply.code(400).send({ error: rangeError });
       }
     }
 
-    return prisma.studyLog.update({
-      where: { id: logId },
-      data: {
-        // 予定から作成した実績は、予定との紐づきを壊す項目を固定する。
-        date: log.studyPlanId != null ? log.date : new Date(parsed.data.date),
-        minutes: parsed.data.minutes,
-        subject: log.studyPlanId != null ? log.subject : parsed.data.subject ?? null,
-        textbookId:
-          log.studyPlanId != null ? log.textbookId : parsed.data.textbookId ?? null,
-        rangeStart: parsed.data.rangeStart ?? null,
-        rangeEnd: parsed.data.rangeEnd ?? null,
-        rangeUnit: parsed.data.rangeUnit ?? null,
-        memo: parsed.data.memo ?? null,
-      },
-    });
+    return updateStudyLog(logId, log, parsed.data);
   });
 
   app.delete<{ Params: IdParams }>("/api/study-logs/:id", async (request, reply) => {
@@ -91,12 +58,12 @@ export function registerStudyLogItemRoutes(app: FastifyInstance) {
     if (denyDemoWrite(session, reply)) return;
 
     const id = Number(request.params.id);
-    const log = await prisma.studyLog.findUnique({ where: { id } });
-    if (!log || log.userId !== session.user.id) {
+    const log = await findOwnedStudyLog(id, session.user.id);
+    if (!log) {
       return reply.code(404).send({ error: "Not found" });
     }
 
-    await prisma.studyLog.delete({ where: { id } });
+    await deleteStudyLog(id);
     return { message: "Deleted" };
   });
 }

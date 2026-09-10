@@ -1,5 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/api/infra/prisma";
 import { Prisma } from "@/api/generated/prisma/client";
 import {
   createStudyPlansSchema,
@@ -7,7 +6,17 @@ import {
 } from "@/shared/validations/studyPlan";
 import { completeStudyPlanSchema } from "@/shared/validations/studyLog";
 import { toStudyPlanDTO } from "@/api/dto/study-mapper";
-import { listStudyPlans } from "@/api/services/study-plan-service";
+import {
+  completeStudyPlan,
+  countLinkedStudyLogs,
+  createStudyPlans,
+  deleteStudyPlan,
+  findOwnedStudyPlan,
+  findOwnedStudyPlanForComplete,
+  listStudyPlans,
+  updateStudyPlan,
+} from "@/api/services/study-plan-service";
+import { countOwnedTextbooks } from "@/api/services/textbook-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
 type IdParams = { id: string };
@@ -31,8 +40,6 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: parsed.error.issues });
     }
 
-    const date = new Date(parsed.data.date);
-
     // 参考書は他人のIDを混ぜられないよう、自分の所有分だけを許可する
     const textbookIds = [
       ...new Set(
@@ -43,26 +50,16 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     ];
 
     if (textbookIds.length > 0) {
-      const owned = await prisma.textbook.count({
-        where: { id: { in: textbookIds }, userId: session.user.id },
-      });
+      const owned = await countOwnedTextbooks(textbookIds, session.user.id);
       if (owned !== textbookIds.length) {
         return reply.code(400).send({ error: "不正な参考書が含まれています" });
       }
     }
 
-    // 1つの日付に複数の内容をまとめて作成
-    const result = await prisma.studyPlan.createMany({
-      data: parsed.data.items.map((item) => ({
-        date,
-        textbookId: item.textbookId ?? null,
-        rangeStart: item.rangeStart ?? null,
-        rangeEnd: item.rangeEnd ?? null,
-        rangeUnit: item.rangeUnit ?? null,
-        content: item.content ?? null,
-        subject: item.subject ?? null,
-        userId: session.user.id,
-      })),
+    const result = await createStudyPlans({
+      userId: session.user.id,
+      date: new Date(parsed.data.date),
+      items: parsed.data.items,
     });
 
     return reply.code(201).send({ count: result.count });
@@ -79,15 +76,14 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     }
 
     const id = Number(request.params.id);
-    const plan = await prisma.studyPlan.findUnique({ where: { id } });
-    if (!plan || plan.userId !== session.user.id) {
+    const plan = await findOwnedStudyPlan(id, session.user.id);
+    if (!plan) {
       return reply.code(404).send({ error: "Not found" });
     }
 
+    // 実績を記録済みの予定を未完了へ戻すと、実績だけが宙に浮く
     if (parsed.data.done === false) {
-      const linkedLog = await prisma.studyLog.count({
-        where: { studyPlanId: plan.id },
-      });
+      const linkedLog = await countLinkedStudyLogs(plan.id);
       if (linkedLog > 0) {
         return reply
           .code(409)
@@ -97,33 +93,16 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
 
     // 参考書を指定する場合は、自分の所有分だけを許可する
     if (parsed.data.textbookId != null) {
-      const owned = await prisma.textbook.count({
-        where: { id: parsed.data.textbookId, userId: session.user.id },
-      });
+      const owned = await countOwnedTextbooks(
+        [parsed.data.textbookId],
+        session.user.id
+      );
       if (owned === 0) {
         return reply.code(400).send({ error: "不正な参考書です" });
       }
     }
 
-    return prisma.studyPlan.update({
-      where: { id },
-      data: {
-        ...(parsed.data.date && { date: new Date(parsed.data.date) }),
-        ...(parsed.data.content !== undefined && { content: parsed.data.content }),
-        ...(parsed.data.subject !== undefined && { subject: parsed.data.subject }),
-        ...(parsed.data.textbookId !== undefined && {
-          textbookId: parsed.data.textbookId,
-        }),
-        ...(parsed.data.rangeStart !== undefined && {
-          rangeStart: parsed.data.rangeStart,
-        }),
-        ...(parsed.data.rangeEnd !== undefined && { rangeEnd: parsed.data.rangeEnd }),
-        ...(parsed.data.rangeUnit !== undefined && {
-          rangeUnit: parsed.data.rangeUnit,
-        }),
-        ...(parsed.data.done !== undefined && { done: parsed.data.done }),
-      },
-    });
+    return updateStudyPlan(id, parsed.data);
   });
 
   app.delete<{ Params: IdParams }>("/api/study-plans/:id", async (request, reply) => {
@@ -132,12 +111,12 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     if (denyDemoWrite(session, reply)) return;
 
     const id = Number(request.params.id);
-    const plan = await prisma.studyPlan.findUnique({ where: { id } });
-    if (!plan || plan.userId !== session.user.id) {
+    const plan = await findOwnedStudyPlan(id, session.user.id);
+    if (!plan) {
       return reply.code(404).send({ error: "Not found" });
     }
 
-    await prisma.studyPlan.delete({ where: { id } });
+    await deleteStudyPlan(id);
     return { message: "Deleted" };
   });
 
@@ -158,10 +137,7 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: parsed.error.issues });
       }
 
-      const plan = await prisma.studyPlan.findFirst({
-        where: { id: planId, userId: session.user.id },
-        include: { textbook: true, studyLog: true },
-      });
+      const plan = await findOwnedStudyPlanForComplete(planId, session.user.id);
       if (!plan) {
         return reply.code(404).send({ error: "Not found" });
       }
@@ -171,12 +147,14 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
           .send({ error: "この予定の実績はすでに記録されています" });
       }
 
+      // 範囲は送られてきたものを優先し、無ければ予定の値をそのまま使う
       const rangeStart =
         parsed.data.rangeStart !== undefined ? parsed.data.rangeStart : plan.rangeStart;
       const rangeEnd =
         parsed.data.rangeEnd !== undefined ? parsed.data.rangeEnd : plan.rangeEnd;
       const rangeUnit =
         parsed.data.rangeUnit !== undefined ? parsed.data.rangeUnit : plan.rangeUnit;
+
       if (
         rangeEnd != null &&
         plan.textbook?.rangeUnit != null &&
@@ -197,37 +175,19 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
       }
 
       try {
-        const { log, updatedPlan, isFirstStudyLog } = await prisma.$transaction(
-          async (tx) => {
-            const activation = await tx.user.updateMany({
-              where: { id: session.user.id, firstStudyLogAt: null },
-              data: { firstStudyLogAt: new Date() },
-            });
-            const log = await tx.studyLog.create({
-              data: {
-                userId: session.user.id,
-                studyPlanId: plan.id,
-                date: plan.date,
-                minutes: parsed.data.minutes,
-                subject: plan.subject,
-                textbookId: plan.textbookId,
-                rangeStart,
-                rangeEnd,
-                rangeUnit,
-                memo: parsed.data.memo ?? null,
-              },
-              include: { textbook: true },
-            });
-            const updatedPlan = await tx.studyPlan.update({
-              where: { id: plan.id },
-              data: { done: true },
-            });
-            return { log, updatedPlan, isFirstStudyLog: activation.count === 1 };
-          }
-        );
+        const { log, updatedPlan, isFirstStudyLog } = await completeStudyPlan({
+          userId: session.user.id,
+          plan,
+          minutes: parsed.data.minutes,
+          rangeStart: rangeStart ?? null,
+          rangeEnd: rangeEnd ?? null,
+          rangeUnit: rangeUnit ?? null,
+          memo: parsed.data.memo ?? null,
+        });
 
         return reply.code(201).send({ log, plan: updatedPlan, isFirstStudyLog });
       } catch (error) {
+        // 同じ予定を同時に完了すると一意制約に当たる。これは「すでに記録済み」なので 409。
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"

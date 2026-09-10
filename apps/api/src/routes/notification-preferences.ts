@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/api/infra/prisma";
 import {
   findLineConnection,
   findNotificationPreference,
+  saveNotificationPreference,
 } from "@/api/services/notification-service";
 import { notificationPreferenceSchema } from "@/shared/validations/notification";
 import { denyDemoWrite, requireSession } from "../context.ts";
@@ -56,17 +56,7 @@ export function registerNotificationPreferenceRoutes(app: FastifyInstance) {
       lineEveningEnabled: result.data.lineEveningEnabled,
     };
 
-    const preference = await prisma.notificationPreference.upsert({
-      where: { userId: session.user.id },
-      create: { userId: session.user.id, ...data },
-      update: data,
-      select: {
-        morningEnabled: true,
-        eveningEnabled: true,
-        lineMorningEnabled: true,
-        lineEveningEnabled: true,
-      },
-    });
+    const preference = await saveNotificationPreference(session.user.id, data);
 
     return {
       emailMorningEnabled: preference.morningEnabled,
