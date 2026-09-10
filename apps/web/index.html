@@ -4,7 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>受験マップ</title>
-    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <!-- Next.js は app/apple-icon.png から自動で apple-touch-icon を出していた。
+         Vite にその仕組みはないので明示する。 -->
+    <link rel="apple-touch-icon" href="/apple-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- Next.js では next/font/google が CSS 変数を生成していた。Vite では自前で読み、
          同じ変数名（--font-noto-sans-jp / --font-geist-mono）を index.css で定義する。 -->
