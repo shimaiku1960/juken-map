@@ -15,7 +15,7 @@ export default defineConfig({
       "**/node_modules/**",
       ".next",
       "e2e",
-      "app/generated",
+      "src/backend/generated",
       "apps",
     ],
   },

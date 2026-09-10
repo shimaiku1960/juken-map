@@ -125,6 +125,25 @@ export async function metaForPath(pathname: string): Promise<PageMeta> {
   }
 }
 
+// Google Analytics のタグ。Next.js では layout.tsx が GA_MEASUREMENT_ID を読んで
+// 差し込んでいた。SPA のバンドルに焼き込むと環境ごとに再ビルドが要るので、
+// meta と同じくサーバー側で差し込んで実行時の環境変数のまま扱う。
+// 画面遷移の計測は GA4 の拡張計測（履歴の変化を自動で拾う）に任せる。
+function analyticsTag() {
+  const measurementId = process.env.GA_MEASUREMENT_ID;
+  if (!measurementId) return "";
+
+  const id = escapeAttribute(measurementId);
+  return `<script async src="https://www.googletagmanager.com/gtag/js?id=${id}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      window.gtag = gtag;
+      gtag('js', new Date());
+      gtag('config', '${id}');
+    </script>`;
+}
+
 // index.html の <title> を差し替え、</head> の直前に meta を差し込む。
 export function injectMeta(html: string, meta: PageMeta) {
   const tags = [
@@ -152,6 +171,7 @@ export function injectMeta(html: string, meta: PageMeta) {
     `<meta name="twitter:title" content="${escapeAttribute(meta.ogTitle)}"/>`,
     `<meta name="twitter:description" content="${escapeAttribute(meta.description)}"/>`,
     `<meta name="twitter:image" content="${escapeAttribute(meta.ogImage)}"/>`,
+    analyticsTag(),
   ]
     .filter(Boolean)
     .join("\n    ");

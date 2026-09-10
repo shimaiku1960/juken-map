@@ -1,104 +1,66 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import globals from "globals";
 
 // レイヤー境界（docs/architecture.md）を ESLint で強制する。
 //
-//   app/  ──→  frontend  ──→  shared
-//     └─────→  backend   ──→  shared
+//   apps/web  ──→  shared
+//   apps/api  ──→  backend  ──→  shared
 //
-// app/ は両方を呼べる唯一の入口。frontend と backend は互いを知らず、
-// shared は何にも依存しない。この向きが崩れると、フロントとバックが
-// 同じものを別々に持つ状態へ戻る。
-const PRISMA_CLIENT = "@/app/generated/prisma/client";
-
+// apps/web（画面）と apps/api（HTTP の入口）が上の層。backend は DB や外部連携を持ち、
+// shared は何にも依存しない。この向きが崩れると、フロントとバックが同じものを
+// 別々に持つ状態へ戻る。
+//
+// 注意: apps/ は独自の tsconfig を持つ別パッケージなので lint 対象から外している。
+// ここで守れるのは src/ 側の依存の向きだけで、apps/web から backend を呼ぶ経路は
+// そもそも解決できない（tsconfig の paths に無い）ため物理的に不可能になっている。
 const layerBoundaries = [
   {
     // shared は最下層。誰にも依存してはいけない。
-    files: ["src/shared/**/*.ts", "src/shared/**/*.tsx"],
+    files: ["src/shared/**/*.ts"],
     rules: {
-      "no-restricted-imports": ["error", {
-        patterns: [
-          {
-            group: ["@/frontend/*", "@/backend/*", "@/app/*", "@/frontend", "@/backend"],
-            message:
-              "shared は何にも依存しない層です。frontend・backend・app のコードを import しないでください。" +
-              "両方で使いたいものは shared の中に置き、片方でしか使わないものはその層へ移してください。",
-          },
-        ],
-      }],
-    },
-  },
-  {
-    // frontend は UI の責務。DB や外部連携には触れない。
-    files: ["src/frontend/**/*.ts", "src/frontend/**/*.tsx"],
-    rules: {
-      "no-restricted-imports": ["error", {
-        patterns: [
-          {
-            group: ["@/backend/*", "@/backend"],
-            message:
-              "frontend から backend を直接呼ばないでください。データ取得は入口（app/ の page.tsx / layout.tsx）で行い、" +
-              "結果を props で渡してください。両方で使う純粋な処理は @/shared へ置きます。",
-          },
-          {
-            group: [PRISMA_CLIENT, `${PRISMA_CLIENT}/*`],
-            message: "UI 層から DB に直接アクセスしないでください。@/backend/services 経由で呼びます。",
-          },
-        ],
-      }],
-    },
-  },
-  {
-    // backend が UI を参照すると、サーバー処理が画面都合に引きずられる。
-    files: ["src/backend/**/*.ts", "src/backend/**/*.tsx"],
-    rules: {
-      "no-restricted-imports": ["error", {
-        patterns: [
-          {
-            group: ["@/frontend/*", "@/frontend"],
-            message:
-              "backend から frontend を import しないでください。両方で使う型や純粋関数は @/shared に置きます。",
-          },
-        ],
-      }],
-    },
-  },
-  {
-    // app/ の画面側は UI の組み立てだけ。DB へは触らない。
-    // API の入口（app/api/**/route.ts）は Prisma のエラー型などを扱うため対象外。
-    files: ["app/**/page.tsx", "app/**/layout.tsx", "app/**/template.tsx"],
-    rules: {
-      "no-restricted-imports": ["error", {
-        patterns: [
-          {
-            group: [PRISMA_CLIENT, `${PRISMA_CLIENT}/*`, "@/backend/infra/prisma"],
-            message:
-              "UI 層から DB に直接アクセスしないでください。@/backend/services のサービス関数を呼びます。" +
-              "適切な関数が無ければ、サービス層に追加してから使ってください。",
-          },
-        ],
-      }],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/backend/*", "@/backend"],
+              message:
+                "shared は何にも依存しない層です。backend のコードを import しないでください。" +
+                "両方で使いたいものは shared の中に置き、片方でしか使わないものはその層へ移してください。",
+            },
+          ],
+        },
+      ],
     },
   },
 ];
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
+export default defineConfig([
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   ...layerBoundaries,
-  // Override default ignores of eslint-config-next.
+  {
+    // このリポジトリのコードはすべて Node で動く（サーバー・シード・スクリプト・テスト）。
+    // ブラウザ側は apps/web が持ち、そちらは対象外。
+    languageOptions: { globals: globals.node },
+    // テストは vitest のグローバルを使わず import しているので追加設定は不要。
+    rules: {
+      // 型で表現しきれない箇所で any を使っている既存コードがあるため警告に留める。
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+  },
   globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
     // Prisma の生成物。自動生成コードは対象外。
-    "app/generated/**",
-    // apps/ は独自の tsconfig と lint 設定を持つ別パッケージ。
+    "src/backend/generated/**",
+    // apps/ は独自の tsconfig と依存を持つ別パッケージ。
     "apps/**",
+    // 実行成果物
+    "playwright-report/**",
+    "test-results/**",
+    "terraform/**",
+    // k6 のスクリプト。Node でもブラウザでもない実行環境（__ENV 等）なので対象外。
+    "load-tests/**",
   ]),
 ]);
-
-export default eslintConfig;

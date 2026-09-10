@@ -7,13 +7,11 @@ import {
   sendPasswordResetEmail,
 } from "@/backend/infra/email";
 
-// 移行期間中は Next.js 側の src/backend/infra/auth.ts と設定を二重に持つ。
-// 違いは plugins: [nextCookies()] を持たないことだけで、これは Server Actions 用なので
-// Fastify には不要である（このリポジトリに Server Actions は0件）。
-// Next.js を削除する Step 3 で、あちらを消してこれを唯一の定義にする。
+// アプリ唯一の Better Auth 定義。Next.js 側にあった同等の定義は削除済み。
 //
-// セッションテーブルと BETTER_AUTH_SECRET は共通なので、Next.js が発行した Cookie を
-// そのまま受理できる（Phase 0 で実証済み）。secret を変えると全ユーザーが強制ログアウトになる。
+// セッションテーブルと BETTER_AUTH_SECRET は Next.js 時代から引き継いでいるので、
+// あの頃に発行された Cookie もそのまま受理できる。secret を変えると全ユーザーが
+// 強制ログアウトになるので触らないこと。
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "mysql",

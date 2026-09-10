@@ -9,31 +9,23 @@ on:
       - main
 
 jobs:
-  # package-lock.json に Linux 用ネイティブ依存が記録されているかを検査する。
-  # mac で依存追加すると Linux 用オプショナル依存が lock から抜け、CI(Linux)の
-  # npm ci が落ちる npm の既知バグ対策。npm を実行せず grep で直接確認するため、
-  # 実行OSに依存せず false positive が出ない（npm install --package-lock-only は
-  # 実行OS以外を間引くのでガードには使わない）。
+  # 各 package-lock.json に Linux 用ネイティブ依存が記録されているかを検査する。
+  # mac で依存追加すると Linux 用オプショナル依存が lock から抜け、CI と本番イメージ
+  # （どちらも Linux）の npm ci が落ちる npm の既知の挙動への対策。
+  # npm を実行せず lockfile を直接読むため、実行OSに依存せず false positive が出ない。
+  #
+  # apps/web と apps/api も対象に含める。あちらの lockfile が壊れると、CI では気づかず
+  # 本番イメージのビルド時に初めて落ちる。
   lockfile:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Verify Linux native deps are in package-lock.json
-        run: |
-          missing=0
-          for pkg in \
-            "@tailwindcss/oxide-linux-x64-gnu" \
-            "@unrs/resolver-binding-linux-x64-gnu" \
-            "lightningcss-linux-x64-gnu" \
-            "@rolldown/binding-linux-x64-gnu"; do
-            if ! grep -q "\"node_modules/$pkg\"" package-lock.json; then
-              echo "::error::package-lock.json に Linux 用ネイティブ依存 $pkg がありません。ローカルで 'npm run lock:fix' を実行し、更新された package-lock.json をコミットしてください。"
-              missing=1
-            fi
-          done
-          [ "$missing" = 0 ]
+      - name: Verify Linux native deps are in every package-lock.json
+        run: >-
+          node scripts/check-linux-native-deps.mjs
+          package-lock.json apps/api/package-lock.json apps/web/package-lock.json
 
   check:
     runs-on: ubuntu-latest
@@ -51,7 +43,10 @@ jobs:
         run: npm install --global "npm@$NPM_VERSION"
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix apps/api
+          npm ci --prefix apps/web
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -61,21 +56,28 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
-      
+
+      - name: Type check apps
+        run: |
+          npm run typecheck --prefix apps/api
+          npm run typecheck --prefix apps/web
+
       - name: Test
         run: npm test
 
-      - name: Build
-        run: npx next build
-        env:
-            MICROCMS_SERVICE_DOMAIN: dummy
-            MICROCMS_API_KEY: dummy
-            DATABASE_URL: mysql://u:p@localhost:3306/db
-            BETTER_AUTH_SECRET: ecPTNJXeffEkIMhtDiAKQI8X/dv0xZ5PWupA15w9rVU=
-            BETTER_AUTH_URL: http://localhost:3000
+      # apps/api と apps/web は独自の tsconfig を持つ別パッケージなので、
+      # テストもそれぞれの vitest で実行する。
+      - name: Test apps
+        run: |
+          npm run test --prefix apps/api
+          npm run test --prefix apps/web
+
+      # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
+      - name: Build SPA
+        run: npm run build --prefix apps/web
 
   # E2E（Playwright）。使い捨ての MySQL 8.4 を立て、マイグレーション→seed→
-  # ビルド→next start で本番相当のアプリを起動し、実ブラウザで主要導線を検証する。
+  # SPA のビルド→Fastify 起動で本番相当の構成を立ち上げ、実ブラウザで主要導線を検証する。
   e2e:
     runs-on: ubuntu-latest
     services:
@@ -115,7 +117,10 @@ jobs:
         run: npm install --global "npm@$NPM_VERSION"
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix apps/api
+          npm ci --prefix apps/web
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -129,11 +134,9 @@ jobs:
       - name: Seed master data and demo user
         run: npx tsx prisma/seed.ts
 
-      - name: Build
-        run: npx next build
-
       # E2E 用ユーザーの投入は globalSetup（seed-e2e.ts）が、アプリ起動は
-      # playwright.config の webServer（CI では next start）が担当する
+      # playwright.config の webServer（scripts/e2e-server.sh）が担当する。
+      # SPA のビルドもそのスクリプトの中で行う。
       - name: Run E2E tests
         run: npx playwright test
 

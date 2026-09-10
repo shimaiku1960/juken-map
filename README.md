@@ -23,7 +23,7 @@
 
 ## 画面
 
-![学習内容を選んで記録を始める画面](app/components/landing/images/study-start-hero.png)
+![学習内容を選んで記録を始める画面](apps/web/src/components/landing/images/study-start-hero.png)
 
 ## 主な機能
 
@@ -66,7 +66,7 @@
 ```mermaid
 flowchart LR
     User[利用者] --> Nginx[Nginx / HTTPS]
-    Nginx --> App[Next.js 16\nDocker on EC2]
+    Nginx --> App[Fastify + SPA\nDocker on EC2]
     App --> RDS[(Amazon RDS\nMySQL 8.4)]
     App --> Auth[Google / GitHub OAuth]
     App --> Resend[Resend]
@@ -86,7 +86,8 @@ flowchart LR
 
 | カテゴリ | 技術 |
 |---|---|
-| フレームワーク | Next.js 16（App Router）/ React 19 |
+| フロントエンド | React 19 / Vite（SPA） |
+| バックエンド | Fastify 5（Node.js 24） |
 | 言語 | TypeScript |
 | UI | shadcn/ui / Tailwind CSS v4 / Motion |
 | フォーム・検証 | React Hook Form / Zod |
@@ -165,21 +166,28 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    npx prisma db seed
    ```
 
-8. 開発サーバーを起動します。
+8. 開発サーバーを起動します。APIと画面は別プロセスなので、ターミナルを2つ使います。
 
    ```bash
-   npm run dev
+   npm run dev:api   # Fastify（http://localhost:4000）
+   npm run dev:web   # Vite（http://localhost:5173）
    ```
 
-9. [http://localhost:3000](http://localhost:3000)を開きます。
+   Viteが`/api`を4000番へ同一オリジンでプロキシするため、本番（nginxが1オリジンで配る構成）と
+   同じ形になります。ブラウザで開くのは5173番です。
+
+9. [http://localhost:5173](http://localhost:5173)を開きます。
 
 ### 2回目以降の起動
 
-次のコマンドだけで、MySQLの起動を待ってから開発サーバーを開始できます。
-
 ```bash
-npm run dev
+npm run dev:infra   # MySQL
+npm run dev:api
+npm run dev:web
 ```
+
+[注意] `.env`を変更したら、APIプロセスを再起動してください。`--env-file`は起動時に一度しか
+読まれないため、`tsx watch`ではソース変更でしか再読み込みされません。
 
 本番相当のDocker構成を確認する場合は、次のコマンドを使用します。
 
@@ -219,21 +227,23 @@ docker compose up --build
 
 | コマンド | 説明 |
 |---|---|
-| `npm run dev` | MySQLを起動し、開発サーバーを開始する |
 | `npm run dev:infra` | MySQLコンテナを起動する |
+| `npm run dev:api` | Fastify（APIとSPA配信）を4000番で起動する |
+| `npm run dev:web` | Vite（画面）を5173番で起動する |
 | `npm run dev:infra:stop` | MySQLコンテナを停止する |
 | `npm run dev:infra:logs` | MySQLコンテナのログを表示する |
-| `npm run build` | Prisma生成、マイグレーション、本番ビルドを実行する |
-| `npm run start` | 本番サーバーを起動する |
 | `npm run lint` | ESLintを実行する |
-| `npm run test` | Vitestを実行する |
+| `npm run test` | ルート（`src/`）のVitestを実行する |
 | `npm run e2e` | PlaywrightのE2Eテストを実行する |
-| `npm run check` | Prisma生成、Lint、型チェック、Vitest、ビルドをまとめて実行する |
+| `npm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
 | `npm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `npm run hooks:install` | リポジトリ管理のGitフックを有効にする |
-| `npm run lock:check` | Linux環境でlockfileを非破壊検証する |
-| `npm run lock:linux` | DockerのLinux環境でlockfileを更新し、`npm ci`まで検証する |
+| `npm run lock:check` | 3つのlockfileにLinux用ネイティブ依存が揃っているか検証する |
+| `npm run lock:linux` | DockerのLinux環境で3つのlockfileを更新し、`npm ci`まで検証する |
 | `npm run lock:fix` | `lock:linux`の互換エイリアス |
+
+`apps/api`と`apps/web`のテストは、それぞれ`npm run test --prefix apps/api`と
+`npm run test --prefix apps/web`で個別に実行できます（`npm run check`には含まれます）。
 
 ## テストとCI
 
@@ -268,24 +278,26 @@ GitHub Actionsでは、次の3ジョブを実行します。
 ## 主なディレクトリ
 
 ```text
-app/
-├── api/                 # Route Handlers
-├── articles/[id]/       # ブログ記事詳細
-├── blog/                # ブログ一覧
-├── components/          # 画面・機能コンポーネント
-├── dashboard/           # 学習記録と振り返り
-├── explore/             # 大学検索
-├── goals/               # 志望校管理
-├── hooks/               # TanStack Queryのカスタムフック
-├── login/               # ログイン
-├── profile/             # プロフィール
-└── schedule/            # 学習予定
+apps/
+├── web/                 # 画面（React + Vite の SPA）
+│   ├── src/pages/         ルートに対応する画面
+│   ├── src/components/    画面部品（ui/ は shadcn/ui）
+│   ├── src/hooks/         TanStack Query のサーバー状態フック
+│   └── public/            favicon、PWAアイコン、manifest、robots.txt
+└── api/                 # HTTP の入口（Fastify）
+    ├── src/routes/        エンドポイント定義
+    ├── src/auth.ts        Better Auth の定義
+    ├── src/context.ts     認証・デモガードの門番
+    └── src/seo.ts         robots / sitemap / ページ別 meta
 
-components/ui/           # 共通UIコンポーネント
+src/
+├── backend/             # DB・外部連携・ドメインロジック（apps/api から使う）
+└── shared/              # 外部依存のない純粋関数・型・Zodスキーマ（両方から使う）
+
 e2e/                     # Playwright E2Eテスト
-lib/                     # 認証、DB、検証、ドメインロジック
+infra/nginx/             # 本番リバースプロキシ設定の記録
 prisma/                  # スキーマ、マイグレーション、seed
-scripts/                 # データ変換などの補助スクリプト
+scripts/                 # 補助スクリプト
 terraform/               # AWSインフラ定義
 ```
 

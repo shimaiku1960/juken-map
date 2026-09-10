@@ -1,4 +1,4 @@
-import type { Prisma } from "@/app/generated/prisma/client";
+import type { Prisma } from "@/backend/generated/prisma/client";
 
 import type { StudyLog, StudyPlan, Textbook } from "@/shared/dto/study";
 

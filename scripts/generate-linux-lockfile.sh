@@ -12,19 +12,29 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cp "$PROJECT_ROOT/package.json" "$TEMP_DIR/package.json"
-if [[ -f "$PROJECT_ROOT/package-lock.json" ]]; then
-  cp "$PROJECT_ROOT/package-lock.json" "$TEMP_DIR/package-lock.json"
-fi
+# ルートと apps/* は別パッケージで lockfile も別。本番イメージは apps/* の lockfile で
+# npm ci するので、どれか1つでも Linux 用依存が欠けるとデプロイ時に落ちる。
+for pkg_dir in "" "apps/api" "apps/web"; do
+  target="${PROJECT_ROOT}${pkg_dir:+/$pkg_dir}"
+  [[ -f "$target/package.json" ]] || continue
 
-docker run --rm \
-  --user "$(id -u):$(id -g)" \
-  --volume "$TEMP_DIR:/workspace" \
-  --workdir /workspace \
-  --env npm_config_cache=/tmp/npm-cache \
-  "$NODE_IMAGE" \
-  sh -c "npx --yes npm@$NPM_VERSION install --package-lock-only --ignore-scripts --no-audit --no-fund && npx --yes npm@$NPM_VERSION ci --ignore-scripts --no-audit --no-fund"
+  work="$TEMP_DIR/${pkg_dir:-root}"
+  mkdir -p "$work"
+  cp "$target/package.json" "$work/package.json"
+  if [[ -f "$target/package-lock.json" ]]; then
+    cp "$target/package-lock.json" "$work/package-lock.json"
+  fi
 
-cp "$TEMP_DIR/package-lock.json" "$PROJECT_ROOT/package-lock.json"
+  docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    --volume "$work:/workspace" \
+    --workdir /workspace \
+    --env npm_config_cache=/tmp/npm-cache \
+    "$NODE_IMAGE" \
+    sh -c "npx --yes npm@$NPM_VERSION install --package-lock-only --ignore-scripts --no-audit --no-fund && npx --yes npm@$NPM_VERSION ci --ignore-scripts --no-audit --no-fund"
 
-echo "Linux環境でpackage-lock.jsonを更新し、npm ciの成功を確認しました。"
+  cp "$work/package-lock.json" "$target/package-lock.json"
+  echo "更新: ${pkg_dir:-（ルート）}/package-lock.json"
+done
+
+echo "Linux環境で全ての package-lock.json を更新し、npm ci の成功を確認しました。"

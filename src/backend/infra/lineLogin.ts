@@ -40,7 +40,9 @@ type LineTokenResponse = { access_token: string; id_token: string };
 type VerifiedLineIdToken = { sub: string; nonce?: string };
 
 async function lineJson<T>(url: string, init: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...init, cache: "no-store" });
+  // Next.js は fetch を拡張して既定でキャッシュしたため cache: "no-store" が要ったが、
+  // 素の Node の fetch はキャッシュしないので指定しない。
+  const response = await fetch(url, init);
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`LINE Login API ${response.status}: ${detail.slice(0, 300)}`);

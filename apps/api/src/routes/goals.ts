@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@/backend/infra/prisma";
-import { Prisma } from "@/app/generated/prisma/client";
+import { Prisma } from "@/backend/generated/prisma/client";
 import { goalSchema, updateGoalSchema, patchGoalSchema } from "@/shared/validations/goal";
 import { listGoals } from "@/backend/services/goal-service";
 import { denyDemoWrite, requireSession } from "../context.ts";

@@ -1,7 +1,7 @@
 // E2E 用の通常ユーザーを投入する tsx スクリプト（Playwright の globalSetup から呼ぶ）。
 // Prisma クライアントは ESM（import.meta）なので、Playwright 本体ではなく
 // tsx の子プロセスで実行して読み込む。
-import { PrismaClient } from "../app/generated/prisma/client";
+import { PrismaClient } from "../src/backend/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { hashPassword } from "better-auth/crypto";
 import { E2E_EMAIL, E2E_PASSWORD } from "../e2e/credentials";
