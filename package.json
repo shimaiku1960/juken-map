@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "npm run dev:infra && prisma migrate deploy && next dev -p 3000",
     "dev:infra": "docker compose up -d --wait db",
+    "dev:api": "npm run dev --prefix apps/api",
+    "dev:web": "npm run dev --prefix apps/web",
     "dev:infra:stop": "docker compose stop db",
     "dev:infra:logs": "docker compose logs -f db",
     "build": "prisma generate && prisma migrate deploy && next build",
