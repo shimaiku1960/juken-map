@@ -73,6 +73,10 @@ jobs:
       - name: Test
         run: npm test
 
+      # apps/api は独自の vitest を持つ（Route Handler 相当の門番テスト）
+      - name: Test apps/api
+        run: npm run test --prefix apps/api
+
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA
         run: npm run build --prefix apps/web

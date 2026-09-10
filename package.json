@@ -17,7 +17,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "check": "npx prisma generate && npx eslint --max-warnings 0 && npx tsc --noEmit && npm run typecheck --prefix apps/api && npm run typecheck --prefix apps/web && npm test && npm run build --prefix apps/web",
+    "check": "npx prisma generate && npx eslint --max-warnings 0 && npx tsc --noEmit && npm run typecheck --prefix apps/api && npm run typecheck --prefix apps/web && npm test && npm run test --prefix apps/api && npm run build --prefix apps/web",
     "e2e": "playwright test",
     "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
     "hooks:install": "git config core.hooksPath .githooks",
