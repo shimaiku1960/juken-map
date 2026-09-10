@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/api/infra/prisma";
+import { findSignUpMethod, markSignUpTracked } from "@/api/services/user-service";
 import { requireSession } from "../context.ts";
 
 export function registerAnalyticsRoutes(app: FastifyInstance) {
@@ -7,24 +7,12 @@ export function registerAnalyticsRoutes(app: FastifyInstance) {
     const session = await requireSession(request, reply);
     if (!session) return;
 
-    const tracked = await prisma.user.updateMany({
-      where: { id: session.user.id, analyticsSignUpTrackedAt: null },
-      data: { analyticsSignUpTrackedAt: new Date() },
-    });
-    if (tracked.count === 0) {
+    // 初回だけ計測を飛ばす。2回目以降は shouldTrack: false で黙って終わる。
+    const isFirstTime = await markSignUpTracked(session.user.id);
+    if (!isFirstTime) {
       return { shouldTrack: false };
     }
 
-    const account = await prisma.account.findFirst({
-      where: { userId: session.user.id },
-      select: { providerId: true },
-      orderBy: { createdAt: "asc" },
-    });
-    const method =
-      account?.providerId === "google" || account?.providerId === "github"
-        ? account.providerId
-        : "email";
-
-    return { shouldTrack: true, method };
+    return { shouldTrack: true, method: await findSignUpMethod(session.user.id) };
   });
 }

@@ -5,29 +5,28 @@ vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/api/infra/prisma", () => ({
-  prisma: {
+vi.mock("@/api/infra/prisma", () => {
+  // routes は名前付き、services は default で import している。同じ実体を返す。
+  const client = {
     user: { updateMany: vi.fn() },
-    studyLog: { create: vi.fn() },
+    studyLog: { findMany: vi.fn(), create: vi.fn() },
     textbook: { findFirst: vi.fn() },
     $transaction: vi.fn(),
-  },
-}));
+  };
+  return { prisma: client, default: client };
+});
 
-vi.mock("@/api/services/study-log-service", () => ({
-  listStudyLogs: vi.fn(),
-}));
+
 
 const { auth } = await import("../auth.ts");
 const { prisma } = await import("@/api/infra/prisma");
-const { listStudyLogs } = await import("@/api/services/study-log-service");
 const { registerStudyLogRoutes } = await import("./study-logs.ts");
 const { buildTestApp, request, loggedInSession, demoSession } = await import(
   "../test-support.ts"
 );
 
 const getSession = auth.api.getSession as unknown as Mock;
-const list = listStudyLogs as unknown as Mock;
+const list = prisma.studyLog.findMany as unknown as Mock;
 const create = prisma.studyLog.create as unknown as Mock;
 const markActivation = prisma.user.updateMany as unknown as Mock;
 const transaction = prisma.$transaction as unknown as Mock;
@@ -103,7 +102,9 @@ describe("GET /api/study-logs", () => {
         updatedAt: "2026-02-20T02:00:00.000Z",
       },
     ]);
-    expect(list).toHaveBeenCalledWith("user-1");
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "user-1" } })
+    );
   });
 });
 

@@ -4,12 +4,13 @@ vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/api/infra/prisma", () => ({
-  prisma: {
-    studyLog: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
+vi.mock("@/api/infra/prisma", () => {
+  const client = {
+    studyLog: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
     textbook: { findFirst: vi.fn() },
-  },
-}));
+  };
+  return { prisma: client, default: client };
+});
 
 const { auth } = await import("../auth.ts");
 const { prisma } = await import("@/api/infra/prisma");
@@ -19,7 +20,7 @@ const { buildTestApp, request, loggedInSession, demoSession } = await import(
 );
 
 const getSession = auth.api.getSession as unknown as Mock;
-const findUnique = prisma.studyLog.findUnique as unknown as Mock;
+const findUnique = prisma.studyLog.findFirst as unknown as Mock;
 const del = prisma.studyLog.delete as unknown as Mock;
 const update = prisma.studyLog.update as unknown as Mock;
 const findTextbook = prisma.textbook.findFirst as unknown as Mock;
@@ -48,12 +49,16 @@ describe("PATCH /api/study-logs/:id", () => {
 
   it("他人の実績は 404 を返す", async () => {
     getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue({ id: 1, userId: "someone-else" });
+    // 所有者チェックは where に userId を含めるので、他人の行はそもそも返らない
+    findUnique.mockResolvedValue(null);
 
     const res = await patch("1", validBody);
 
     expect(res.statusCode).toBe(404);
     expect(update).not.toHaveBeenCalled();
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 1, userId: "user-1" },
+    });
   });
 
   it("他人の参考書IDなら 400 を返す", async () => {
@@ -170,12 +175,15 @@ describe("DELETE /api/study-logs/:id", () => {
 
   it("他人の実績は 404 を返す（削除しない）", async () => {
     getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue({ id: 1, userId: "someone-else" });
+    findUnique.mockResolvedValue(null);
 
     const res = await remove("1");
 
     expect(res.statusCode).toBe(404);
     expect(del).not.toHaveBeenCalled();
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 1, userId: "user-1" },
+    });
   });
 
   it("存在しない実績は 404 を返す", async () => {
