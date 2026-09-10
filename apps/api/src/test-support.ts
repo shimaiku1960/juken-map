@@ -52,7 +52,8 @@ export function request(
   app: FastifyInstance,
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   url: string,
-  body?: unknown
+  body?: unknown,
+  headers?: Record<string, string>
 ): Promise<LightMyRequestResponse> {
-  return app.inject({ method, url, payload: body as object });
+  return app.inject({ method, url, payload: body as object, headers });
 }
