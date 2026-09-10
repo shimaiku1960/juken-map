@@ -44,7 +44,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/app/generated/prisma
+/src/backend/generated/prisma
 
 # Claude auto-memory（私的メモ・公開リポジトリに含めない）
 memory/

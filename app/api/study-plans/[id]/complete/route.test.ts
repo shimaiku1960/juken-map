@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { POST } from "./route";
 import { auth } from "@/backend/infra/auth";
 import prisma from "@/backend/infra/prisma";
-import { Prisma } from "@/app/generated/prisma/client";
+import { Prisma } from "@/backend/generated/prisma/client";
 
 vi.mock("@/backend/infra/auth", () => ({
   auth: { api: { getSession: vi.fn() } },

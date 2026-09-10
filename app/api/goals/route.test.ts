@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { GET, POST } from "./route";
 import { auth } from "@/backend/infra/auth";
 import prisma from "@/backend/infra/prisma";
-import { Prisma } from "@/app/generated/prisma/client";
+import { Prisma } from "@/backend/generated/prisma/client";
 
 // 外部境界だけを差し替える（DB・認証・リクエストヘッダー）。門番ロジック本体は実物を動かす。
 vi.mock("@/backend/infra/auth", () => ({

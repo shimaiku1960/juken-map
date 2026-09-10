@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 COPY apps/api/package.json apps/api/package-lock.json ./apps/api/
 RUN npm ci --prefix apps/api
 
-# Prisma Client は schema の output 指定により /app/app/generated/prisma へ出る。
+# Prisma Client は schema の output 指定により /app/src/backend/generated/prisma へ出る。
 COPY prisma ./prisma
 COPY apps/api/prisma.config.ts ./apps/api/prisma.config.ts
 RUN npm run prisma:generate --prefix apps/api
@@ -51,15 +51,15 @@ RUN groupadd --system --gid 1001 nodejs \
 
 # tsx と prisma CLI を実行時にも使うため、devDependencies を含めたまま渡す。
 COPY --from=api-deps --chown=app:nodejs /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=api-deps --chown=app:nodejs /app/app/generated ./app/generated
 COPY --chown=app:nodejs prisma ./prisma
 COPY --chown=app:nodejs apps/api ./apps/api
 # apps/api は @/backend と @/shared 経由でリポジトリ直下を読む（tsconfig の paths）。
 COPY --chown=app:nodejs src/backend ./src/backend
 COPY --chown=app:nodejs src/shared ./src/shared
+COPY --from=api-deps --chown=app:nodejs /app/src/backend/generated ./src/backend/generated
 COPY --from=web-builder --chown=app:nodejs /app/apps/web/dist ./web
 
-# 生成された Prisma Client は /app/app/generated 配下にあり、そこからの解決は
+# 生成された Prisma Client は /app/src/backend/generated 配下にあり、そこからの解決は
 # /app/node_modules までしか辿らず apps/api/node_modules に届かない。web-builder と
 # 同じ理由（npm workspaces を使っていない）なので、同じく symlink で橋渡しする。
 RUN ln -s /app/apps/api/node_modules /app/node_modules

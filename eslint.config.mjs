@@ -10,7 +10,7 @@ import nextTs from "eslint-config-next/typescript";
 // app/ は両方を呼べる唯一の入口。frontend と backend は互いを知らず、
 // shared は何にも依存しない。この向きが崩れると、フロントとバックが
 // 同じものを別々に持つ状態へ戻る。
-const PRISMA_CLIENT = "@/app/generated/prisma/client";
+const PRISMA_CLIENT = "@/backend/generated/prisma/client";
 
 const layerBoundaries = [
   {
@@ -95,7 +95,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     // Prisma の生成物。自動生成コードは対象外。
-    "app/generated/**",
+    "src/backend/generated/**",
     // apps/ は独自の tsconfig と lint 設定を持つ別パッケージ。
     "apps/**",
   ]),

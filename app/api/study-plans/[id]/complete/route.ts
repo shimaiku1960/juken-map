@@ -4,7 +4,7 @@ import { auth } from "@/backend/infra/auth";
 import prisma from "@/backend/infra/prisma";
 import { demoReadOnlyGuard } from "@/backend/demo-guard";
 import { completeStudyPlanSchema } from "@/shared/validations/studyLog";
-import { Prisma } from "@/app/generated/prisma/client";
+import { Prisma } from "@/backend/generated/prisma/client";
 
 export async function POST(
   request: Request,

@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/backend/infra/auth";
 import prisma from "@/backend/infra/prisma";
 import { goalSchema } from "@/shared/validations/goal";
-import { Prisma } from "@/app/generated/prisma/client";
+import { Prisma } from "@/backend/generated/prisma/client";
 import { demoReadOnlyGuard } from "@/backend/demo-guard";
 import { listGoals } from "@/backend/services/goal-service";
 export async function GET() {

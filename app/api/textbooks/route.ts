@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/backend/infra/auth";
 import prisma from "@/backend/infra/prisma";
 import { createTextbookSchema } from "@/shared/validations/textbook";
-import { Prisma } from "@/app/generated/prisma/client";
+import { Prisma } from "@/backend/generated/prisma/client";
 import { demoReadOnlyGuard } from "@/backend/demo-guard";
 
 export async function GET() {
