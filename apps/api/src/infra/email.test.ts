@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getResend } from "@/backend/infra/resend";
-import { notifyAdminOfNewUser } from "@/backend/infra/email";
+import { getResend } from "@/api/infra/resend";
+import { notifyAdminOfNewUser } from "@/api/infra/email";
 
-vi.mock("@/backend/infra/resend", () => ({
+vi.mock("@/api/infra/resend", () => ({
   getResend: vi.fn(),
 }));
 

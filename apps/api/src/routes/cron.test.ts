@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-vi.mock("@/backend/services/sendDailyNotifications", () => ({
+vi.mock("@/api/services/sendDailyNotifications", () => ({
   sendDailyNotifications: vi.fn(),
 }));
 
 const { sendDailyNotifications } = await import(
-  "@/backend/services/sendDailyNotifications"
+  "@/api/services/sendDailyNotifications"
 );
 const { registerCronRoutes } = await import("./cron.ts");
 const { buildTestApp, request } = await import("../test-support.ts");

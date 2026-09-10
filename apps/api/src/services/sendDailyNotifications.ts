@@ -1,7 +1,7 @@
-import prisma from "@/backend/infra/prisma";
-import { getResend } from "@/backend/infra/resend";
-import { pushLineText } from "@/backend/infra/line";
-import { buildDailyNotification, tokyoDateRange, type NotificationSlot } from "@/backend/domain/dailyNotification";
+import prisma from "@/api/infra/prisma";
+import { getResend } from "@/api/infra/resend";
+import { pushLineText } from "@/api/infra/line";
+import { buildDailyNotification, tokyoDateRange, type NotificationSlot } from "@/api/domain/dailyNotification";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
 type Channel = "email" | "line";

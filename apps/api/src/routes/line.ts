@@ -1,22 +1,22 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { prisma } from "@/backend/infra/prisma";
+import { prisma } from "@/api/infra/prisma";
 import {
   issueLineLinkToken,
   lineAccountLinkUrl,
   pushLineText,
   replyLineText,
   verifyLineSignature,
-} from "@/backend/infra/line";
+} from "@/api/infra/line";
 import {
   createLineOAuthValues,
   exchangeLineLoginCode,
   getLineFriendshipStatus,
   lineLoginAuthorizationUrl,
   verifyLineIdToken,
-} from "@/backend/infra/lineLogin";
-import { findLineConnection } from "@/backend/services/notification-service";
+} from "@/api/infra/lineLogin";
+import { findLineConnection } from "@/api/services/notification-service";
 import { SITE_URL } from "@/shared/site";
 import { denyDemoWrite, getSession, requireSession } from "../context.ts";
 

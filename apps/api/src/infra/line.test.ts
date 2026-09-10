@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { verifyLineSignature } from "@/backend/infra/line";
+import { verifyLineSignature } from "@/api/infra/line";
 
 beforeEach(() => {
   process.env.LINE_CHANNEL_SECRET = "test-channel-secret";

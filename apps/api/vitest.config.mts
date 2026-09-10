@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     // tsconfig の paths と同じ対応。テストからも @/backend などで辿れるようにする。
     alias: {
-      "@/backend": `${repoRoot}src/backend`,
+      "@/api": fileURLToPath(new URL("./src", import.meta.url)),
       "@/shared": `${repoRoot}src/shared`,
       "@": repoRoot.replace(/\/$/, ""),
     },
@@ -15,5 +15,6 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    exclude: ["**/node_modules/**", "src/generated/**"],
   },
 });

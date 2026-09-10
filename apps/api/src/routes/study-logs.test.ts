@@ -5,7 +5,7 @@ vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/backend/infra/prisma", () => ({
+vi.mock("@/api/infra/prisma", () => ({
   prisma: {
     user: { updateMany: vi.fn() },
     studyLog: { create: vi.fn() },
@@ -14,13 +14,13 @@ vi.mock("@/backend/infra/prisma", () => ({
   },
 }));
 
-vi.mock("@/backend/services/study-log-service", () => ({
+vi.mock("@/api/services/study-log-service", () => ({
   listStudyLogs: vi.fn(),
 }));
 
 const { auth } = await import("../auth.ts");
-const { prisma } = await import("@/backend/infra/prisma");
-const { listStudyLogs } = await import("@/backend/services/study-log-service");
+const { prisma } = await import("@/api/infra/prisma");
+const { listStudyLogs } = await import("@/api/services/study-log-service");
 const { registerStudyLogRoutes } = await import("./study-logs.ts");
 const { buildTestApp, request, loggedInSession, demoSession } = await import(
   "../test-support.ts"

@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/backend/infra/prisma";
-import { Prisma } from "@/backend/generated/prisma/client";
+import { prisma } from "@/api/infra/prisma";
+import { Prisma } from "@/api/generated/prisma/client";
 import {
   createStudyPlansSchema,
   updateStudyPlanSchema,
 } from "@/shared/validations/studyPlan";
 import { completeStudyPlanSchema } from "@/shared/validations/studyLog";
-import { toStudyPlanDTO } from "@/backend/dto/study-mapper";
-import { listStudyPlans } from "@/backend/services/study-plan-service";
+import { toStudyPlanDTO } from "@/api/dto/study-mapper";
+import { listStudyPlans } from "@/api/services/study-plan-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
 type IdParams = { id: string };

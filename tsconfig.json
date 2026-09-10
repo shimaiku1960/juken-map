@@ -12,11 +12,10 @@
     "isolatedModules": true,
     "types": ["node"],
     "paths": {
-      "@/backend/*": ["./src/backend/*"],
       "@/shared/*": ["./src/shared/*"],
       "@/*": ["./*"]
     }
   },
   "include": ["src/**/*.ts", "prisma/**/*.ts", "e2e/**/*.ts", "*.ts", "*.mts"],
-  "exclude": ["node_modules", "apps", "src/backend/generated"]
+  "exclude": ["node_modules", "apps"]
 }

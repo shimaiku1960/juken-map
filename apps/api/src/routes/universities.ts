@@ -2,11 +2,11 @@ import type { FastifyInstance } from "fastify";
 import {
   findUniversityDetail,
   listUniversitiesForExplore,
-} from "@/backend/services/university-service";
+} from "@/api/services/university-service";
 import {
   findFirstChoiceGoal,
   listGoalFacultyIds,
-} from "@/backend/services/goal-service";
+} from "@/api/services/goal-service";
 import { requireSession } from "../context.ts";
 
 // Next.js では Server Component がサービス層を関数として直接呼んでいたため、

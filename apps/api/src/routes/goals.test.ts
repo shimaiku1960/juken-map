@@ -5,20 +5,20 @@ vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/backend/infra/prisma", () => ({
+vi.mock("@/api/infra/prisma", () => ({
   prisma: {
     finalGoal: { findMany: vi.fn(), create: vi.fn() },
   },
 }));
 
-vi.mock("@/backend/services/goal-service", () => ({
+vi.mock("@/api/services/goal-service", () => ({
   listGoals: vi.fn(),
 }));
 
 const { auth } = await import("../auth.ts");
-const { prisma } = await import("@/backend/infra/prisma");
-const { listGoals } = await import("@/backend/services/goal-service");
-const { Prisma } = await import("@/backend/generated/prisma/client");
+const { prisma } = await import("@/api/infra/prisma");
+const { listGoals } = await import("@/api/services/goal-service");
+const { Prisma } = await import("@/api/generated/prisma/client");
 const { registerGoalRoutes } = await import("./goals.ts");
 const { buildTestApp, request, loggedInSession, demoSession } = await import("../test-support.ts");
 

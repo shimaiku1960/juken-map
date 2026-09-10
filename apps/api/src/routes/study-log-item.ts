@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/backend/infra/prisma";
+import { prisma } from "@/api/infra/prisma";
 import { createStudyLogSchema } from "@/shared/validations/studyLog";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
