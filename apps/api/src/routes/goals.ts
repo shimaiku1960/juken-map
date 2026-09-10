@@ -1,8 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/api/infra/prisma";
 import { Prisma } from "@/api/generated/prisma/client";
 import { goalSchema, updateGoalSchema, patchGoalSchema } from "@/shared/validations/goal";
-import { listGoals } from "@/api/services/goal-service";
+import {
+  applyGoalPatch,
+  createGoal,
+  deleteGoal,
+  findOwnedGoal,
+  listGoals,
+  updateGoal,
+} from "@/api/services/goal-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
 type IdParams = { id: string };
@@ -26,20 +32,15 @@ export function registerGoalRoutes(app: FastifyInstance) {
     }
 
     try {
-      const goal = await prisma.finalGoal.create({
-        data: {
-          facultyId: parsed.data.facultyId,
-          userId: session.user.id,
-          status: parsed.data.status ?? "decided",
-        },
-        include: {
-          faculty: {
-            include: { university: true },
-          },
-        },
+      const goal = await createGoal({
+        userId: session.user.id,
+        facultyId: parsed.data.facultyId,
+        status: parsed.data.status,
       });
       return reply.code(201).send(goal);
     } catch (error) {
+      // 一意制約違反だけは「すでに登録済み」という意味なので 409 に翻訳する。
+      // それ以外は握りつぶさず投げ直す。
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -61,17 +62,12 @@ export function registerGoalRoutes(app: FastifyInstance) {
     }
 
     const id = Number(request.params.id);
-    const goal = await prisma.finalGoal.findUnique({ where: { id } });
-    if (!goal || goal.userId !== session.user.id) {
+    const goal = await findOwnedGoal(id, session.user.id);
+    if (!goal) {
       return reply.code(404).send({ error: "Not found" });
     }
 
-    return prisma.finalGoal.update({
-      where: { id },
-      data: {
-        ...(parsed.data.facultyId && { facultyId: parsed.data.facultyId }),
-      },
-    });
+    return updateGoal(id, parsed.data);
   });
 
   app.patch<{ Params: IdParams }>("/api/goals/:id", async (request, reply) => {
@@ -85,43 +81,12 @@ export function registerGoalRoutes(app: FastifyInstance) {
     }
 
     const id = Number(request.params.id);
-    const goal = await prisma.finalGoal.findUnique({ where: { id } });
-    if (!goal || goal.userId !== session.user.id) {
+    const goal = await findOwnedGoal(id, session.user.id);
+    if (!goal) {
       return reply.code(404).send({ error: "Not found" });
     }
 
-    // 第一志望トグル（送られてきたときだけ処理。未指定なら現状維持）
-    if (parsed.data.isFirstChoice !== undefined) {
-      if (parsed.data.isFirstChoice) {
-        // 第一志望は1ユーザー1校まで。既存の第一志望を全部外してから付け替える
-        await prisma.$transaction([
-          prisma.finalGoal.updateMany({
-            where: { userId: session.user.id },
-            data: { isFirstChoice: false },
-          }),
-          prisma.finalGoal.update({
-            where: { id },
-            data: { isFirstChoice: true },
-          }),
-        ]);
-      } else {
-        await prisma.finalGoal.update({
-          where: { id },
-          data: { isFirstChoice: false },
-        });
-      }
-    }
-
-    // メモ更新（送られてきたときだけ）
-    if (parsed.data.note !== undefined) {
-      await prisma.finalGoal.update({ where: { id }, data: { note: parsed.data.note } });
-    }
-
-    // ステータス更新（候補→受験校に確定 など。送られてきたときだけ）
-    if (parsed.data.status !== undefined) {
-      await prisma.finalGoal.update({ where: { id }, data: { status: parsed.data.status } });
-    }
-
+    await applyGoalPatch(session.user.id, id, parsed.data);
     return { message: "OK" };
   });
 
@@ -131,12 +96,12 @@ export function registerGoalRoutes(app: FastifyInstance) {
     if (denyDemoWrite(session, reply)) return;
 
     const id = Number(request.params.id);
-    const goal = await prisma.finalGoal.findUnique({ where: { id } });
-    if (!goal || goal.userId !== session.user.id) {
+    const goal = await findOwnedGoal(id, session.user.id);
+    if (!goal) {
       return reply.code(404).send({ error: "Not found" });
     }
 
-    await prisma.finalGoal.delete({ where: { id } });
+    await deleteGoal(id);
     return { message: "Deleted" };
   });
 }
