@@ -27,6 +27,7 @@ function webOrigin() {
   return process.env.WEB_ORIGIN ?? SITE_URL;
 }
 
+const NOTIFICATION_SETTINGS_PATH = "/profile#notification-settings";
 const CALLBACK_PATH = "/api/line/oauth/callback";
 const LINE_CONNECTION_COMPLETED_MESSAGE = [
   "受験マップとのLINE連携が完了しました！",
@@ -110,6 +111,22 @@ async function completeAccountLink(event: LineEvent) {
 }
 
 export function registerLineRoutes(app: FastifyInstance) {
+  // LINE のメッセージ本文が案内する導線。画面を持たず、ログイン状態で行き先を変えるだけ。
+  // Next.js では app/line/settings/route.ts が同じことをしていた。SPA 側のルートに
+  // しないのは、描画が要らずクライアント判定だと一瞬ちらつくため。
+  app.get("/line/settings", async (request, reply) => {
+    const session = await getSession(request);
+    const origin = webOrigin();
+
+    if (session) {
+      return reply.redirect(`${origin}${NOTIFICATION_SETTINGS_PATH}`);
+    }
+
+    const loginUrl = new URL("/login", origin);
+    loginUrl.searchParams.set("callbackURL", NOTIFICATION_SETTINGS_PATH);
+    return reply.redirect(loginUrl.toString());
+  });
+
   app.post("/api/line/account-link", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;

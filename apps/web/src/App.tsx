@@ -16,6 +16,7 @@ import SignUpPage from "@/web/pages/auth/signup";
 import ForgotPasswordPage from "@/web/pages/auth/forgot-password";
 import ResetPasswordPage from "@/web/pages/auth/reset-password";
 import VerifyEmailPage from "@/web/pages/auth/verify-email";
+import LineLinkPage from "@/web/pages/LineLinkPage";
 import NotFoundPage from "@/web/pages/NotFoundPage";
 
 const protectedRoute = (element: React.ReactNode) => (
@@ -57,6 +58,9 @@ export default function App() {
           path="/schedule"
           element={<Navigate to="/dashboard#study-calendar" replace />}
         />
+
+        {/* LINE のトークから開く。ログインは画面内で判定するので protectedRoute にしない。 */}
+        <Route path="/line/link" element={<LineLinkPage />} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
