@@ -1,4 +1,7 @@
-node_modules
+# node_modules はホスト（macOS）のバイナリを含むので、どの階層のものも持ち込まない。
+# 先頭階層だけを指す "node_modules" では apps/*/node_modules が漏れる。
+**/node_modules
+**/dist
 .next
 .env
 .env.*
@@ -6,3 +9,5 @@ node_modules
 npm-debug.log
 Dockerfile
 .dockerignore
+playwright-report
+test-results
