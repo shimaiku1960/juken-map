@@ -1,5 +1,5 @@
-import prisma from "@/backend/infra/prisma";
-import { measured } from "@/backend/observability/measured";
+import prisma from "@/api/infra/prisma";
+import { measured } from "@/api/observability/measured";
 
 // プロフィール画面（Server Component）と通知設定 API の両方から使う。
 // 以前は両者に同じ findUnique が別々に書かれていた。

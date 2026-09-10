@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { measured } from "@/backend/observability/measured";
+import { measured } from "@/api/observability/measured";
 
 describe("measured", () => {
   afterEach(() => {

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { listTextbookMasters } from "@/backend/services/textbook-service";
+import { listTextbookMasters } from "@/api/services/textbook-service";
 import { requireSession } from "../context.ts";
 
 export function registerTextbookMasterRoutes(app: FastifyInstance) {

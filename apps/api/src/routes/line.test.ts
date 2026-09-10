@@ -9,7 +9,7 @@ const transactionPrisma = {
   lineLinkNonce: { delete: vi.fn() },
 };
 
-vi.mock("@/backend/infra/prisma", () => ({
+vi.mock("@/api/infra/prisma", () => ({
   prisma: {
     $transaction: vi.fn(),
     lineConnection: { findUnique: vi.fn(), deleteMany: vi.fn() },
@@ -24,7 +24,7 @@ vi.mock("@/backend/infra/prisma", () => ({
   },
 }));
 
-vi.mock("@/backend/infra/line", () => ({
+vi.mock("@/api/infra/line", () => ({
   verifyLineSignature: vi.fn(),
   issueLineLinkToken: vi.fn(),
   lineAccountLinkUrl: vi.fn(
@@ -34,7 +34,7 @@ vi.mock("@/backend/infra/line", () => ({
   pushLineText: vi.fn(),
 }));
 
-vi.mock("@/backend/infra/lineLogin", () => ({
+vi.mock("@/api/infra/lineLogin", () => ({
   createLineOAuthValues: vi.fn(),
   lineLoginAuthorizationUrl: vi.fn(),
   exchangeLineLoginCode: vi.fn(),
@@ -42,25 +42,25 @@ vi.mock("@/backend/infra/lineLogin", () => ({
   verifyLineIdToken: vi.fn(),
 }));
 
-vi.mock("@/backend/services/notification-service", () => ({
+vi.mock("@/api/services/notification-service", () => ({
   findLineConnection: vi.fn(),
 }));
 
 const { auth } = await import("../auth.ts");
-const { prisma } = await import("@/backend/infra/prisma");
+const { prisma } = await import("@/api/infra/prisma");
 const {
   verifyLineSignature,
   issueLineLinkToken,
   replyLineText,
   pushLineText,
-} = await import("@/backend/infra/line");
+} = await import("@/api/infra/line");
 const {
   createLineOAuthValues,
   lineLoginAuthorizationUrl,
   exchangeLineLoginCode,
   getLineFriendshipStatus,
   verifyLineIdToken,
-} = await import("@/backend/infra/lineLogin");
+} = await import("@/api/infra/lineLogin");
 const { registerLineRoutes } = await import("./line.ts");
 const { buildTestApp, request, loggedInSession } = await import(
   "../test-support.ts"

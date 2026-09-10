@@ -1,11 +1,11 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { prisma } from "@/backend/infra/prisma";
+import { prisma } from "@/api/infra/prisma";
 import {
   notifyAdminOfNewUser,
   sendVerificationEmail,
   sendPasswordResetEmail,
-} from "@/backend/infra/email";
+} from "@/api/infra/email";
 
 // アプリ唯一の Better Auth 定義。Next.js 側にあった同等の定義は削除済み。
 //

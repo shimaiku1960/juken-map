@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/backend/infra/prisma";
+import { prisma } from "@/api/infra/prisma";
 import { requireSession } from "../context.ts";
 
 export function registerAnalyticsRoutes(app: FastifyInstance) {

@@ -17,22 +17,22 @@ apps/web/               画面（React + Vite の SPA）
 │                         prefectures, studySession, studyLog, studyPlan, examSchedule
 └ public/                 favicon, PWA アイコン, manifest, robots.txt, LP 素材
 
-apps/api/               HTTP の入口（Fastify）
-├ src/server.ts           サーバー組み立て。圧縮・JSON 解析・SPA 配信もここ
-├ src/auth.ts             Better Auth の唯一の定義
-├ src/context.ts          requireSession / denyDemoWrite（門番）
-├ src/seo.ts              robots / sitemap / ページ別 meta の生成
-└ src/routes/             エンドポイント定義（認証・検証・ステータスコードのみ）
+apps/api/               バックエンド一式（Fastify）
+└ src/
+  ├ server.ts             サーバー組み立て。圧縮・JSON 解析・SPA 配信もここ
+  ├ auth.ts               Better Auth の唯一の定義
+  ├ context.ts            requireSession / denyDemoWrite（門番）
+  ├ seo.ts                robots / sitemap / ページ別 meta の生成
+  ├ routes/               HTTP の入口（認証・検証・ステータスコードのみ）
+  ├ services/             ユースケース（goal / study-log / study-plan / textbook /
+  │                       university / notification / sendDailyNotifications）
+  ├ infra/                prisma, email, resend, microcms, line, lineLogin
+  ├ dto/study-mapper.ts   Prisma の戻り値 → 共有 DTO への変換
+  ├ domain/               通知本文の組み立てなど
+  ├ observability/        サービスの所要時間計測
+  └ generated/prisma/     Prisma Client（生成物・gitignore）
 
-src/backend/            データアクセス・外部連携・ドメインロジック
-├ infra/                  prisma, email, resend, microcms, line, lineLogin
-├ services/               ユースケース（goal / study-log / study-plan / textbook /
-│                         university / notification / sendDailyNotifications）
-├ dto/study-mapper.ts     Prisma の戻り値 → 共有 DTO への変換
-├ domain/dailyNotification.ts  通知本文の組み立て
-└ observability/measured.ts    サービスの所要時間計測
-
-src/shared/             外部依存のない純粋関数・型・定数データのみ
+src/shared/             2つのアプリが共有する、外部依存のない純粋関数・型のみ
 ├ date.ts, subjects.ts, studyStats.ts, site.ts, demo.ts
 ├ validations/            Zod スキーマ（リクエストの契約）
 └ dto/study.ts            画面↔API で受け渡す形の型定義
@@ -41,17 +41,19 @@ src/shared/             外部依存のない純粋関数・型・定数デー�
 ## 依存の向き
 
 ```
-apps/web  ──────────────→  shared
-apps/api  ──→  backend  ──→  shared
+apps/web  ────────────────────→  shared
+apps/api  routes ──→ services ──→  shared
 ```
 
 - **shared は何にも依存しない。** DB・HTTP・ブラウザ API に依存するものは置かない。
   ここが崩れると、画面と API が同じものを別々に持つ状態に戻る。
-- **apps/web は backend を呼べない。** これは約束ではなく**物理的に不可能**である。
-  `apps/web/tsconfig.json` の `paths` に `@/backend` が無く、そもそも解決できない。
+- **apps/web は apps/api の中身を呼べない。** これは約束ではなく**物理的に不可能**である。
+  `apps/web/tsconfig.json` の `paths` に `@/api` が無く、そもそも解決できない。
   データが必要なら HTTP を通すしかない。
-- **apps/api は薄い。** 認証・入力検証・ステータスコードだけを持ち、処理は backend の
-  サービス層に置く。
+- **routes は薄い。** 認証・入力検証・ステータスコードだけを持ち、処理は services に置く。
+- **バックエンドのコードは `apps/api` に全部ある。** 以前は `src/backend` にも分散していたが、
+  それは Next.js のモノリスを分割したときの名残で、利用者が `apps/api` だけになった時点で
+  置き場所としての理由を失っていた。`src/` に残すのは 2 つのアプリが共有する `shared` だけ。
 
 ### Next.js のときとの違い
 
@@ -111,7 +113,7 @@ Actions を使わない理由として書いていたが（URL が固定され�
 
 `POST /api/study-logs` に JSON を送るだけで、Web もアプリも同じ入口を使える。
 画面と API が同じ形をやり取りすることは `src/shared/dto/` の型と
-`src/backend/dto/study-mapper.ts` が保証している。
+`apps/api/src/dto/study-mapper.ts` が保証している。
 
 ### 画面から DB を触らない
 
@@ -134,7 +136,7 @@ Actions を使わない理由として書いていたが（URL が固定され�
 利点は「DB を差し替えられること」だが、MySQL から移る予定は無い。一方で失うものは具体的である。
 
 - **Prisma の型推論が切れる。** `include` の内容に応じて戻り値の型が変わるのが Prisma の
-  最大の利点で、`src/backend/dto/study-mapper.ts` はその型を
+  最大の利点で、`apps/api/src/dto/study-mapper.ts` はその型を
   `Prisma.StudyPlanGetPayload<{ include: ... }>` として受けている。schema を変えると変換側が
   型エラーになり、直し忘れに気づける。自前の型に詰め替えると、この検出が効かなくなる。
 - **`select` の柔軟性が失われる。** 画面ごとに必要な列は違う。`listGoalsWithFaculty` は
@@ -145,23 +147,23 @@ Actions を使わない理由として書いていたが（URL が固定され�
 
 **見直す条件**は、DB を実際に移す必要が出たとき、または Prisma を直接モックできず
 テストが書けない場面が繰り返し出てきたとき。現状はルートのテストで
-`vi.mock("@/backend/infra/prisma")` によりモックできている。
+`vi.mock("@/api/infra/prisma")` によりモックできている。
 
 ## 境界の強制
 
 物理的に守れない部分だけを ESLint で見る（`eslint.config.mjs`）。
 
-- **shared は backend を import できない。** これは同じ tsconfig の下にあるので型解決では
+- **shared は apps 配下を import できない。** これは同じ tsconfig の下にあるので型解決では
   防げず、ルールが要る。
 - `apps/**` は独自の tsconfig と依存を持つ別パッケージなので、ルートの lint 対象から外している。
-- Prisma の生成物（`src/backend/generated/**`）も対象外。
+- Prisma の生成物（`apps/api/src/generated/**`）も対象外。
 
 ## テスト
 
 | 対象 | 実行 | 内容 |
 |---|---|---|
-| `src/shared`・`src/backend` | ルートの vitest | 純粋関数、Zod スキーマ、通知本文の組み立て |
-| `apps/api` | `npm run test --prefix apps/api` | エンドポイントの門番（401 / 403 / 400 / 404 / 409） |
+| `src/shared` | ルートの vitest | 純粋関数、Zod スキーマ |
+| `apps/api` | `npm run test --prefix apps/api` | エンドポイントの門番（401 / 403 / 400 / 404 / 409）、通知本文、外部連携 |
 | `apps/web` | `npm run test --prefix apps/web` | 画面まわりの純粋関数 |
 | 通し | Playwright | 記録→可視化の毎日ループ、デモ閲覧専用、モバイルナビ |
 
@@ -177,6 +179,6 @@ Actions を使わない理由として書いていたが（URL が固定され�
 `apps/web` のビルド成果物と `apps/api` を1つのイメージに入れ、EC2 上の Docker で動かす。
 nginx（EC2 ホスト上）が 443 を受けて 3000 番へ流す。設定の実物は `infra/nginx/README.md`。
 
-`Dockerfile` に2つ symlink がある。npm workspaces を使っていないため、`/app/src` や
-`/app/src/backend/generated` からのモジュール解決が `apps/*/node_modules` に届かないための
-橋渡しである。workspaces へ移せば不要になる。
+`Dockerfile` に symlink が2つある。`src/shared` が `apps/*` の外にあるため、`/app/src` からの
+モジュール解決（zod など）が `apps/*/node_modules` に届かないための橋渡しである。
+npm workspaces へ移せば不要になる。

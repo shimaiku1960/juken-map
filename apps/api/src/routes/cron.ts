@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { sendDailyNotifications } from "@/backend/services/sendDailyNotifications";
+import { sendDailyNotifications } from "@/api/services/sendDailyNotifications";
 
 const bodySchema = z.object({ slot: z.enum(["morning", "evening"]) });
 

@@ -1,5 +1,5 @@
-import prisma from "@/backend/infra/prisma";
-import { measured } from "@/backend/observability/measured";
+import prisma from "@/api/infra/prisma";
+import { measured } from "@/api/observability/measured";
 
 export function listTextbookMasters() {
   return measured("textbookMaster.list", () =>

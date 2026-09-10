@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/backend/infra/prisma";
-import { Prisma } from "@/backend/generated/prisma/client";
+import { prisma } from "@/api/infra/prisma";
+import { Prisma } from "@/api/generated/prisma/client";
 import { goalSchema, updateGoalSchema, patchGoalSchema } from "@/shared/validations/goal";
-import { listGoals } from "@/backend/services/goal-service";
+import { listGoals } from "@/api/services/goal-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
 type IdParams = { id: string };

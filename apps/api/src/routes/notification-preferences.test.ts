@@ -4,19 +4,19 @@ vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/backend/infra/prisma", () => ({
+vi.mock("@/api/infra/prisma", () => ({
   prisma: { notificationPreference: { upsert: vi.fn() } },
 }));
 
-vi.mock("@/backend/services/notification-service", () => ({
+vi.mock("@/api/services/notification-service", () => ({
   findNotificationPreference: vi.fn(),
   findLineConnection: vi.fn(),
 }));
 
 const { auth } = await import("../auth.ts");
-const { prisma } = await import("@/backend/infra/prisma");
+const { prisma } = await import("@/api/infra/prisma");
 const { findNotificationPreference, findLineConnection } = await import(
-  "@/backend/services/notification-service"
+  "@/api/services/notification-service"
 );
 const { registerNotificationPreferenceRoutes } = await import(
   "./notification-preferences.ts"

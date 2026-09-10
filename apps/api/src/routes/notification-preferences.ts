@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/backend/infra/prisma";
+import { prisma } from "@/api/infra/prisma";
 import {
   findLineConnection,
   findNotificationPreference,
-} from "@/backend/services/notification-service";
+} from "@/api/services/notification-service";
 import { notificationPreferenceSchema } from "@/shared/validations/notification";
 import { denyDemoWrite, requireSession } from "../context.ts";
 

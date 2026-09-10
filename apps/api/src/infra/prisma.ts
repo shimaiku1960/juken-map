@@ -1,4 +1,4 @@
-import { PrismaClient } from "@/backend/generated/prisma/client";
+import { PrismaClient } from "@/api/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };

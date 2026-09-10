@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDailyNotification,
   tokyoDateRange,
-} from "@/backend/domain/dailyNotification";
+} from "@/api/domain/dailyNotification";
 
 describe("tokyoDateRange", () => {
   it("UTCの日付ではなく日本時間の一日を返す", () => {

@@ -1,4 +1,4 @@
-import { client, type Blog } from "@/backend/infra/microcms";
+import { client, type Blog } from "@/api/infra/microcms";
 import { SITE_URL } from "@/shared/site";
 
 // Next.js では generateMetadata と app/sitemap.ts がこれを担っていた。SPA は誰が来ても

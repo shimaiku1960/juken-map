@@ -1,4 +1,4 @@
-import { PrismaClient } from "../src/backend/generated/prisma/client";
+import { PrismaClient } from "../apps/api/src/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { hashPassword } from "better-auth/crypto";
 

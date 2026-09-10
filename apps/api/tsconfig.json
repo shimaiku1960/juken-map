@@ -12,12 +12,11 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
     "paths": {
-      "@/frontend/*": ["../../src/frontend/*"],
-      "@/backend/*": ["../../src/backend/*"],
+      "@/api/*": ["./src/*"],
       "@/shared/*": ["../../src/shared/*"],
       "@/*": ["../../*"]
     }
   },
-  "include": ["src/**/*.ts", "../../src/backend/**/*.ts", "../../src/shared/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*.ts", "../../src/shared/**/*.ts"],
+  "exclude": ["node_modules", "src/generated"]
 }

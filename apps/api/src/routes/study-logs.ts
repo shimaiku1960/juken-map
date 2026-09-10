@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "@/backend/infra/prisma";
+import { prisma } from "@/api/infra/prisma";
 import { createStudyLogSchema } from "@/shared/validations/studyLog";
-import { toStudyLogDTO } from "@/backend/dto/study-mapper";
-import { listStudyLogs } from "@/backend/services/study-log-service";
+import { toStudyLogDTO } from "@/api/dto/study-mapper";
+import { listStudyLogs } from "@/api/services/study-log-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
 
 export function registerStudyLogRoutes(app: FastifyInstance) {

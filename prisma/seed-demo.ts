@@ -2,7 +2,7 @@
 // 大学マスターには一切触れず、既存の Faculty を参照して志望校・学習予定を作る。
 // 本番へは EC2 を踏み台にした SSH トンネル経由で DATABASE_URL を向けて実行する想定。
 //   例) DATABASE_URL="mysql://user:pass@127.0.0.1:3307/db" npx tsx prisma/seed-demo.ts
-import { PrismaClient } from "../src/backend/generated/prisma/client";
+import { PrismaClient } from "../apps/api/src/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { hashPassword } from "better-auth/crypto";
 import { ymdAfterDays } from "../src/shared/date";

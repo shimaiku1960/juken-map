@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import prisma from "@/backend/infra/prisma";
-import { getResend } from "@/backend/infra/resend";
-import { sendDailyNotifications } from "@/backend/services/sendDailyNotifications";
-import { pushLineText } from "@/backend/infra/line";
+import prisma from "@/api/infra/prisma";
+import { getResend } from "@/api/infra/resend";
+import { sendDailyNotifications } from "@/api/services/sendDailyNotifications";
+import { pushLineText } from "@/api/infra/line";
 
-vi.mock("@/backend/infra/prisma", () => ({
+vi.mock("@/api/infra/prisma", () => ({
   default: {
     user: { findMany: vi.fn() },
     notificationDelivery: { create: vi.fn(), delete: vi.fn() },
   },
 }));
-vi.mock("@/backend/infra/resend", () => ({ getResend: vi.fn() }));
-vi.mock("@/backend/infra/line", () => ({ pushLineText: vi.fn() }));
+vi.mock("@/api/infra/resend", () => ({ getResend: vi.fn() }));
+vi.mock("@/api/infra/line", () => ({ pushLineText: vi.fn() }));
 
 const findUsers = vi.mocked(prisma.user.findMany);
 const createDelivery = vi.mocked(prisma.notificationDelivery.create);

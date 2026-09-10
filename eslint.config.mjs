@@ -6,15 +6,14 @@ import globals from "globals";
 // レイヤー境界（docs/architecture.md）を ESLint で強制する。
 //
 //   apps/web  ──→  shared
-//   apps/api  ──→  backend  ──→  shared
+//   apps/api  ──→  shared
 //
-// apps/web（画面）と apps/api（HTTP の入口）が上の層。backend は DB や外部連携を持ち、
-// shared は何にも依存しない。この向きが崩れると、フロントとバックが同じものを
-// 別々に持つ状態へ戻る。
+// shared は 2 つのアプリが共有する最下層で、何にも依存しない。ここが崩れると、
+// 画面と API が同じものを別々に持つ状態へ戻る。
 //
 // 注意: apps/ は独自の tsconfig を持つ別パッケージなので lint 対象から外している。
-// ここで守れるのは src/ 側の依存の向きだけで、apps/web から backend を呼ぶ経路は
-// そもそも解決できない（tsconfig の paths に無い）ため物理的に不可能になっている。
+// アプリ同士（apps/web → apps/api の中身など）を直接参照する経路は、そもそも
+// tsconfig の paths に無いので物理的に解決できない。ここで守るのは shared の純度だけ。
 const layerBoundaries = [
   {
     // shared は最下層。誰にも依存してはいけない。
@@ -25,10 +24,11 @@ const layerBoundaries = [
         {
           patterns: [
             {
-              group: ["@/backend/*", "@/backend"],
+              group: ["@/api/*", "@/api", "@/web/*", "@/web", "@/apps/*"],
               message:
-                "shared は何にも依存しない層です。backend のコードを import しないでください。" +
-                "両方で使いたいものは shared の中に置き、片方でしか使わないものはその層へ移してください。",
+                "shared は何にも依存しない層です。apps 配下のコードを import しないでください。" +
+                "両方のアプリで使いたいものは shared の中に置き、片方でしか使わないものは" +
+                "そのアプリへ移してください。",
             },
           ],
         },
@@ -53,7 +53,7 @@ export default defineConfig([
   },
   globalIgnores([
     // Prisma の生成物。自動生成コードは対象外。
-    "src/backend/generated/**",
+    "apps/api/src/generated/**",
     // apps/ は独自の tsconfig と依存を持つ別パッケージ。
     "apps/**",
     // 実行成果物

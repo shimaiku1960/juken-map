@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { client, type Blog } from "@/backend/infra/microcms";
+import { client, type Blog } from "@/api/infra/microcms";
 
 // ブログは microCMS の API キーをサーバー側で使うため、SPA から直接は叩けない。
 // Next.js では Server Component が client を直接呼んでいたので入口が無かった。

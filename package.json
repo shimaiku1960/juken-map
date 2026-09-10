@@ -28,8 +28,6 @@
     "@prisma/client": "^7.8.0",
     "better-auth": "^1.6.22",
     "mariadb": "^3.5.3",
-    "microcms-js-sdk": "^3.4.0",
-    "resend": "^6.16.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

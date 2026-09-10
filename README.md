@@ -284,15 +284,16 @@ apps/
 │   ├── src/components/    画面部品（ui/ は shadcn/ui）
 │   ├── src/hooks/         TanStack Query のサーバー状態フック
 │   └── public/            favicon、PWAアイコン、manifest、robots.txt
-└── api/                 # HTTP の入口（Fastify）
-    ├── src/routes/        エンドポイント定義
+└── api/                 # バックエンド一式（Fastify）
+    ├── src/routes/        HTTPの入口（認証・検証・ステータスコード）
+    ├── src/services/      ユースケース（DBアクセス・業務ルール）
+    ├── src/infra/         Prisma、メール、LINE、microCMS
     ├── src/auth.ts        Better Auth の定義
     ├── src/context.ts     認証・デモガードの門番
     └── src/seo.ts         robots / sitemap / ページ別 meta
 
 src/
-├── backend/             # DB・外部連携・ドメインロジック（apps/api から使う）
-└── shared/              # 外部依存のない純粋関数・型・Zodスキーマ（両方から使う）
+└── shared/              # 外部依存のない純粋関数・型・Zodスキーマ（両方のアプリから使う）
 
 e2e/                     # Playwright E2Eテスト
 infra/nginx/             # 本番リバースプロキシ設定の記録

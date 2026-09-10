@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { findFirstChoiceGoal } from "@/backend/services/goal-service";
+import { findFirstChoiceGoal } from "@/api/services/goal-service";
 import { requireSession } from "../context.ts";
 
 // トップ画面が表示する「第一志望」。Next.js では Server Component が直接呼んでいた。
