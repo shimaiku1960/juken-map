@@ -36,3 +36,57 @@ export function findOwnedTextbook(id: number, userId: string) {
     prisma.textbook.findFirst({ where: { id, userId } })
   );
 }
+
+/** 自分の参考書の一覧。 */
+export function listTextbooks(userId: string) {
+  return measured("textbook.list", () =>
+    prisma.textbook.findMany({ where: { userId }, orderBy: { name: "asc" } })
+  );
+}
+
+/** マスター登録から作るときの元データ。総量の候補（metrics）も一緒に引く。 */
+export function findTextbookMaster(id: number) {
+  return measured("textbookMaster.find", () =>
+    prisma.textbookMaster.findUnique({ where: { id }, include: { metrics: true } })
+  );
+}
+
+/** 参考書を登録する。同名の重複は DB の一意制約が弾く（P2002）。 */
+export function createTextbook(data: {
+  name: string;
+  userId: string;
+  masterId?: number;
+  totalAmount?: number;
+  rangeUnit?: string;
+  subject?: string | null;
+}) {
+  return measured("textbook.create", () => prisma.textbook.create({ data }));
+}
+
+/** 逆算設定を更新する。送られてきた項目だけ変える。 */
+export function updateTextbookProgress(
+  id: number,
+  data: {
+    totalAmount?: number;
+    rangeUnit?: string;
+    targetDate?: string | null;
+    subject?: string | null;
+  }
+) {
+  return measured("textbook.updateProgress", () =>
+    prisma.textbook.update({
+      where: { id },
+      data: {
+        ...(data.totalAmount !== undefined && { totalAmount: data.totalAmount }),
+        ...(data.rangeUnit !== undefined && { rangeUnit: data.rangeUnit }),
+        ...(data.targetDate !== undefined && {
+          targetDate:
+            data.targetDate == null
+              ? null
+              : new Date(`${data.targetDate}T00:00:00.000Z`),
+        }),
+        ...(data.subject !== undefined && { subject: data.subject }),
+      },
+    })
+  );
+}

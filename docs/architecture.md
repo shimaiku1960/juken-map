@@ -115,6 +115,27 @@ Actions を使わない理由として書いていたが（URL が固定され�
 画面と API が同じ形をやり取りすることは `src/shared/dto/` の型と
 `apps/api/src/dto/study-mapper.ts` が保証している。
 
+### routes は DB を触らない
+
+`apps/api/src/routes/` に `prisma` の直接呼び出しは**0件**。DB へ行くのは
+`services/` だけで、routes は次の4つだけを持つ。
+
+1. 認証（`requireSession`）
+2. 権限（`denyDemoWrite`）
+3. 入力検証（Zod の `safeParse`）
+4. ステータスコードへの翻訳（`P2002` → 409、`null` → 404）
+
+**この順番に意味がある。** 誰か分からない人に入力の良し悪しを教えないため、
+認証 → 権限 → 入力の順で門番を並べている。
+
+サービス層は HTTP を知らない。「見つからない」は `null`、「一意制約違反」は Prisma の
+例外のまま返し、それを 404 や 409 にするかは routes が決める。こうしておくと、
+cron やバッチなど HTTP 以外の入口からも同じ処理を呼べる。
+
+所有者チェックは `findFirst({ where: { id, userId } })` の形に統一した。以前は
+`findUnique` で引いてから `userId` を比べていたが、取得と判定が1回のクエリで済み、
+比較の書き忘れも起きない。
+
 ### 画面から DB を触らない
 
 **理由は「DB を隠すため」ではなく「同じクエリが増殖するのを防ぐため」。** Next.js 時代、

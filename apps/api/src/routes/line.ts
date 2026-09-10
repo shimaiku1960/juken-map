@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { prisma } from "@/api/infra/prisma";
 import {
   issueLineLinkToken,
   lineAccountLinkUrl,
@@ -18,6 +17,16 @@ import {
 } from "@/api/infra/lineLogin";
 import { findLineConnection } from "@/api/services/notification-service";
 import { SITE_URL } from "@/shared/site";
+import {
+  completeAccountLinkByNonce,
+  disconnectLine,
+  discardOAuthAttempt,
+  findConnectionByLineUserId,
+  findOAuthAttempt,
+  issueLinkNonce,
+  linkVerifiedLineUser,
+  startOAuthAttempt,
+} from "@/api/services/line-connection-service";
 import { denyDemoWrite, getSession, requireSession } from "../context.ts";
 
 // 分離前は「リダイレクト先の画面」と「API」が同じオリジンだったので
@@ -50,10 +59,7 @@ type LineEvent = {
 async function sendLinkGuide(event: LineEvent) {
   const lineUserId = event.source?.userId;
   if (!lineUserId || !event.replyToken) return;
-  const connection = await prisma.lineConnection.findUnique({
-    where: { lineUserId },
-    select: { id: true },
-  });
+  const connection = await findConnectionByLineUserId(lineUserId);
   if (connection) {
     await replyLineText(
       event.replyToken,
@@ -74,8 +80,9 @@ async function completeAccountLink(event: LineEvent) {
   const lineUserId = event.source?.userId;
   if (!nonce || !lineUserId) return;
 
-  const linkNonce = await prisma.lineLinkNonce.findUnique({ where: { nonce } });
-  if (!linkNonce || linkNonce.expiresAt <= new Date()) {
+  const result = await completeAccountLinkByNonce(nonce, lineUserId);
+
+  if (result.status === "expired") {
     if (event.replyToken) {
       await replyLineText(
         event.replyToken,
@@ -85,20 +92,7 @@ async function completeAccountLink(event: LineEvent) {
     return;
   }
 
-  const linked = await prisma.$transaction(async (tx) => {
-    const current = await tx.lineConnection.findUnique({ where: { lineUserId } });
-    if (current && current.userId !== linkNonce.userId) {
-      await tx.lineLinkNonce.delete({ where: { nonce } });
-      return false;
-    }
-    await tx.lineConnection.upsert({
-      where: { userId: linkNonce.userId },
-      create: { userId: linkNonce.userId, lineUserId },
-      update: { lineUserId, linkedAt: new Date() },
-    });
-    await tx.lineLinkNonce.delete({ where: { nonce } });
-    return true;
-  });
+  const linked = result.status === "linked";
 
   if (event.replyToken) {
     await replyLineText(
@@ -137,16 +131,7 @@ export function registerLineRoutes(app: FastifyInstance) {
     }
 
     const nonce = randomBytes(32).toString("base64url");
-    await prisma.$transaction([
-      prisma.lineLinkNonce.deleteMany({ where: { userId: session.user.id } }),
-      prisma.lineLinkNonce.create({
-        data: {
-          nonce,
-          userId: session.user.id,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        },
-      }),
-    ]);
+    await issueLinkNonce(session.user.id, nonce);
 
     const redirectUrl = new URL("https://access.line.me/dialog/bot/accountLink");
     redirectUrl.searchParams.set("linkToken", result.data.linkToken);
@@ -169,15 +154,7 @@ export function registerLineRoutes(app: FastifyInstance) {
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
 
-    await prisma.$transaction([
-      prisma.notificationPreference.updateMany({
-        where: { userId: session.user.id },
-        data: { lineMorningEnabled: false, lineEveningEnabled: false },
-      }),
-      prisma.lineConnection.deleteMany({ where: { userId: session.user.id } }),
-      prisma.lineLinkNonce.deleteMany({ where: { userId: session.user.id } }),
-      prisma.lineOAuthAttempt.deleteMany({ where: { userId: session.user.id } }),
-    ]);
+    await disconnectLine(session.user.id);
     return { connected: false };
   });
 
@@ -192,19 +169,13 @@ export function registerLineRoutes(app: FastifyInstance) {
     try {
       const values = createLineOAuthValues();
       const redirectUri = `${webOrigin()}${CALLBACK_PATH}`;
-      await prisma.$transaction([
-        prisma.lineOAuthAttempt.deleteMany({ where: { userId: session.user.id } }),
-        prisma.lineOAuthAttempt.create({
-          data: {
-            state: values.state,
-            nonce: values.nonce,
-            codeVerifier: values.codeVerifier,
-            redirectUri,
-            userId: session.user.id,
-            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-          },
-        }),
-      ]);
+      await startOAuthAttempt({
+        userId: session.user.id,
+        state: values.state,
+        nonce: values.nonce,
+        codeVerifier: values.codeVerifier,
+        redirectUri,
+      });
       return reply.redirect(
         lineLoginAuthorizationUrl({ ...values, redirectUri }).toString()
       );
@@ -232,17 +203,17 @@ export function registerLineRoutes(app: FastifyInstance) {
         );
       }
 
-      const attempt = await prisma.lineOAuthAttempt.findUnique({ where: { state } });
+      const attempt = await findOAuthAttempt(state);
       if (
         !attempt ||
         attempt.userId !== session.user.id ||
         attempt.expiresAt <= new Date()
       ) {
-        if (attempt) await prisma.lineOAuthAttempt.deleteMany({ where: { state } });
+        if (attempt) await discardOAuthAttempt(state);
         return profileRedirect("expired");
       }
 
-      await prisma.lineOAuthAttempt.delete({ where: { state } });
+      await discardOAuthAttempt(state);
       try {
         const tokens = await exchangeLineLoginCode({
           code,
@@ -258,18 +229,7 @@ export function registerLineRoutes(app: FastifyInstance) {
         }
         if (!friendship.friendFlag) return profileRedirect("friend-required");
 
-        const linked = await prisma.$transaction(async (tx) => {
-          const current = await tx.lineConnection.findUnique({
-            where: { lineUserId: identity.sub },
-          });
-          if (current && current.userId !== session.user.id) return false;
-          await tx.lineConnection.upsert({
-            where: { userId: session.user.id },
-            create: { userId: session.user.id, lineUserId: identity.sub },
-            update: { lineUserId: identity.sub, linkedAt: new Date() },
-          });
-          return true;
-        });
+        const linked = await linkVerifiedLineUser(session.user.id, identity.sub);
         if (!linked) return profileRedirect("already-used");
 
         const controller = new AbortController();
