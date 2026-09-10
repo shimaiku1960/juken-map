@@ -4,19 +4,26 @@ vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/api/infra/prisma", () => ({
-  prisma: {
+vi.mock("@/api/infra/prisma", () => {
+  // routes は名前付き、services は default で import している。
+  // 同じ実体を返さないと、どちらか片方のモックしか観測できない。
+  const client = {
     user: { updateMany: vi.fn() },
-    studyPlan: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    studyPlan: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      createMany: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
     studyLog: { count: vi.fn(), create: vi.fn() },
     textbook: { count: vi.fn() },
     $transaction: vi.fn(),
-  },
-}));
-
-vi.mock("@/api/services/study-plan-service", () => ({
-  listStudyPlans: vi.fn(),
-}));
+  };
+  return { prisma: client, default: client };
+});
 
 const { auth } = await import("../auth.ts");
 const { prisma } = await import("@/api/infra/prisma");
@@ -27,7 +34,7 @@ const { buildTestApp, request, loggedInSession, demoSession } = await import(
 );
 
 const getSession = auth.api.getSession as unknown as Mock;
-const findPlan = prisma.studyPlan.findUnique as unknown as Mock;
+const findPlan = prisma.studyPlan.findFirst as unknown as Mock;
 const findPlanFirst = prisma.studyPlan.findFirst as unknown as Mock;
 const updatePlan = prisma.studyPlan.update as unknown as Mock;
 const countLogs = prisma.studyLog.count as unknown as Mock;

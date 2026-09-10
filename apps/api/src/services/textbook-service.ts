@@ -19,3 +19,20 @@ export function listTextbookSubjects(userId: string) {
     })
   );
 }
+
+/**
+ * 指定した参考書のうち、自分が所有しているものの件数を返す。
+ * 呼び出し元は「渡した件数と一致するか」で他人の参考書混入を弾く。
+ */
+export function countOwnedTextbooks(ids: number[], userId: string) {
+  return measured("textbook.countOwned", () =>
+    prisma.textbook.count({ where: { id: { in: ids }, userId } })
+  );
+}
+
+/** 1件だけの所有確認。範囲や単位の検証にも使うので行ごと返す。 */
+export function findOwnedTextbook(id: number, userId: string) {
+  return measured("textbook.findOwned", () =>
+    prisma.textbook.findFirst({ where: { id, userId } })
+  );
+}
