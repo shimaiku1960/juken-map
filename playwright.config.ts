@@ -28,9 +28,11 @@ export default defineConfig({
   webServer: externalBaseURL
     ? undefined
     : {
-        command: isCI ? "npx next start" : "npm run dev",
+        // 本番と同じ構成（Fastify が API と SPA の両方を配る）を 3000 番で起動する。
+        // apps/web のビルドを含むので、初回は少し時間がかかる。
+        command: "bash scripts/e2e-server.sh",
         url: "http://localhost:3000",
         reuseExistingServer: !isCI,
-        timeout: 120_000,
+        timeout: 180_000,
       },
 });

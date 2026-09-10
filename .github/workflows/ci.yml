@@ -51,7 +51,10 @@ jobs:
         run: npm install --global "npm@$NPM_VERSION"
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix apps/api
+          npm ci --prefix apps/web
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -61,21 +64,21 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
-      
+
+      - name: Type check apps
+        run: |
+          npm run typecheck --prefix apps/api
+          npm run typecheck --prefix apps/web
+
       - name: Test
         run: npm test
 
-      - name: Build
-        run: npx next build
-        env:
-            MICROCMS_SERVICE_DOMAIN: dummy
-            MICROCMS_API_KEY: dummy
-            DATABASE_URL: mysql://u:p@localhost:3306/db
-            BETTER_AUTH_SECRET: ecPTNJXeffEkIMhtDiAKQI8X/dv0xZ5PWupA15w9rVU=
-            BETTER_AUTH_URL: http://localhost:3000
+      # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
+      - name: Build SPA
+        run: npm run build --prefix apps/web
 
   # E2E（Playwright）。使い捨ての MySQL 8.4 を立て、マイグレーション→seed→
-  # ビルド→next start で本番相当のアプリを起動し、実ブラウザで主要導線を検証する。
+  # SPA のビルド→Fastify 起動で本番相当の構成を立ち上げ、実ブラウザで主要導線を検証する。
   e2e:
     runs-on: ubuntu-latest
     services:
@@ -115,7 +118,10 @@ jobs:
         run: npm install --global "npm@$NPM_VERSION"
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix apps/api
+          npm ci --prefix apps/web
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -129,11 +135,9 @@ jobs:
       - name: Seed master data and demo user
         run: npx tsx prisma/seed.ts
 
-      - name: Build
-        run: npx next build
-
       # E2E 用ユーザーの投入は globalSetup（seed-e2e.ts）が、アプリ起動は
-      # playwright.config の webServer（CI では next start）が担当する
+      # playwright.config の webServer（scripts/e2e-server.sh）が担当する。
+      # SPA のビルドもそのスクリプトの中で行う。
       - name: Run E2E tests
         run: npx playwright test
 
