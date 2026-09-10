@@ -19,8 +19,15 @@ export default function ProfilePage() {
   const { data: session } = useSession();
   const [searchParams] = useSearchParams();
   const lineResult = searchParams.get("line") ?? undefined;
-  const { data: preference, isPending } = useNotificationPreferences();
-  const { data: lineConnection } = useLineConnection();
+  const { data: preference, isPending: preferencePending } =
+    useNotificationPreferences();
+  const { data: lineConnection, isPending: connectionPending } =
+    useLineConnection();
+
+  // NotificationPreferenceForm は initial* を useState の初期値として取り込むので、
+  // 取得前の値を渡すとそれが焼き付いて後から直らない。両方が揃うまで描かない。
+  // Next.js ではサーバーで確定した値を渡していたため、この待ちが要らなかった。
+  const isPending = preferencePending || connectionPending;
 
   if (!session) return null;
 

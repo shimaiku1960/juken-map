@@ -56,6 +56,14 @@ async function main() {
       rangeUnit: "page",
     },
   });
+  // LINE 連携済みの状態も作る。プロフィール画面が連携状態を正しく描けるかを
+  // E2E で確認するため（連携状態の取得が遅いと未連携が焼き付く不具合があった）。
+  await prisma.lineConnection.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: { userId: user.id, lineUserId: "U-e2e-test" },
+  });
+
   console.log(`E2Eユーザーを投入: ${E2E_EMAIL}`);
 }
 
