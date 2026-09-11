@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execute, pool, select } from "@/api/infra/db";
-import type { StudyLogRow, StudyPlanRow, TextbookRow } from "@/api/infra/tables";
+import type { FinalGoalRow, StudyLogRow, StudyPlanRow, TextbookRow } from "@/api/infra/tables";
 
 // 本物の DB に流すテストの下ごしらえ。
 //
@@ -197,11 +197,24 @@ export async function createTextbookMaster(values: {
   return master.insertId;
 }
 
-export async function createFinalGoal(userId: string, facultyId: number) {
-  await execute(
-    "INSERT INTO FinalGoal (userId, facultyId, createdAt) VALUES (?, ?, ?)",
-    [userId, facultyId, new Date()]
+export async function createFinalGoal(
+  userId: string,
+  facultyId: number,
+  values: Partial<Pick<FinalGoalRow, "isFirstChoice" | "note" | "status" | "createdAt">> = {}
+) {
+  const result = await execute(
+    `INSERT INTO FinalGoal (userId, facultyId, isFirstChoice, note, status, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      userId,
+      facultyId,
+      values.isFirstChoice ?? false,
+      values.note ?? null,
+      values.status ?? "decided",
+      values.createdAt ?? new Date(),
+    ]
   );
+  return result.insertId;
 }
 
 // 検証用の読み取り。応答だけでなく、DB に実際に何が残ったかを確かめるのに使う。
@@ -209,6 +222,10 @@ export async function createFinalGoal(userId: string, facultyId: number) {
 export async function findStudyPlan(id: number) {
   const [row] = await select<StudyPlanRow>("SELECT * FROM StudyPlan WHERE id = ?", [id]);
   return row ?? null;
+}
+
+export function findFinalGoals(userId: string) {
+  return select<FinalGoalRow>("SELECT * FROM FinalGoal WHERE userId = ? ORDER BY id", [userId]);
 }
 
 export function findTextbooks(userId: string) {

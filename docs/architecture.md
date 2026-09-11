@@ -204,9 +204,9 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移して�
 何本の SQL が流れるか（`include` は JOIN ではなく `IN (...)` の別クエリになる）、
 `updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
 
-移行済みは `services/` の study-plan・study-log・textbook・university・user・notification・sendDailyNotifications。
+移行済みは `services/` の study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal。
 予定と実績で共通の列と、JOIN の結果を入れ子に戻す関数は `services/study-columns.ts` にある。
-それ以外のサービス（goal・line-connection）と Better Auth はまだ Prisma を使う。
+それ以外のサービス（line-connection）と Better Auth はまだ Prisma を使う。
 移行が終わるまでは、Prisma と `infra/db.ts` が別々のプールで同じ DB に繋がる。
 そのため1つのトランザクションに Prisma と生 SQL を混ぜることはできない。
 

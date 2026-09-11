@@ -5,7 +5,6 @@ vi.mock("../auth.ts", () => ({
 }));
 
 const { auth } = await import("../auth.ts");
-const { prisma } = await import("@/api/infra/prisma");
 const { registerUniversityRoutes } = await import("./universities.ts");
 const { buildTestApp, request } = await import("../test-support.ts");
 const { cleanup, createFinalGoal, createTag, createUniversity, createUser } =
@@ -22,11 +21,7 @@ beforeEach(async () => {
   getSession.mockResolvedValue(owner.session);
 });
 
-afterAll(async () => {
-  await cleanup();
-  // 志望校の読み取り（goal-service）はまだ Prisma なので、その接続も閉じる
-  await prisma.$disconnect();
-});
+afterAll(cleanup);
 
 describe("GET /api/universities", () => {
   it("未ログインなら401を返す", async () => {

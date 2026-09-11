@@ -42,6 +42,18 @@ export type TagRow = {
   createdAt: Date;
 };
 
+// 志望校。1ユーザー1学部1行（userId, facultyId が UNIQUE）。更新日時の列は無い。
+export type FinalGoalRow = {
+  id: number;
+  createdAt: Date;
+  userId: string;
+  facultyId: number;
+  isFirstChoice: boolean;
+  note: string | null;
+  // "candidate"（比較検討中）/ "decided"（受験校として確定）
+  status: string;
+};
+
 // 参考書マスター（ISBN 単位の既製の参考書）と、その総量の候補（ページ数・問題数など）。
 export type TextbookMasterRow = {
   id: number;

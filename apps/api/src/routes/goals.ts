@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { Prisma } from "@/api/generated/prisma/client";
+import { isDuplicateEntry } from "@/api/infra/db";
 import { goalSchema, updateGoalSchema, patchGoalSchema } from "@/shared/validations/goal";
 import {
   applyGoalPatch,
@@ -41,10 +41,7 @@ export function registerGoalRoutes(app: FastifyInstance) {
     } catch (error) {
       // 一意制約違反だけは「すでに登録済み」という意味なので 409 に翻訳する。
       // それ以外は握りつぶさず投げ直す。
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
+      if (isDuplicateEntry(error)) {
         return reply.code(409).send({ error: "この学部はすでに登録されています" });
       }
       throw error;
