@@ -4,6 +4,44 @@
 // ORM を外すと、スキーマと型の一致を保つのは人間の責任になる。
 // 列の定義は prisma/migrations の CREATE TABLE / ALTER TABLE が正。
 
+// Better Auth も同じテーブルを読み書きする。列は Better Auth の分も含めて全部書く。
+export type UserRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  nickname: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  emailVerified: boolean;
+  firstStudyLogAt: Date | null;
+  analyticsSignUpTrackedAt: Date | null;
+};
+
+export type UniversityRow = {
+  id: number;
+  name: string;
+  prefecture: string;
+  type: string;
+  createdAt: Date;
+};
+
+export type FacultyRow = {
+  id: number;
+  name: string;
+  examDate: Date;
+  createdAt: Date;
+  universityId: number;
+};
+
+// 学部とタグは多対多。Prisma が暗黙に作った中間テーブル _FacultyToTag
+// （A = Faculty.id, B = Tag.id）で結ばれている。
+export type TagRow = {
+  id: number;
+  name: string;
+  createdAt: Date;
+};
+
 export type TextbookRow = {
   id: number;
   userId: string;
