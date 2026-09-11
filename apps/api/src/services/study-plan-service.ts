@@ -14,13 +14,17 @@ import {
 // Prisma の include は、親を取ったあとに子を `WHERE id IN (...)` で別に取りに行く
 // （予定・参考書・実績で SQL が3本）。ここでは LEFT JOIN 1本で済ませる。
 // 実績は予定1件につき最大1件（StudyLog.studyPlanId が UNIQUE）なので、JOIN しても行は増えない。
+//
+// 1日に複数の予定を入れるのは普通なので、同じ日付の中は作った順（id 昇順）に固定する。
+// ORDER BY date だけでは同じ日付の中の順番が決まらない（Prisma 版も DB 任せで、
+// 既存データでは結果的に id 昇順になっていた）。
 const LIST_SQL = `
   SELECT ${PLAN_COLUMNS}, ${TEXTBOOK_COLUMNS}, l.id AS log_id
   FROM StudyPlan AS p
   LEFT JOIN Textbook AS t ON t.id = p.textbookId
   LEFT JOIN StudyLog AS l ON l.studyPlanId = p.id
   WHERE p.userId = ?
-  ORDER BY p.date ASC
+  ORDER BY p.date ASC, p.id ASC
 `;
 
 export function listStudyPlans(userId: string) {

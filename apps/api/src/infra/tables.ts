@@ -42,6 +42,27 @@ export type TagRow = {
   createdAt: Date;
 };
 
+// 参考書マスター（ISBN 単位の既製の参考書）と、その総量の候補（ページ数・問題数など）。
+export type TextbookMasterRow = {
+  id: number;
+  name: string;
+  publisher: string | null;
+  edition: string | null;
+  isbn: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type TextbookMasterMetricRow = {
+  id: number;
+  masterId: number;
+  unit: string;
+  totalAmount: number;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type TextbookRow = {
   id: number;
   userId: string;
