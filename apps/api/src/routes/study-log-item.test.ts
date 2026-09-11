@@ -1,209 +1,206 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
+// 認証だけ差し替え、DB は本物のテスト用 MySQL に流す。
 vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/api/infra/prisma", () => {
-  const client = {
-    studyLog: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    textbook: { findFirst: vi.fn() },
-  };
-  return { prisma: client, default: client };
-});
-
 const { auth } = await import("../auth.ts");
 const { prisma } = await import("@/api/infra/prisma");
 const { registerStudyLogItemRoutes } = await import("./study-log-item.ts");
-const { buildTestApp, request, loggedInSession, demoSession } = await import(
-  "../test-support.ts"
-);
+const { buildTestApp, request, demoSession } = await import("../test-support.ts");
+const {
+  cleanup,
+  createStudyLog,
+  createStudyPlan,
+  createTextbook,
+  createUser,
+  findStudyLog,
+} = await import("../test-db/fixtures.ts");
 
 const getSession = auth.api.getSession as unknown as Mock;
-const findUnique = prisma.studyLog.findFirst as unknown as Mock;
-const del = prisma.studyLog.delete as unknown as Mock;
-const update = prisma.studyLog.update as unknown as Mock;
-const findTextbook = prisma.textbook.findFirst as unknown as Mock;
-
 const app = buildTestApp(registerStudyLogItemRoutes);
 
-const patch = (id: string, body: unknown) =>
+const patch = (id: number, body: unknown) =>
   request(app, "PATCH", `/api/study-logs/${id}`, body);
-const remove = (id: string) => request(app, "DELETE", `/api/study-logs/${id}`);
+const remove = (id: number) => request(app, "DELETE", `/api/study-logs/${id}`);
 
 const validBody = { date: "2026-02-20", minutes: 90, subject: "english" };
 
-beforeEach(() => {
+let owner: Awaited<ReturnType<typeof createUser>>;
+
+beforeEach(async () => {
   vi.clearAllMocks();
+  owner = await createUser();
+  getSession.mockResolvedValue(owner.session);
+});
+
+afterAll(async () => {
+  await cleanup();
+  // 参考書の所有チェック（textbook-service）はまだ Prisma なので、その接続も閉じる
+  await prisma.$disconnect();
 });
 
 describe("PATCH /api/study-logs/:id", () => {
   it("未ログインなら 401 を返す", async () => {
     getSession.mockResolvedValue(null);
+    const logId = await createStudyLog(owner.id, { minutes: 30 });
 
-    const res = await patch("1", validBody);
+    const res = await patch(logId, validBody);
 
     expect(res.statusCode).toBe(401);
-    expect(update).not.toHaveBeenCalled();
+    expect((await findStudyLog(logId))?.minutes).toBe(30);
   });
 
-  it("他人の実績は 404 を返す", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    // 所有者チェックは where に userId を含めるので、他人の行はそもそも返らない
-    findUnique.mockResolvedValue(null);
+  it("他人の実績は 404 を返し、変更しない", async () => {
+    const other = await createUser();
+    const logId = await createStudyLog(other.id, { minutes: 30 });
 
-    const res = await patch("1", validBody);
+    const res = await patch(logId, validBody);
 
     expect(res.statusCode).toBe(404);
-    expect(update).not.toHaveBeenCalled();
-    expect(findUnique).toHaveBeenCalledWith({
-      where: { id: 1, userId: "user-1" },
-    });
+    expect((await findStudyLog(logId))?.minutes).toBe(30);
   });
 
   it("他人の参考書IDなら 400 を返す", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue({ id: 1, userId: "user-1" });
-    findTextbook.mockResolvedValue(null);
+    const logId = await createStudyLog(owner.id);
+    const other = await createUser();
+    const othersTextbook = await createTextbook(other.id);
 
-    const res = await patch("1", { ...validBody, textbookId: 999 });
+    const res = await patch(logId, { ...validBody, textbookId: othersTextbook });
 
     expect(res.statusCode).toBe(400);
-    expect(update).not.toHaveBeenCalled();
+    expect((await findStudyLog(logId))?.textbookId).toBeNull();
   });
 
-  it("自分の実績なら入力内容を更新する", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue({ id: 1, userId: "user-1" });
-    update.mockResolvedValue({ id: 1, ...validBody });
+  it("自分の実績なら入力内容で更新し、更新後の実績を返す", async () => {
+    const logId = await createStudyLog(owner.id, { minutes: 30, memo: "前のメモ" });
 
-    const res = await patch("1", validBody);
+    // 送られなかった項目は空（null）になる。フォームは毎回全項目を送る前提
+    const res = await patch(logId, validBody);
 
     expect(res.statusCode).toBe(200);
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 1 },
-      data: expect.objectContaining({ minutes: 90, subject: "english" }),
+    expect(res.json()).toMatchObject({
+      id: logId,
+      date: "2026-02-20T00:00:00.000Z",
+      minutes: 90,
+      subject: "english",
+      memo: null,
     });
+    expect(await findStudyLog(logId)).toMatchObject({ minutes: 90, subject: "english", memo: null });
   });
 
   it("予定由来の実績は日付・科目・参考書の紐づきを維持する", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue({
-      id: 1,
-      userId: "user-1",
-      studyPlanId: 8,
-      date: new Date("2026-02-20"),
+    const textbookId = await createTextbook(owner.id, { name: "数学" });
+    const otherTextbook = await createTextbook(owner.id, { name: "英語" });
+    const planId = await createStudyPlan(owner.id);
+    const logId = await createStudyLog(owner.id, {
+      studyPlanId: planId,
+      date: new Date("2026-02-20T00:00:00.000Z"),
       subject: "math",
-      textbookId: 3,
+      textbookId,
     });
-    findTextbook.mockResolvedValue({
-      id: 9,
-      userId: "user-1",
-      rangeUnit: null,
-      totalAmount: null,
-    });
-    update.mockResolvedValue({ id: 1 });
 
-    const res = await patch("1", {
+    const res = await patch(logId, {
       ...validBody,
       date: "2026-02-21",
       subject: "english",
-      textbookId: 9,
+      textbookId: otherTextbook,
     });
 
     expect(res.statusCode).toBe(200);
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 1 },
-      data: expect.objectContaining({
-        date: new Date("2026-02-20"),
-        subject: "math",
-        textbookId: 3,
-      }),
+    expect(await findStudyLog(logId)).toMatchObject({
+      date: new Date("2026-02-20T00:00:00.000Z"),
+      subject: "math",
+      textbookId,
+      minutes: 90,
     });
   });
 
-  it("時間だけの修正では現在の参考書設定を過去実績へ遡及しない", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue({
-      id: 1,
-      userId: "user-1",
-      studyPlanId: null,
-      date: new Date("2026-02-20"),
+  it("時間だけの修正では、後から変わった参考書設定を過去の実績へ遡って当てはめない", async () => {
+    // 記録したあとで参考書の総量を 5 に減らした、という状態（範囲の終わり 10 は今の総量を超える）
+    const textbookId = await createTextbook(owner.id, { totalAmount: 5, rangeUnit: "page" });
+    const logId = await createStudyLog(owner.id, {
+      date: new Date("2026-02-20T00:00:00.000Z"),
       minutes: 60,
       subject: "english",
-      textbookId: 3,
+      textbookId,
       rangeStart: 1,
       rangeEnd: 10,
       rangeUnit: "page",
     });
-    update.mockResolvedValue({ id: 1 });
 
-    const res = await patch("1", {
+    const res = await patch(logId, {
       date: "2026-02-20",
       minutes: 90,
       subject: "english",
-      textbookId: 3,
+      textbookId,
       rangeStart: 1,
       rangeEnd: 10,
       rangeUnit: "page",
     });
 
     expect(res.statusCode).toBe(200);
-    expect(findTextbook).not.toHaveBeenCalled();
-    expect(update).toHaveBeenCalled();
+    expect((await findStudyLog(logId))?.minutes).toBe(90);
+  });
+
+  it("範囲を変えるなら、今の参考書設定で確かめる", async () => {
+    const textbookId = await createTextbook(owner.id, { totalAmount: 5, rangeUnit: "page" });
+    const logId = await createStudyLog(owner.id, {
+      textbookId,
+      rangeStart: 1,
+      rangeEnd: 3,
+      rangeUnit: "page",
+    });
+
+    const res = await patch(logId, {
+      ...validBody,
+      textbookId,
+      rangeStart: 1,
+      rangeEnd: 10,
+      rangeUnit: "page",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((await findStudyLog(logId))?.rangeEnd).toBe(3);
   });
 });
 
 describe("DELETE /api/study-logs/:id", () => {
   it("未ログインなら 401 を返す", async () => {
     getSession.mockResolvedValue(null);
+    const logId = await createStudyLog(owner.id);
 
-    const res = await remove("1");
-
-    expect(res.statusCode).toBe(401);
-    expect(del).not.toHaveBeenCalled();
+    expect((await remove(logId)).statusCode).toBe(401);
+    expect(await findStudyLog(logId)).not.toBeNull();
   });
 
   it("デモアカウントなら 403 を返す（削除しない）", async () => {
     getSession.mockResolvedValue(demoSession);
+    const logId = await createStudyLog(owner.id);
 
-    const res = await remove("1");
-
-    expect(res.statusCode).toBe(403);
-    expect(del).not.toHaveBeenCalled();
+    expect((await remove(logId)).statusCode).toBe(403);
+    expect(await findStudyLog(logId)).not.toBeNull();
   });
 
   it("他人の実績は 404 を返す（削除しない）", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue(null);
+    const other = await createUser();
+    const logId = await createStudyLog(other.id);
 
-    const res = await remove("1");
-
-    expect(res.statusCode).toBe(404);
-    expect(del).not.toHaveBeenCalled();
-    expect(findUnique).toHaveBeenCalledWith({
-      where: { id: 1, userId: "user-1" },
-    });
+    expect((await remove(logId)).statusCode).toBe(404);
+    expect(await findStudyLog(logId)).not.toBeNull();
   });
 
   it("存在しない実績は 404 を返す", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue(null);
-
-    const res = await remove("999");
-
-    expect(res.statusCode).toBe(404);
-    expect(del).not.toHaveBeenCalled();
+    expect((await remove(999999999)).statusCode).toBe(404);
   });
 
   it("自分の実績なら 200 で削除する", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    findUnique.mockResolvedValue({ id: 1, userId: "user-1" });
-    del.mockResolvedValue({ id: 1 });
+    const logId = await createStudyLog(owner.id);
 
-    const res = await remove("1");
+    const res = await remove(logId);
 
     expect(res.statusCode).toBe(200);
-    expect(del).toHaveBeenCalledWith({ where: { id: 1 } });
+    expect(await findStudyLog(logId)).toBeNull();
   });
 });

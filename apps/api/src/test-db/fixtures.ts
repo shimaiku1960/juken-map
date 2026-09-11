@@ -64,13 +64,28 @@ export async function createStudyPlan(
 
 export async function createStudyLog(
   userId: string,
-  values: { studyPlanId?: number | null; minutes?: number; date?: Date } = {}
+  values: Partial<Omit<StudyLogRow, "id" | "userId" | "createdAt" | "updatedAt">> = {}
 ) {
   const now = new Date();
   const result = await execute(
-    `INSERT INTO StudyLog (userId, studyPlanId, date, minutes, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [userId, values.studyPlanId ?? null, values.date ?? now, values.minutes ?? 30, now, now]
+    `INSERT INTO StudyLog
+       (userId, studyPlanId, date, minutes, subject, textbookId,
+        rangeStart, rangeEnd, rangeUnit, memo, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      userId,
+      values.studyPlanId ?? null,
+      values.date ?? now,
+      values.minutes ?? 30,
+      values.subject ?? null,
+      values.textbookId ?? null,
+      values.rangeStart ?? null,
+      values.rangeEnd ?? null,
+      values.rangeUnit ?? null,
+      values.memo ?? null,
+      now,
+      now,
+    ]
   );
   return result.insertId;
 }
@@ -170,6 +185,11 @@ export async function createFinalGoal(userId: string, facultyId: number) {
 
 export async function findStudyPlan(id: number) {
   const [row] = await select<StudyPlanRow>("SELECT * FROM StudyPlan WHERE id = ?", [id]);
+  return row ?? null;
+}
+
+export async function findStudyLog(id: number) {
+  const [row] = await select<StudyLogRow>("SELECT * FROM StudyLog WHERE id = ?", [id]);
   return row ?? null;
 }
 
