@@ -7,7 +7,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "pnpm run dev:infra && prisma migrate deploy && pnpm run \"/^dev:(api|web)$/\"",
+    "dev": "pnpm run dev:infra && pnpm run db:migrate && pnpm run \"/^dev:(api|web)$/\"",
     "dev:infra": "docker compose up -d --wait db",
     "dev:api": "pnpm --filter @juken-map/api dev",
     "dev:web": "pnpm --filter @juken-map/web dev",
@@ -17,6 +17,7 @@
     "test": "vitest run",
     "check": "pnpm exec prisma generate && pnpm exec eslint --max-warnings 0 && pnpm exec tsc --noEmit && pnpm -r typecheck && pnpm test && pnpm -r test && pnpm --filter @juken-map/web build",
     "e2e": "playwright test",
+    "db:migrate": "pnpm --filter @juken-map/api migrate",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
     "hooks:install": "git config core.hooksPath .githooks",

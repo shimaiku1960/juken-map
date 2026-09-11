@@ -154,11 +154,10 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    pnpm run dev:infra
    ```
 
-6. Prisma Clientを生成し、マイグレーションを適用します。
+6. マイグレーション（テーブル定義）を適用します。
 
    ```bash
-   pnpm exec prisma generate
-   pnpm exec prisma migrate deploy
+   pnpm run db:migrate
    ```
 
 7. 大学マスターとデモデータを投入します。
@@ -238,6 +237,7 @@ docker compose up --build
 | `pnpm run test` | ルート（`src/`）のVitestを実行する |
 | `pnpm run e2e` | PlaywrightのE2Eテストを実行する |
 | `pnpm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
+| `pnpm run db:migrate` | まだ当てていないマイグレーション（`prisma/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
