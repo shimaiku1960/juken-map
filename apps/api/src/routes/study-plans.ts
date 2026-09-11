@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { Prisma } from "@/api/generated/prisma/client";
+import { isDuplicateEntry } from "@/api/infra/db";
 import {
   createStudyPlansSchema,
   updateStudyPlanSchema,
@@ -188,10 +188,7 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
         return reply.code(201).send({ log, plan: updatedPlan, isFirstStudyLog });
       } catch (error) {
         // 同じ予定を同時に完了すると一意制約に当たる。これは「すでに記録済み」なので 409。
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === "P2002"
-        ) {
+        if (isDuplicateEntry(error)) {
           return reply
             .code(409)
             .send({ error: "この予定の実績はすでに記録されています" });

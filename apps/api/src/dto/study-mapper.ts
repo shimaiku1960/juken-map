@@ -1,4 +1,8 @@
-import type { Prisma } from "@/api/generated/prisma/client";
+import type {
+  StudyLogRow as StudyLogTableRow,
+  StudyPlanRow as StudyPlanTableRow,
+  TextbookRow,
+} from "@/api/infra/tables";
 
 import type { StudyLog, StudyPlan, Textbook } from "@/shared/dto/study";
 
@@ -12,17 +16,16 @@ import type { StudyLog, StudyPlan, Textbook } from "@/shared/dto/study";
 // 受け渡す形そのもの（型）は shared 側にある。
 
 // 変換元＝サービス層（listStudyPlans / listStudyLogs）の戻り値の要素。
-// include の形を Prisma の型から導いているので、schema を変えると
-// ここが型エラーになり、直し忘れに気づける。
-type StudyPlanRow = Prisma.StudyPlanGetPayload<{
-  include: { textbook: true; studyLog: { select: { id: true } } };
-}>;
+// 以前は Prisma の型から導いていたので schema の変更が型エラーで分かったが、
+// 今は infra/tables.ts の手書きの型が頼り。
+type StudyPlanRow = StudyPlanTableRow & {
+  textbook: TextbookRow | null;
+  studyLog: { id: number } | null;
+};
 
-type StudyLogRow = Prisma.StudyLogGetPayload<{
-  include: { textbook: true };
-}>;
+type StudyLogRow = StudyLogTableRow & { textbook: TextbookRow | null };
 
-function toTextbookDTO(textbook: StudyPlanRow["textbook"]): Textbook | null {
+function toTextbookDTO(textbook: TextbookRow | null): Textbook | null {
   if (!textbook) return null;
   return {
     id: textbook.id,
