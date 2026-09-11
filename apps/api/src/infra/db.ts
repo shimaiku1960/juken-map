@@ -30,7 +30,8 @@ const pool: Pool = mysql.createPool({
   },
 });
 
-function parseDatabaseUrl(url: string | undefined) {
+/** DATABASE_URL を mysql2 の接続設定にする。マイグレーション（infra/migrations.ts）も使う。 */
+export function parseDatabaseUrl(url: string | undefined) {
   // テストのようにサービスを読み込むだけで DB を使わない場面もあるので、
   // URL が無くても読み込み時には落とさない。実際に繋ぐときに接続エラーになる。
   if (!url) return {};

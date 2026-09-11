@@ -1,6 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
+import { applyMigrations } from "../infra/migrations.ts";
 import {
   testDatabaseAdminUrl,
   testDatabaseName,
@@ -30,9 +29,5 @@ export default async function setup() {
   }
 
   // 本番と同じマイグレーションを当てるので、テストの DB は本番と同じ形になる。
-  execFileSync("pnpm", ["exec", "prisma", "migrate", "deploy"], {
-    cwd: fileURLToPath(new URL("../..", import.meta.url)),
-    env: { ...process.env, DATABASE_URL: testDatabaseUrl },
-    stdio: "pipe",
-  });
+  await applyMigrations({ databaseUrl: testDatabaseUrl, log: () => {} });
 }

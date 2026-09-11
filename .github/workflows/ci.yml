@@ -137,7 +137,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run migrations
-        run: pnpm exec prisma migrate deploy
+        run: pnpm run db:migrate
 
       - name: Seed master data and demo user
         run: pnpm exec tsx prisma/seed.ts
