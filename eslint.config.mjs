@@ -52,8 +52,6 @@ export default defineConfig([
     },
   },
   globalIgnores([
-    // Prisma の生成物。自動生成コードは対象外。
-    "apps/api/src/generated/**",
     // apps/ は独自の tsconfig と依存を持つ別パッケージ。
     "apps/**",
     // 実行成果物

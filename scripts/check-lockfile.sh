@@ -22,10 +22,9 @@ case "${1:-}" in
     docker run --rm --platform linux/amd64 \
       --volume "$TEMP_DIR:/workspace" --workdir /workspace \
       node:24-slim sh -ec '
-        apt-get update -qq && apt-get install -y -qq openssl >/dev/null
         npm install --global "$(node -p "require(\"./package.json\").packageManager")" --no-audit --no-fund
         pnpm install --frozen-lockfile
-        pnpm --filter @juken-map/api exec prisma --version
+        pnpm --filter @juken-map/api exec tsx --version
         pnpm --filter @juken-map/web exec vite --version
       '
     ;;

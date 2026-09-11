@@ -31,7 +31,6 @@ apps/api/               バックエンド一式（Fastify）
   ├ test-db/              テスト用 MySQL の準備と、テストデータの作成
   ├ domain/               通知本文の組み立てなど
   ├ observability/        サービスの所要時間計測
-  └ generated/prisma/     Prisma Client（生成物・gitignore）
 
 src/shared/             2つのアプリが共有する、外部依存のない純粋関数・型のみ
 ├ date.ts, subjects.ts, studyStats.ts, site.ts, demo.ts
@@ -195,10 +194,10 @@ cron やバッチなど HTTP 以外の入口からも同じ処理を呼べる。
 **見直す条件**は、DB を実際に移す必要が出たとき、または Prisma を直接モックできず
 テストが書けない場面が繰り返し出てきたとき。
 
-### ORM をやめて生 SQL へ移行中（2026-09-11〜）
+### ORM をやめて生 SQL へ（2026-09-11 完了）
 
-Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移している。最終的には
-クエリ・Better Auth・マイグレーション・seed のすべてから Prisma を無くす。
+Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移した。
+クエリ・Better Auth・マイグレーション・seed のすべてから Prisma を無くした。
 
 **理由: 「ORM があると処理が追いにくい」ため。学習目的も兼ねる。** 1回の呼び出しの裏で
 何本の SQL が流れるか（`include` は JOIN ではなく `IN (...)` の別クエリになる）、
@@ -209,7 +208,8 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移して�
 Better Auth（`auth.ts`）も同じ mysql2 のプールを使う（内部の Kysely で読み書きする）。
 アプリの実行時も seed（`prisma/seed*.ts`）もマイグレーションの適用も Prisma を使っていない。
 seed は `prisma/seed-helpers.ts` 経由でアプリと同じ接続プールを使い、日時の扱い（UTC）もアプリと揃えている。
-（`schema.prisma` と Prisma の依存パッケージは、片付けの段階で消す。）
+`schema.prisma`・生成コード・Prisma の依存パッケージも消した（2026-09-11）。テーブル定義の正は
+`prisma/migrations` の SQL、行の型は `infra/tables.ts`。
 
 ### マイグレーション（テーブル定義の変更）
 
@@ -269,7 +269,6 @@ infra という分担は、ORM の有無と関係なく同じだった。
 - **shared は apps 配下を import できない。** これは同じ tsconfig の下にあるので型解決では
   防げず、ルールが要る。
 - `apps/**` は独自の tsconfig と依存を持つ別パッケージなので、ルートの lint 対象から外している。
-- Prisma の生成物（`apps/api/src/generated/**`）も対象外。
 
 ## テスト
 

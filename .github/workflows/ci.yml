@@ -59,9 +59,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma Client
-        run: pnpm exec prisma generate
-
       - name: Lint
         run: pnpm exec eslint --max-warnings 0
 
@@ -129,9 +126,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma Client
-        run: pnpm exec prisma generate
 
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium

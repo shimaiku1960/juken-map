@@ -93,7 +93,7 @@ flowchart LR
 | フォーム・検証 | React Hook Form / Zod |
 | サーバー状態 | TanStack Query |
 | カレンダー | FullCalendar / Schedule-X |
-| ORM・DB | Prisma 7 / MySQL 8.4 |
+| DB | MySQL 8.4（mysql2 で SQL を直接書く。ORM は使わない） |
 | 認証 | Better Auth |
 | メール | Resend |
 | CMS | microCMS |
@@ -242,7 +242,7 @@ docker compose up --build
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
 | `pnpm run lock:check` | 隔離ディレクトリでmanifestとlockfileの整合性を検証する |
-| `pnpm run lock:linux` | DockerのLinux/amd64環境でfrozen installとPrisma・Viteの起動を検証する |
+| `pnpm run lock:linux` | DockerのLinux/amd64環境でfrozen installとtsx・Viteの起動を検証する |
 | `pnpm run lock:fix` | lockfileを更新し、Linuxで検証する |
 
 `apps/api`と`apps/web`のテストは、それぞれ`pnpm --filter @juken-map/api test`と
@@ -294,7 +294,7 @@ apps/
 └── api/                 # バックエンド一式（Fastify）
     ├── src/routes/        HTTPの入口（認証・検証・ステータスコード）
     ├── src/services/      ユースケース（DBアクセス・業務ルール）
-    ├── src/infra/         Prisma、メール、LINE、microCMS
+    ├── src/infra/         DB接続とマイグレーション、メール、LINE、microCMS
     ├── src/auth.ts        Better Auth の定義
     ├── src/context.ts     認証・デモガードの門番
     └── src/seo.ts         robots / sitemap / ページ別 meta
@@ -304,7 +304,7 @@ src/
 
 e2e/                     # Playwright E2Eテスト
 infra/nginx/             # 本番リバースプロキシ設定の記録
-prisma/                  # スキーマ、マイグレーション、seed
+prisma/                  # マイグレーション（SQL）と seed（ディレクトリ名は Prisma 時代の名残）
 scripts/                 # 補助スクリプト
 terraform/               # AWSインフラ定義
 ```
