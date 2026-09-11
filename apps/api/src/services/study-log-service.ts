@@ -1,29 +1,59 @@
-import prisma from "@/api/infra/prisma";
+import { execute, select, transaction, type Db } from "@/api/infra/db";
+import type { StudyLogRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
+import {
+  LOG_COLUMNS,
+  TEXTBOOK_COLUMNS,
+  pickLog,
+  pickTextbook,
+  type TextbookColumns,
+} from "./study-columns.ts";
 
 export function listStudyLogs(userId: string) {
-  return measured("studyLog.list", () =>
-    prisma.studyLog.findMany({
-      where: { userId },
-      orderBy: { date: "desc" },
-      include: { textbook: true },
-    })
-  );
+  return measured("studyLog.list", async () => {
+    // Prisma の include は実績と参考書で SQL を2本に分けていた。LEFT JOIN 1本にする。
+    //
+    // 実績の日付は日単位なので、同じ日付の実績はよくある。ORDER BY date だけでは
+    // その中の順番は決まらず、Prisma 版は DB が返した順（大半は記録した順、ときどき逆順）
+    // だった。ヒートマップはその日の実績をこの順のまま並べるので、記録した順（id 昇順）に固定する。
+    const rows = await select<StudyLogRow & TextbookColumns>(
+      `SELECT ${LOG_COLUMNS}, ${TEXTBOOK_COLUMNS}
+       FROM StudyLog AS l
+       LEFT JOIN Textbook AS t ON t.id = l.textbookId
+       WHERE l.userId = ?
+       ORDER BY l.date DESC, l.id ASC`,
+      [userId]
+    );
+    return rows.map((row) => ({ ...pickLog(row), textbook: pickTextbook(row) }));
+  });
 }
 
 // ここから下は書き込み。HTTP は知らない。
 
+async function findStudyLogById(id: number, db?: Db) {
+  const [row] = await select<StudyLogRow>(
+    `SELECT ${LOG_COLUMNS} FROM StudyLog AS l WHERE l.id = ?`,
+    [id],
+    db
+  );
+  return row ?? null;
+}
+
 /** 更新・削除の前に「自分のものか」を確かめる。 */
 export function findOwnedStudyLog(id: number, userId: string) {
-  return measured("studyLog.findOwned", () =>
-    prisma.studyLog.findFirst({ where: { id, userId } })
-  );
+  return measured("studyLog.findOwned", async () => {
+    const [row] = await select<StudyLogRow>(
+      `SELECT ${LOG_COLUMNS} FROM StudyLog AS l WHERE l.id = ? AND l.userId = ? LIMIT 1`,
+      [id, userId]
+    );
+    return row ?? null;
+  });
 }
 
 /**
  * 実績を1件記録する。「初回記録」の印付けと同じトランザクションで行う。
  *
- * updateMany の where に firstStudyLogAt: null を入れて DB 側で判定させている。
+ * UPDATE の WHERE に firstStudyLogAt IS NULL を入れて DB 側で判定させている。
  * 先に読んでから書くと、同時アクセスで両方が「初回」になり得る。
  */
 export function createStudyLog(input: {
@@ -38,25 +68,37 @@ export function createStudyLog(input: {
   memo?: string | null;
 }) {
   return measured("studyLog.create", () =>
-    prisma.$transaction(async (tx) => {
-      const activation = await tx.user.updateMany({
-        where: { id: input.userId, firstStudyLogAt: null },
-        data: { firstStudyLogAt: new Date() },
-      });
-      const created = await tx.studyLog.create({
-        data: {
-          date: new Date(input.date),
-          minutes: input.minutes,
-          subject: input.subject ?? null,
-          textbookId: input.textbookId ?? null,
-          rangeStart: input.rangeStart ?? null,
-          rangeEnd: input.rangeEnd ?? null,
-          rangeUnit: input.rangeUnit ?? null,
-          memo: input.memo ?? null,
-          userId: input.userId,
-        },
-      });
-      return { created, isFirstStudyLog: activation.count === 1 };
+    transaction(async (tx) => {
+      const now = new Date();
+      const activation = await execute(
+        `UPDATE \`user\` SET firstStudyLogAt = ?, updatedAt = ?
+         WHERE id = ? AND firstStudyLogAt IS NULL`,
+        [now, now, input.userId],
+        tx
+      );
+      const inserted = await execute(
+        `INSERT INTO StudyLog
+           (userId, date, minutes, subject, textbookId,
+            rangeStart, rangeEnd, rangeUnit, memo, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          input.userId,
+          new Date(input.date),
+          input.minutes,
+          input.subject ?? null,
+          input.textbookId ?? null,
+          input.rangeStart ?? null,
+          input.rangeEnd ?? null,
+          input.rangeUnit ?? null,
+          input.memo ?? null,
+          now,
+          now,
+        ],
+        tx
+      );
+      // INSERT は行を返さないので、応答に使う形を同じ tx で読み直す。
+      const created = await findStudyLogById(inserted.insertId, tx);
+      return { created: created!, isFirstStudyLog: activation.affectedRows === 1 };
     })
   );
 }
@@ -85,25 +127,34 @@ export function updateStudyLog(
   }
 ) {
   const fromPlan = current.studyPlanId != null;
-  return measured("studyLog.update", () =>
-    prisma.studyLog.update({
-      where: { id },
-      data: {
-        date: fromPlan ? current.date : new Date(data.date),
-        minutes: data.minutes,
-        subject: fromPlan ? current.subject : data.subject ?? null,
-        textbookId: fromPlan ? current.textbookId : data.textbookId ?? null,
-        rangeStart: data.rangeStart ?? null,
-        rangeEnd: data.rangeEnd ?? null,
-        rangeUnit: data.rangeUnit ?? null,
-        memo: data.memo ?? null,
-      },
-    })
-  );
+  return measured("studyLog.update", async () => {
+    await execute(
+      `UPDATE StudyLog
+       SET date = ?, minutes = ?, subject = ?, textbookId = ?,
+           rangeStart = ?, rangeEnd = ?, rangeUnit = ?, memo = ?, updatedAt = ?
+       WHERE id = ?`,
+      [
+        fromPlan ? current.date : new Date(data.date),
+        data.minutes,
+        fromPlan ? current.subject : data.subject ?? null,
+        fromPlan ? current.textbookId : data.textbookId ?? null,
+        data.rangeStart ?? null,
+        data.rangeEnd ?? null,
+        data.rangeUnit ?? null,
+        data.memo ?? null,
+        new Date(),
+        id,
+      ]
+    );
+    // MySQL の UPDATE は更新後の行を返さないので読み直す（Prisma も同じことをしていた）。
+    const updated = await findStudyLogById(id);
+    if (!updated) throw new Error(`StudyLog ${id} が見つかりません`);
+    return updated;
+  });
 }
 
 export function deleteStudyLog(id: number) {
-  return measured("studyLog.delete", () =>
-    prisma.studyLog.delete({ where: { id } })
-  );
+  return measured("studyLog.delete", async () => {
+    await execute("DELETE FROM StudyLog WHERE id = ?", [id]);
+  });
 }
