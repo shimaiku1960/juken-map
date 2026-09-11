@@ -1,35 +1,9 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
+// 差し替えるのは外部境界（認証・LINE の API）だけ。DB は本物のテスト用 MySQL に流す。
 vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
-
-const transactionPrisma = {
-  lineConnection: { findUnique: vi.fn(), upsert: vi.fn() },
-  lineLinkNonce: { delete: vi.fn() },
-};
-
-vi.mock("@/api/infra/prisma", () => {
-  // routes は名前付き、services は default で import している。同じ実体を返す。
-  const client = {
-    $transaction: vi.fn(),
-    lineConnection: { findUnique: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
-    lineLinkNonce: {
-      findUnique: vi.fn(),
-      create: vi.fn(),
-      delete: vi.fn(),
-      deleteMany: vi.fn(),
-    },
-    lineOAuthAttempt: {
-      findUnique: vi.fn(),
-      create: vi.fn(),
-      delete: vi.fn(),
-      deleteMany: vi.fn(),
-    },
-    notificationPreference: { updateMany: vi.fn() },
-  };
-  return { prisma: client, default: client };
-});
 
 vi.mock("@/api/infra/line", () => ({
   verifyLineSignature: vi.fn(),
@@ -49,12 +23,7 @@ vi.mock("@/api/infra/lineLogin", () => ({
   verifyLineIdToken: vi.fn(),
 }));
 
-vi.mock("@/api/services/notification-service", () => ({
-  findLineConnection: vi.fn(),
-}));
-
 const { auth } = await import("../auth.ts");
-const { prisma } = await import("@/api/infra/prisma");
 const {
   verifyLineSignature,
   issueLineLinkToken,
@@ -69,9 +38,19 @@ const {
   verifyLineIdToken,
 } = await import("@/api/infra/lineLogin");
 const { registerLineRoutes } = await import("./line.ts");
-const { buildTestApp, request, loggedInSession } = await import(
-  "../test-support.ts"
-);
+const { buildTestApp, request, demoSession } = await import("../test-support.ts");
+const {
+  cleanup,
+  createLineConnection,
+  createLineLinkNonce,
+  createLineOAuthAttempt,
+  createNotificationPreference,
+  createUser,
+  findLineConnections,
+  findLineLinkNonces,
+  findLineOAuthAttempts,
+  findNotificationPreferences,
+} = await import("../test-db/fixtures.ts");
 
 const getSession = auth.api.getSession as unknown as Mock;
 
@@ -85,14 +64,21 @@ const webhook = (events: unknown[]) =>
     "x-line-signature": "signature",
   });
 
-beforeEach(() => {
+// LINE ユーザー ID は UNIQUE なので、テストごとに作る。
+const newLineUserId = () => `U${crypto.randomUUID().replaceAll("-", "")}`;
+
+let owner: Awaited<ReturnType<typeof createUser>>;
+
+beforeEach(async () => {
   vi.clearAllMocks();
+  owner = await createUser();
+  getSession.mockResolvedValue(owner.session);
 });
+
+afterAll(cleanup);
 
 describe("GET /line/settings", () => {
   it("ログイン済みならプロフィールの通知設定へ移動する", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-
     const res = await request(app, "GET", "/line/settings");
 
     expect(res.statusCode).toBe(302);
@@ -114,6 +100,31 @@ describe("GET /line/settings", () => {
 });
 
 describe("POST /api/line/webhook", () => {
+  const accountLink = (nonce: string, lineUserId: string) =>
+    webhook([
+      {
+        type: "accountLink",
+        replyToken: "reply-token",
+        source: { type: "user", userId: lineUserId },
+        link: { result: "ok", nonce },
+      },
+    ]);
+
+  const linkMessage = (lineUserId: string) =>
+    webhook([
+      {
+        type: "message",
+        replyToken: "reply-token",
+        source: { type: "user", userId: lineUserId },
+        message: { type: "text", text: "連携" },
+      },
+    ]);
+
+  beforeEach(() => {
+    vi.mocked(verifyLineSignature).mockReturnValue(true);
+    vi.mocked(replyLineText).mockResolvedValue(undefined);
+  });
+
   it("署名が不正なら401を返す", async () => {
     vi.mocked(verifyLineSignature).mockReturnValue(false);
 
@@ -121,22 +132,13 @@ describe("POST /api/line/webhook", () => {
   });
 
   it("連携メッセージへ公式Account Linking URLを返す", async () => {
-    vi.mocked(verifyLineSignature).mockReturnValue(true);
-    vi.mocked(prisma.lineConnection.findUnique).mockResolvedValue(null);
+    const lineUserId = newLineUserId();
     vi.mocked(issueLineLinkToken).mockResolvedValue("token");
-    vi.mocked(replyLineText).mockResolvedValue(undefined);
 
-    const res = await webhook([
-      {
-        type: "message",
-        replyToken: "reply-token",
-        source: { type: "user", userId: "U123" },
-        message: { type: "text", text: "連携" },
-      },
-    ]);
+    const res = await linkMessage(lineUserId);
 
     expect(res.statusCode).toBe(200);
-    expect(issueLineLinkToken).toHaveBeenCalledWith("U123");
+    expect(issueLineLinkToken).toHaveBeenCalledWith(lineUserId);
     expect(replyLineText).toHaveBeenCalledWith(
       "reply-token",
       expect.stringContaining("10分以内")
@@ -144,20 +146,9 @@ describe("POST /api/line/webhook", () => {
   });
 
   it("連携済みなら再連携リンクを発行せず通知設定を案内する", async () => {
-    vi.mocked(verifyLineSignature).mockReturnValue(true);
-    vi.mocked(prisma.lineConnection.findUnique).mockResolvedValue({
-      id: 1,
-    } as never);
-    vi.mocked(replyLineText).mockResolvedValue(undefined);
+    const lineUserId = await createLineConnection(owner.id);
 
-    const res = await webhook([
-      {
-        type: "message",
-        replyToken: "reply-token",
-        source: { type: "user", userId: "U123" },
-        message: { type: "text", text: "連携" },
-      },
-    ]);
+    const res = await linkMessage(lineUserId);
 
     expect(res.statusCode).toBe(200);
     expect(issueLineLinkToken).not.toHaveBeenCalled();
@@ -171,78 +162,78 @@ describe("POST /api/line/webhook", () => {
     );
   });
 
-  it("有効なnonceでアプリユーザーとLINEユーザーを連携する", async () => {
-    vi.mocked(verifyLineSignature).mockReturnValue(true);
-    vi.mocked(replyLineText).mockResolvedValue(undefined);
-    vi.mocked(prisma.lineLinkNonce.findUnique).mockResolvedValue({
-      nonce: "nonce-1",
-      userId: "user-1",
-      expiresAt: new Date(Date.now() + 60_000),
-    } as never);
-    vi.mocked(prisma.$transaction).mockImplementation(
-      (callback: unknown) =>
-        (callback as (tx: unknown) => unknown)(transactionPrisma) as never
-    );
-    transactionPrisma.lineConnection.findUnique.mockResolvedValue(null);
-    transactionPrisma.lineConnection.upsert.mockResolvedValue({});
-    transactionPrisma.lineLinkNonce.delete.mockResolvedValue({});
+  it("有効なnonceでアプリユーザーとLINEユーザーを連携し、nonceを使い捨てにする", async () => {
+    const nonce = await createLineLinkNonce(owner.id);
+    const lineUserId = newLineUserId();
 
-    const res = await webhook([
-      {
-        type: "accountLink",
-        replyToken: "reply-token",
-        source: { type: "user", userId: "U123" },
-        link: { result: "ok", nonce: "nonce-1" },
-      },
-    ]);
+    const res = await accountLink(nonce, lineUserId);
 
     expect(res.statusCode).toBe(200);
-    expect(transactionPrisma.lineConnection.upsert).toHaveBeenCalledWith({
-      where: { userId: "user-1" },
-      create: { userId: "user-1", lineUserId: "U123" },
-      update: { lineUserId: "U123", linkedAt: expect.any(Date) },
-    });
-    expect(transactionPrisma.lineLinkNonce.delete).toHaveBeenCalledWith({
-      where: { nonce: "nonce-1" },
-    });
+    expect(await findLineConnections(owner.id)).toEqual([
+      expect.objectContaining({ lineUserId }),
+    ]);
+    expect(await findLineLinkNonces(owner.id)).toHaveLength(0);
     expect(replyLineText).toHaveBeenCalledWith(
       "reply-token",
       expect.stringContaining("連携が完了")
     );
   });
 
-  it("別ユーザーに連携済みなら解除方法を返信する", async () => {
-    vi.mocked(verifyLineSignature).mockReturnValue(true);
-    vi.mocked(replyLineText).mockResolvedValue(undefined);
-    vi.mocked(prisma.lineLinkNonce.findUnique).mockResolvedValue({
-      nonce: "nonce-2",
-      userId: "user-2",
-      expiresAt: new Date(Date.now() + 60_000),
-    } as never);
-    vi.mocked(prisma.$transaction).mockImplementation(
-      (callback: unknown) =>
-        (callback as (tx: unknown) => unknown)(transactionPrisma) as never
-    );
-    transactionPrisma.lineConnection.findUnique.mockResolvedValue({
-      userId: "user-1",
-    });
-    transactionPrisma.lineLinkNonce.delete.mockResolvedValue({});
+  it("連携済みのアカウントなら、新しいLINEへ付け替える", async () => {
+    await createLineConnection(owner.id);
+    const nonce = await createLineLinkNonce(owner.id);
+    const lineUserId = newLineUserId();
 
-    const res = await webhook([
-      {
-        type: "accountLink",
-        replyToken: "reply-token",
-        source: { type: "user", userId: "U123" },
-        link: { result: "ok", nonce: "nonce-2" },
-      },
+    await accountLink(nonce, lineUserId);
+
+    expect(await findLineConnections(owner.id)).toEqual([
+      expect.objectContaining({ lineUserId }),
     ]);
+  });
+
+  it("別ユーザーに連携済みなら解除方法を返信し、どちらの連携も変えない", async () => {
+    const other = await createUser();
+    const lineUserId = await createLineConnection(other.id);
+    const before = await findLineConnections(other.id);
+    const nonce = await createLineLinkNonce(owner.id);
+
+    const res = await accountLink(nonce, lineUserId);
 
     expect(res.statusCode).toBe(200);
-    expect(transactionPrisma.lineConnection.upsert).not.toHaveBeenCalled();
+    expect(await findLineConnections(owner.id)).toHaveLength(0);
+    expect(await findLineConnections(other.id)).toEqual(before);
+    // nonce は断ったときも使い捨て
+    expect(await findLineLinkNonces(owner.id)).toHaveLength(0);
     expect(replyLineText).toHaveBeenCalledWith(
       "reply-token",
       expect.stringContaining("別の受験マップアカウント")
     );
+  });
+
+  it("期限切れのnonceなら連携せず、やり直しを案内する", async () => {
+    const nonce = await createLineLinkNonce(owner.id, {
+      expiresAt: new Date(Date.now() - 1_000),
+    });
+
+    await accountLink(nonce, newLineUserId());
+
+    expect(await findLineConnections(owner.id)).toHaveLength(0);
+    expect(replyLineText).toHaveBeenCalledWith(
+      "reply-token",
+      expect.stringContaining("期限が切れました")
+    );
+  });
+
+  it("同じnonceが同時に2回届いても、連携は1回だけ行われる", async () => {
+    const nonce = await createLineLinkNonce(owner.id);
+    const lineUserId = newLineUserId();
+
+    await Promise.all([accountLink(nonce, lineUserId), accountLink(nonce, lineUserId)]);
+
+    expect(await findLineConnections(owner.id)).toHaveLength(1);
+    const replies = vi.mocked(replyLineText).mock.calls.map(([, text]) => text);
+    expect(replies.filter((text) => text.includes("連携が完了"))).toHaveLength(1);
+    expect(replies.filter((text) => text.includes("期限が切れました"))).toHaveLength(1);
   });
 });
 
@@ -255,12 +246,11 @@ describe("POST /api/line/account-link", () => {
     });
 
     expect(res.statusCode).toBe(401);
-    expect(prisma.lineLinkNonce.create).not.toHaveBeenCalled();
+    expect(await findLineLinkNonces(owner.id)).toHaveLength(0);
   });
 
-  it("ログインユーザーに10分間の単回nonceを発行する", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
+  it("ログインユーザーに10分間の単回nonceを発行する（古いnonceは捨てる）", async () => {
+    await createLineLinkNonce(owner.id, { nonce: `old-${crypto.randomUUID()}` });
     const before = Date.now();
 
     const res = await request(app, "POST", "/api/line/account-link", {
@@ -268,62 +258,91 @@ describe("POST /api/line/account-link", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().redirectUrl).toContain(
+    const redirectUrl = new URL(res.json().redirectUrl);
+    expect(redirectUrl.origin + redirectUrl.pathname).toBe(
       "https://access.line.me/dialog/bot/accountLink"
     );
-    expect(prisma.lineLinkNonce.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        userId: "user-1",
-        nonce: expect.any(String),
-        expiresAt: expect.any(Date),
-      }),
-    });
-    expect(prisma.lineLinkNonce.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1" },
-    });
-    const { expiresAt } = vi.mocked(prisma.lineLinkNonce.create).mock
-      .calls[0][0].data as { expiresAt: Date };
-    expect(expiresAt.getTime()).toBeGreaterThanOrEqual(before + 9 * 60 * 1000);
+    const nonces = await findLineLinkNonces(owner.id);
+    expect(nonces).toHaveLength(1);
+    expect(nonces[0].nonce).toBe(redirectUrl.searchParams.get("nonce"));
+    expect(nonces[0].expiresAt.getTime()).toBeGreaterThanOrEqual(before + 9 * 60 * 1000);
+    expect(nonces[0].expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 10 * 60 * 1000);
+  });
+});
+
+describe("GET /api/line/connection", () => {
+  it("連携の有無を返す", async () => {
+    expect((await request(app, "GET", "/api/line/connection")).json()).toEqual({ connected: false });
+
+    await createLineConnection(owner.id);
+
+    expect((await request(app, "GET", "/api/line/connection")).json()).toEqual({ connected: true });
   });
 });
 
 describe("DELETE /api/line/connection", () => {
   it("未ログインなら連携を解除しない", async () => {
+    await createLineConnection(owner.id);
     getSession.mockResolvedValue(null);
 
     const res = await request(app, "DELETE", "/api/line/connection");
 
     expect(res.statusCode).toBe(401);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(await findLineConnections(owner.id)).toHaveLength(1);
   });
 
-  it("LINE設定だけを無効にして連携情報を削除する", async () => {
-    getSession.mockResolvedValue(loggedInSession);
-    vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
+  it("デモアカウントなら403を返す", async () => {
+    getSession.mockResolvedValue(demoSession);
+
+    expect((await request(app, "DELETE", "/api/line/connection")).statusCode).toBe(403);
+  });
+
+  it("LINE通知だけを無効にし、連携情報・nonce・OAuth試行を削除する", async () => {
+    await createLineConnection(owner.id);
+    await createLineLinkNonce(owner.id);
+    await createLineOAuthAttempt(owner.id);
+    await createNotificationPreference(owner.id, {
+      morningEnabled: true,
+      lineMorningEnabled: true,
+      lineEveningEnabled: true,
+    });
+    const other = await createUser();
+    await createLineConnection(other.id);
 
     const res = await request(app, "DELETE", "/api/line/connection");
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.notificationPreference.updateMany).toHaveBeenCalledWith({
-      where: { userId: "user-1" },
-      data: { lineMorningEnabled: false, lineEveningEnabled: false },
-    });
-    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(res.json()).toEqual({ connected: false });
+    // メール通知は触らない
+    expect(await findNotificationPreferences(owner.id)).toEqual([
+      expect.objectContaining({
+        morningEnabled: true,
+        lineMorningEnabled: false,
+        lineEveningEnabled: false,
+      }),
+    ]);
+    expect(await findLineConnections(owner.id)).toHaveLength(0);
+    expect(await findLineLinkNonces(owner.id)).toHaveLength(0);
+    expect(await findLineOAuthAttempts(owner.id)).toHaveLength(0);
+    // 他人の連携は残る
+    expect(await findLineConnections(other.id)).toHaveLength(1);
   });
 });
 
 describe("GET /api/line/oauth/start", () => {
+  let state: string;
+
   beforeEach(() => {
+    state = `state-${crypto.randomUUID()}`;
     vi.mocked(createLineOAuthValues).mockReturnValue({
-      state: "state-1",
+      state,
       nonce: "nonce-1",
       codeVerifier: "verifier-1",
       codeChallenge: "challenge-1",
     });
     vi.mocked(lineLoginAuthorizationUrl).mockReturnValue(
-      new URL("https://access.line.me/oauth2/v2.1/authorize?state=state-1")
+      new URL(`https://access.line.me/oauth2/v2.1/authorize?state=${state}`)
     );
-    vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
   });
 
   it("未ログインなら通知設定へ戻るログイン導線へ送る", async () => {
@@ -334,106 +353,70 @@ describe("GET /api/line/oauth/start", () => {
     expect(res.headers.location).toBe(
       `${ORIGIN}/login?callbackURL=%2Fprofile%23line-connection`
     );
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(await findLineOAuthAttempts(owner.id)).toHaveLength(0);
   });
 
-  it("認証済みユーザーに10分間の単回OAuth試行を作る", async () => {
-    getSession.mockResolvedValue(loggedInSession);
+  it("認証済みユーザーに10分間の単回OAuth試行を作る（古い試行は捨てる）", async () => {
+    await createLineOAuthAttempt(owner.id);
 
     const res = await request(app, "GET", "/api/line/oauth/start");
 
     expect(res.headers.location).toContain(
       "access.line.me/oauth2/v2.1/authorize"
     );
-    expect(prisma.lineOAuthAttempt.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1" },
-    });
-    expect(prisma.lineOAuthAttempt.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        state: "state-1",
+    const attempts = await findLineOAuthAttempts(owner.id);
+    expect(attempts).toEqual([
+      expect.objectContaining({
+        state,
         nonce: "nonce-1",
         codeVerifier: "verifier-1",
-        userId: "user-1",
-        expiresAt: expect.any(Date),
+        redirectUri: `${ORIGIN}/api/line/oauth/callback`,
       }),
-    });
+    ]);
+    expect(attempts[0].expiresAt.getTime()).toBeGreaterThan(Date.now() + 9 * 60 * 1000);
   });
 });
 
 describe("GET /api/line/oauth/callback", () => {
-  const attempt = {
-    state: "state-1",
-    userId: "user-1",
-    nonce: "nonce-1",
-    codeVerifier: "verifier",
-    redirectUri: `${ORIGIN}/api/line/oauth/callback`,
-    expiresAt: new Date(Date.now() + 60_000),
-  };
+  let state: string;
+  let lineUserId: string;
 
   const callback = () =>
-    request(app, "GET", "/api/line/oauth/callback?code=code&state=state-1");
+    request(app, "GET", `/api/line/oauth/callback?code=code&state=${state}`);
 
-  const connectedTx = () => {
-    const tx = {
-      lineConnection: {
-        findUnique: vi.fn().mockResolvedValue(null),
-        upsert: vi.fn().mockResolvedValue({}),
-      },
-    };
-    vi.mocked(prisma.$transaction).mockImplementation(
-      (callback: unknown) =>
-        (callback as (tx: unknown) => unknown)(tx) as never
-    );
-    return tx;
-  };
-
-  beforeEach(() => {
-    getSession.mockResolvedValue(loggedInSession);
-    vi.mocked(prisma.lineOAuthAttempt.findUnique).mockResolvedValue(
-      attempt as never
-    );
-    vi.mocked(prisma.lineOAuthAttempt.delete).mockResolvedValue(
-      attempt as never
-    );
+  beforeEach(async () => {
+    state = await createLineOAuthAttempt(owner.id);
+    lineUserId = newLineUserId();
     vi.mocked(exchangeLineLoginCode).mockResolvedValue({
       access_token: "access",
       id_token: "id-token",
     } as never);
     vi.mocked(verifyLineIdToken).mockResolvedValue({
-      sub: "U123",
+      sub: lineUserId,
       nonce: "nonce-1",
     } as never);
     vi.mocked(getLineFriendshipStatus).mockResolvedValue({ friendFlag: true });
     vi.mocked(pushLineText).mockResolvedValue(undefined);
   });
 
-  it("友だち状態とID tokenを確認して連携する", async () => {
-    const tx = connectedTx();
-
+  it("友だち状態とID tokenを確認して連携し、stateを使い捨てにする", async () => {
     const res = await callback();
 
     expect(res.headers.location).toBe(
       `${ORIGIN}/profile?line=connected#line-connection`
     );
-    // state は使い捨て。取得と削除の間に別リクエストが消していても落ちないよう
-    // deleteMany を使う（delete は該当行が無いと例外になる）。
-    expect(prisma.lineOAuthAttempt.deleteMany).toHaveBeenCalledWith({
-      where: { state: "state-1" },
-    });
-    expect(tx.lineConnection.upsert).toHaveBeenCalledWith({
-      where: { userId: "user-1" },
-      create: { userId: "user-1", lineUserId: "U123" },
-      update: { lineUserId: "U123", linkedAt: expect.any(Date) },
-    });
+    expect(await findLineOAuthAttempts(owner.id)).toHaveLength(0);
+    expect(await findLineConnections(owner.id)).toEqual([
+      expect.objectContaining({ lineUserId }),
+    ]);
     expect(pushLineText).toHaveBeenCalledWith(
-      "U123",
+      lineUserId,
       `受験マップとのLINE連携が完了しました！\n\n朝・夜の通知は、受験マップのプロフィールから設定できます。\n${ORIGIN}/line/settings`,
       expect.any(AbortSignal)
     );
   });
 
   it("確認メッセージの送信に失敗しても連携は成功扱いにする", async () => {
-    const tx = connectedTx();
     vi.mocked(pushLineText).mockRejectedValue(new Error("LINE API unavailable"));
     const consoleError = vi
       .spyOn(console, "error")
@@ -444,7 +427,7 @@ describe("GET /api/line/oauth/callback", () => {
     expect(res.headers.location).toBe(
       `${ORIGIN}/profile?line=connected#line-connection`
     );
-    expect(tx.lineConnection.upsert).toHaveBeenCalled();
+    expect(await findLineConnections(owner.id)).toHaveLength(1);
     expect(consoleError).toHaveBeenCalledWith(
       "[line-oauth] LINE connection completed, but confirmation message failed.",
       expect.any(Error)
@@ -453,8 +436,8 @@ describe("GET /api/line/oauth/callback", () => {
   });
 
   it("確認メッセージが3秒以内に完了しなくても連携成功画面へ戻す", async () => {
-    vi.useFakeTimers();
-    const tx = connectedTx();
+    // 偽の時計にするのは setTimeout / clearTimeout だけ。DB ドライバの動作には触れない。
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     let markPushStarted: () => void = () => {};
     const pushStarted = new Promise<void>((resolve) => {
       markPushStarted = resolve;
@@ -481,7 +464,7 @@ describe("GET /api/line/oauth/callback", () => {
       expect(res.headers.location).toBe(
         `${ORIGIN}/profile?line=connected#line-connection`
       );
-      expect(tx.lineConnection.upsert).toHaveBeenCalled();
+      expect(await findLineConnections(owner.id)).toHaveLength(1);
       expect(consoleError).toHaveBeenCalledWith(
         "[line-oauth] LINE connection completed, but confirmation message failed.",
         expect.objectContaining({ name: "AbortError" })
@@ -500,15 +483,42 @@ describe("GET /api/line/oauth/callback", () => {
     expect(res.headers.location).toBe(
       `${ORIGIN}/profile?line=friend-required#line-connection`
     );
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(await findLineConnections(owner.id)).toHaveLength(0);
     expect(pushLineText).not.toHaveBeenCalled();
   });
 
-  it("別ユーザーのstateは利用できない", async () => {
-    vi.mocked(prisma.lineOAuthAttempt.findUnique).mockResolvedValue({
-      ...attempt,
-      userId: "other-user",
-    } as never);
+  it("そのLINEが別ユーザーに連携済みなら連携しない", async () => {
+    const other = await createUser();
+    await createLineConnection(other.id, lineUserId);
+
+    const res = await callback();
+
+    expect(res.headers.location).toBe(
+      `${ORIGIN}/profile?line=already-used#line-connection`
+    );
+    expect(await findLineConnections(owner.id)).toHaveLength(0);
+    expect(await findLineConnections(other.id)).toEqual([
+      expect.objectContaining({ lineUserId }),
+    ]);
+  });
+
+  it("別ユーザーのstateは利用できず、そのstateは捨てる", async () => {
+    const other = await createUser();
+    state = await createLineOAuthAttempt(other.id);
+
+    const res = await callback();
+
+    expect(res.headers.location).toBe(
+      `${ORIGIN}/profile?line=expired#line-connection`
+    );
+    expect(exchangeLineLoginCode).not.toHaveBeenCalled();
+    expect(await findLineOAuthAttempts(other.id)).toHaveLength(0);
+  });
+
+  it("期限切れのstateは利用できない", async () => {
+    state = await createLineOAuthAttempt(owner.id, {
+      expiresAt: new Date(Date.now() - 1_000),
+    });
 
     const res = await callback();
 
@@ -518,12 +528,12 @@ describe("GET /api/line/oauth/callback", () => {
     expect(exchangeLineLoginCode).not.toHaveBeenCalled();
   });
 
-  it("セッション切れならcallbackURLを保持してログインへ送る", async () => {
+  it("セッション切れならcallbackURLを保持してログインへ送り、stateは残す", async () => {
     getSession.mockResolvedValue(null);
 
     const res = await callback();
 
     expect(res.headers.location).toContain("/login?callbackURL=");
-    expect(prisma.lineOAuthAttempt.findUnique).not.toHaveBeenCalled();
+    expect(await findLineOAuthAttempts(owner.id)).toEqual([expect.objectContaining({ state })]);
   });
 });

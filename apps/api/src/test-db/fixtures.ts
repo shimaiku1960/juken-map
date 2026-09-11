@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { execute, pool, select } from "@/api/infra/db";
-import type { FinalGoalRow, StudyLogRow, StudyPlanRow, TextbookRow } from "@/api/infra/tables";
+import type {
+  FinalGoalRow,
+  LineConnectionRow,
+  LineLinkNonceRow,
+  LineOAuthAttemptRow,
+  StudyLogRow,
+  StudyPlanRow,
+  TextbookRow,
+} from "@/api/infra/tables";
 
 // 本物の DB に流すテストの下ごしらえ。
 //
@@ -138,6 +146,39 @@ export async function createLineConnection(userId: string, lineUserId = `U${rand
   return lineUserId;
 }
 
+export async function createLineLinkNonce(
+  userId: string,
+  values: { nonce?: string; expiresAt?: Date } = {}
+) {
+  const nonce = values.nonce ?? `nonce-${randomUUID()}`;
+  await execute(
+    "INSERT INTO LineLinkNonce (nonce, userId, expiresAt, createdAt) VALUES (?, ?, ?, ?)",
+    [nonce, userId, values.expiresAt ?? new Date(Date.now() + 60_000), new Date()]
+  );
+  return nonce;
+}
+
+export async function createLineOAuthAttempt(
+  userId: string,
+  values: { state?: string; nonce?: string; redirectUri?: string; expiresAt?: Date } = {}
+) {
+  const state = values.state ?? `state-${randomUUID()}`;
+  await execute(
+    `INSERT INTO LineOAuthAttempt (state, userId, nonce, codeVerifier, redirectUri, expiresAt, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      state,
+      userId,
+      values.nonce ?? "nonce-1",
+      "verifier",
+      values.redirectUri ?? "https://juken-map.com/api/line/oauth/callback",
+      values.expiresAt ?? new Date(Date.now() + 60_000),
+      new Date(),
+    ]
+  );
+  return state;
+}
+
 // 大学・学部・タグはマスターデータで、ユーザーにぶら下がらない。
 // 名前に UNIQUE 制約があるので、並列のテストとぶつからないよう乱数を付ける。
 const createdUniversityIds: number[] = [];
@@ -222,6 +263,18 @@ export async function createFinalGoal(
 export async function findStudyPlan(id: number) {
   const [row] = await select<StudyPlanRow>("SELECT * FROM StudyPlan WHERE id = ?", [id]);
   return row ?? null;
+}
+
+export function findLineConnections(userId: string) {
+  return select<LineConnectionRow>("SELECT * FROM LineConnection WHERE userId = ?", [userId]);
+}
+
+export function findLineLinkNonces(userId: string) {
+  return select<LineLinkNonceRow>("SELECT * FROM LineLinkNonce WHERE userId = ?", [userId]);
+}
+
+export function findLineOAuthAttempts(userId: string) {
+  return select<LineOAuthAttemptRow>("SELECT * FROM LineOAuthAttempt WHERE userId = ?", [userId]);
 }
 
 export function findFinalGoals(userId: string) {

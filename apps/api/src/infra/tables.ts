@@ -54,6 +54,35 @@ export type FinalGoalRow = {
   status: string;
 };
 
+// LINE 連携。userId と lineUserId がそれぞれ UNIQUE（1アカウント1LINE、1LINE1アカウント）。
+export type LineConnectionRow = {
+  id: number;
+  userId: string;
+  lineUserId: string;
+  linkedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+// LINE 公式アカウントからの連携（Account Linking）で使う、使い捨ての合言葉。
+export type LineLinkNonceRow = {
+  nonce: string;
+  userId: string;
+  expiresAt: Date;
+  createdAt: Date;
+};
+
+// LINE Login の進行中の試行。state が主キーで、使い捨て。
+export type LineOAuthAttemptRow = {
+  state: string;
+  userId: string;
+  nonce: string;
+  codeVerifier: string;
+  redirectUri: string;
+  expiresAt: Date;
+  createdAt: Date;
+};
+
 // 参考書マスター（ISBN 単位の既製の参考書）と、その総量の候補（ページ数・問題数など）。
 export type TextbookMasterRow = {
   id: number;

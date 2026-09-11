@@ -204,9 +204,9 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移して�
 何本の SQL が流れるか（`include` は JOIN ではなく `IN (...)` の別クエリになる）、
 `updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
 
-移行済みは `services/` の study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal。
+`services/` はすべて移行済み（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）。
 予定と実績で共通の列と、JOIN の結果を入れ子に戻す関数は `services/study-columns.ts` にある。
-それ以外のサービス（line-connection）と Better Auth はまだ Prisma を使う。
+Better Auth（`auth.ts`）だけがまだ Prisma を使う。
 移行が終わるまでは、Prisma と `infra/db.ts` が別々のプールで同じ DB に繋がる。
 そのため1つのトランザクションに Prisma と生 SQL を混ぜることはできない。
 
@@ -232,6 +232,10 @@ ORM を外すと、次のことを自分で持つことになる。どれも `in
   （予定・実績の一覧は同じ日付の中の順番が DB 任せだった）。生 SQL では最後に id で並べて順番を固定している。
 - **`upsert`。** Prisma は MySQL では SELECT してから INSERT か UPDATE を選ぶ。
   生 SQL では `INSERT ... ON DUPLICATE KEY UPDATE` の1文で行い、その間に割り込む隙間が無い。
+  ただし UNIQUE が2つ以上あるテーブルでは使わない。ON DUPLICATE KEY はどの UNIQUE の重複でも
+  発動するので、`LineConnection`（`userId` と `lineUserId` が UNIQUE）で他人の LINE とぶつかると、
+  エラーにならず他人の行を更新してしまう（テスト用 DB で実際に確かめた）。そこでは
+  `userId` で UPDATE し、1行も変わらなければ INSERT する。
 
 上の「リポジトリ層は導入していない」は変わらない。何を取るかは services、DB との通信は
 infra という分担は、ORM の有無と関係なく同じだった。
