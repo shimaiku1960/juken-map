@@ -53,12 +53,15 @@ docker run -d \
   -p 3000:3000 \
   "$REPO:$IMAGE_TAG"
 
-# スモークテスト: /login が 200 を返すまで最大45秒待つ
+# スモークテスト: 画面（/login）と DB 接続（/api/health）の両方が 200 を返すまで最大45秒待つ。
+# /login は静的な SPA なので、DB に繋がらなくても 200 になる。/api/health が DB を確かめる。
 ok=false
 code="not-requested"
 for _ in $(seq 1 15); do
-  code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/login || true)"
-  if [ "$code" = "200" ]; then
+  login="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/login || true)"
+  health="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/health || true)"
+  code="login=$login health=$health"
+  if [ "$login" = "200" ] && [ "$health" = "200" ]; then
     ok=true
     break
   fi

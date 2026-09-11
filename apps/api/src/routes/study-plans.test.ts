@@ -1,156 +1,181 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
+// 認証だけは差し替える（Better Auth のセッション発行はこのテストの関心ではない）。
+// DB は本物のテスト用 MySQL に流す。SQL の誤りや制約の効き方はモックでは分からないため。
 vi.mock("../auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock("@/api/infra/prisma", () => {
-  // routes は名前付き、services は default で import している。
-  // 同じ実体を返さないと、どちらか片方のモックしか観測できない。
-  const client = {
-    user: { updateMany: vi.fn() },
-    studyPlan: {
-      findMany: vi.fn(),
-      findUnique: vi.fn(),
-      findFirst: vi.fn(),
-      create: vi.fn(),
-      createMany: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-    },
-    studyLog: { count: vi.fn(), create: vi.fn() },
-    textbook: { count: vi.fn() },
-    $transaction: vi.fn(),
-  };
-  return { prisma: client, default: client };
+// 本物の transaction をそのまま使い、「DB が落ちた」ときだけ失敗させられるように包む。
+vi.mock("@/api/infra/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/infra/db")>();
+  return { ...actual, transaction: vi.fn(actual.transaction) };
 });
 
 const { auth } = await import("../auth.ts");
-const { prisma } = await import("@/api/infra/prisma");
-const { Prisma } = await import("@/api/generated/prisma/client");
+const { transaction } = await import("@/api/infra/db");
 const { registerStudyPlanRoutes } = await import("./study-plans.ts");
-const { buildTestApp, request, loggedInSession, demoSession } = await import(
-  "../test-support.ts"
-);
+const { buildTestApp, request, demoSession } = await import("../test-support.ts");
+const {
+  cleanup,
+  createStudyLog,
+  createStudyPlan,
+  createTextbook,
+  createUser,
+  findStudyLogs,
+  findStudyPlan,
+  findUser,
+} = await import("../test-db/fixtures.ts");
 
 const getSession = auth.api.getSession as unknown as Mock;
-const findPlan = prisma.studyPlan.findFirst as unknown as Mock;
-const findPlanFirst = prisma.studyPlan.findFirst as unknown as Mock;
-const updatePlan = prisma.studyPlan.update as unknown as Mock;
-const countLogs = prisma.studyLog.count as unknown as Mock;
-const createLog = prisma.studyLog.create as unknown as Mock;
-const markActivation = prisma.user.updateMany as unknown as Mock;
-const transaction = prisma.$transaction as unknown as Mock;
-
 const app = buildTestApp(registerStudyPlanRoutes);
 
-const patch = (body: unknown) => request(app, "PATCH", "/api/study-plans/7", body);
-const complete = (body: unknown) =>
-  request(app, "POST", "/api/study-plans/7/complete", body);
+let owner: Awaited<ReturnType<typeof createUser>>;
+
+beforeEach(async () => {
+  vi.clearAllMocks();
+  owner = await createUser();
+  getSession.mockResolvedValue(owner.session);
+});
+
+afterAll(cleanup);
+
+describe("GET /api/study-plans", () => {
+  it("自分の予定だけを、参考書と実績の有無を付けて日付順に返す", async () => {
+    const textbookId = await createTextbook(owner.id, { name: "英単語", totalAmount: 300 });
+    const later = await createStudyPlan(owner.id, {
+      date: new Date("2027-02-21T00:00:00.000Z"),
+      textbookId,
+    });
+    const earlier = await createStudyPlan(owner.id, {
+      date: new Date("2027-02-20T00:00:00.000Z"),
+      content: "自由入力",
+    });
+    const logId = await createStudyLog(owner.id, { studyPlanId: later });
+    const other = await createUser();
+    await createStudyPlan(other.id);
+
+    const res = await request(app, "GET", "/api/study-plans");
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.map((plan: { id: number }) => plan.id)).toEqual([earlier, later]);
+    expect(body[0]).toMatchObject({
+      // DB に入れた UTC の値がそのまま返る（読み書きの時間帯がずれていれば9時間ずれる）
+      date: "2027-02-20T00:00:00.000Z",
+      content: "自由入力",
+      done: false,
+      textbook: null,
+      studyLogId: null,
+    });
+    expect(body[1]).toMatchObject({
+      date: "2027-02-21T00:00:00.000Z",
+      textbookId,
+      textbook: { id: textbookId, name: "英単語", totalAmount: 300 },
+      studyLogId: logId,
+    });
+  });
+});
 
 describe("PATCH /api/study-plans/:id", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    getSession.mockResolvedValue(loggedInSession);
-    findPlan.mockResolvedValue({ id: 7, userId: "user-1" });
-    updatePlan.mockResolvedValue({ id: 7, done: false });
-  });
-
   it("実績記録済みの予定は未完了に戻せない", async () => {
-    countLogs.mockResolvedValue(1);
+    const planId = await createStudyPlan(owner.id, { done: true });
+    await createStudyLog(owner.id, { studyPlanId: planId });
 
-    const res = await patch({ done: false });
+    const res = await request(app, "PATCH", `/api/study-plans/${planId}`, { done: false });
 
     expect(res.statusCode).toBe(409);
-    expect(countLogs).toHaveBeenCalledWith({ where: { studyPlanId: 7 } });
-    expect(updatePlan).not.toHaveBeenCalled();
+    expect((await findStudyPlan(planId))?.done).toBe(true);
   });
 
   it("実績がなければ予定のみ未完了へ戻せる", async () => {
-    countLogs.mockResolvedValue(0);
+    const planId = await createStudyPlan(owner.id, { done: true });
 
-    const res = await patch({ done: false });
+    const res = await request(app, "PATCH", `/api/study-plans/${planId}`, { done: false });
 
     expect(res.statusCode).toBe(200);
-    expect(updatePlan).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ done: false }) })
-    );
+    expect(res.json()).toMatchObject({ id: planId, done: false });
+    expect((await findStudyPlan(planId))?.done).toBe(false);
+  });
+
+  it("他人の予定なら404を返し、変更しない", async () => {
+    const other = await createUser();
+    const planId = await createStudyPlan(other.id, { content: "元のまま" });
+
+    const res = await request(app, "PATCH", `/api/study-plans/${planId}`, { content: "書き換え" });
+
+    expect(res.statusCode).toBe(404);
+    expect((await findStudyPlan(planId))?.content).toBe("元のまま");
   });
 });
 
 describe("POST /api/study-plans/:id/complete", () => {
-  const plan = {
-    id: 7,
-    userId: "user-1",
-    date: new Date("2027-02-20"),
-    subject: "english",
-    textbookId: 3,
-    textbook: { id: 3, totalAmount: 300, rangeUnit: "page" },
-    rangeStart: 10,
-    rangeEnd: 20,
-    rangeUnit: "page",
-    studyLog: null,
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    getSession.mockResolvedValue(loggedInSession);
-    findPlanFirst.mockResolvedValue(plan);
-    markActivation.mockResolvedValue({ count: 0 });
-    createLog.mockResolvedValue({ id: 11 });
-    updatePlan.mockResolvedValue({ ...plan, done: true });
-    transaction.mockImplementation((callback: (tx: unknown) => unknown) =>
-      callback(prisma)
-    );
-  });
+  const complete = (planId: number, body: unknown) =>
+    request(app, "POST", `/api/study-plans/${planId}/complete`, body);
 
   it("未ログインなら401を返す", async () => {
     getSession.mockResolvedValue(null);
+    const planId = await createStudyPlan(owner.id);
 
-    const res = await complete({ minutes: 30 });
+    const res = await complete(planId, { minutes: 30 });
 
     expect(res.statusCode).toBe(401);
-    expect(findPlanFirst).not.toHaveBeenCalled();
+    expect(await findStudyLogs(owner.id)).toHaveLength(0);
   });
 
   it("デモアカウントなら403を返す", async () => {
     getSession.mockResolvedValue(demoSession);
+    const planId = await createStudyPlan(owner.id);
 
-    const res = await complete({ minutes: 30 });
+    const res = await complete(planId, { minutes: 30 });
 
     expect(res.statusCode).toBe(403);
-    expect(findPlanFirst).not.toHaveBeenCalled();
+    expect(await findStudyLogs(owner.id)).toHaveLength(0);
   });
 
   it("学習時間が不正なら400を返す", async () => {
-    const res = await complete({ minutes: 0 });
+    const planId = await createStudyPlan(owner.id);
+
+    const res = await complete(planId, { minutes: 0 });
 
     expect(res.statusCode).toBe(400);
-    expect(findPlanFirst).not.toHaveBeenCalled();
+    expect(await findStudyLogs(owner.id)).toHaveLength(0);
   });
 
   it("他人の予定なら404を返す", async () => {
-    findPlanFirst.mockResolvedValue(null);
+    const other = await createUser();
+    const planId = await createStudyPlan(other.id);
 
-    const res = await complete({ minutes: 30 });
+    const res = await complete(planId, { minutes: 30 });
 
     expect(res.statusCode).toBe(404);
-    expect(findPlanFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 7, userId: "user-1" } })
-    );
+    expect(await findStudyLogs(other.id)).toHaveLength(0);
+    expect((await findStudyPlan(planId))?.done).toBe(false);
   });
 
   it("実績を記録済みなら409を返す", async () => {
-    findPlanFirst.mockResolvedValue({ ...plan, studyLog: { id: 11 } });
+    const planId = await createStudyPlan(owner.id);
+    await createStudyLog(owner.id, { studyPlanId: planId });
 
-    const res = await complete({ minutes: 30 });
+    const res = await complete(planId, { minutes: 30 });
 
     expect(res.statusCode).toBe(409);
-    expect(transaction).not.toHaveBeenCalled();
+    expect(await findStudyLogs(owner.id)).toHaveLength(1);
   });
 
-  it("実績作成と予定完了を同じtransactionで処理する", async () => {
-    const res = await complete({
+  it("実績の作成・予定の完了・初回記録の印を1回で行う", async () => {
+    const textbookId = await createTextbook(owner.id, { totalAmount: 300, rangeUnit: "page" });
+    const planId = await createStudyPlan(owner.id, {
+      date: new Date("2027-02-20T00:00:00.000Z"),
+      subject: "english",
+      textbookId,
+      rangeStart: 10,
+      rangeEnd: 20,
+      rangeUnit: "page",
+    });
+    const startedAt = Date.now();
+
+    const res = await complete(planId, {
       minutes: 45,
       rangeStart: 12,
       rangeEnd: 18,
@@ -159,49 +184,66 @@ describe("POST /api/study-plans/:id/complete", () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(createLog).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        userId: "user-1",
-        studyPlanId: 7,
-        date: plan.date,
-        minutes: 45,
-        subject: "english",
-        textbookId: 3,
-        rangeStart: 12,
-        rangeEnd: 18,
-        rangeUnit: "page",
-        memo: "復習した",
-      }),
-      include: { textbook: true },
+    const body = res.json();
+    expect(body.isFirstStudyLog).toBe(true);
+    expect(body.plan).toMatchObject({ id: planId, done: true });
+    expect(body.log).toMatchObject({
+      userId: owner.id,
+      studyPlanId: planId,
+      date: "2027-02-20T00:00:00.000Z",
+      minutes: 45,
+      subject: "english",
+      textbookId,
+      rangeStart: 12,
+      rangeEnd: 18,
+      rangeUnit: "page",
+      memo: "復習した",
+      textbook: { id: textbookId, totalAmount: 300, rangeUnit: "page" },
     });
-    expect(updatePlan).toHaveBeenCalledWith({
-      where: { id: 7 },
-      data: { done: true },
-    });
-    expect(transaction).toHaveBeenCalledTimes(1);
+
+    // 応答だけでなく、DB に3つとも残っていることを確かめる
+    expect((await findStudyPlan(planId))?.done).toBe(true);
+    expect(await findStudyLogs(owner.id)).toHaveLength(1);
+    const firstStudyLogAt = (await findUser(owner.id))?.firstStudyLogAt;
+    expect(Math.abs(firstStudyLogAt!.getTime() - startedAt)).toBeLessThan(60_000);
   });
 
-  it("同時完了による重複作成（P2002）は409に変換する", async () => {
-    transaction.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
-        code: "P2002",
-        clientVersion: "7.9.1",
-      })
-    );
+  it("2件目の記録は初回扱いにせず、初回記録の日時も上書きしない", async () => {
+    const first = await createStudyPlan(owner.id);
+    const second = await createStudyPlan(owner.id);
+    await complete(first, { minutes: 30 });
+    const firstStudyLogAt = (await findUser(owner.id))?.firstStudyLogAt;
 
-    const res = await complete({ minutes: 30 });
+    const res = await complete(second, { minutes: 30 });
 
-    expect(res.statusCode).toBe(409);
-    expect(res.json()).toEqual({
+    expect(res.statusCode).toBe(201);
+    expect(res.json().isFirstStudyLog).toBe(false);
+    expect((await findUser(owner.id))?.firstStudyLogAt).toEqual(firstStudyLogAt);
+  });
+
+  it("同じ予定を同時に完了しても実績は1件だけで、もう片方は409になる", async () => {
+    const planId = await createStudyPlan(owner.id);
+
+    // 両方が「まだ実績が無い」を読んだあとに INSERT すると、一意制約が片方を止める。
+    const responses = await Promise.all([
+      complete(planId, { minutes: 30 }),
+      complete(planId, { minutes: 30 }),
+    ]);
+
+    expect(responses.map((res) => res.statusCode).sort()).toEqual([201, 409]);
+    expect(responses.find((res) => res.statusCode === 409)?.json()).toEqual({
       error: "この予定の実績はすでに記録されています",
     });
+    expect(await findStudyLogs(owner.id)).toHaveLength(1);
   });
 
   it("想定外のtransactionエラーは握りつぶさず500になる", async () => {
-    transaction.mockRejectedValue(new Error("DB down"));
+    const planId = await createStudyPlan(owner.id);
+    (transaction as unknown as Mock).mockRejectedValueOnce(new Error("DB down"));
 
-    const res = await complete({ minutes: 30 });
+    const res = await complete(planId, { minutes: 30 });
 
     expect(res.statusCode).toBe(500);
+    expect(await findStudyLogs(owner.id)).toHaveLength(0);
   });
 });
