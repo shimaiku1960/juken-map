@@ -27,7 +27,7 @@ apps/api/               バックエンド一式（Fastify）
   ├ services/             ユースケース（goal / study-log / study-plan / textbook /
   │                       university / notification / sendDailyNotifications）
   ├ infra/                db（生 SQL の接続プール）, tables（テーブル1行の型）,
-  │                       prisma（移行中）, email, resend, microcms, line, lineLogin
+  │                       email, resend, microcms, line, lineLogin
   ├ test-db/              テスト用 MySQL の準備と、テストデータの作成
   ├ domain/               通知本文の組み立てなど
   ├ observability/        サービスの所要時間計測
@@ -206,9 +206,9 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移して�
 
 `services/` はすべて移行済み（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）。
 予定と実績で共通の列と、JOIN の結果を入れ子に戻す関数は `services/study-columns.ts` にある。
-Better Auth（`auth.ts`）だけがまだ Prisma を使う。
-移行が終わるまでは、Prisma と `infra/db.ts` が別々のプールで同じ DB に繋がる。
-そのため1つのトランザクションに Prisma と生 SQL を混ぜることはできない。
+Better Auth（`auth.ts`）も同じ mysql2 のプールを使う（内部の Kysely で読み書きする）。
+アプリの実行時に Prisma はもう使っていない。Prisma が残っているのは、マイグレーションの
+適用（`prisma migrate deploy`）と seed だけ。
 
 ORM を外すと、次のことを自分で持つことになる。どれも `infra/db.ts` とテストで押さえている。
 
@@ -279,7 +279,7 @@ infra という分担は、ORM の有無と関係なく同じだった。
 - 往復（書いて読む）だけのテストでは時間帯の誤りが打ち消されて見えないので、
   `infra/db.test.ts` で DB 側の生の値と突き合わせている。CI（UTC）でもずれを検出できるよう、
   テストは `TZ=Asia/Tokyo` で動かす。
-- まだ Prisma を使うサービスのテストは、従来どおり `vi.mock("@/api/infra/prisma")` で差し替えている。
+- モックするのは外部の境界（認証のセッション取得、LINE・メールなどの外部 API）だけ。
 
 ## デプロイ
 

@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { prisma } from "@/api/infra/prisma";
+import { pool } from "@/api/infra/db";
 import {
   notifyAdminOfNewUser,
   sendVerificationEmail,
@@ -12,10 +11,14 @@ import {
 // セッションテーブルと BETTER_AUTH_SECRET は Next.js 時代から引き継いでいるので、
 // あの頃に発行された Cookie もそのまま受理できる。secret を変えると全ユーザーが
 // 強制ログアウトになるので触らないこと。
+//
+// DB にはアプリと同じ mysql2 のプールを渡す。Better Auth は getConnection を持つ
+// オブジェクトを MySQL と判断し、内部の Kysely（SQL を組み立てるライブラリ）で
+// user / session / account / verification を読み書きする。
+// 日時は Date のままドライバへ渡るので、プールの timezone: "Z"（UTC）がそのまま効き、
+// Prisma 時代に保存したセッションの期限とも同じ時刻として比べられる。
 export const auth = betterAuth({
-  database: prismaAdapter(prisma, {
-    provider: "mysql",
-  }),
+  database: pool,
   user: {
     additionalFields: {
       nickname: {
