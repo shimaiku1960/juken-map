@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execute, pool, select } from "@/api/infra/db";
-import type { StudyLogRow, StudyPlanRow } from "@/api/infra/tables";
+import type { StudyLogRow, StudyPlanRow, TextbookRow } from "@/api/infra/tables";
 
 // 本物の DB に流すテストの下ごしらえ。
 //
@@ -174,6 +174,29 @@ export async function createUniversity(values: {
   return { id: university.insertId, facultyIds };
 }
 
+const createdTextbookMasterIds: number[] = [];
+
+/** 参考書マスターと総量の候補。ISBN に UNIQUE 制約があるので乱数を付ける。 */
+export async function createTextbookMaster(values: {
+  name?: string;
+  metrics?: { unit: string; totalAmount: number; isDefault?: boolean }[];
+} = {}) {
+  const now = new Date();
+  const master = await execute(
+    "INSERT INTO TextbookMaster (name, isbn, createdAt, updatedAt) VALUES (?, ?, ?, ?)",
+    [values.name ?? `マスター-${randomUUID()}`, randomUUID(), now, now]
+  );
+  createdTextbookMasterIds.push(master.insertId);
+  for (const metric of values.metrics ?? []) {
+    await execute(
+      `INSERT INTO TextbookMasterMetric (masterId, unit, totalAmount, isDefault, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [master.insertId, metric.unit, metric.totalAmount, metric.isDefault ?? false, now, now]
+    );
+  }
+  return master.insertId;
+}
+
 export async function createFinalGoal(userId: string, facultyId: number) {
   await execute(
     "INSERT INTO FinalGoal (userId, facultyId, createdAt) VALUES (?, ?, ?)",
@@ -186,6 +209,10 @@ export async function createFinalGoal(userId: string, facultyId: number) {
 export async function findStudyPlan(id: number) {
   const [row] = await select<StudyPlanRow>("SELECT * FROM StudyPlan WHERE id = ?", [id]);
   return row ?? null;
+}
+
+export function findTextbooks(userId: string) {
+  return select<TextbookRow>("SELECT * FROM Textbook WHERE userId = ? ORDER BY id", [userId]);
 }
 
 export async function findStudyLog(id: number) {
@@ -248,6 +275,9 @@ export async function cleanup() {
   }
   if (createdTagIds.length > 0) {
     await execute("DELETE FROM Tag WHERE id IN (?)", [createdTagIds.splice(0)]);
+  }
+  if (createdTextbookMasterIds.length > 0) {
+    await execute("DELETE FROM TextbookMaster WHERE id IN (?)", [createdTextbookMasterIds.splice(0)]);
   }
   await pool.end();
 }

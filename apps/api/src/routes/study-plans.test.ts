@@ -77,6 +77,41 @@ describe("GET /api/study-plans", () => {
   });
 });
 
+describe("POST /api/study-plans", () => {
+  const post = (body: unknown) => request(app, "POST", "/api/study-plans", body);
+
+  it("1つの日付に複数の予定をまとめて作る", async () => {
+    const textbookId = await createTextbook(owner.id);
+
+    const res = await post({
+      date: "2027-02-20",
+      items: [{ textbookId, rangeStart: 1, rangeEnd: 10, rangeUnit: "page" }, { content: "自由入力" }],
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({ count: 2 });
+    const listed = (await request(app, "GET", "/api/study-plans")).json();
+    expect(listed).toEqual([
+      expect.objectContaining({ date: "2027-02-20T00:00:00.000Z", textbookId, rangeEnd: 10 }),
+      expect.objectContaining({ date: "2027-02-20T00:00:00.000Z", content: "自由入力" }),
+    ]);
+  });
+
+  it("他人の参考書が1つでも混ざっていたら400を返し、何も作らない", async () => {
+    const mine = await createTextbook(owner.id);
+    const other = await createUser();
+    const others = await createTextbook(other.id);
+
+    const res = await post({
+      date: "2027-02-20",
+      items: [{ textbookId: mine }, { textbookId: others }],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((await request(app, "GET", "/api/study-plans")).json()).toEqual([]);
+  });
+});
+
 describe("PATCH /api/study-plans/:id", () => {
   it("実績記録済みの予定は未完了に戻せない", async () => {
     const planId = await createStudyPlan(owner.id, { done: true });

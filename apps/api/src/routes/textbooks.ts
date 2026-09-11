@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { Prisma } from "@/api/generated/prisma/client";
+import { isDuplicateEntry } from "@/api/infra/db";
 import {
   createTextbookSchema,
   updateTextbookProgressSchema,
@@ -74,10 +74,8 @@ export function registerTextbookRoutes(app: FastifyInstance) {
       const textbook = await createTextbook(textbookData);
       return reply.code(201).send(textbook);
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
+      // 同じ名前の参考書は (userId, name) の UNIQUE 制約で弾かれる。
+      if (isDuplicateEntry(error)) {
         return reply.code(409).send({ error: "この参考書はすでに登録されています" });
       }
       throw error;
