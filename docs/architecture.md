@@ -192,7 +192,8 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移して�
 何本の SQL が流れるか（`include` は JOIN ではなく `IN (...)` の別クエリになる）、
 `updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
 
-移行済みは `services/study-plan-service.ts`。それ以外のサービスと Better Auth はまだ Prisma を使う。
+移行済みは `services/` の study-plan・university・user・notification・sendDailyNotifications。
+それ以外のサービス（study-log・textbook・goal・line-connection）と Better Auth はまだ Prisma を使う。
 移行が終わるまでは、Prisma と `infra/db.ts` が別々のプールで同じ DB に繋がる。
 そのため1つのトランザクションに Prisma と生 SQL を混ぜることはできない。
 
@@ -208,6 +209,15 @@ ORM を外すと、次のことを自分で持つことになる。どれも `in
   （`isDuplicateEntry`）。
 - **型。** 上の「Prisma の型推論」は失われた。行の型は `infra/tables.ts` に手で書いており、
   列を足してもここを直し忘れたら型エラーにならない。
+- **入れ子の組み立てと SQL の本数。** `include` は JOIN ではなく、親を取ってから子を
+  `IN (...)` で別に取る。生 SQL では自分で選ぶ。大学 → 学部 → タグのような一本道の
+  1対多は JOIN 1本で取って詰め直す。ユーザー → 予定・実績のように1対多が並ぶときは、
+  JOIN すると（予定 × 実績）の行に膨らみ合計がずれるので、別々の SQL に分ける
+  （`sendDailyNotifications.ts` の `findRecipients`）。
+- **並び順。** Prisma が子を取る SQL には `ORDER BY` が無く、並びは DB が返した順だった
+  （大学一覧のタグの順がそうだった）。生 SQL では `ORDER BY` を明示している。
+- **`upsert`。** Prisma は MySQL では SELECT してから INSERT か UPDATE を選ぶ。
+  生 SQL では `INSERT ... ON DUPLICATE KEY UPDATE` の1文で行い、その間に割り込む隙間が無い。
 
 上の「リポジトリ層は導入していない」は変わらない。何を取るかは services、DB との通信は
 infra という分担は、ORM の有無と関係なく同じだった。
