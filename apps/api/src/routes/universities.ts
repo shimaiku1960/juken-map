@@ -3,10 +3,7 @@ import {
   findUniversityDetail,
   listUniversitiesForExplore,
 } from "@/api/services/university-service";
-import {
-  findFirstChoiceGoal,
-  listGoalFacultyIds,
-} from "@/api/services/goal-service";
+import { listGoalFacultyIds } from "@/api/services/goal-service";
 import { requireSession } from "../context.ts";
 
 // Next.js では Server Component がサービス層を関数として直接呼んでいたため、
