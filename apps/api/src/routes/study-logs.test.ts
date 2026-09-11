@@ -13,7 +13,6 @@ vi.mock("@/api/infra/db", async (importOriginal) => {
 
 const { auth } = await import("../auth.ts");
 const { transaction } = await import("@/api/infra/db");
-const { prisma } = await import("@/api/infra/prisma");
 const { registerStudyLogRoutes } = await import("./study-logs.ts");
 const { buildTestApp, request, demoSession } = await import("../test-support.ts");
 const {
@@ -41,11 +40,7 @@ beforeEach(async () => {
   getSession.mockResolvedValue(owner.session);
 });
 
-afterAll(async () => {
-  await cleanup();
-  // 参考書の所有チェック（textbook-service）はまだ Prisma なので、その接続も閉じる
-  await prisma.$disconnect();
-});
+afterAll(cleanup);
 
 describe("GET /api/study-logs", () => {
   it("未ログインなら 401 を返す", async () => {
