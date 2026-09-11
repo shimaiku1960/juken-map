@@ -41,8 +41,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 
-/apps/api/src/generated/prisma
-
 # Claude auto-memory（私的メモ・公開リポジトリに含めない）
 memory/
 

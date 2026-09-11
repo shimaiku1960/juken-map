@@ -9,9 +9,6 @@ enableGlobalVirtualStore: false
 verifyDepsBeforeRun: error
 
 allowBuilds:
-  '@prisma/client': true
-  '@prisma/engines': true
-  prisma: true
   esbuild: true
   sharp: true
 
