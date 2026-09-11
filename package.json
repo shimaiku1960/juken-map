@@ -17,6 +17,7 @@
     "test": "vitest run",
     "check": "pnpm exec prisma generate && pnpm exec eslint --max-warnings 0 && pnpm exec tsc --noEmit && pnpm -r typecheck && pnpm test && pnpm -r test && pnpm --filter @juken-map/web build",
     "e2e": "playwright test",
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
     "hooks:install": "git config core.hooksPath .githooks",
     "lock:check": "bash scripts/check-lockfile.sh",

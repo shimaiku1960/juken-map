@@ -207,8 +207,9 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移して�
 `services/` はすべて移行済み（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）。
 予定と実績で共通の列と、JOIN の結果を入れ子に戻す関数は `services/study-columns.ts` にある。
 Better Auth（`auth.ts`）も同じ mysql2 のプールを使う（内部の Kysely で読み書きする）。
-アプリの実行時に Prisma はもう使っていない。Prisma が残っているのは、マイグレーションの
-適用（`prisma migrate deploy`）と seed だけ。
+アプリの実行時も seed（`prisma/seed*.ts`）も Prisma を使っていない。Prisma が残っているのは、
+マイグレーションの適用（`prisma migrate deploy`）だけ。seed は `prisma/seed-helpers.ts` 経由で
+アプリと同じ接続プールを使い、日時の扱い（UTC）もアプリと揃えている。
 
 ORM を外すと、次のことを自分で持つことになる。どれも `infra/db.ts` とテストで押さえている。
 

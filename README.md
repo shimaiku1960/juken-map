@@ -164,7 +164,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 7. 大学マスターとデモデータを投入します。
 
    ```bash
-   pnpm exec prisma db seed
+   pnpm run db:seed
    ```
 
 8. 開発サーバーを起動します。MySQLの起動とマイグレーション確認後、APIと画面が並列で起動します。
@@ -238,6 +238,7 @@ docker compose up --build
 | `pnpm run test` | ルート（`src/`）のVitestを実行する |
 | `pnpm run e2e` | PlaywrightのE2Eテストを実行する |
 | `pnpm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
+| `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
 | `pnpm run lock:check` | 隔離ディレクトリでmanifestとlockfileの整合性を検証する |
