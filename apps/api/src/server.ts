@@ -5,6 +5,7 @@ import fastifyCompress from "@fastify/compress";
 import fastifyStatic from "@fastify/static";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth.ts";
+import { select } from "./infra/db.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { buildSitemap, injectMeta, metaForPath } from "./seo.ts";
 
@@ -108,7 +109,12 @@ export async function buildServer() {
     }
   );
 
-  app.get("/api/health", async () => ({ ok: true }));
+  app.get("/api/health", async () => {
+    // デプロイ後のスモークテストが叩く。DB に繋がらなければ 500 になり、
+    // 前のイメージへ自動で戻る（.github/scripts/deploy-ec2.sh）。
+    await select("SELECT 1");
+    return { ok: true };
+  });
 
   registerRoutes(app);
 
