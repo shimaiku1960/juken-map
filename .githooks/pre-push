@@ -21,9 +21,9 @@ while read -r _local_ref local_oid _remote_ref remote_oid; do
   fi
 
   if ! git diff --quiet "$base_oid" "$local_oid" -- \
-    package.json package-lock.json \
-    apps/api/package.json apps/api/package-lock.json \
-    apps/web/package.json apps/web/package-lock.json; then
+    package.json pnpm-lock.yaml pnpm-workspace.yaml \
+    apps/api/package.json \
+    apps/web/package.json; then
     needs_lock_check=1
     break
   fi
@@ -34,9 +34,9 @@ if [[ "$needs_lock_check" -eq 0 ]]; then
 fi
 
 DEP_FILES=(
-  package.json package-lock.json
-  apps/api/package.json apps/api/package-lock.json
-  apps/web/package.json apps/web/package-lock.json
+  package.json pnpm-lock.yaml pnpm-workspace.yaml
+  apps/api/package.json
+  apps/web/package.json
 )
 
 if ! git diff --quiet -- "${DEP_FILES[@]}" \
@@ -45,5 +45,5 @@ if ! git diff --quiet -- "${DEP_FILES[@]}" \
   exit 1
 fi
 
-echo "依存ファイルの変更を検出したため、Linux lockfileを確認します。"
-npm run lock:check
+echo "依存ファイルの変更を検出したため、workspaceのlockfileを確認します。"
+pnpm run lock:check

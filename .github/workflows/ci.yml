@@ -1,31 +1,29 @@
 name: CI
 
-env:
-  NPM_VERSION: 11.19.0
-
 on:
   pull_request:
     branches:
       - main
 
 jobs:
-  # 各 package-lock.json に Linux 用ネイティブ依存が記録されているかを検査する。
-  # mac で依存追加すると Linux 用オプショナル依存が lock から抜け、CI と本番イメージ
-  # （どちらも Linux）の npm ci が落ちる npm の既知の挙動への対策。
-  # npm を実行せず lockfile を直接読むため、実行OSに依存せず false positive が出ない。
-  #
-  # apps/web と apps/api も対象に含める。あちらの lockfile が壊れると、CI では気づかず
-  # 本番イメージのビルド時に初めて落ちる。
+  # lockfileジョブ名を維持し、Linuxで実際に全workspaceをインストールする。
   lockfile:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Verify Linux native deps are in every package-lock.json
-        run: >-
-          node scripts/check-linux-native-deps.mjs
-          package-lock.json apps/api/package-lock.json apps/web/package-lock.json
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify frozen install on Linux
+        run: pnpm install --frozen-lockfile
 
   check:
     runs-on: ubuntu-latest
@@ -33,48 +31,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-
-      - name: Use pinned npm version
-        run: npm install --global "npm@$NPM_VERSION"
+          cache: pnpm
 
       - name: Install dependencies
-        run: |
-          npm ci
-          npm ci --prefix apps/api
-          npm ci --prefix apps/web
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: npx prisma generate
+        run: pnpm exec prisma generate
 
       - name: Lint
-        run: npx eslint --max-warnings 0
+        run: pnpm exec eslint --max-warnings 0
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: pnpm exec tsc --noEmit
 
       - name: Type check apps
         run: |
-          npm run typecheck --prefix apps/api
-          npm run typecheck --prefix apps/web
+          pnpm --filter @juken-map/api typecheck
+          pnpm --filter @juken-map/web typecheck
 
       - name: Test
-        run: npm test
+        run: pnpm test
 
       # apps/api と apps/web は独自の tsconfig を持つ別パッケージなので、
       # テストもそれぞれの vitest で実行する。
       - name: Test apps
         run: |
-          npm run test --prefix apps/api
-          npm run test --prefix apps/web
+          pnpm --filter @juken-map/api test
+          pnpm --filter @juken-map/web test
 
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA
-        run: npm run build --prefix apps/web
+        run: pnpm --filter @juken-map/web build
 
   # E2E（Playwright）。使い捨ての MySQL 8.4 を立て、マイグレーション→seed→
   # SPA のビルド→Fastify 起動で本番相当の構成を立ち上げ、実ブラウザで主要導線を検証する。
@@ -107,38 +102,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-
-      - name: Use pinned npm version
-        run: npm install --global "npm@$NPM_VERSION"
+          cache: pnpm
 
       - name: Install dependencies
-        run: |
-          npm ci
-          npm ci --prefix apps/api
-          npm ci --prefix apps/web
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: npx prisma generate
+        run: pnpm exec prisma generate
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run migrations
-        run: npx prisma migrate deploy
+        run: pnpm exec prisma migrate deploy
 
       - name: Seed master data and demo user
-        run: npx tsx prisma/seed.ts
+        run: pnpm exec tsx prisma/seed.ts
 
       # E2E 用ユーザーの投入は globalSetup（seed-e2e.ts）が、アプリ起動は
       # playwright.config の webServer（scripts/e2e-server.sh）が担当する。
       # SPA のビルドもそのスクリプトの中で行う。
       - name: Run E2E tests
-        run: npx playwright test
+        run: pnpm exec playwright test
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

@@ -13,3 +13,8 @@ playwright-report
 test-results
 # Prisma の生成物はイメージ内で作る。ホストのものを持ち込むと再現性が落ちる。
 apps/api/src/generated
+
+# workspaceの依存・検証用キャッシュをビルドコンテキストへ含めない。
+.pnpm-store
+.agent-memory
+.codex

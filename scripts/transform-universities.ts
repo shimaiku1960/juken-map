@@ -3,7 +3,7 @@
 //   - 地図用TSV (univs_map.tsv):       設置区分（type列: 1国立/2公立/3私立/4短大/5大学校）
 // 2ファイルは同じ並び順・同じ件数なので「行の位置」で結合する。
 //
-// 実行: npx tsx scripts/transform-universities.ts
+// 実行: pnpm exec tsx scripts/transform-universities.ts
 
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 

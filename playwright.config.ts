@@ -8,7 +8,7 @@ import { defineConfig, devices } from "@playwright/test";
 // SPA 移行中の暫定運用: E2E_BASE_URL を渡すと、その URL に対して実行する。
 // apps/web（Vite）と apps/api（Fastify）は別々に起動しておく必要があるため、
 // このときは webServer を立てずに既存のサーバへつなぐ。
-//   例: E2E_BASE_URL=http://localhost:5173 npm run e2e
+//   例: E2E_BASE_URL=http://localhost:5173 pnpm run e2e
 const isCI = !!process.env.CI;
 const externalBaseURL = process.env.E2E_BASE_URL;
 export default defineConfig({

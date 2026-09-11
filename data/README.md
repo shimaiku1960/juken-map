@@ -18,5 +18,5 @@ ASTI アマノ技研「国内大学の位置データ」
 
 1. アマノ技研からフル版CSVを再取得し `raw/` を差し替え
 2. `curl https://amano-tec.com/_userdata/astiunivs.php -o data/raw/asti-datr0805uj/univs_map.tsv`
-3. `npx tsx scripts/transform-universities.ts` で `clean/universities.json` を再生成
-4. `npx prisma db seed` でDBへ upsert
+3. `pnpm exec tsx scripts/transform-universities.ts` で `clean/universities.json` を再生成
+4. `pnpm exec prisma db seed` でDBへ upsert

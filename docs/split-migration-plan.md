@@ -125,9 +125,9 @@ Fastify（:4000）へ送って認証が通った。**セッションテーブル
 Fastify 経由で学習記録を作成→更新→削除する一巡も通り、同じ DB を見ていることも確認済み。
 既存アプリは 233テスト通過で無傷。
 
-`apps/api` は **npm workspaces にせず独立パッケージ**にした。Dockerfile が
-`package.json` と `package-lock.json` だけをコピーして `npm ci` するため、ルートに
-workspaces を足すと既存のデプロイが壊れる。ルートの `package.json` は変更していない。
+Step 1の時点では、既存Dockerfileを壊さないため`apps/api`を独立したnpmパッケージとして追加した。
+その後、SPAへの切り替え完了後にDockerfileも含めて更新し、2026-09-10にpnpm workspaceへ
+移行した。現在の構成は`docs/architecture.md`を正とする。
 
 #### 移植中に踏んだ3点
 
