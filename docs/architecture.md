@@ -26,8 +26,10 @@ apps/api/               バックエンド一式（Fastify）
   ├ routes/               HTTP の入口（認証・検証・ステータスコードのみ）
   ├ services/             ユースケース（goal / study-log / study-plan / textbook /
   │                       university / notification / sendDailyNotifications）
-  ├ infra/                prisma, email, resend, microcms, line, lineLogin
-  ├ dto/study-mapper.ts   Prisma の戻り値 → 共有 DTO への変換
+  ├ infra/                db（生 SQL の接続プール）, tables（テーブル1行の型）,
+  │                       prisma（移行中）, email, resend, microcms, line, lineLogin
+  ├ test-db/              テスト用 MySQL の準備と、テストデータの作成
+  ├ dto/study-mapper.ts   サービスの戻り値 → 共有 DTO への変換
   ├ domain/               通知本文の組み立てなど
   ├ observability/        サービスの所要時間計測
   └ generated/prisma/     Prisma Client（生成物・gitignore）
@@ -179,8 +181,36 @@ cron やバッチなど HTTP 以外の入口からも同じ処理を呼べる。
   差し替え可能性という使わない利点を上回る。
 
 **見直す条件**は、DB を実際に移す必要が出たとき、または Prisma を直接モックできず
-テストが書けない場面が繰り返し出てきたとき。現状はルートのテストで
-`vi.mock("@/api/infra/prisma")` によりモックできている。
+テストが書けない場面が繰り返し出てきたとき。
+
+### ORM をやめて生 SQL へ移行中（2026-09-11〜）
+
+Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移している。最終的には
+クエリ・Better Auth・マイグレーション・seed のすべてから Prisma を無くす。
+
+**理由: 「ORM があると処理が追いにくい」ため。学習目的も兼ねる。** 1回の呼び出しの裏で
+何本の SQL が流れるか（`include` は JOIN ではなく `IN (...)` の別クエリになる）、
+`updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
+
+移行済みは `services/study-plan-service.ts`。それ以外のサービスと Better Auth はまだ Prisma を使う。
+移行が終わるまでは、Prisma と `infra/db.ts` が別々のプールで同じ DB に繋がる。
+そのため1つのトランザクションに Prisma と生 SQL を混ぜることはできない。
+
+ORM を外すと、次のことを自分で持つことになる。どれも `infra/db.ts` とテストで押さえている。
+
+- **日時の時間帯。** MySQL の `DATETIME` は時間帯を持たない。Prisma は UTC として読み書き
+  していたが、ドライバの既定はプロセスのローカル時刻で、Mac（JST）では9時間ずれる。
+  `timezone: "Z"` で UTC に揃えている。
+- **真偽値。** `BOOLEAN` は `TINYINT(1)` なので `1 / 0` が返る。`typeCast` で直している。
+- **`updatedAt`。** Prisma の `@updatedAt` は DB の機能ではなく Prisma が毎回値を足していた。
+  列に既定値は無いので、INSERT / UPDATE で必ず書く。
+- **一意制約違反。** Prisma の `P2002` の代わりに MySQL の `ER_DUP_ENTRY`（1062）で判定する
+  （`isDuplicateEntry`）。
+- **型。** 上の「Prisma の型推論」は失われた。行の型は `infra/tables.ts` に手で書いており、
+  列を足してもここを直し忘れたら型エラーにならない。
+
+上の「リポジトリ層は導入していない」は変わらない。何を取るかは services、DB との通信は
+infra という分担は、ORM の有無と関係なく同じだった。
 
 ## 境界の強制
 
@@ -205,7 +235,23 @@ cron やバッチなど HTTP 以外の入口からも同じ処理を呼べる。
 「壊れた JSON でも 400 にせず認証チェックを先に効かせる」という細工が入っており
 （`server.ts` のコメント参照）、ハンドラ直呼びではここが素通りしてしまう。
 
-差し替えるのは DB・認証・外部サービスという境界だけで、門番のロジックは実物を動かす。
+差し替えるのは認証・外部サービスという境界だけで、門番のロジックは実物を動かす。
+
+**生 SQL に移したサービスのテストは、DB も差し替えず本物の MySQL に流す。** ORM の呼び出しを
+モックしても SQL の誤りは分からず、SQL 文字列を照合するテストは書き方を変えただけで壊れるため。
+一意制約による 409 や同時アクセスの挙動も、本物の DB でしか確かめられない。
+
+- テスト用 DB は開発用とは別の `juken_map_test`。vitest の globalSetup
+  （`apps/api/src/test-db/global-setup.ts`）が作成とマイグレーションを行う。
+  取り違え防止のため、DB 名が `_test` で終わらなければ何もせずに止まる。
+- ローカルでは `pnpm dev:infra` で DB コンテナを起動しておく必要がある。CI は `check` ジョブに
+  MySQL サービスを持つ。
+- テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる
+  （`test-db/fixtures.ts`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
+- 往復（書いて読む）だけのテストでは時間帯の誤りが打ち消されて見えないので、
+  `infra/db.test.ts` で DB 側の生の値と突き合わせている。CI（UTC）でもずれを検出できるよう、
+  テストは `TZ=Asia/Tokyo` で動かす。
+- まだ Prisma を使うサービスのテストは、従来どおり `vi.mock("@/api/infra/prisma")` で差し替えている。
 
 ## デプロイ
 

@@ -27,6 +27,22 @@ jobs:
 
   check:
     runs-on: ubuntu-latest
+    # apps/api のテストは SQL を本物の MySQL に流す。テスト用 DB（juken_map_test）の
+    # 作成とマイグレーションは vitest の globalSetup が行うので、ここでは起動するだけ。
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_USER: juken
+          MYSQL_PASSWORD: jukenpassword
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootpassword"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
