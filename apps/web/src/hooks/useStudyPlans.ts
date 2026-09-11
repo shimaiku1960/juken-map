@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 // フォーム/カレンダー/リストで共有し、鍵や取得処理の二重定義を防ぐ。
 
 // 型は src/shared/dto/study.ts が正。ここは既存の import 元を変えずに済ませるための re-export。
-// backend の study-mapper が Prisma の戻り値をこの形へ変換する。
+// API 側はサービス（listStudyPlans）がこの形で組み立てて返す。
 export type { Textbook, StudyPlan } from "@/shared/dto/study";
 import type { StudyPlan } from "@/shared/dto/study";
 

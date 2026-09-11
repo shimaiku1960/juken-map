@@ -5,7 +5,6 @@ import {
   updateStudyPlanSchema,
 } from "@/shared/validations/studyPlan";
 import { completeStudyPlanSchema } from "@/shared/validations/studyLog";
-import { toStudyPlanDTO } from "@/api/dto/study-mapper";
 import {
   completeStudyPlan,
   countLinkedStudyLogs,
@@ -26,8 +25,7 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     const session = await requireSession(request, reply);
     if (!session) return;
 
-    const plans = await listStudyPlans(session.user.id);
-    return plans.map(toStudyPlanDTO);
+    return listStudyPlans(session.user.id);
   });
 
   app.post("/api/study-plans", async (request, reply) => {

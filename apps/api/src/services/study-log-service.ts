@@ -1,15 +1,19 @@
 import { execute, select, transaction, type Db } from "@/api/infra/db";
 import type { StudyLogRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
+import type { StudyLog } from "@/shared/dto/study";
 import {
   LOG_COLUMNS,
   TEXTBOOK_COLUMNS,
-  pickLog,
-  pickTextbook,
+  pickTextbookDTO,
   type TextbookColumns,
 } from "./study-columns.ts";
 
-export function listStudyLogs(userId: string) {
+/**
+ * 自分の実績の一覧を、画面へ返す形（src/shared/dto/study.ts の StudyLog）で返す。
+ * 呼び出し元は GET /api/study-logs だけなので、日時もここで ISO 文字列にしておく。
+ */
+export function listStudyLogs(userId: string): Promise<StudyLog[]> {
   return measured("studyLog.list", async () => {
     // Prisma の include は実績と参考書で SQL を2本に分けていた。LEFT JOIN 1本にする。
     //
@@ -24,7 +28,22 @@ export function listStudyLogs(userId: string) {
        ORDER BY l.date DESC, l.id ASC`,
       [userId]
     );
-    return rows.map((row) => ({ ...pickLog(row), textbook: pickTextbook(row) }));
+    return rows.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      date: row.date.toISOString(),
+      minutes: row.minutes,
+      subject: row.subject,
+      textbookId: row.textbookId,
+      textbook: pickTextbookDTO(row),
+      rangeStart: row.rangeStart,
+      rangeEnd: row.rangeEnd,
+      rangeUnit: row.rangeUnit,
+      memo: row.memo,
+      studyPlanId: row.studyPlanId,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }));
   });
 }
 
