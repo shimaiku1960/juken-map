@@ -54,8 +54,12 @@ function parseDatabaseUrl(url: string | undefined) {
 export type Db = Pool | PoolConnection;
 
 // Prisma の `log: ["query"]` の代わり。何が DB に飛んでいるかを開発中に見えるようにする。
-const logQueries =
-  process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test";
+// SQL_LOG=off で止められる（seed は標準出力を JSON などに使うので止めている）。
+// 読み込み時ではなく毎回判定するのは、読み込んだ側があとから止められるようにするため。
+function shouldLogQueries() {
+  const env = process.env.NODE_ENV;
+  return env !== "production" && env !== "test" && process.env.SQL_LOG !== "off";
+}
 
 async function run(db: Db, sql: string, params: unknown[]) {
   const startedAt = performance.now();
@@ -63,7 +67,7 @@ async function run(db: Db, sql: string, params: unknown[]) {
   // execute（プリペアドステートメント）ではなく query を使うのは、
   // `IN (?)` に配列を渡して展開させたいから。エスケープはドライバが行う。
   const [result] = await db.query(sql, params);
-  if (logQueries) {
+  if (shouldLogQueries()) {
     const ms = (performance.now() - startedAt).toFixed(1);
     console.log(`[sql ${ms}ms] ${sql.replace(/\s+/g, " ").trim()}`, params);
   }

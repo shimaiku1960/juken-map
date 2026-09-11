@@ -1,13 +1,9 @@
-
+// ローカル・CI の DB を初期状態にする seed。大学マスター（全国の大学・一部の学部・系統タグ）と
+// デモユーザーを入れる。何度流しても同じ状態になる（upsert とデモのリセット）。
+// 実行: pnpm run db:seed
 import { readFileSync } from "fs";
-import { PrismaClient } from "../apps/api/src/generated/prisma/client";
-import { PrismaMariaDb } from "@prisma/adapter-mariadb";
-import { hashPassword } from "better-auth/crypto";
-import { ymdAfterDays } from "../src/shared/date";
-
-const prisma = new PrismaClient({
-  adapter: new PrismaMariaDb( process.env.DATABASE_URL! ),
-});
+import { seedDemoUser } from "./demo-user";
+import { execute, runSeed, select } from "./seed-helpers";
 
 // 全国大学マスター（scripts/transform-universities.ts が生成）
 type UniversityRow = { name: string; prefecture: string; type: string };
@@ -104,174 +100,80 @@ const facultyData: Record<
   ],
 };
 
+// 多くの行を1本の INSERT で入れるときの1回あたりの行数（プレースホルダが増えすぎないように）
+const CHUNK_SIZE = 200;
+
+const TAG_NAMES = [
+  "法・政経系",
+  "商・経営系",
+  "文・文化系",
+  "理工系",
+  "情報系",
+  "医歯薬系",
+  "農・生命系",
+];
+
 async function main() {
-  // 1. 全国の大学マスターを upsert（name が一意キー）
-  for (const u of universities) {
-    await prisma.university.upsert({
-      where: { name: u.name },
-      update: { prefecture: u.prefecture, type: u.type },
-      create: { name: u.name, prefecture: u.prefecture, type: u.type },
-    });
+  const now = new Date();
+
+  // 1. 全国の大学マスターを upsert（name が UNIQUE）。
+  //    Prisma は1校ずつ「探す → 作成か更新」をしていた（823校で約2,500往復）。
+  //    ここでは複数行の INSERT ... ON DUPLICATE KEY UPDATE を数本流すだけで済ませる。
+  //    University の UNIQUE は name だけ（id は自動採番で指定しない）なので、ON DUPLICATE KEY で安全。
+  for (let i = 0; i < universities.length; i += CHUNK_SIZE) {
+    const chunk = universities.slice(i, i + CHUNK_SIZE);
+    await execute(
+      `INSERT INTO University (name, prefecture, type, createdAt)
+       VALUES ${chunk.map(() => "(?, ?, ?, ?)").join(", ")} AS new
+       ON DUPLICATE KEY UPDATE prefecture = new.prefecture, type = new.type`,
+      chunk.flatMap((u) => [u.name, u.prefecture, u.type, now])
+    );
   }
   console.log(`大学を投入: ${universities.length}校`);
 
-  // 2. 系統タグを upsert（重複作成を避ける）
-  const tagNames = [
-    "法・政経系",
-    "商・経営系",
-    "文・文化系",
-    "理工系",
-    "情報系",
-    "医歯薬系",
-    "農・生命系",
-  ];
-  for (const name of tagNames) {
-    await prisma.tag.upsert({
-      where: { name },
-      update: {},
-      create: { name },
-    });
-  }
+  // 2. 系統タグ。既にあれば何もしない（name = name は「更新なし」の書き方）
+  await execute(
+    `INSERT INTO Tag (name, createdAt) VALUES ${TAG_NAMES.map(() => "(?, ?)").join(", ")} AS new
+     ON DUPLICATE KEY UPDATE name = Tag.name`,
+    TAG_NAMES.flatMap((name) => [name, now])
+  );
 
-  // 3. 大学ごとに学部・系統タグを投入（学部データは facultyData を手動拡充）
+  // 3. 大学ごとに学部と系統タグを投入（学部データは facultyData を手動で拡充する）。
+  //    既存の学部はタグの付け替えだけ行い、受験日は変えない（Prisma 版と同じ）。
   for (const [universityName, faculties] of Object.entries(facultyData)) {
-    const university = await prisma.university.findUniqueOrThrow({
-      where: { name: universityName },
-    });
+    const [university] = await select<{ id: number }>(
+      "SELECT id FROM University WHERE name = ?",
+      [universityName]
+    );
+    if (!university) throw new Error(`${universityName} が大学マスターにありません`);
 
     for (const { name, examDate, tags } of faculties) {
-      const existing = await prisma.faculty.findFirst({
-        where: { name, universityId: university.id },
-      });
+      const [existing] = await select<{ id: number }>(
+        "SELECT id FROM Faculty WHERE name = ? AND universityId = ? ORDER BY id ASC LIMIT 1",
+        [name, university.id]
+      );
 
-      const tagConnect = tags.map((t) => ({ name: t }));
-
+      let facultyId: number;
       if (existing) {
-        await prisma.faculty.update({
-          where: { id: existing.id },
-          data: { tags: { set: tagConnect } },
-        });
+        facultyId = existing.id;
+        // タグを指定どおりに置き換える（Prisma の set）。中間テーブルの A = Faculty.id, B = Tag.id
+        await execute("DELETE FROM _FacultyToTag WHERE A = ?", [facultyId]);
       } else {
-        await prisma.faculty.create({
-          data: {
-            name,
-            examDate: new Date(examDate),
-            universityId: university.id,
-            tags: { connect: tagConnect },
-          },
-        });
+        const created = await execute(
+          "INSERT INTO Faculty (name, examDate, universityId, createdAt) VALUES (?, ?, ?, ?)",
+          [name, new Date(examDate), university.id, now]
+        );
+        facultyId = created.insertId;
       }
+      await execute(
+        "INSERT INTO _FacultyToTag (A, B) SELECT ?, id FROM Tag WHERE name IN (?)",
+        [facultyId, tags]
+      );
     }
   }
 
-  // 4. デモ用ユーザー（面接官がワンクリックで体験するための共有アカウント）
-  const DEMO_EMAIL = "demo@juken-map.com";
-  const DEMO_PASSWORD = "demodemo1234";
-
-  const demoUser = await prisma.user.upsert({
-    where: { email: DEMO_EMAIL },
-    update: { emailVerified: true },
-    create: {
-      email: DEMO_EMAIL,
-      name: "デモユーザー",
-      nickname: "デモ太郎",
-      emailVerified: true,
-    },
-  });
-
-  // Better Auth の認証情報（credential アカウント）を用意
-  const passwordHash = await hashPassword(DEMO_PASSWORD);
-  const existingCredential = await prisma.account.findFirst({
-    where: { userId: demoUser.id, providerId: "credential" },
-  });
-  if (existingCredential) {
-    await prisma.account.update({
-      where: { id: existingCredential.id },
-      data: { password: passwordHash },
-    });
-  } else {
-    await prisma.account.create({
-      data: {
-        userId: demoUser.id,
-        accountId: demoUser.id,
-        providerId: "credential",
-        password: passwordHash,
-      },
-    });
-  }
-  console.log(`デモユーザーを投入: ${DEMO_EMAIL}`);
-
-  // 5. デモユーザーの志望校（FinalGoal）サンプル
-  //    大学名＋学部名から faculty を引いて紐づける
-  const demoGoals: {
-    university: string;
-    faculty: string;
-    isFirstChoice: boolean;
-    status: "candidate" | "decided";
-    note?: string;
-  }[] = [
-    { university: "早稲田大学", faculty: "政治経済学部", isFirstChoice: true, status: "decided", note: "第一志望。英語と数学を重点的に。" },
-    { university: "慶應義塾大学", faculty: "経済学部", isFirstChoice: false, status: "decided", note: "小論文対策が必要。" },
-    { university: "明治大学", faculty: "政治経済学部", isFirstChoice: false, status: "decided" },
-    { university: "中央大学", faculty: "経済学部", isFirstChoice: false, status: "decided", note: "併願の安全校。" },
-    { university: "法政大学", faculty: "経済学部", isFirstChoice: false, status: "candidate", note: "日程が合えば受験候補。" },
-    { university: "青山学院大学", faculty: "経済学部", isFirstChoice: false, status: "candidate" },
-  ];
-
-  for (const g of demoGoals) {
-    const university = await prisma.university.findUniqueOrThrow({
-      where: { name: g.university },
-    });
-    const faculty = await prisma.faculty.findFirstOrThrow({
-      where: { name: g.faculty, universityId: university.id },
-    });
-
-    await prisma.finalGoal.upsert({
-      where: { userId_facultyId: { userId: demoUser.id, facultyId: faculty.id } },
-      update: { isFirstChoice: g.isFirstChoice, note: g.note ?? null, status: g.status },
-      create: {
-        userId: demoUser.id,
-        facultyId: faculty.id,
-        isFirstChoice: g.isFirstChoice,
-        note: g.note ?? null,
-        status: g.status,
-      },
-    });
-  }
-  console.log(`デモの志望校を投入: ${demoGoals.length}件`);
-
-  // 6. デモユーザーの学習予定（StudyPlan）サンプル
-  //    今日を基準にした相対日付。過去は完了済み、今日・未来は未完了にする。
-  //    再seedで重複しないよう、デモの既存予定を一度消してから入れ直す（デモのリセット）
-  await prisma.studyPlan.deleteMany({ where: { userId: demoUser.id } });
-
-  const demoPlans: { offset: number; content: string; subject: string; done: boolean }[] = [
-    { offset: -3, content: "英単語 ターゲット1900（前半）", subject: "english", done: true },
-    { offset: -3, content: "数学ⅠA 二次関数 演習", subject: "math", done: true },
-    { offset: -1, content: "現代文 評論 読解1題", subject: "japanese", done: true },
-    { offset: 0, content: "英語長文 1題（早稲田過去問）", subject: "english", done: false },
-    { offset: 0, content: "日本史 近現代 通史", subject: "social", done: false },
-    { offset: 1, content: "数学ⅡB ベクトル", subject: "math", done: false },
-    { offset: 3, content: "英文法 Vintage 仮定法", subject: "english", done: false },
-    { offset: 6, content: "古文 助動詞 暗記", subject: "japanese", done: false },
-  ];
-
-  await prisma.studyPlan.createMany({
-    data: demoPlans.map((p) => ({
-      userId: demoUser.id,
-      date: new Date(ymdAfterDays(p.offset)),
-      content: p.content,
-      subject: p.subject,
-      done: p.done,
-    })),
-  });
-  console.log(`デモの学習予定を投入: ${demoPlans.length}件`);
+  // 4〜6. デモユーザーと、その志望校・学習予定
+  await seedDemoUser({ withLogs: false });
 }
 
-main()
-  .then(() => prisma.$disconnect())
-  .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+runSeed(main);
