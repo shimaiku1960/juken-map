@@ -167,13 +167,13 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    pnpm exec prisma db seed
    ```
 
-8. 開発サーバーを起動します。APIと画面は別プロセスなので、ターミナルを2つ使います。
+8. 開発サーバーを起動します。MySQLの起動とマイグレーション確認後、APIと画面が並列で起動します。
 
    ```bash
-   pnpm run dev:api   # Fastify（http://localhost:4000）
-   pnpm run dev:web   # Vite（http://localhost:5173）
+   pnpm dev
    ```
 
+   APIと画面のログは、実行したターミナルに実行元の名前付きで表示されます。
    Viteが`/api`を4000番へ同一オリジンでプロキシするため、本番（nginxが1オリジンで配る構成）と
    同じ形になります。ブラウザで開くのは5173番です。
 
@@ -182,10 +182,10 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 ### 2回目以降の起動
 
 ```bash
-pnpm run dev:infra   # MySQL
-pnpm run dev:api
-pnpm run dev:web
+pnpm dev
 ```
+
+`Ctrl+C`でAPIと画面をまとめて停止できます。MySQLコンテナはバックグラウンドで継続するため、停止する場合は`pnpm run dev:infra:stop`を実行します。
 
 [注意] `.env`を変更したら、APIプロセスを再起動してください。`--env-file`は起動時に一度しか
 読まれないため、`tsx watch`ではソース変更でしか再読み込みされません。
@@ -200,7 +200,7 @@ docker compose up --build
 
 次の状態になれば、ローカルセットアップは完了です。
 
-- `http://localhost:3000` でトップページが表示される
+- `http://localhost:5173` でトップページが表示される
 - ログイン画面からデモユーザーでログインできる
 - ダッシュボードに学習予定や志望校が表示される
 
@@ -228,6 +228,7 @@ docker compose up --build
 
 | コマンド | 説明 |
 |---|---|
+| `pnpm dev` | MySQLとマイグレーションを準備し、APIとViteを並列で起動する |
 | `pnpm run dev:infra` | MySQLコンテナを起動する |
 | `pnpm run dev:api` | Fastify（APIとSPA配信）を4000番で起動する |
 | `pnpm run dev:web` | Vite（画面）を5173番で起動する |

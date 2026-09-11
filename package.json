@@ -7,7 +7,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "pnpm run dev:infra && prisma migrate deploy && echo '別ターミナルで pnpm dev:api と pnpm dev:web を実行してください'",
+    "dev": "pnpm run dev:infra && prisma migrate deploy && pnpm run \"/^dev:(api|web)$/\"",
     "dev:infra": "docker compose up -d --wait db",
     "dev:api": "pnpm --filter @juken-map/api dev",
     "dev:web": "pnpm --filter @juken-map/web dev",
