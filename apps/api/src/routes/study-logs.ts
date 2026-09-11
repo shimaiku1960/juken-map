@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { createStudyLogSchema } from "@/shared/validations/studyLog";
-import { toStudyLogDTO } from "@/api/dto/study-mapper";
 import {
   createStudyLog,
   listStudyLogs,
@@ -14,8 +13,7 @@ export function registerStudyLogRoutes(app: FastifyInstance) {
     const session = await requireSession(request, reply);
     if (!session) return;
 
-    const logs = await listStudyLogs(session.user.id);
-    return logs.map(toStudyLogDTO);
+    return listStudyLogs(session.user.id);
   });
 
   app.post("/api/study-logs", async (request, reply) => {

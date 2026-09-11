@@ -29,7 +29,6 @@ apps/api/               バックエンド一式（Fastify）
   ├ infra/                db（生 SQL の接続プール）, tables（テーブル1行の型）,
   │                       prisma（移行中）, email, resend, microcms, line, lineLogin
   ├ test-db/              テスト用 MySQL の準備と、テストデータの作成
-  ├ dto/study-mapper.ts   サービスの戻り値 → 共有 DTO への変換
   ├ domain/               通知本文の組み立てなど
   ├ observability/        サービスの所要時間計測
   └ generated/prisma/     Prisma Client（生成物・gitignore）
@@ -126,8 +125,21 @@ Actions を使わない理由として書いていたが（URL が固定され�
 ボディが React 独自形式）、分離した今はそもそも選択肢が存在しない。
 
 `POST /api/study-logs` に JSON を送るだけで、Web もアプリも同じ入口を使える。
-画面と API が同じ形をやり取りすることは `src/shared/dto/` の型と
-`apps/api/src/dto/study-mapper.ts` が保証している。
+画面と API が同じ形をやり取りすることは `src/shared/dto/` の型が保証している。
+予定と実績の一覧は、サービス（`listStudyPlans` / `listStudyLogs`）の戻り値の型をこの型にしている。
+
+### 画面へ返す形への変換はサービスで行う（2026-09-11〜）
+
+以前は `apps/api/src/dto/study-mapper.ts` に変換関数を置き、routes から呼んでいた。
+Next.js 時代に同じ変換が画面3箇所と API に重複していたのを集めたものだった。
+
+SPA に分けたあとは、変換を使うのが予定と実績の一覧の GET の2か所だけになった。
+流れを追うときに開くファイルが1つ増えるだけだったので、ファイルを消し、
+サービスが最初から画面の形で組み立てるようにした。整形は1回で済み、
+routes → services → infra の3層だけで流れを追える。
+
+**見直す条件:** cron のように、日時を `Date` のまま使いたい呼び出し元が出てきたとき。
+そのときはサービスの戻り値を `Date` に戻し、変換を呼び出し元へ分ける。
 
 ### routes は DB を触らない
 
@@ -171,8 +183,8 @@ cron やバッチなど HTTP 以外の入口からも同じ処理を呼べる。
 利点は「DB を差し替えられること」だが、MySQL から移る予定は無い。一方で失うものは具体的である。
 
 - **Prisma の型推論が切れる。** `include` の内容に応じて戻り値の型が変わるのが Prisma の
-  最大の利点で、`apps/api/src/dto/study-mapper.ts` はその型を
-  `Prisma.StudyPlanGetPayload<{ include: ... }>` として受けている。schema を変えると変換側が
+  最大の利点で、当時の `apps/api/src/dto/study-mapper.ts` はその型を
+  `Prisma.StudyPlanGetPayload<{ include: ... }>` として受けていた。schema を変えると変換側が
   型エラーになり、直し忘れに気づける。自前の型に詰め替えると、この検出が効かなくなる。
 - **`select` の柔軟性が失われる。** 画面ごとに必要な列は違う。`listGoalsWithFaculty` は
   `tags` を引かず `listGoals` は引く、という使い分けをしている（`tags` は暗黙的多対多なので

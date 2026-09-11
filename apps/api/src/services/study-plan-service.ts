@@ -1,6 +1,7 @@
 import { execute, select, transaction, type Db } from "@/api/infra/db";
 import type { StudyLogRow, StudyPlanRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
+import type { StudyPlan } from "@/shared/dto/study";
 import {
   LOG_COLUMNS,
   PLAN_COLUMNS,
@@ -8,6 +9,7 @@ import {
   pickLog,
   pickPlan,
   pickTextbook,
+  pickTextbookDTO,
   type TextbookColumns,
 } from "./study-columns.ts";
 
@@ -27,16 +29,31 @@ const LIST_SQL = `
   ORDER BY p.date ASC, p.id ASC
 `;
 
-export function listStudyPlans(userId: string) {
+/**
+ * 自分の予定の一覧を、画面へ返す形（src/shared/dto/study.ts の StudyPlan）で返す。
+ * 呼び出し元は GET /api/study-plans だけなので、日時もここで ISO 文字列にしておく。
+ */
+export function listStudyPlans(userId: string): Promise<StudyPlan[]> {
   return measured("studyPlan.list", async () => {
     const rows = await select<
       StudyPlanRow & TextbookColumns & { log_id: number | null }
     >(LIST_SQL, [userId]);
 
     return rows.map((row) => ({
-      ...pickPlan(row),
-      textbook: pickTextbook(row),
-      studyLog: row.log_id === null ? null : { id: row.log_id },
+      id: row.id,
+      userId: row.userId,
+      date: row.date.toISOString(),
+      content: row.content,
+      subject: row.subject,
+      done: row.done,
+      studyLogId: row.log_id,
+      textbookId: row.textbookId,
+      textbook: pickTextbookDTO(row),
+      rangeStart: row.rangeStart,
+      rangeEnd: row.rangeEnd,
+      rangeUnit: row.rangeUnit,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     }));
   });
 }

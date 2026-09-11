@@ -3,6 +3,7 @@ import type {
   StudyPlanRow,
   TextbookRow,
 } from "@/api/infra/tables";
+import type { Textbook } from "@/shared/dto/study";
 
 // 予定（p）・実績（l）・参考書（t）を SELECT するときの列と、JOIN の結果を
 // オブジェクトへ戻す関数。study-plan-service と study-log-service の両方で使う。
@@ -53,6 +54,23 @@ export function pickTextbook(row: TextbookColumns): TextbookRow | null {
     subject: row.tb_subject,
     createdAt: row.tb_createdAt!,
     updatedAt: row.tb_updatedAt!,
+  };
+}
+
+/**
+ * tb_ 列から、画面へ返す参考書の形（src/shared/dto/study.ts の Textbook）を作る。
+ * 画面が使わない列（userId・作成日時）は落とし、日時は ISO 文字列にする。
+ */
+export function pickTextbookDTO(row: TextbookColumns): Textbook | null {
+  if (row.tb_id === null) return null;
+  return {
+    id: row.tb_id,
+    masterId: row.tb_masterId,
+    name: row.tb_name!,
+    totalAmount: row.tb_totalAmount,
+    rangeUnit: row.tb_rangeUnit,
+    targetDate: row.tb_targetDate?.toISOString() ?? null,
+    subject: row.tb_subject,
   };
 }
 
