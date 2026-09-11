@@ -4,14 +4,12 @@ import mysql, {
   type ResultSetHeader,
 } from "mysql2/promise";
 
-// 生 SQL 用の接続プール。infra/prisma.ts と同じ役割を、ORM 無しで持つ。
+// アプリ唯一の DB 接続プール。services の生 SQL も、Better Auth（auth.ts）も
+// このプールを使う。
 //
-// Prisma を使っているときは、@prisma/adapter-mariadb がこの層を持ち、その上で
+// Prisma を使っていた頃は、@prisma/adapter-mariadb がこの層を持ち、その上で
 // 「クエリの組み立て」と「結果の整形」を ORM がやっていた。ORM を外すとは、
 // その2つを services に自分で書くということ。接続の管理はどちらでも要る。
-//
-// Prisma を完全に外し終えるまでは、両者が別々のプールで同じ DB に繋がる。
-// そのため1つのトランザクションに Prisma と生 SQL を混ぜることはできない。
 
 const pool: Pool = mysql.createPool({
   ...parseDatabaseUrl(process.env.DATABASE_URL),
