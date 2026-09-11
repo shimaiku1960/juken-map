@@ -9,10 +9,15 @@
 
 ## 依存関係とlockfile
 
-`package.json`または依存関係を変更した場合、macOS上の`npm install`だけで
-`package-lock.json`を確定しないこと。必ず`npm run lock:linux`を実行し、Linux
-環境の`npm ci`成功後に、`package.json`と`package-lock.json`を一緒にコミットする。
-通常の確認には非破壊の`npm run lock:check`を使える。
+パッケージ管理は `package.json` の `packageManager` に固定した pnpm を使う。
+ルート・`apps/api`・`apps/web` は pnpm workspace で、lockfile はルートの
+`pnpm-lock.yaml` 1つを正とする。npm install / npm ci や個別の package-lock.json は使わない。
+
+依存関係または `pnpm-workspace.yaml` を変更したら `pnpm install` でlockfileを更新し、
+必ず `pnpm run lock:linux` で本番と同じ Linux/amd64 の
+`pnpm install --frozen-lockfile` 成功を確認する。変更したmanifest・workspace設定・lockfileは
+一緒にコミットする。通常の非破壊確認は `pnpm run lock:check` を使う。
+必要な依存のinstall scriptだけを `pnpm-workspace.yaml` の `allowBuilds` で許可する。
 
 ## 言語
 

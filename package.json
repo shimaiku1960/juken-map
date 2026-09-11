@@ -2,26 +2,26 @@
   "name": "juken-map",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "npm@11.19.0",
+  "packageManager": "pnpm@12.3.4",
   "engines": {
     "node": "24.x"
   },
   "scripts": {
-    "dev": "npm run dev:infra && prisma migrate deploy && echo '別ターミナルで npm run dev:api と npm run dev:web を実行してください'",
+    "dev": "pnpm run dev:infra && prisma migrate deploy && echo '別ターミナルで pnpm dev:api と pnpm dev:web を実行してください'",
     "dev:infra": "docker compose up -d --wait db",
-    "dev:api": "npm run dev --prefix apps/api",
-    "dev:web": "npm run dev --prefix apps/web",
+    "dev:api": "pnpm --filter @juken-map/api dev",
+    "dev:web": "pnpm --filter @juken-map/web dev",
     "dev:infra:stop": "docker compose stop db",
     "dev:infra:logs": "docker compose logs -f db",
     "lint": "eslint",
     "test": "vitest run",
-    "check": "npx prisma generate && npx eslint --max-warnings 0 && npx tsc --noEmit && npm run typecheck --prefix apps/api && npm run typecheck --prefix apps/web && npm test && npm run test --prefix apps/api && npm run test --prefix apps/web && npm run build --prefix apps/web",
+    "check": "pnpm exec prisma generate && pnpm exec eslint --max-warnings 0 && pnpm exec tsc --noEmit && pnpm -r typecheck && pnpm test && pnpm -r test && pnpm --filter @juken-map/web build",
     "e2e": "playwright test",
     "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
     "hooks:install": "git config core.hooksPath .githooks",
-    "lock:check": "node scripts/check-linux-native-deps.mjs package-lock.json apps/api/package-lock.json apps/web/package-lock.json",
-    "lock:linux": "bash scripts/generate-linux-lockfile.sh",
-    "lock:fix": "npm run lock:linux"
+    "lock:check": "bash scripts/check-lockfile.sh",
+    "lock:linux": "bash scripts/check-lockfile.sh --linux",
+    "lock:fix": "pnpm install --lockfile-only && pnpm run lock:linux"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.8.0",
@@ -31,8 +31,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.61.1",
     "@types/node": "^20",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "globals": "^17.12.0",
     "prisma": "^7.8.0",

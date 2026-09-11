@@ -6,7 +6,7 @@
 
 Better AuthのVU別Cookie維持と、同じ学習予定を同時完了した場合の競合応答を確認する。
 
-1. 別ターミナルで`npm run dev`を起動する。
+1. ビルド済みSPAを配信するAPIを3000番で起動する（`bash scripts/e2e-server.sh`）。
 2. `bash scripts/run-loadtest-phase0.sh`を実行する。
 
 実行スクリプトはローカルDBへ専用の合成ユーザーと予定を再作成し、Docker版k6を実行する。期待結果は次のとおり。

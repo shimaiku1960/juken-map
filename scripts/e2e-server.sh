@@ -5,11 +5,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-npm run build --prefix "$ROOT/apps/web"
+pnpm --dir "$ROOT" --filter @juken-map/web build
 
 # apps/api は cwd が apps/api になるので、配信元は絶対パスで渡す。
 export WEB_DIST_DIR="$ROOT/apps/web/dist"
 # Playwright の baseURL は 3000 番。手元で確認したいときだけ API_PORT で上書きできる。
 export API_PORT="${API_PORT:-3000}"
 
-exec npm run start --prefix "$ROOT/apps/api"
+exec pnpm --dir "$ROOT" --filter @juken-map/api start

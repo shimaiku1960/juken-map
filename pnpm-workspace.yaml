@@ -1,0 +1,23 @@
+packages:
+  - apps/*
+
+# 各アプリの依存宣言は保ち、解決結果はルートの1ファイルで管理する。
+sharedWorkspaceLockfile: true
+# Dockerへコピーする依存のリンクをリポジトリ内で完結させる。
+enableGlobalVirtualStore: false
+# コマンド実行時に暗黙のinstallを行わず、依存変更後は明示的にinstallする。
+verifyDepsBeforeRun: error
+
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  esbuild: true
+  sharp: true
+
+# 使用するpeer依存も各package.jsonで明示する。
+autoInstallPeers: false
+
+# npm版から引き継ぐ既存の固定バージョン。公開直後の待機期間だけ例外にする。
+minimumReleaseAgeExclude:
+  - resend@6.27.0

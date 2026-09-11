@@ -1,6 +1,6 @@
 // LPのスクリーンショット・動画撮影専用ユーザーを、ローカルDBへ再現可能な状態で投入する。
 // 共有デモユーザーとは分離し、タイマー開始→実績保存まで実際に操作できるようにする。
-// 実行: npm run capture:seed
+// 実行: pnpm run capture:seed
 import { PrismaClient } from "../apps/api/src/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { hashPassword } from "better-auth/crypto";

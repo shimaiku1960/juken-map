@@ -114,7 +114,7 @@ flowchart LR
 ### 前提条件
 
 - Node.js 24
-- npm
+- pnpm 12.3.4（`package.json`で固定）
 - Docker Desktopなど、Docker Composeを実行できる環境
 
 OAuthログイン、メール送信、ブログまで確認する場合は、Google・GitHub OAuth、Resend、microCMSの資格情報も必要です。
@@ -131,8 +131,9 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 2. 依存関係をインストールします。
 
    ```bash
-   npm ci
-   npm run hooks:install
+   npm install --global pnpm@12.3.4
+   pnpm install --frozen-lockfile
+   pnpm run hooks:install
    ```
 
    `hooks:install`は、依存ファイルを含むpushの前だけLinux環境でlockfileを確認するGitフックを有効にします。
@@ -150,27 +151,27 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 5. MySQLを起動します。
 
    ```bash
-   npm run dev:infra
+   pnpm run dev:infra
    ```
 
 6. Prisma Clientを生成し、マイグレーションを適用します。
 
    ```bash
-   npx prisma generate
-   npx prisma migrate deploy
+   pnpm exec prisma generate
+   pnpm exec prisma migrate deploy
    ```
 
 7. 大学マスターとデモデータを投入します。
 
    ```bash
-   npx prisma db seed
+   pnpm exec prisma db seed
    ```
 
 8. 開発サーバーを起動します。APIと画面は別プロセスなので、ターミナルを2つ使います。
 
    ```bash
-   npm run dev:api   # Fastify（http://localhost:4000）
-   npm run dev:web   # Vite（http://localhost:5173）
+   pnpm run dev:api   # Fastify（http://localhost:4000）
+   pnpm run dev:web   # Vite（http://localhost:5173）
    ```
 
    Viteが`/api`を4000番へ同一オリジンでプロキシするため、本番（nginxが1オリジンで配る構成）と
@@ -181,9 +182,9 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 ### 2回目以降の起動
 
 ```bash
-npm run dev:infra   # MySQL
-npm run dev:api
-npm run dev:web
+pnpm run dev:infra   # MySQL
+pnpm run dev:api
+pnpm run dev:web
 ```
 
 [注意] `.env`を変更したら、APIプロセスを再起動してください。`--env-file`は起動時に一度しか
@@ -223,37 +224,41 @@ docker compose up --build
 | `LINE_LOGIN_CHANNEL_SECRET` | LINE Loginの認可コード交換 |
 | `MICROCMS_API_KEY` / `MICROCMS_SERVICE_DOMAIN` | ブログ記事の取得 |
 
-## npm scripts
+## 開発コマンド
 
 | コマンド | 説明 |
 |---|---|
-| `npm run dev:infra` | MySQLコンテナを起動する |
-| `npm run dev:api` | Fastify（APIとSPA配信）を4000番で起動する |
-| `npm run dev:web` | Vite（画面）を5173番で起動する |
-| `npm run dev:infra:stop` | MySQLコンテナを停止する |
-| `npm run dev:infra:logs` | MySQLコンテナのログを表示する |
-| `npm run lint` | ESLintを実行する |
-| `npm run test` | ルート（`src/`）のVitestを実行する |
-| `npm run e2e` | PlaywrightのE2Eテストを実行する |
-| `npm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
-| `npm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
-| `npm run hooks:install` | リポジトリ管理のGitフックを有効にする |
-| `npm run lock:check` | 3つのlockfileにLinux用ネイティブ依存が揃っているか検証する |
-| `npm run lock:linux` | DockerのLinux環境で3つのlockfileを更新し、`npm ci`まで検証する |
-| `npm run lock:fix` | `lock:linux`の互換エイリアス |
+| `pnpm run dev:infra` | MySQLコンテナを起動する |
+| `pnpm run dev:api` | Fastify（APIとSPA配信）を4000番で起動する |
+| `pnpm run dev:web` | Vite（画面）を5173番で起動する |
+| `pnpm run dev:infra:stop` | MySQLコンテナを停止する |
+| `pnpm run dev:infra:logs` | MySQLコンテナのログを表示する |
+| `pnpm run lint` | ESLintを実行する |
+| `pnpm run test` | ルート（`src/`）のVitestを実行する |
+| `pnpm run e2e` | PlaywrightのE2Eテストを実行する |
+| `pnpm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
+| `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
+| `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
+| `pnpm run lock:check` | 隔離ディレクトリでmanifestとlockfileの整合性を検証する |
+| `pnpm run lock:linux` | DockerのLinux/amd64環境でfrozen installとPrisma・Viteの起動を検証する |
+| `pnpm run lock:fix` | lockfileを更新し、Linuxで検証する |
 
-`apps/api`と`apps/web`のテストは、それぞれ`npm run test --prefix apps/api`と
-`npm run test --prefix apps/web`で個別に実行できます（`npm run check`には含まれます）。
+`apps/api`と`apps/web`のテストは、それぞれ`pnpm --filter @juken-map/api test`と
+`pnpm --filter @juken-map/web test`で個別に実行できます（`pnpm run check`には含まれます）。
 
 ## テストとCI
 
 変更をpushする前に、次のコマンドで主要な検査をまとめて実行できます。
 
 ```bash
-npm run check
+pnpm run check
 ```
 
-`package.json`または`package-lock.json`を含むpushでは、pre-pushフックが`npm run lock:check`を自動実行します。不整合がある場合はpushを中止するため、`npm run lock:linux`でlockfileを更新してコミットしてください。通常のコード変更では、この追加検査は実行しません。
+ルートと`apps/*`はpnpm workspaceです。各アプリの依存はそれぞれの`package.json`に宣言し、解決結果はルートの`pnpm-lock.yaml`で共有します。依存追加は、例えば`pnpm --filter @juken-map/web add パッケージ名`、ルートの開発依存なら`pnpm add -Dw パッケージ名`を使います。
+
+manifest・`pnpm-workspace.yaml`・`pnpm-lock.yaml`を含むpushでは、pre-pushフックが非破壊の`pnpm run lock:check`を実行します。依存変更後は`pnpm install`に続けて`pnpm run lock:linux`でLinux/amd64のインストール成功を確認し、manifestとlockfileを一緒にコミットしてください。CIでも`pnpm install --frozen-lockfile`を使います。
+
+依存パッケージのinstall scriptは`pnpm-workspace.yaml`の`allowBuilds`で必要なものだけ許可しています。新しい依存でビルド未承認のエラーが出た場合は、スクリプトの内容を確認してこの設定を更新します。
 
 GitHub Actionsでは、次の3ジョブを実行します。
 

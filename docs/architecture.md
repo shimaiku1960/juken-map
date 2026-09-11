@@ -38,6 +38,18 @@ src/shared/             2つのアプリが共有する、外部依存のない�
 └ dto/study.ts            画面↔API で受け渡す形の型定義
 ```
 
+## パッケージ管理
+
+ルート・`apps/api`・`apps/web` をpnpm workspaceとして管理する。
+`pnpm-workspace.yaml`が参加パッケージを定義し、各`package.json`に依存を宣言する。
+解決結果はルートの`pnpm-lock.yaml`へ集約し、pnpmのバージョンもルートの
+`packageManager`で固定する。ルートの`pnpm install`で全パッケージを導入できる。
+
+`src/shared`は今回パッケージ化せず、既存のパス参照を維持する。そこから使うZodは
+ルートに宣言する。Dockerは`node_modules/.pnpm`とAPI側の相対リンクを同じ階層で
+コピーするため、手作業でルートの`node_modules`をアプリへリンクする処理は不要。
+開発時は従来どおりAPIと画面を別ターミナルで起動する。
+
 ## 依存の向き
 
 ```
@@ -184,8 +196,8 @@ cron やバッチなど HTTP 以外の入口からも同じ処理を呼べる。
 | 対象 | 実行 | 内容 |
 |---|---|---|
 | `src/shared` | ルートの vitest | 純粋関数、Zod スキーマ |
-| `apps/api` | `npm run test --prefix apps/api` | エンドポイントの門番（401 / 403 / 400 / 404 / 409）、通知本文、外部連携 |
-| `apps/web` | `npm run test --prefix apps/web` | 画面まわりの純粋関数 |
+| `apps/api` | `pnpm --filter @juken-map/api test` | エンドポイントの門番（401 / 403 / 400 / 404 / 409）、通知本文、外部連携 |
+| `apps/web` | `pnpm --filter @juken-map/web test` | 画面まわりの純粋関数 |
 | 通し | Playwright | 記録→可視化の毎日ループ、デモ閲覧専用、モバイルナビ |
 
 `apps/api` のテストは Fastify の `inject()` を使う。ハンドラを直接呼ばないのは、
@@ -200,6 +212,5 @@ cron やバッチなど HTTP 以外の入口からも同じ処理を呼べる。
 `apps/web` のビルド成果物と `apps/api` を1つのイメージに入れ、EC2 上の Docker で動かす。
 nginx（EC2 ホスト上）が 443 を受けて 3000 番へ流す。設定の実物は `infra/nginx/README.md`。
 
-`Dockerfile` に symlink が2つある。`src/shared` が `apps/*` の外にあるため、`/app/src` からの
-モジュール解決（zod など）が `apps/*/node_modules` に届かないための橋渡しである。
-npm workspaces へ移せば不要になる。
+`src/shared` は `apps/*` の外にあるが、pnpm workspaceのルート依存からZodなどを解決できる。
+Dockerイメージにもworkspaceと同じ階層でpnpmの依存をコピーするため、個別のsymlinkは不要である。
