@@ -3,6 +3,13 @@
 **方針決定: 2026-09-09（ユーザー判断）。** 受験マップ本体を、React + Vite の SPA と
 Fastify の API サーバーに分離する。学習用の別リポジトリではなく、**本番アプリを分ける。**
 
+> **状態: 2026-09-10 に完了。** Phase 0 / Step 1 / Step 2 / Step 3 のすべてが終わり、
+> Next.js は削除済み。**このドキュメントは計画書ではなく、判断と結果の記録である。**
+> 現在の構成は `docs/architecture.md` を正とする。
+> 計画から変わった点は3つ。(1) nginx は結局さわらず Fastify が SPA も配る、
+> (2) LINE のコールバック URL と cron の向き先は変更不要だった、
+> (3) SEO は静的 HTML の事前生成ではなくサーバー側の meta 生成で解決した。詳細は各 Step に書いた。
+
 ## なぜ分けるか
 
 Next.js はフロントとバックが同じプロセスに同居する設計である。2026-09-09 に `lib/` を
@@ -29,6 +36,9 @@ juken-map/
 配信は **nginx で同一オリジンのままパス振り分け**（`/api/*` → Fastify、`/*` → 静的 SPA）。
 別ドメインにすると認証 Cookie が `SameSite=None; Secure` 必須になるため、同一オリジンにする。
 
+> **実際はこうしなかった（Step 3）。** 同一オリジンにする方針はそのままだが、振り分けは
+> nginx ではなく **Fastify が API と SPA の両方を配る**形にした。理由は Step 3 の節を参照。
+
 ### なぜ別リポジトリにしないか（2026-09-09 判断）
 
 当初「別リポジトリに同じものを作る」案を検討したが、実数で比べて**同一リポジトリに決めた**。
@@ -54,6 +64,10 @@ juken-map/
 | microCMS（ブログ） | Server Component から直接取得 | 低 | 置き場所は Phase 2 で判断 |
 | デプロイ | Docker 1コンテナ（:3000）＋SSM | 中 | 2コンテナ化とプロキシ設定 |
 
+> **結果（2026-09-10）:** 見込みが外れたのは下2行である。URL が変わらなかったので
+> **LINE の登録 URL 変更と cron の向き先変更は発生しなかった。** デプロイも
+> **1コンテナのまま**で、プロキシ設定にも手を入れていない。
+
 移植元となる `src/backend/`（19本）は TASK 1〜7 でサービス層・DTO・infra に切り出し済みで、
 **ほぼそのまま Fastify へ持っていける。** 先の整理がここで効く。
 
@@ -74,7 +88,8 @@ Next.js 固有なのは `plugins: [nextCookies()]` の1行だけで、これは 
 
 ## 進め方
 
-Phase 0（検証）は完了済み。以降は Step 1 → 2 → 3 の順に進める。
+Phase 0 → Step 1 → 2 → 3 の順に進め、**すべて完了した（2026-09-09〜09-10）。**
+以下は各段階の結果と、そこで踏んだ点の記録である。
 
 ### ✅ Phase 0 — 認証の実現可能性検証（2026-09-09 完了・実証済み）
 
@@ -184,21 +199,61 @@ TASK 3〜5B で「UI 層から Prisma を直接呼ばない」「サービス層
 
 完了条件: 20本すべてが Fastify で動き、curl で既存ユーザーの認証込みの応答が得られる。
 
-### Step 2 — `apps/web`（React + Vite）を作る
+### ✅ Step 2 — `apps/web`（React + Vite）を作る（2026-09-09〜09-10 完了）
 
-ここだけゼロから。**作業量の大半（コンポーネント35本・6,218行、画面18本、hooks 5本）はここ。**
+**全18画面を移植済み。** 画面は `react-router` のルート定義（`apps/web/src/App.tsx`）に対応し、
+公開ページ・認証フロー・ログイン後のアプリ・LINE 連携まで揃っている。
+Server Component がサービス層を関数で直接呼んでいた10ファイルは、想定どおりすべて
+TanStack Query 経由の fetch になった。`src/frontend/components/ui`（shadcn）と `src/shared` は
+そのまま持ち込めた。
 
-- `src/frontend/components/ui`（shadcn 10本）はそのままコピーできる
-- Server Component がサービス層を関数で直接呼んでいた**10ファイルは、すべて fetch になる**
-- 認証状態は better-auth のクライアントで扱う
-- `src/shared` は `apps/api` と共用する
+#### 移植中に踏んだ点
 
-### Step 3 — 切り替えて Next.js を消す
+1. **静的ファイルの置き場所。** manifest と PWA アイコンが 404 になった。Next.js の `public/` に
+   あたるものを `apps/web/public/` に置き直して解消。
+2. **移植漏れは画面単位で起きる。** LINE 連携の2画面が抜けていた。ルート定義と旧アプリの
+   画面一覧を突き合わせて初めて分かる種類の漏れである。
+3. **キャッシュの無効化漏れ。** プロフィール更新後に古い表示が残った。Server Component の
+   再レンダリングが担っていた更新を、TanStack Query の invalidate で明示する必要がある。
+   同種の不具合が LINE 連携の表示でも出た（連携済みなのに未連携と表示される）。
 
-nginx のルーティングを `apps/web` に向け、Next.js を削除する。**利用者が開発者本人のみなので
-段階移行はしない。** パリティに達したら一気に切り替える。問題があれば nginx の設定を戻す。
+#### SEO は「サーバー側で作り直す」で決着した（未決事項だった）
 
-その後、cron（GitHub Actions）の向き先と **LINE Developers のコールバック URL** を更新する。
+計画時点では「LP・ブログ・規約だけ事前生成した静的 HTML にする」を緩和策として挙げていたが、
+**採らなかった。** Fastify 側（`apps/api/src/seo.ts`）で `robots.txt` / `sitemap.xml` と
+ページ別の meta を返す形にした。`index.html` を返すときに head を差し込み、`/articles/:id` は
+microCMS からタイトル・説明・アイキャッチを引く。判断の詳細は `docs/architecture.md` の
+「SPA 化で失う SEO を、サーバー側で作り直した」にある。
+
+一覧やアプリ内の画面が JS 実行後にしか中身を出さない点は、SPA である限り残る。実害と
+認識のうえで許容している。
+
+### ✅ Step 3 — 切り替えて Next.js を消す（2026-09-10 完了）
+
+**Next.js は削除済み。** 計画どおり段階移行はせず、パリティに達した時点で一気に切り替えた。
+
+#### nginx は結局さわらなかった（計画からの変更）
+
+計画では「nginx で `/api/*` → Fastify、`/*` → 静的 SPA に振り分ける」としていたが、
+**Fastify が SPA も配る形にした。** 3000 番で待ち受けるものが Next.js から Fastify に
+替わるだけなので、nginx の `location / { proxy_pass http://localhost:3000; }` は無変更で済む。
+
+理由は性能ではなく**リスクの形**である。静的ファイルをホストに置くと、切り戻す対象が
+「コンテナ」と「静的ファイル」の2系統に割れ、既存のスモークテストと自動ロールバックが
+片方しか守らなくなる。結果として**切り替えで本番ホストに一切触っていない**（SSM での
+手作業がゼロ）。必要になれば nginx に `location /api` を足すだけで移せる（アプリ側は無変更）。
+詳細は `docs/architecture.md` の「Fastify が API と SPA の両方を配る」。
+
+#### cron と LINE のコールバック URL の更新は不要だった
+
+同一オリジン・同一ポートのまま切り替えたため、`https://juken-map.com/api/cron/...` も
+`/api/line/oauth/callback` も URL が変わらなかった。**計画で想定していた
+「LINE Developers 側の登録 URL 変更」は発生していない。**
+
+#### CI の向き先
+
+E2E とビルドの対象を新しい構成へ向け直した。E2E の接続先は切り替え可能にしてあり、
+SPA でもそのまま流せる。
 
 ### 段階移行をしない理由（2026-09-09 判断）
 
@@ -218,24 +273,34 @@ nginx のルーティングを `apps/web` に向け、Next.js を削除する。
 
 残る実質的な制約は SEO（後述）と、LINE のコールバック URL 更新、cron の向き先だけである。
 
-## 未決事項（判断を後回しにできるもの）
+> **結果:** SEO はサーバー側の meta 生成で解決し、後ろ2つは URL が変わらなかったので
+> そもそも作業が発生しなかった。
 
-### SEO をどうするか（Step 2 で判断）
+## 未決事項だったもの（決着済み）
+
+### ✅ SEO をどうするか → サーバー側で作り直した（Step 2 で決着）
 
 **SPA 化すると SSR が無くなり、現在の SEO は失われる。** LP は新規登録の入口で、
 インデックス済み・`sitemap.xml` 送信済み・Search Console 登録済みである
-（`lp-and-mockup.md`）。これは実害として認識したうえで SPA を選択している。
+（`lp-and-mockup.md`）。これは実害として認識したうえで SPA を選択した。
 
-緩和策: LP・ブログ・規約・プライバシーポリシーだけを**事前生成した静的 HTML** として
-配信すれば、検索流入は維持できる。ログイン後のアプリ部分は SPA で問題ない。
-Step 2 で具体化する。
+計画時の緩和策は「LP・ブログ・規約だけを**事前生成した静的 HTML** にする」だったが、
+**採らなかった。** Fastify の `apps/api/src/seo.ts` が `robots.txt` / `sitemap.xml` と
+ページ別の meta を返す。静的ファイルを別に持たずに済み、記事のタイトル・説明も
+microCMS の最新を反映できる。Step 2 の節と `docs/architecture.md` を参照。
 
-### その他
+### ✅ microCMS ブログの置き場所 → API 側で中継する（`apps/api/src/routes/blog.ts`）
 
-- microCMS ブログの置き場所
-- 学習用リポジトリ `juken-map-fullstack-lab` の位置づけ。本番移行と目的が重複するため、
-  役目を終えたと考えてよい。Phase 1 相当（Fastify + メモリ保存の CRUD、PATCH/DELETE 込み）
-  まで実装済みだが未コミットで残っている
+**判断の決め手は API キーである。** Next.js では Server Component が microCMS のクライアントを
+直接呼んでいたので、キーはサーバーに閉じたままだった。SPA から直接叩くとキーがブラウザに出る。
+`GET /api/blog` と `GET /api/blog/:id` で中継し、キーはサーバー側に留める（公開コンテンツなので
+認証は不要）。画面は `apps/web` の `useBlog` から fetch する。`sitemap.xml` の生成にも記事一覧が
+要るので、いずれにせよ API 側に必要だった。
+
+### 学習用リポジトリ `juken-map-fullstack-lab`
+
+本番移行と目的が重複するため、**役目を終えた。** Phase 1 相当（Fastify + メモリ保存の
+CRUD、PATCH/DELETE 込み）まで実装済みだが未コミットで残っている。
 
 ## ✅ リバースプロキシの実態（2026-09-09 確認済み）
 
@@ -248,11 +313,15 @@ Step 3 の前提として、SSM 経由で本番 EC2 から実物を読み取っ�
 - HTTPS は Let's Encrypt。`certbot.timer` が動いており自動更新されている
 - 80 番は Certbot が入れた 301 で HTTPS へ寄せているだけ
 
-Step 3 では `location /api` を Fastify（:4000）へ、`location /` を SPA の静的ファイルへ
-振り分ける。SPA はクライアントルーティングなので `try_files $uri /index.html;` が要る
-（無いと `/dashboard` の直接アクセスが 404 になる）。
+当初の Step 3 は、ここへ `location /api` を Fastify（:4000）へ、`location /` を SPA の
+静的ファイルへ振り分ける設定を入れる想定だった。SPA はクライアントルーティングなので
+`try_files $uri /index.html;` も要る（無いと `/dashboard` の直接アクセスが 404 になる）。
 
-**切り戻しは設定を戻して `nginx -s reload` するだけ。** Step 3 が低リスクなのはこのため。
+> **実際には nginx を一切変更していない。** Fastify が 3000 番で SPA も配るため、
+> `location / { proxy_pass http://localhost:3000; }` のままで切り替わった。
+> クライアントルーティングの受けも Fastify 側が担っている（`fastify-static` の `index` は
+> 切ってあり、`index.html` は meta を差し込んでから返す）。
+> **ここを読んで本番の nginx に手を入れないこと。** 上の設定は「採らなかった案」である。
 
 ## 進め方の制約（TASK 1〜7 から引き継ぐ）
 
