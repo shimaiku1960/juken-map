@@ -62,7 +62,7 @@ afterAll(async () => {
 });
 
 describe("applyMigrations", () => {
-  it("空の DB に prisma/migrations を名前順にすべて当て、2回目は何も当てない", async () => {
+  it("空の DB に db/migrations を名前順にすべて当て、2回目は何も当てない", async () => {
     const names = (await readdir(MIGRATIONS_DIR, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
