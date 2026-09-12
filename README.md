@@ -237,7 +237,7 @@ docker compose up --build
 | `pnpm run test` | ルート（`src/`）のVitestを実行する |
 | `pnpm run e2e` | PlaywrightのE2Eテストを実行する |
 | `pnpm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
-| `pnpm run db:migrate` | まだ当てていないマイグレーション（`prisma/migrations/*/migration.sql`）をDBへ当てる |
+| `pnpm run db:migrate` | まだ当てていないマイグレーション（`db/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
@@ -304,7 +304,7 @@ src/
 
 e2e/                     # Playwright E2Eテスト
 infra/nginx/             # 本番リバースプロキシ設定の記録
-prisma/                  # マイグレーション（SQL）と seed（ディレクトリ名は Prisma 時代の名残）
+db/                      # マイグレーション（SQL）と seed
 scripts/                 # 補助スクリプト
 terraform/               # AWSインフラ定義
 ```

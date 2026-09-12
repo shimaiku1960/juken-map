@@ -36,6 +36,10 @@ src/shared/             2つのアプリが共有する、外部依存のない�
 ├ date.ts, subjects.ts, studyStats.ts, site.ts, demo.ts
 ├ validations/            Zod スキーマ（リクエストの契約）
 └ dto/study.ts            画面↔API で受け渡す形の型定義
+
+db/                     テーブル定義と初期データ
+├ migrations/             テーブル定義の変更（SQL）。テーブル定義の正はここ
+└ seed*.ts                大学マスター・デモ・E2E・LP 撮影・負荷試験のデータ投入
 ```
 
 ## パッケージ管理
@@ -206,10 +210,10 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移した�
 `services/` はすべて移行済み（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）。
 予定と実績で共通の列と、JOIN の結果を入れ子に戻す関数は `services/study-columns.ts` にある。
 Better Auth（`auth.ts`）も同じ mysql2 のプールを使う（内部の Kysely で読み書きする）。
-アプリの実行時も seed（`prisma/seed*.ts`）もマイグレーションの適用も Prisma を使っていない。
-seed は `prisma/seed-helpers.ts` 経由でアプリと同じ接続プールを使い、日時の扱い（UTC）もアプリと揃えている。
+アプリの実行時も seed（`db/seed*.ts`）もマイグレーションの適用も Prisma を使っていない。
+seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使い、日時の扱い（UTC）もアプリと揃えている。
 `schema.prisma`・生成コード・Prisma の依存パッケージも消した（2026-09-11）。テーブル定義の正は
-`prisma/migrations` の SQL、行の型は `infra/tables.ts`。
+`db/migrations` の SQL、行の型は `infra/tables.ts`。
 
 ### マイグレーション（テーブル定義の変更）
 
@@ -217,8 +221,11 @@ seed は `prisma/seed-helpers.ts` 経由でアプリと同じ接続プールを�
 本番はコンテナの起動時（`docker-entrypoint.sh`）、ローカルは `pnpm dev` / `pnpm run db:migrate`、
 CI は E2E の前、テストは globalSetup で流す。
 
-- `prisma/migrations/<名前>/migration.sql` を名前順に見て、まだ当てていないものだけを流す。
-  既存の22本はそのまま使う（ディレクトリ名に prisma が残るのはそのため）。
+- `db/migrations/<名前>/migration.sql` を名前順に見て、まだ当てていないものだけを流す。
+  既存の22本はそのまま使う。**各マイグレーションのディレクトリ名は変えない。** 名前が
+  `_prisma_migrations` の `migration_name` として本番の DB に記録されており、変えると
+  当て直しになる（親ディレクトリは `prisma/` から `db/` へ改名済み。こちらは DB に記録が
+  無いので影響しない）。
 - 当てた記録は、Prisma が使っていた表 `_prisma_migrations` にそのまま書く。本番の DB に残る
   Prisma の記録を引き継げるので、移し替えは要らない。checksum も Prisma と同じ「ファイルの SHA-256」。
   Prisma で当てた DB と、この仕組みで当てた DB のテーブル定義・記録が一致することを確かめてある。
@@ -228,7 +235,7 @@ CI は E2E の前、テストは globalSetup で流す。
   デプロイのスモークテストが落ちて前のイメージに戻る。
 - `GET_LOCK` で、同時に2つ動いても二重に当てない。
 - **新しいマイグレーションは SQL を手で書く。** ORM がスキーマの差分から作ってくれることはもう無い。
-  `prisma/migrations/<YYYYMMDDHHMMSS>_<内容>/migration.sql` を足し、テーブル1行の型
+  `db/migrations/<YYYYMMDDHHMMSS>_<内容>/migration.sql` を足し、テーブル1行の型
   （`infra/tables.ts`）も合わせて直す。当てたあとの migration.sql は書き換えない（変えても DB には
   反映されず、警告だけが出る）。直すときは新しいマイグレーションを足す。
 
