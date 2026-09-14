@@ -18,6 +18,7 @@
     "db:stop": "docker compose stop db",
     "db:logs": "docker compose logs -f db",
     "db:migrate": "pnpm --filter @juken-map/api migrate",
+    "db:shell": "bash scripts/db-shell.sh",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "capture:seed": "tsx --env-file=.env prisma/seed-capture.ts",
     "hooks:install": "git config core.hooksPath .githooks",

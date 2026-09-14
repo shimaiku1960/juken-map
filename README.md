@@ -195,6 +195,17 @@ pnpm dev
 docker compose up --build
 ```
 
+### ローカルDBの中身を見る
+
+表形式で眺めるときは、TablePlusなどのGUIクライアントで`127.0.0.1:3306`（DB名`juken_map`）へ接続します。ユーザー名とパスワードは[docker-compose.yml](docker-compose.yml)の`MYSQL_USER`／`MYSQL_PASSWORD`です。
+
+SQLを直接打つときは、MySQLの対話画面を開きます。接続情報は`docker-compose.yml`から読むため、入力は不要です。
+
+```bash
+pnpm run db:shell                        # 対話画面を開く（exitで終了）
+pnpm run db:shell -e "SHOW TABLES"       # SQLを1本だけ実行する
+```
+
 ### 完了の確認
 
 次の状態になれば、ローカルセットアップは完了です。
@@ -239,6 +250,7 @@ docker compose up --build
 | `pnpm run db:logs` | MySQLコンテナのログを表示する |
 | `pnpm run db:migrate` | まだ当てていないマイグレーション（`prisma/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
+| `pnpm run db:shell` | ローカルDB（`juken_map`）のMySQL対話画面を開く（`exit`で終了）。`-e "SQL"`を付けると1本だけ実行する |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
 | `pnpm run lock:check` | 隔離ディレクトリでmanifestとlockfileの整合性を検証する |
