@@ -30,14 +30,29 @@
 
 過去の決定やユーザーの作業上の好みを確認するときは、Claude Code の
 auto-memory を正（source of truth）として扱うこと（作業再開時に何を確認するかは
-「タスク管理」セクションを参照）。アクセスは、リポジトリ内のエントリポイント
-（実体である外部の場所への gitignore 済みシンボリックリンク）を通じて行う：
+「タスク管理」セクションを参照）。アクセスは、リポジトリ内の gitignore 済みの
+エントリポイント（ローカルでは実体である外部の場所へのシンボリックリンク、
+それ以外の環境では非公開リポジトリの clone）を通じて行う：
 
 `./.agent-memory/MEMORY.md`
 
 さらに詳細が必要なときだけ、そのファイルから参照されている該当トピックファイル
 を読むこと。通常のプロジェクトメモリとして、リポジトリ内の `memory/MEMORY.md`
 は使わないこと。あちらは Claude から Codex への移行状態を記録するものである。
+
+auto-memory の実体は、非公開の GitHub リポジトリ `shimaiku1960/juken-map-memory`
+で git 管理している（このリポジトリは public のため、メモリは中に含めない）。
+
+- **作業開始時**は `git -C .agent-memory pull --rebase` で最新を取り込む。
+- **メモリを更新したら**、`.agent-memory` の中で commit して push する。push が
+  拒否されたら `pull --rebase` してから再度 push する。コンフリクトは勝手に解決せず
+  ユーザーに報告する。
+- **`./.agent-memory` が無い環境**（別のPC、クラウドのセッション）では、最初に
+  `git clone https://github.com/shimaiku1960/juken-map-memory.git .agent-memory`
+  を実行する。clone できない（権限が無い）ときは、メモリなしで進めずユーザーに伝える。
+  Claude Code をローカルで使う場合は、clone 先を Claude Code の auto-memory
+  ディレクトリ（`~/.claude/projects/<作業ディレクトリのパスを - でつないだ名前>/memory`）
+  にして、`.agent-memory` をそこへのシンボリックリンクにする。
 
 auto-memory ディレクトリは Claude Code が所有する。Claude Code と Codex は、
 ユーザーがプロジェクトメモリの保存・変更を直接依頼したとき、または後述の
@@ -102,4 +117,6 @@ Claude Code でも Codex でもないエージェント（例えば Cursor の�
    実際に行ったエージェントに帰属させる。
 7. 設定済みの外部メモリに書き込めない場合は、必要な権限を求める。リポジトリ内の
    `memory/MEMORY.md` に決してフォールバックしないこと。
-8. 最終応答で、更新したメモリファイルを列挙する。
+8. 更新したら `.agent-memory` で commit して push する（「プロジェクトメモリ」
+   セクション参照）。
+9. 最終応答で、更新したメモリファイルを列挙する。
