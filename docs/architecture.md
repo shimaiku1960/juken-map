@@ -293,7 +293,7 @@ infra という分担は、ORM の有無と関係なく同じだった。
 - テスト用 DB は開発用とは別の `juken_map_test`。vitest の globalSetup
   （`apps/api/src/test-db/global-setup.ts`）が作成とマイグレーションを行う。
   取り違え防止のため、DB 名が `_test` で終わらなければ何もせずに止まる。
-- ローカルでは `pnpm dev:infra` で DB コンテナを起動しておく必要がある。CI は `check` ジョブに
+- ローカルでは `pnpm db:start` で DB コンテナを起動しておく必要がある。CI は `check` ジョブに
   MySQL サービスを持つ。
 - テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる
   （`test-db/fixtures.ts`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
