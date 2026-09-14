@@ -11,7 +11,7 @@ import {
 export default async function setup() {
   const admin = await mysql.createConnection(testDatabaseAdminUrl).catch((error) => {
     throw new Error(
-      "テスト用の MySQL に接続できません。`pnpm dev:infra` で DB コンテナを起動してください。",
+      "テスト用の MySQL に接続できません。`pnpm db:start` で DB コンテナを起動してください。",
       { cause: error }
     );
   });

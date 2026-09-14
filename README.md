@@ -151,7 +151,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 5. MySQLを起動します。
 
    ```bash
-   pnpm run dev:infra
+   pnpm run db:start
    ```
 
 6. マイグレーション（テーブル定義）を適用します。
@@ -184,7 +184,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 pnpm dev
 ```
 
-`Ctrl+C`でAPIと画面をまとめて停止できます。MySQLコンテナはバックグラウンドで継続するため、停止する場合は`pnpm run dev:infra:stop`を実行します。
+`Ctrl+C`でAPIと画面をまとめて停止できます。MySQLコンテナはバックグラウンドで継続するため、停止する場合は`pnpm run db:stop`を実行します。
 
 [注意] `.env`を変更したら、APIプロセスを再起動してください。`--env-file`は起動時に一度しか
 読まれないため、`tsx watch`ではソース変更でしか再読み込みされません。
@@ -228,15 +228,15 @@ docker compose up --build
 | コマンド | 説明 |
 |---|---|
 | `pnpm dev` | MySQLとマイグレーションを準備し、APIとViteを並列で起動する |
-| `pnpm run dev:infra` | MySQLコンテナを起動する |
 | `pnpm run dev:api` | Fastify（APIとSPA配信）を4000番で起動する |
 | `pnpm run dev:web` | Vite（画面）を5173番で起動する |
-| `pnpm run dev:infra:stop` | MySQLコンテナを停止する |
-| `pnpm run dev:infra:logs` | MySQLコンテナのログを表示する |
 | `pnpm run lint` | ESLintを実行する |
 | `pnpm run test` | ルート（`src/`）のVitestを実行する |
 | `pnpm run e2e` | PlaywrightのE2Eテストを実行する |
 | `pnpm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
+| `pnpm run db:start` | MySQLコンテナを起動する |
+| `pnpm run db:stop` | MySQLコンテナを停止する |
+| `pnpm run db:logs` | MySQLコンテナのログを表示する |
 | `pnpm run db:migrate` | まだ当てていないマイグレーション（`prisma/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
