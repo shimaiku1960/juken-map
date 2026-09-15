@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   LogController,
   type FastifyBaseLogger,
   type FastifyReply,
   type FastifyRequest,
 } from "fastify";
-import { pino, type LoggerOptions } from "pino";
+import { pino, type LoggerOptions, type TransportTargetOptions } from "pino";
 
 // サーバー全体で使うロガー。Fastify にも loggerInstance として渡すので、
 // ルートの request.log はこれの子になり、同じ出力先・同じ設定で reqId が付く。
@@ -39,8 +41,10 @@ function requestForLog(request: FastifyRequest) {
   return { method: request.method, url: pathForLog(request.url) };
 }
 
+const level = process.env.LOG_LEVEL ?? "info";
+
 const baseOptions: LoggerOptions = {
-  level: process.env.LOG_LEVEL ?? "info",
+  level,
   serializers: {
     // 既定の req には接続元 IP なども入るが、nginx 越しなので常に nginx の値になり
     // 役に立たない。何のリクエストかが分かれば足りるので、メソッドとパスだけにする。
@@ -57,17 +61,23 @@ const baseOptions: LoggerOptions = {
  */
 export const testLogLines: Record<string, unknown>[] = [];
 
-function createLogger() {
-  if (isTest()) {
-    return pino(baseOptions, {
-      write: (line: string) => testLogLines.push(JSON.parse(line)),
-    });
-  }
-  if (isProduction()) return pino(baseOptions);
-  return pino({
-    ...baseOptions,
-    transport: {
+// リポジトリのルート。LOG_FILE の相対パスは、書く場所の .env と同じくここを基準にする
+// （API はルートではなく apps/api をカレントにして動くため）。
+const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+
+/**
+ * 手元の開発での書き出し先。
+ *
+ * 画面には pino-pretty で人が読める形を出す。LOG_FILE を設定したときは、本番と同じ
+ * JSON をファイルにも書く。そのファイルを Alloy が読んで Loki へ送る（pnpm run obs:start）。
+ * アプリから Loki へ直接送らないのは、送り先が落ちてもアプリに影響させないためと、
+ * 本番へ持っていくときに Alloy の送り先を変えるだけで済むようにするため。
+ */
+export function developmentTargets(logFile: string | undefined): TransportTargetOptions[] {
+  const targets: TransportTargetOptions[] = [
+    {
       target: "pino-pretty",
+      level,
       options: {
         translateTime: "SYS:HH:MM:ss",
         // リクエストの行は「GET /api/study-logs 200 12.3ms」、measured() の行は
@@ -80,6 +90,27 @@ function createLogger() {
           "pid,hostname,reqId,req,res,responseTime,operation,duration_ms,success",
       },
     },
+  ];
+  if (logFile) {
+    targets.push({
+      target: "pino/file",
+      level,
+      options: { destination: path.resolve(repoRoot, logFile), mkdir: true },
+    });
+  }
+  return targets;
+}
+
+function createLogger() {
+  if (isTest()) {
+    return pino(baseOptions, {
+      write: (line: string) => testLogLines.push(JSON.parse(line)),
+    });
+  }
+  if (isProduction()) return pino(baseOptions);
+  return pino({
+    ...baseOptions,
+    transport: { targets: developmentTargets(process.env.LOG_FILE) },
   });
 }
 

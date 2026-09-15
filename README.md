@@ -208,13 +208,19 @@ pnpm run db:shell                        # 対話画面を開く（exitで終了
 pnpm run db:shell -e "SHOW TABLES"       # SQLを1本だけ実行する
 ```
 
-### メトリクスをGrafanaで見る
+### メトリクスとログをGrafanaで見る
 
-APIのリクエスト数・エラー率・レスポンスタイム・CPU・メモリを、手元のPrometheusとGrafanaで確認できます（本番にはまだ入れていません）。
+APIのリクエスト数・エラー率・レスポンスタイム・CPU・メモリ（Prometheus）と、APIのログ（Loki）を、手元のGrafanaで確認できます（本番にはまだ入れていません）。
 
-1. `.env`に`METRICS_PORT="9464"`を足してから`pnpm dev`で起動する（APIが別ポートで`/metrics`を出す）
-2. `pnpm run obs:start`でPrometheus・Grafana・Mailpitを起動する
+1. `.env`に次の2行を足してから`pnpm dev`で起動する
+   ```bash
+   METRICS_PORT="9464"      # APIが別ポートで/metricsを出す
+   LOG_FILE="logs/api.log"  # APIが本番と同じJSONのログをファイルにも書く
+   ```
+2. `pnpm run obs:start`でPrometheus・Grafana・Loki・Alloy・Mailpitを起動する
 3. `http://localhost:3001`（`admin` / `admin`）の「juken-map API」ダッシュボードを開く
+
+ログは、APIが`logs/api.log`に書いたものをAlloyが読んでLokiへ送ります（`http://localhost:12345`でAlloyの処理の流れを見られます）。ダッシュボードで時間の範囲を絞ると、その時間のエラーのログと5xxを返したリクエストが下に並びます。1つのリクエストの行をまとめて見るときは、Exploreで`{job="juken-map-api"} |= "<reqId>"`と検索します。
 
 5xxの割合が5%を超えた状態が1分続くとアラートのメールが送られ、`http://localhost:8025`（Mailpit）で受け取れます。設定は[observability/](observability/)にあります。
 
@@ -246,6 +252,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `LINE_LOGIN_CHANNEL_SECRET` | LINE Loginの認可コード交換 |
 | `MICROCMS_API_KEY` / `MICROCMS_SERVICE_DOMAIN` | ブログ記事の取得 |
 | `METRICS_PORT` | 設定したときだけ、そのポートでPrometheus用の`/metrics`を出す（任意） |
+| `LOG_FILE` | 手元の開発で、JSONのログをこのファイル（リポジトリのルートからの相対パス）にも書く。Loki用（任意） |
 
 ## 開発コマンド
 
@@ -264,8 +271,8 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `pnpm run db:migrate` | まだ当てていないマイグレーション（`db/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
 | `pnpm run db:shell` | ローカルDB（`juken_map`）のMySQL対話画面を開く（`exit`で終了）。`-e "SQL"`を付けると1本だけ実行する |
-| `pnpm run obs:start` | Prometheus（9090番）・Grafana（3001番）・Mailpit（8025番）を起動する |
-| `pnpm run obs:stop` | Prometheus・Grafana・Mailpitを停止する |
+| `pnpm run obs:start` | Prometheus（9090番）・Grafana（3001番）・Loki（3100番）・Alloy（12345番）・Mailpit（8025番）を起動する |
+| `pnpm run obs:stop` | Prometheus・Grafana・Loki・Alloy・Mailpitを停止する |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
 | `pnpm run lock:check` | 隔離ディレクトリでmanifestとlockfileの整合性を検証する |

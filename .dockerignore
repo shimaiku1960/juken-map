@@ -14,4 +14,5 @@ test-results
 # workspaceの依存・検証用キャッシュをビルドコンテキストへ含めない。
 .pnpm-store
 .agent-memory
+logs
 .codex

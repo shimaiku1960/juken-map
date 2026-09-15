@@ -64,6 +64,32 @@ services:
       - prometheus
       - mailpit
 
+  # ログの保存先。イメージに入っている1台構成の設定（/etc/loki/local-config.yaml）をそのまま使う。
+  loki:
+    image: grafana/loki:3.7.7
+    container_name: juken-map-loki
+    profiles: ["observability"]
+    ports:
+      - "3100:3100"
+
+  # API が logs/ に書いた JSON を読み、Loki へ送る。
+  alloy:
+    image: grafana/alloy:v1.19.2
+    container_name: juken-map-alloy
+    profiles: ["observability"]
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "12345:12345"
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./logs:/var/log/juken-map:ro
+    depends_on:
+      - loki
+
   mailpit:
     image: axllent/mailpit:v1.31.1
     container_name: juken-map-mailpit
