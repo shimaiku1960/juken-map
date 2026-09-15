@@ -248,7 +248,7 @@ pnpm run db:shell -e "SHOW TABLES"       # SQLを1本だけ実行する
 | `pnpm run db:start` | MySQLコンテナを起動する |
 | `pnpm run db:stop` | MySQLコンテナを停止する |
 | `pnpm run db:logs` | MySQLコンテナのログを表示する |
-| `pnpm run db:migrate` | まだ当てていないマイグレーション（`prisma/migrations/*/migration.sql`）をDBへ当てる |
+| `pnpm run db:migrate` | まだ当てていないマイグレーション（`db/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
 | `pnpm run db:shell` | ローカルDB（`juken_map`）のMySQL対話画面を開く（`exit`で終了）。`-e "SQL"`を付けると1本だけ実行する |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
@@ -314,9 +314,9 @@ apps/
 src/
 └── shared/              # 外部依存のない純粋関数・型・Zodスキーマ（両方のアプリから使う）
 
+db/                      # マイグレーション（SQL）と seed
 e2e/                     # Playwright E2Eテスト
 infra/nginx/             # 本番リバースプロキシ設定の記録
-prisma/                  # マイグレーション（SQL）と seed（ディレクトリ名は Prisma 時代の名残）
 scripts/                 # 補助スクリプト
 terraform/               # AWSインフラ定義
 ```

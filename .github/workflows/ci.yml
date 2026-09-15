@@ -134,7 +134,7 @@ jobs:
         run: pnpm run db:migrate
 
       - name: Seed master data and demo user
-        run: pnpm exec tsx prisma/seed.ts
+        run: pnpm exec tsx db/seed.ts
 
       # E2E 用ユーザーの投入は globalSetup（seed-e2e.ts）が、アプリ起動は
       # playwright.config の webServer（scripts/e2e-server.sh）が担当する。

@@ -33,8 +33,8 @@ RUN groupadd --system --gid 1001 nodejs \
 COPY --from=api-deps --chown=app:nodejs /app/node_modules ./node_modules
 COPY --from=api-deps --chown=app:nodejs /app/apps/api/node_modules ./apps/api/node_modules
 COPY --chown=app:nodejs package.json ./package.json
-# マイグレーション（prisma/migrations）はコンテナの起動時に当てる（docker-entrypoint.sh）。
-COPY --chown=app:nodejs prisma/migrations ./prisma/migrations
+# マイグレーション（db/migrations）はコンテナの起動時に当てる（docker-entrypoint.sh）。
+COPY --chown=app:nodejs db/migrations ./db/migrations
 COPY --chown=app:nodejs apps/api ./apps/api
 COPY --chown=app:nodejs src/shared ./src/shared
 COPY --from=web-builder --chown=app:nodejs /app/apps/web/dist ./web
