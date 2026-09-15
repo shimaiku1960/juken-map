@@ -10,6 +10,8 @@ verifyDepsBeforeRun: error
 
 allowBuilds:
   esbuild: true
+  # OpenTelemetryのOTLP送信が使う。installスクリプトは付属CLIの版を確かめるだけで、実行に不要。
+  protobufjs: false
   sharp: true
 
 # 使用するpeer依存も各package.jsonで明示する。

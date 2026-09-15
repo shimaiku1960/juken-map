@@ -8,6 +8,7 @@ import {
   type FastifyRequest,
 } from "fastify";
 import { pino, type LoggerOptions, type TransportTargetOptions } from "pino";
+import { redactPath } from "./redact.ts";
 
 // サーバー全体で使うロガー。Fastify にも loggerInstance として渡すので、
 // ルートの request.log はこれの子になり、同じ出力先・同じ設定で reqId が付く。
@@ -24,21 +25,9 @@ function isTest() {
   return process.env.NODE_ENV === "test";
 }
 
-/**
- * ログに残す URL からトークンを取り除く。
- *
- * メール確認・パスワード再設定のリンクや OAuth の戻り先は、URL の ? 以降に
- * トークンや code が乗る。そのままログに残すと、ログを読める人がそのリンクを
- * 使えてしまう。パスワード再設定だけはトークンがパスに入る
- * （Better Auth の /api/auth/reset-password/:token）ので、そこも伏せる。
- */
-export function pathForLog(url: string) {
-  const [path] = url.split("?");
-  return path.replace(/^(\/api\/auth\/reset-password\/)[^/]+/, "$1:token");
-}
-
 function requestForLog(request: FastifyRequest) {
-  return { method: request.method, url: pathForLog(request.url) };
+  // URL の ? 以降やパスに入るトークンは残さない（redact.ts）。
+  return { method: request.method, url: redactPath(request.url) };
 }
 
 const level = process.env.LOG_LEVEL ?? "info";
@@ -87,7 +76,9 @@ export function developmentTargets(logFile: string | undefined): TransportTarget
           "{if req.method}{req.method} {req.url} {res.statusCode} {responseTime}ms {end}" +
           "{if operation}{operation} {duration_ms}ms success={success} {end}{msg}",
         ignore:
-          "pid,hostname,reqId,req,res,responseTime,operation,duration_ms,success",
+          "pid,hostname,reqId,req,res,responseTime,operation,duration_ms,success," +
+          // トレースを有効にしたとき（instrumentation.ts）に足される。ファイルの JSON には残る。
+          "trace_id,span_id,trace_flags",
       },
     },
   ];

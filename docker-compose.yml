@@ -90,6 +90,18 @@ services:
     depends_on:
       - loki
 
+  # トレースの保存先。API（instrumentation.ts）が OTLP で 4318 番へ送る。
+  tempo:
+    image: grafana/tempo:3.0.3
+    container_name: juken-map-tempo
+    profiles: ["observability"]
+    command: ["-config.file=/etc/tempo.yaml"]
+    ports:
+      - "3200:3200"
+      - "4318:4318"
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo.yaml:ro
+
   mailpit:
     image: axllent/mailpit:v1.31.1
     container_name: juken-map-mailpit

@@ -1,28 +1,7 @@
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { developmentTargets, pathForLog } from "@/api/observability/logger";
+import { developmentTargets } from "@/api/observability/logger";
 import { buildTestApp, takeLogLines } from "@/api/test-support";
-
-describe("pathForLog", () => {
-  it("? 以降（トークンや OAuth の code）を落とす", () => {
-    expect(pathForLog("/api/auth/verify-email?token=secret&callbackURL=%2F")).toBe(
-      "/api/auth/verify-email"
-    );
-    expect(pathForLog("/api/line/oauth/callback?state=s&code=c")).toBe(
-      "/api/line/oauth/callback"
-    );
-  });
-
-  it("パスに入るパスワード再設定のトークンを伏せる", () => {
-    expect(pathForLog("/api/auth/reset-password/secret-token?callbackURL=%2F")).toBe(
-      "/api/auth/reset-password/:token"
-    );
-  });
-
-  it("トークンを含まないパスはそのまま残す", () => {
-    expect(pathForLog("/api/study-logs/12")).toBe("/api/study-logs/12");
-  });
-});
 
 describe("developmentTargets", () => {
   it("LOG_FILE が無ければ画面（pino-pretty）にだけ出す", () => {

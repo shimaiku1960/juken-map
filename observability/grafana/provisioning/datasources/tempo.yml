@@ -1,0 +1,18 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      # トレースの画面から「このトレースのログ」を Loki で開く。
+      # ログの行には instrumentation.ts（pino の計測）が trace_id を足している。
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+        spanStartTimeShift: "-1m"
+        spanEndTimeShift: "1m"
+        customQuery: true
+        query: '{job="juken-map-api"} |= "$${__trace.traceId}"'
