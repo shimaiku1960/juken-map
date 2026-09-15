@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { PatchGoalInput } from "@/shared/validations/goal";
 
 // goals（サーバー状態）の型・取得・queryKey をここに集約する。
 // GoalList / FacultyList など複数コンポーネントで共有し、鍵や取得処理の
@@ -40,5 +41,47 @@ export function useGoals(initialGoals?: Goal[]) {
     queryKey: goalsKey,
     queryFn: fetchGoals,
     initialData: initialGoals,
+  });
+}
+
+// 志望校を削除するフック（成功したら一覧を再取得）。
+// トーストなど画面への知らせは、呼び出し側が mutate の onSuccess / onError で出す。
+export function useDeleteGoal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "削除に失敗しました");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: goalsKey });
+    },
+  });
+}
+
+// 志望校を部分更新するフック（第一志望の設定/解除、候補→受験校の確定など）。
+// isPending は呼び出しごとに別なので、用途ごとにこのフックを呼び分ける。
+export function useUpdateGoal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: PatchGoalInput }) => {
+      const res = await fetch(`/api/goals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "更新に失敗しました");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: goalsKey });
+    },
   });
 }
