@@ -30,5 +30,46 @@ services:
       db:
         condition: service_healthy
 
+  # ここから下は可観測性の学習用（pnpm run obs:start で起動）。profiles を付けているので、
+  # db:start や docker compose up では起動しない。
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    container_name: juken-map-prometheus
+    profiles: ["observability"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:13.2.2
+    container_name: juken-map-grafana
+    profiles: ["observability"]
+    ports:
+      - "3001:3000"
+    environment:
+      # 手元専用。admin / admin でログインする（初回のパスワード変更は Skip でよい）。
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # アラートのメールは Mailpit が受け取る（外へは送られない）。
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: mailpit:1025
+      GF_SMTP_FROM_ADDRESS: grafana@example.com
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - mailpit
+
+  mailpit:
+    image: axllent/mailpit:v1.31.1
+    container_name: juken-map-mailpit
+    profiles: ["observability"]
+    ports:
+      - "8025:8025"
+
 volumes:
   mysql_data:

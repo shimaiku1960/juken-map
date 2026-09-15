@@ -1,0 +1,58 @@
+# 「グラフを見に行かないと気づけない」を避けるためのアラート。
+# 5xx の割合が 5% を超えた状態が1分続いたらメールを送る。
+# 手元では Mailpit（http://localhost:8025）が受け取るので、実際には外へ送られない。
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: dev-email
+    receivers:
+      - uid: dev-email
+        type: email
+        settings:
+          addresses: dev@example.com
+
+policies:
+  - orgId: 1
+    receiver: dev-email
+    group_by: ["alertname"]
+    group_wait: 10s
+    group_interval: 1m
+    repeat_interval: 1h
+
+groups:
+  - orgId: 1
+    name: api
+    folder: juken-map
+    interval: 10s
+    rules:
+      - uid: api-error-rate
+        title: APIのエラー率が5%を超えた
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              # リクエストが1件も無いときは分母が空になり「データなし」になる（下で OK 扱い）。
+              # 0 で割って NaN にならないよう、分母は 0 より大きいときだけ残す。
+              expr: >-
+                (sum(rate(http_requests_total{status_code=~"5.."}[5m])) or vector(0))
+                / (sum(rate(http_requests_total[5m])) > 0)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.05] }
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: 直近5分の5xxの割合が5%を超えています

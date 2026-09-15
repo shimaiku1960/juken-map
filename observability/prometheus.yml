@@ -1,0 +1,11 @@
+# 手元の学習用。pnpm dev で動いている API（ホスト側）の /metrics を読みに行く。
+# API は METRICS_PORT=9464 のときだけ /metrics を出す（apps/api/src/observability/metrics.ts）。
+global:
+  # 本番なら 15〜60 秒が普通。手元では操作がすぐグラフに出るよう短くする。
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: juken-map-api
+    static_configs:
+      - targets: ["host.docker.internal:9464"]
