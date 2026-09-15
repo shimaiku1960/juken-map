@@ -166,6 +166,21 @@
           "expr": "{job=\"juken-map-api\"} | json | msg = \"request completed\" | res_statusCode >= 500 | line_format \"{{.req_method}} {{.req_url}} {{.res_statusCode}} {{.responseTime}}ms reqId={{.reqId}}\""
         }
       ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "トレース（新しい順・Tempo）　Trace ID を押すと内訳が開く",
+      "gridPos": { "x": 0, "y": 42, "w": 24, "h": 10 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{resource.service.name=\"juken-map-api\" && trace:rootName != \"GET /api/health\"}",
+          "limit": 20
+        }
+      ]
     }
   ]
 }

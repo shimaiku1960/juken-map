@@ -1,0 +1,19 @@
+# 手元の学習用。1台構成で、トレースはコンテナ内のディスクに置く（作り直すと消える）。
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        # API の OTLPTraceExporter（HTTP + protobuf）が送ってくる。
+        http:
+          endpoint: 0.0.0.0:4318
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
