@@ -7,6 +7,7 @@ import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth.ts";
 import { select } from "./infra/db.ts";
 import { fastifyLoggingOptions } from "./observability/logger.ts";
+import { registerMetrics, startMetricsServer } from "./observability/metrics.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { buildSitemap, injectMeta, metaForPath } from "./seo.ts";
 
@@ -66,6 +67,9 @@ export async function buildServer() {
   // ログを切っていると、ハンドラで想定外の例外が起きて 500 を返しても、その中身は
   // どこにも残らない（Fastify の既定のエラー処理はロガーへ書くため）。
   const app = Fastify(fastifyLoggingOptions);
+
+  // 件数と所要時間は、下で横取りする Better Auth の分も含めて全リクエストで数える。
+  registerMetrics(app);
 
   // Next.js は応答を既定で圧縮していたが、Fastify は何もしない。SPA のバンドルは
   // 800KB 超あり、無圧縮のまま配ると回線の細い端末で目に見えて遅くなる。
@@ -135,4 +139,8 @@ if (isEntrypoint) {
   const app = await buildServer();
   // 待ち受け開始のログは Fastify が出す（"Server listening at ..."）。
   await app.listen({ port, host: "0.0.0.0" });
+
+  if (process.env.METRICS_PORT) {
+    startMetricsServer(Number(process.env.METRICS_PORT));
+  }
 }

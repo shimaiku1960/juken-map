@@ -208,6 +208,16 @@ pnpm run db:shell                        # 対話画面を開く（exitで終了
 pnpm run db:shell -e "SHOW TABLES"       # SQLを1本だけ実行する
 ```
 
+### メトリクスをGrafanaで見る
+
+APIのリクエスト数・エラー率・レスポンスタイム・CPU・メモリを、手元のPrometheusとGrafanaで確認できます（本番にはまだ入れていません）。
+
+1. `.env`に`METRICS_PORT="9464"`を足してから`pnpm dev`で起動する（APIが別ポートで`/metrics`を出す）
+2. `pnpm run obs:start`でPrometheus・Grafana・Mailpitを起動する
+3. `http://localhost:3001`（`admin` / `admin`）の「juken-map API」ダッシュボードを開く
+
+5xxの割合が5%を超えた状態が1分続くとアラートのメールが送られ、`http://localhost:8025`（Mailpit）で受け取れます。設定は[observability/](observability/)にあります。
+
 ### 完了の確認
 
 次の状態になれば、ローカルセットアップは完了です。
@@ -235,6 +245,7 @@ pnpm run db:shell -e "SHOW TABLES"       # SQLを1本だけ実行する
 | `LINE_LOGIN_CHANNEL_ID` | プロフィールから直接LINE連携するLINE LoginチャネルID |
 | `LINE_LOGIN_CHANNEL_SECRET` | LINE Loginの認可コード交換 |
 | `MICROCMS_API_KEY` / `MICROCMS_SERVICE_DOMAIN` | ブログ記事の取得 |
+| `METRICS_PORT` | 設定したときだけ、そのポートでPrometheus用の`/metrics`を出す（任意） |
 
 ## 開発コマンド
 
@@ -253,6 +264,8 @@ pnpm run db:shell -e "SHOW TABLES"       # SQLを1本だけ実行する
 | `pnpm run db:migrate` | まだ当てていないマイグレーション（`db/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
 | `pnpm run db:shell` | ローカルDB（`juken_map`）のMySQL対話画面を開く（`exit`で終了）。`-e "SQL"`を付けると1本だけ実行する |
+| `pnpm run obs:start` | Prometheus（9090番）・Grafana（3001番）・Mailpit（8025番）を起動する |
+| `pnpm run obs:stop` | Prometheus・Grafana・Mailpitを停止する |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
 | `pnpm run lock:check` | 隔離ディレクトリでmanifestとlockfileの整合性を検証する |
