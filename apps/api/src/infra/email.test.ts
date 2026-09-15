@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getResend } from "@/api/infra/resend";
 import { notifyAdminOfNewUser } from "@/api/infra/email";
+import { takeLogLines } from "@/api/test-support";
 
 vi.mock("@/api/infra/resend", () => ({
   getResend: vi.fn(),
@@ -50,7 +51,7 @@ describe("notifyAdminOfNewUser", () => {
 
   it("通知先が未設定なら送信せず警告する", async () => {
     delete process.env.ADMIN_NOTIFICATION_EMAIL;
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    takeLogLines();
 
     await notifyAdminOfNewUser({
       name: "新規ユーザー",
@@ -59,12 +60,17 @@ describe("notifyAdminOfNewUser", () => {
     });
 
     expect(send).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledOnce();
+    expect(takeLogLines()).toEqual([
+      expect.objectContaining({
+        level: 40,
+        msg: "[registration-notification] ADMIN_NOTIFICATION_EMAIL is not configured.",
+      }),
+    ]);
   });
 
   it("Resendのエラーで登録処理を失敗させない", async () => {
     send.mockResolvedValue({ data: null, error: { message: "Resend unavailable" } });
-    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    takeLogLines();
 
     await expect(
       notifyAdminOfNewUser({
@@ -73,6 +79,12 @@ describe("notifyAdminOfNewUser", () => {
         createdAt: new Date(),
       })
     ).resolves.toBeUndefined();
-    expect(error).toHaveBeenCalledOnce();
+    expect(takeLogLines()).toEqual([
+      expect.objectContaining({
+        level: 50,
+        msg: "[registration-notification] Failed to send notification.",
+        err: expect.objectContaining({ message: "Resend unavailable" }),
+      }),
+    ]);
   });
 });

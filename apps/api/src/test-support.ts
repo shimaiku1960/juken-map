@@ -2,6 +2,7 @@ import Fastify, {
   type FastifyInstance,
   type LightMyRequestResponse,
 } from "fastify";
+import { fastifyLoggingOptions, testLogLines } from "./observability/logger.ts";
 
 /**
  * テスト用に、対象のルートだけを載せた Fastify を作る。
@@ -10,9 +11,10 @@ import Fastify, {
  * クライアント生成が走り、テストに関係のない環境変数を要求するため。
  * JSON の解析だけは本番と同じ挙動にしておく（不正な JSON を 400 にせず undefined を
  * 渡し、認証チェックを先に効かせる。理由は server.ts のコメント参照）。
+ * ロガーも本番と同じものを渡す（テストでは画面に出さず testLogLines に溜まる）。
  */
 export function buildTestApp(register: (app: FastifyInstance) => void) {
-  const app = Fastify({ logger: false });
+  const app = Fastify(fastifyLoggingOptions);
 
   app.addContentTypeParser(
     "application/json",
@@ -56,4 +58,12 @@ export function request(
   headers?: Record<string, string>
 ): Promise<LightMyRequestResponse> {
   return app.inject({ method, url, payload: body as object, headers });
+}
+
+/**
+ * これまでに書き出されたログを取り出して空にする。
+ * テストの最初に呼んで前のテストの分を捨て、操作のあとにもう一度呼んで中身を確かめる。
+ */
+export function takeLogLines() {
+  return testLogLines.splice(0);
 }

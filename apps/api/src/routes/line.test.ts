@@ -38,7 +38,9 @@ const {
   verifyLineIdToken,
 } = await import("@/api/infra/lineLogin");
 const { registerLineRoutes } = await import("./line.ts");
-const { buildTestApp, request, demoSession } = await import("../test-support.ts");
+const { buildTestApp, request, demoSession, takeLogLines } = await import(
+  "../test-support.ts"
+);
 const {
   cleanup,
   createLineConnection,
@@ -418,9 +420,7 @@ describe("GET /api/line/oauth/callback", () => {
 
   it("確認メッセージの送信に失敗しても連携は成功扱いにする", async () => {
     vi.mocked(pushLineText).mockRejectedValue(new Error("LINE API unavailable"));
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    takeLogLines();
 
     const res = await callback();
 
@@ -428,11 +428,13 @@ describe("GET /api/line/oauth/callback", () => {
       `${ORIGIN}/profile?line=connected#line-connection`
     );
     expect(await findLineConnections(owner.id)).toHaveLength(1);
-    expect(consoleError).toHaveBeenCalledWith(
-      "[line-oauth] LINE connection completed, but confirmation message failed.",
-      expect.any(Error)
+    expect(takeLogLines()).toContainEqual(
+      expect.objectContaining({
+        level: 50,
+        msg: "[line-oauth] LINE connection completed, but confirmation message failed.",
+        err: expect.objectContaining({ message: "LINE API unavailable" }),
+      })
     );
-    consoleError.mockRestore();
   });
 
   it("確認メッセージが3秒以内に完了しなくても連携成功画面へ戻す", async () => {
@@ -451,9 +453,7 @@ describe("GET /api/line/oauth/callback", () => {
           );
         })
     );
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    takeLogLines();
 
     try {
       const responsePromise = callback();
@@ -465,12 +465,14 @@ describe("GET /api/line/oauth/callback", () => {
         `${ORIGIN}/profile?line=connected#line-connection`
       );
       expect(await findLineConnections(owner.id)).toHaveLength(1);
-      expect(consoleError).toHaveBeenCalledWith(
-        "[line-oauth] LINE connection completed, but confirmation message failed.",
-        expect.objectContaining({ name: "AbortError" })
+      expect(takeLogLines()).toContainEqual(
+        expect.objectContaining({
+          level: 50,
+          msg: "[line-oauth] LINE connection completed, but confirmation message failed.",
+          err: expect.objectContaining({ type: "DOMException" }),
+        })
       );
     } finally {
-      consoleError.mockRestore();
       vi.useRealTimers();
     }
   });

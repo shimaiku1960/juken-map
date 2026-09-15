@@ -1,6 +1,7 @@
 import { execute, isDuplicateEntry, select } from "@/api/infra/db";
 import { getResend } from "@/api/infra/resend";
 import { pushLineText } from "@/api/infra/line";
+import { logger } from "@/api/observability/logger";
 import { buildDailyNotification, tokyoDateRange, type NotificationSlot } from "@/api/domain/dailyNotification";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
@@ -154,7 +155,10 @@ export async function sendDailyNotifications(slot: NotificationSlot, now = new D
         failed += 1;
         // 送れなかったので印を消し、次の実行で再び送れるようにする。
         await execute("DELETE FROM NotificationDelivery WHERE id = ?", [deliveryId]);
-        console.error(`[daily-notification] ${slot}/${channel} delivery failed for user ${user.id}.`, error);
+        logger.error(
+          { err: error, slot, channel, userId: user.id },
+          "[daily-notification] Delivery failed."
+        );
       }
     }
   }

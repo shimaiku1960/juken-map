@@ -21,6 +21,9 @@ export function registerCronRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Invalid slot" });
     }
 
-    return sendDailyNotifications(result.data.slot);
+    const summary = await sendDailyNotifications(result.data.slot);
+    // 1回の実行で何通送れて何通失敗したかを残す。失敗が続いていないかを後から追える。
+    request.log.info({ notification: summary }, "[daily-notification] Run finished.");
+    return summary;
   });
 }
