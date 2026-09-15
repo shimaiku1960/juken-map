@@ -1,4 +1,5 @@
 import { getResend } from "@/api/infra/resend";
+import { logger } from "@/api/observability/logger";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
 
@@ -45,7 +46,7 @@ export async function notifyAdminOfNewUser(user: RegisteredUser) {
   const to = process.env.ADMIN_NOTIFICATION_EMAIL;
 
   if (!to) {
-    console.warn(
+    logger.warn(
       "[registration-notification] ADMIN_NOTIFICATION_EMAIL is not configured."
     );
     return;
@@ -74,6 +75,9 @@ export async function notifyAdminOfNewUser(user: RegisteredUser) {
       throw new Error(error.message);
     }
   } catch (error) {
-    console.error("[registration-notification] Failed to send notification.", error);
+    logger.error(
+      { err: error },
+      "[registration-notification] Failed to send notification."
+    );
   }
 }

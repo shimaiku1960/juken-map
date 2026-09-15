@@ -1,3 +1,5 @@
+import { logger } from "@/api/observability/logger";
+
 export async function measured<T>(
   name: string,
   fn: () => Promise<T>
@@ -10,12 +12,10 @@ export async function measured<T>(
     success = true;
     return result;
   } finally {
-    console.log(
-      JSON.stringify({
-        operation: name,
-        duration_ms: Number((performance.now() - startedAt).toFixed(2)),
-        success,
-      })
-    );
+    logger.info({
+      operation: name,
+      duration_ms: Number((performance.now() - startedAt).toFixed(2)),
+      success,
+    });
   }
 }

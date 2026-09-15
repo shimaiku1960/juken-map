@@ -180,7 +180,7 @@ export function registerLineRoutes(app: FastifyInstance) {
         lineLoginAuthorizationUrl({ ...values, redirectUri }).toString()
       );
     } catch (error) {
-      console.error("[line-oauth] Failed to start LINE Login.", error);
+      request.log.error({ err: error }, "[line-oauth] Failed to start LINE Login.");
       return reply.redirect(`${webOrigin()}/profile?line=unavailable#line-connection`);
     }
   });
@@ -244,16 +244,16 @@ export function registerLineRoutes(app: FastifyInstance) {
             controller.signal
           );
         } catch (error) {
-          console.error(
-            "[line-oauth] LINE connection completed, but confirmation message failed.",
-            error
+          request.log.error(
+            { err: error },
+            "[line-oauth] LINE connection completed, but confirmation message failed."
           );
         } finally {
           clearTimeout(timeout);
         }
         return profileRedirect("connected");
       } catch (error) {
-        console.error("[line-oauth] Failed to complete LINE Login.", error);
+        request.log.error({ err: error }, "[line-oauth] Failed to complete LINE Login.");
         return profileRedirect("failed");
       }
     }
@@ -301,7 +301,10 @@ export function registerLineRoutes(app: FastifyInstance) {
             );
           }
         } catch (error) {
-          console.error(`[line-webhook] ${event.type} processing failed.`, error);
+          request.log.error(
+            { err: error, eventType: event.type },
+            "[line-webhook] Event processing failed."
+          );
         }
       }
 

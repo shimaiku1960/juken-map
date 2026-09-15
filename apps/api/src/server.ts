@@ -6,6 +6,7 @@ import fastifyStatic from "@fastify/static";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth.ts";
 import { select } from "./infra/db.ts";
+import { fastifyLoggingOptions } from "./observability/logger.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { buildSitemap, injectMeta, metaForPath } from "./seo.ts";
 
@@ -62,7 +63,9 @@ function registerSpa(app: FastifyInstance, root: string) {
 }
 
 export async function buildServer() {
-  const app = Fastify({ logger: false });
+  // ログを切っていると、ハンドラで想定外の例外が起きて 500 を返しても、その中身は
+  // どこにも残らない（Fastify の既定のエラー処理はロガーへ書くため）。
+  const app = Fastify(fastifyLoggingOptions);
 
   // Next.js は応答を既定で圧縮していたが、Fastify は何もしない。SPA のバンドルは
   // 800KB 超あり、無圧縮のまま配ると回線の細い端末で目に見えて遅くなる。
@@ -130,6 +133,6 @@ const isEntrypoint = process.argv[1]?.endsWith("server.ts");
 if (isEntrypoint) {
   const port = Number(process.env.API_PORT ?? 4000);
   const app = await buildServer();
+  // 待ち受け開始のログは Fastify が出す（"Server listening at ..."）。
   await app.listen({ port, host: "0.0.0.0" });
-  console.log(JSON.stringify({ event: "api.listening", port }));
 }
