@@ -2,7 +2,7 @@
 //
 // 列を足しても DB からは何も教えてくれないので、ここを直し忘れても型エラーにならない。
 // ORM を外すと、スキーマと型の一致を保つのは人間の責任になる。
-// 列の定義は prisma/migrations の CREATE TABLE / ALTER TABLE が正。
+// 列の定義は db/migrations の CREATE TABLE / ALTER TABLE が正。
 
 // Better Auth も同じテーブルを読み書きする。列は Better Auth の分も含めて全部書く。
 export type UserRow = {

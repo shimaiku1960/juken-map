@@ -7,16 +7,16 @@ import { parseDatabaseUrl } from "./db.ts";
 
 // マイグレーション（テーブル定義の変更）を当てる。`prisma migrate deploy` の代わり。
 //
-// prisma/migrations/<名前>/migration.sql を名前順に見て、まだ当てていないものだけを流す。
+// db/migrations/<名前>/migration.sql を名前順に見て、まだ当てていないものだけを流す。
 // 当てた記録は、Prisma が使っていた表 _prisma_migrations にそのまま書く。
 // 本番の DB には Prisma が当てた記録が残っているので、表を引き継げば移し替えは要らない
 // （表の名前に prisma が残るのはそのため）。checksum も Prisma と同じ「ファイルの SHA-256」。
 //
-// 新しいマイグレーションは、prisma/migrations/<日時>_<内容>/migration.sql を手で書いて足す。
+// 新しいマイグレーションは、db/migrations/<日時>_<内容>/migration.sql を手で書いて足す。
 // ORM がスキーマの差分から SQL を作ってくれることはもう無い。
 
 export const MIGRATIONS_DIR = fileURLToPath(
-  new URL("../../../../prisma/migrations", import.meta.url)
+  new URL("../../../../db/migrations", import.meta.url)
 );
 
 // 同時に2つ動かないようにする MySQL のロック名。デプロイが重なっても二重に当てない。

@@ -18,7 +18,7 @@ command -v docker >/dev/null || {
   exit 1
 }
 
-seed_json="$(pnpm exec tsx --env-file=.env prisma/seed-load-test-phase0.ts)"
+seed_json="$(pnpm exec tsx --env-file=.env db/seed-load-test-phase0.ts)"
 load_test_email="$(jq -er '.email' <<<"$seed_json")"
 load_test_password="$(jq -er '.password' <<<"$seed_json")"
 load_test_plan_id="$(jq -er '.planId' <<<"$seed_json")"
