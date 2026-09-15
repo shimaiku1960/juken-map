@@ -23,6 +23,8 @@
 
 # misc
 .DS_Store
+# 手元の API が LOG_FILE に書く JSON ログ（Alloy が読んで Loki へ送る）
+/logs/
 *.pem
 
 # debug

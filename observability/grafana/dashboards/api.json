@@ -119,6 +119,53 @@
           "legendFormat": "p99"
         }
       ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "ログの件数（レベル別・Loki）",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 6 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "warn" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "info" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (level) (count_over_time({job=\"juken-map-api\"}[1m]))",
+          "legendFormat": "{{level}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "logs",
+      "title": "エラーのログ",
+      "gridPos": { "x": 0, "y": 30, "w": 12, "h": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{job=\"juken-map-api\", level=\"error\"}" }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "logs",
+      "title": "5xx を返したリクエスト",
+      "gridPos": { "x": 12, "y": 30, "w": 12, "h": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"juken-map-api\"} | json | msg = \"request completed\" | res_statusCode >= 500 | line_format \"{{.req_method}} {{.req_url}} {{.res_statusCode}} {{.responseTime}}ms reqId={{.reqId}}\""
+        }
+      ]
     }
   ]
 }

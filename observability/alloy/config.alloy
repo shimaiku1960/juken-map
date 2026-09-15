@@ -1,0 +1,51 @@
+// 手元の学習用。API が書いた JSON のログ（LOG_FILE、ルートの logs/ に書く）を読み、Loki へ送る。
+// 流れ：ファイルを見つける → 1行ずつ読む → 加工してラベルを付ける → Loki へ送る。
+// 途中の様子は http://localhost:12345 で見られる。
+
+local.file_match "api" {
+  path_targets = [{
+    "__path__" = "/var/log/juken-map/*.log",
+    "job"      = "juken-map-api",
+  }]
+}
+
+loki.source.file "api" {
+  targets    = local.file_match.api.targets
+  forward_to = [loki.process.api.receiver]
+}
+
+loki.process "api" {
+  // pino の JSON から、ラベルと時刻に使う値を取り出す。
+  stage.json {
+    expressions = {
+      level = "",
+      time  = "",
+    }
+  }
+
+  // pino のレベルは数字（30 = info、50 = error）なので、読める名前に直す。
+  stage.template {
+    source   = "level"
+    template = "{{ if eq .Value \"60\" }}fatal{{ else if eq .Value \"50\" }}error{{ else if eq .Value \"40\" }}warn{{ else if eq .Value \"30\" }}info{{ else if eq .Value \"20\" }}debug{{ else }}trace{{ end }}"
+  }
+
+  // ラベルは検索の入口になる少数の値だけにする（値の種類だけ Loki の保存単位が増えるため）。
+  // reqId やステータスコードはラベルにせず、Grafana で | json して絞り込む。
+  stage.labels {
+    values = { level = "" }
+  }
+
+  // 読み込んだ時刻ではなく、ログを書いた時刻で並べる。
+  stage.timestamp {
+    source = "time"
+    format = "UnixMs"
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

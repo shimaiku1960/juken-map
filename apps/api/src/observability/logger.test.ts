@@ -1,5 +1,6 @@
+import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { pathForLog } from "@/api/observability/logger";
+import { developmentTargets, pathForLog } from "@/api/observability/logger";
 import { buildTestApp, takeLogLines } from "@/api/test-support";
 
 describe("pathForLog", () => {
@@ -20,6 +21,22 @@ describe("pathForLog", () => {
 
   it("トークンを含まないパスはそのまま残す", () => {
     expect(pathForLog("/api/study-logs/12")).toBe("/api/study-logs/12");
+  });
+});
+
+describe("developmentTargets", () => {
+  it("LOG_FILE が無ければ画面（pino-pretty）にだけ出す", () => {
+    expect(developmentTargets(undefined).map((t) => t.target)).toEqual(["pino-pretty"]);
+  });
+
+  it("LOG_FILE があれば、リポジトリのルートを基準にしたファイルにも JSON を書く", () => {
+    const file = developmentTargets("logs/api.log").find((t) => t.target === "pino/file");
+    const destination = (file?.options as { destination: string }).destination;
+    expect(path.isAbsolute(destination)).toBe(true);
+    // apps/api ではなくルート直下の logs/ に書く（.env と同じ基準）。
+    expect(destination).toBe(
+      path.resolve(import.meta.dirname, "../../../../logs/api.log")
+    );
   });
 });
 
