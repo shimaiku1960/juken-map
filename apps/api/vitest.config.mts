@@ -37,6 +37,9 @@ export default defineConfig({
           include: [MIGRATIONS_TEST],
           // 番号の小さいグループから順に走る。api（0）が終わってから始まる。
           sequence: { groupOrder: 1 },
+          // 単独で走らせても、23本（SQL 約90文）を当てるのに手元の Docker で 5〜7秒かかり、
+          // 既定の5秒をまたいで結果が揺れた。マイグレーションが増えるほど長くなるので余裕を持たせる。
+          testTimeout: 30_000,
         },
       },
     ],
