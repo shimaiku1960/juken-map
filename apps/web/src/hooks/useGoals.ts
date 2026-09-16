@@ -83,25 +83,29 @@ export function useUpdateGoal() {
 //
 // 409（すでに登録済み）はエラーとして扱わない。利用者から見れば「もう入っている」
 // だけで失敗ではないので、duplicated として返し、呼び出し側が文言を選ぶ。
+export async function createGoal(
+  facultyId: number
+): Promise<{ duplicated: boolean }> {
+  try {
+    await api.post(
+      "/api/goals",
+      { facultyId, status: "candidate" },
+      { fallbackMessage: "追加に失敗しました" }
+    );
+    return { duplicated: false };
+  } catch (cause) {
+    if (cause instanceof ApiError && cause.status === 409) {
+      return { duplicated: true };
+    }
+    throw cause;
+  }
+}
+
 export function useCreateGoal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (facultyId: number): Promise<{ duplicated: boolean }> => {
-      try {
-        await api.post(
-          "/api/goals",
-          { facultyId, status: "candidate" },
-          { fallbackMessage: "追加に失敗しました" }
-        );
-        return { duplicated: false };
-      } catch (cause) {
-        if (cause instanceof ApiError && cause.status === 409) {
-          return { duplicated: true };
-        }
-        throw cause;
-      }
-    },
+    mutationFn: createGoal,
     onSuccess: () => {
       // ["goals"] を無効化 → GoalList 含め同じキャッシュを見る全員が最新に
       queryClient.invalidateQueries({ queryKey: goalsKey });

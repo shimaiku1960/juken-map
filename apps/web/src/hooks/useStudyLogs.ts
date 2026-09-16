@@ -111,29 +111,32 @@ export type SaveStudySessionInput =
   | { planId: null; data: CreateStudyLogInput }
   | { planId: number; data: CompleteStudyPlanInput };
 
+export async function saveStudySession(input: SaveStudySessionInput) {
+  const result =
+    input.planId == null
+      ? await api.post<{ isFirstStudyLog?: boolean }>(
+          "/api/study-logs",
+          input.data,
+          { fallbackMessage: "実績を保存できませんでした" }
+        )
+      : await api.post<{ isFirstStudyLog?: boolean }>(
+          `/api/study-plans/${input.planId}/complete`,
+          input.data,
+          { fallbackMessage: "実績を保存できませんでした" }
+        );
+
+  // 応答に isFirstStudyLog が無い場合もあるので、ここで真偽に寄せる。
+  return {
+    isFirstStudyLog: result?.isFirstStudyLog === true,
+    recordMethod: input.planId == null ? ("timer" as const) : ("plan" as const),
+  };
+}
+
 export function useSaveStudySession() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: SaveStudySessionInput) => {
-      const result =
-        input.planId == null
-          ? await api.post<{ isFirstStudyLog?: boolean }>(
-              "/api/study-logs",
-              input.data,
-              { fallbackMessage: "実績を保存できませんでした" }
-            )
-          : await api.post<{ isFirstStudyLog?: boolean }>(
-              `/api/study-plans/${input.planId}/complete`,
-              input.data,
-              { fallbackMessage: "実績を保存できませんでした" }
-            );
-
-      return {
-        isFirstStudyLog: result?.isFirstStudyLog === true,
-        recordMethod: input.planId == null ? "timer" : "plan",
-      } as const;
-    },
+    mutationFn: saveStudySession,
     onSuccess: async ({ isFirstStudyLog, recordMethod }) => {
       trackStudyLogCreated(isFirstStudyLog, recordMethod);
       await Promise.all([
