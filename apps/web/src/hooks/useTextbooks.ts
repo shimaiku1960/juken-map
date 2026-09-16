@@ -4,6 +4,7 @@ import type {
   CreateTextbookInput,
   UpdateTextbookProgressInput,
 } from "@/shared/validations/textbook";
+import { api } from "@/web/lib/api-client";
 
 // textbooks（サーバー状態）の型・取得・queryKey をここに集約する。
 export const textbooksKey = ["textbooks"] as const;
@@ -27,9 +28,9 @@ export type TextbookMaster = {
 
 // サーバーから自分の参考書一覧を取得する
 async function fetchTextbooks(): Promise<Textbook[]> {
-  const res = await fetch("/api/textbooks");
-  if (!res.ok) throw new Error("参考書の取得に失敗しました");
-  return res.json();
+  return api.get<Textbook[]>("/api/textbooks", {
+    fallbackMessage: "参考書の取得に失敗しました",
+  });
 }
 
 // 参考書一覧を購読するフック
@@ -42,9 +43,9 @@ export function useTextbooks(initialData?: Textbook[]) {
 }
 
 async function fetchTextbookMasters(): Promise<TextbookMaster[]> {
-  const res = await fetch("/api/textbook-masters");
-  if (!res.ok) throw new Error("参考書マスターの取得に失敗しました");
-  return res.json();
+  return api.get<TextbookMaster[]>("/api/textbook-masters", {
+    fallbackMessage: "参考書マスターの取得に失敗しました",
+  });
 }
 
 export function useTextbookMasters() {
@@ -58,26 +59,16 @@ export function useUpdateTextbookProgress() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       id,
       data,
     }: {
       id: number;
       data: UpdateTextbookProgressInput;
-    }): Promise<Textbook> => {
-      const res = await fetch(`/api/textbooks/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(
-          typeof error.error === "string" ? error.error : "設定に失敗しました"
-        );
-      }
-      return res.json();
-    },
+    }): Promise<Textbook> =>
+      api.patch<Textbook>(`/api/textbooks/${id}`, data, {
+        fallbackMessage: "設定に失敗しました",
+      }),
     onSuccess: (updated) => {
       queryClient.setQueryData<Textbook[]>(textbooksKey, (current = []) =>
         current.map((textbook) =>
@@ -95,26 +86,18 @@ export function useUpdateTextbookSubject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       id,
       subject,
     }: {
       id: number;
       subject: string | null;
-    }): Promise<Textbook> => {
-      const res = await fetch(`/api/textbooks/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject }),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(
-          typeof error.error === "string" ? error.error : "科目の設定に失敗しました"
-        );
-      }
-      return res.json();
-    },
+    }): Promise<Textbook> =>
+      api.patch<Textbook>(
+        `/api/textbooks/${id}`,
+        { subject },
+        { fallbackMessage: "科目の設定に失敗しました" }
+      ),
     onSuccess: (updated) => {
       queryClient.setQueryData<Textbook[]>(textbooksKey, (current = []) =>
         current.map((textbook) =>
@@ -131,18 +114,10 @@ export function useCreateTextbook() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateTextbookInput): Promise<Textbook> => {
-      const res = await fetch("/api/textbooks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "参考書の追加に失敗しました");
-      }
-      return res.json();
-    },
+    mutationFn: (data: CreateTextbookInput): Promise<Textbook> =>
+      api.post<Textbook>("/api/textbooks", data, {
+        fallbackMessage: "参考書の追加に失敗しました",
+      }),
     onSuccess: (created) => {
       queryClient.setQueryData<Textbook[]>(textbooksKey, (current = []) =>
         current.some((textbook) => textbook.id === created.id)

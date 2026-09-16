@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { api } from "@/web/lib/api-client";
 
 export type NotificationPreferences = {
   emailMorningEnabled: boolean;
@@ -12,11 +13,10 @@ export const notificationPreferencesKey = ["notification-preferences"] as const;
 export function useNotificationPreferences() {
   return useQuery({
     queryKey: notificationPreferencesKey,
-    queryFn: async (): Promise<NotificationPreferences> => {
-      const res = await fetch("/api/notification-preferences");
-      if (!res.ok) throw new Error("通知設定の取得に失敗しました");
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<NotificationPreferences>("/api/notification-preferences", {
+        fallbackMessage: "通知設定の取得に失敗しました",
+      }),
   });
 }
 
@@ -25,10 +25,9 @@ export const lineConnectionKey = ["line-connection"] as const;
 export function useLineConnection() {
   return useQuery({
     queryKey: lineConnectionKey,
-    queryFn: async (): Promise<{ connected: boolean }> => {
-      const res = await fetch("/api/line/connection");
-      if (!res.ok) throw new Error("LINE連携状態の取得に失敗しました");
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<{ connected: boolean }>("/api/line/connection", {
+        fallbackMessage: "LINE連携状態の取得に失敗しました",
+      }),
   });
 }

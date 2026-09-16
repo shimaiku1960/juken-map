@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PatchGoalInput } from "@/shared/validations/goal";
+import { api } from "@/web/lib/api-client";
 
 // goals（サーバー状態）の型・取得・queryKey をここに集約する。
 // GoalList / FacultyList など複数コンポーネントで共有し、鍵や取得処理の
@@ -30,9 +31,9 @@ export const goalsKey = ["goals"] as const;
 
 // サーバーから最新の goals を取得する（useQuery の queryFn）
 export async function fetchGoals(): Promise<Goal[]> {
-  const res = await fetch("/api/goals");
-  if (!res.ok) throw new Error("目標の取得に失敗しました");
-  return res.json();
+  return api.get<Goal[]>("/api/goals", {
+    fallbackMessage: "目標の取得に失敗しました",
+  });
 }
 
 // goals を購読するフック。SSR で取得済みの initialGoals があれば初期キャッシュに使う。
@@ -50,13 +51,10 @@ export function useDeleteGoal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "削除に失敗しました");
-      }
-    },
+    mutationFn: (id: number) =>
+      api.del<void>(`/api/goals/${id}`, {
+        fallbackMessage: "削除に失敗しました",
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: goalsKey });
     },
@@ -69,17 +67,10 @@ export function useUpdateGoal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: PatchGoalInput }) => {
-      const res = await fetch(`/api/goals/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "更新に失敗しました");
-      }
-    },
+    mutationFn: ({ id, data }: { id: number; data: PatchGoalInput }) =>
+      api.patch<void>(`/api/goals/${id}`, data, {
+        fallbackMessage: "更新に失敗しました",
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: goalsKey });
     },
