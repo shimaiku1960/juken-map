@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BookOpen,
@@ -9,19 +8,15 @@ import {
   Square,
 } from "lucide-react";
 import { notifyDemoReadOnly } from "@/web/lib/demo-client";
-import { trackEvent } from "@/web/lib/analytics";
+import { ApiError } from "@/web/lib/api-client";
 import { toast } from "sonner";
 import QuickManualStudyLogDialog from "@/web/components/QuickManualStudyLogDialog";
 import {
   NumberStepper,
   RangeUnitSelect,
 } from "@/web/components/StudyFields";
-import { studyLogsKey } from "@/web/hooks/useStudyLogs";
-import {
-  studyPlansKey,
-  useStudyPlans,
-  type StudyPlan,
-} from "@/web/hooks/useStudyPlans";
+import { useSaveStudySession } from "@/web/hooks/useStudyLogs";
+import { useStudyPlans, type StudyPlan } from "@/web/hooks/useStudyPlans";
 import {
   useCreateTextbook,
   useTextbooks,
@@ -54,15 +49,6 @@ import {
 import { Input } from "@/web/components/ui/input";
 import { Label } from "@/web/components/ui/label";
 
-const responseError = async (response: Response) => {
-  const body = await response.json().catch(() => null);
-  if (typeof body?.error === "string") return body.error;
-  if (Array.isArray(body?.error) && typeof body.error[0]?.message === "string") {
-    return body.error[0].message;
-  }
-  return "実績を保存できませんでした";
-};
-
 type PickerView = "choose" | "textbook" | "free" | "new-textbook";
 
 export default function StudySessionManager({
@@ -80,7 +66,7 @@ export default function StudySessionManager({
   /** hero: ログイン直後の集中スタート画面向けに、ボタンを中央・大きく表示する */
   variant?: "compact" | "hero";
 }) {
-  const queryClient = useQueryClient();
+  const saveSession = useSaveStudySession();
   const {
     data: textbooks = [],
     isPending: textbooksPending,
@@ -136,7 +122,6 @@ export default function StudySessionManager({
   const [rangeEnd, setRangeEnd] = useState<number | null>(null);
   const [rangeUnit, setRangeUnit] = useState<string | null>(null);
   const [memo, setMemo] = useState("");
-  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
@@ -317,66 +302,52 @@ export default function StudySessionManager({
     setConfirmDiscard(false);
   };
 
-  const save = async (asManual = false) => {
+  const save = (asManual = false) => {
     if (!session) return;
-    setSaving(true);
     setSaveError(null);
     const planId = asManual ? null : session.planId;
-    try {
-      const response = await fetch(
-        planId == null
-          ? "/api/study-logs"
-          : `/api/study-plans/${planId}/complete`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            planId == null
-              ? {
-                  date: todayYmd(),
-                  minutes,
-                  subject: session.subject,
-                  textbookId: session.textbookId,
-                  rangeStart,
-                  rangeEnd,
-                  rangeUnit,
-                  memo,
-                }
-              : { minutes, rangeStart, rangeEnd, rangeUnit, memo }
-          ),
-        }
-      );
-      if (!response.ok) {
-        setSaveError(await responseError(response));
-        return;
-      }
 
-      const result = (await response.json()) as { isFirstStudyLog?: boolean };
-      trackEvent(
-        result.isFirstStudyLog
-          ? "first_study_log_created"
-          : "study_log_created",
-        { record_method: planId == null ? "timer" : "plan" }
-      );
+    // 送る中身は経路で変わる。予定の完了側は、予定が既に持っている内容
+    // （日付・科目・参考書）をサーバーが引き継ぐので送らない。
+    const input =
+      planId == null
+        ? {
+            planId: null as null,
+            data: {
+              date: todayYmd(),
+              minutes,
+              subject: session.subject,
+              textbookId: session.textbookId,
+              rangeStart,
+              rangeEnd,
+              rangeUnit,
+              memo,
+            },
+          }
+        : { planId, data: { minutes, rangeStart, rangeEnd, rangeUnit, memo } };
 
-      clearSession();
-      setConfirmDiscard(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: studyLogsKey }),
-        queryClient.invalidateQueries({ queryKey: studyPlansKey }),
-      ]);
-      // Next.js ではサーバー描画分の更新に router.refresh() が要ったが、SPA では
-      // 直前の invalidateQueries だけで画面が最新になるため不要。
-      toast.success(
-        planId == null
-          ? "学習実績を保存しました"
-          : "実績を保存し、予定を完了しました"
-      );
-    } catch {
-      setSaveError("通信に失敗しました。接続を確認して、もう一度お試しください");
-    } finally {
-      setSaving(false);
-    }
+    // 計測（trackEvent）と一覧の再取得はフック側。ここでは画面の後始末だけ行う。
+    saveSession.mutate(input, {
+      onSuccess: () => {
+        clearSession();
+        setConfirmDiscard(false);
+        // Next.js ではサーバー描画分の更新に router.refresh() が要ったが、SPA では
+        // フック側の invalidateQueries だけで画面が最新になるため不要。
+        toast.success(
+          planId == null
+            ? "学習実績を保存しました"
+            : "実績を保存し、予定を完了しました"
+        );
+      },
+      // サーバーが理由を返したときはその文言を出す。通信自体が届かなかった
+      // ときだけ、つなぎ直しを促す固定の文言にする。
+      onError: (error) =>
+        setSaveError(
+          error instanceof ApiError
+            ? error.message
+            : "通信に失敗しました。接続を確認して、もう一度お試しください"
+        ),
+    });
   };
 
   const elapsed = session ? elapsedStudyMs(session, now) : 0;
@@ -860,13 +831,13 @@ export default function StudySessionManager({
       <Dialog
         open={session?.status === "reviewing"}
         onOpenChange={(open) => {
-          if (!open && session && !saving) {
+          if (!open && session && !saveSession.isPending) {
             setSession({ ...session, status: "paused" });
           }
         }}
       >
         <DialogContent
-          showCloseButton={!saving}
+          showCloseButton={!saveSession.isPending}
           className="top-auto bottom-0 max-h-[90dvh] translate-y-0 overflow-y-auto rounded-b-none sm:top-1/2 sm:bottom-auto sm:max-w-lg sm:-translate-y-1/2 sm:rounded-xl"
         >
           <DialogHeader>
@@ -894,7 +865,7 @@ export default function StudySessionManager({
                       variant="outline"
                       size="sm"
                       className="mt-2"
-                      disabled={saving}
+                      disabled={saveSession.isPending}
                       onClick={() => save(true)}
                     >
                       その他の実績として保存
@@ -976,7 +947,7 @@ export default function StudySessionManager({
             <Button
               type="button"
               variant="ghost"
-              disabled={saving}
+              disabled={saveSession.isPending}
               onClick={() => setConfirmDiscard(true)}
             >
               保存せず終了
@@ -984,17 +955,17 @@ export default function StudySessionManager({
             <Button
               type="button"
               variant="outline"
-              disabled={saving}
+              disabled={saveSession.isPending}
               onClick={() => session && setSession({ ...session, status: "paused" })}
             >
               タイマーへ戻る
             </Button>
             <Button
               type="button"
-              disabled={saving || minutes < 1 || minutes > 1440}
+              disabled={saveSession.isPending || minutes < 1 || minutes > 1440}
               onClick={() => save(false)}
             >
-              {saving ? "保存中…" : "実績を保存"}
+              {saveSession.isPending ? "保存中…" : "実績を保存"}
             </Button>
           </DialogFooter>
         </DialogContent>
