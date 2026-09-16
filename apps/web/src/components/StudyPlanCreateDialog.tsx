@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BookOpen, Check, PencilLine } from "lucide-react";
 import { toast } from "sonner";
-import { studyPlansKey } from "@/web/hooks/useStudyPlans";
+import { useCreateStudyPlan } from "@/web/hooks/useStudyPlans";
 import { useCreateTextbook, useTextbooks } from "@/web/hooks/useTextbooks";
 import { RANGE_UNITS } from "@/shared/validations/studyPlan";
 import { SUBJECTS, subjectColor, subjectLabel } from "@/shared/subjects";
@@ -37,15 +36,6 @@ function rangeUnitLabel(value: string | null): string {
   return RANGE_UNITS.find((unit) => unit.value === value)?.label ?? "ページ";
 }
 
-async function responseError(response: Response): Promise<string> {
-  const body = await response.json().catch(() => null);
-  if (typeof body?.error === "string") return body.error;
-  if (Array.isArray(body?.error) && typeof body.error[0]?.message === "string") {
-    return body.error[0].message;
-  }
-  return "予定を追加できませんでした";
-}
-
 export default function StudyPlanCreateDialog({
   date,
   onClose,
@@ -53,7 +43,7 @@ export default function StudyPlanCreateDialog({
   date: string;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
+  const createPlan = useCreateStudyPlan();
   const {
     data: textbooks = [],
     isPending: textbooksPending,
@@ -73,7 +63,6 @@ export default function StudyPlanCreateDialog({
   const [newTextbookUnit, setNewTextbookUnit] = useState<
     (typeof RANGE_UNITS)[number]["value"]
   >("page");
-  const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedSummary | null>(null);
 
@@ -117,7 +106,7 @@ export default function StudyPlanCreateDialog({
     setCreated(null);
   };
 
-  const submit = async () => {
+  const submit = () => {
     setFormError(null);
 
     if (view === "textbook" && !selectedTextbook) {
@@ -164,35 +153,27 @@ export default function StudyPlanCreateDialog({
             content: freeContent.trim(),
           };
 
-    setSaving(true);
-    try {
-      const response = await fetch("/api/study-plans", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, items: [item] }),
-      });
-      if (!response.ok) throw new Error(await responseError(response));
-
-      await queryClient.invalidateQueries({ queryKey: studyPlansKey });
-      const range =
-        view === "textbook" && hasStart
-          ? `${rangeStart}〜${rangeEnd}${rangeUnitLabel(unit)}`
-          : null;
-      setCreated({
-        subject: item.subject,
-        title: selectedTextbook?.name ?? freeContent.trim(),
-        range,
-        memo: view === "textbook" && memo.trim() ? memo.trim() : null,
-      });
-      setView("success");
-      toast.success("学習予定を追加しました");
-    } catch (error) {
-      setFormError(
-        error instanceof Error ? error.message : "予定を追加できませんでした"
-      );
-    } finally {
-      setSaving(false);
-    }
+    // 一覧の再取得はフック側で終わってから onSuccess が呼ばれる。
+    createPlan.mutate(
+      { date, items: [item] },
+      {
+        onSuccess: () => {
+          const range =
+            view === "textbook" && hasStart
+              ? `${rangeStart}〜${rangeEnd}${rangeUnitLabel(unit)}`
+              : null;
+          setCreated({
+            subject: item.subject,
+            title: selectedTextbook?.name ?? freeContent.trim(),
+            range,
+            memo: view === "textbook" && memo.trim() ? memo.trim() : null,
+          });
+          setView("success");
+          toast.success("学習予定を追加しました");
+        },
+        onError: (error) => setFormError(error.message),
+      }
+    );
   };
 
   const addNewTextbook = () => {
@@ -465,8 +446,8 @@ export default function StudyPlanCreateDialog({
 
         {(view === "textbook" && selectedTextbook) || view === "free" ? (
           <div className="border-t bg-card px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
-            <Button type="button" className="min-h-11 w-full" onClick={submit} disabled={saving}>
-              {saving ? "追加中…" : "この予定を追加"}
+            <Button type="button" className="min-h-11 w-full" onClick={submit} disabled={createPlan.isPending}>
+              {createPlan.isPending ? "追加中…" : "この予定を追加"}
             </Button>
           </div>
         ) : null}

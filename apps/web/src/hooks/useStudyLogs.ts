@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CreateStudyLogInput } from "@/shared/validations/studyLog";
+import type {
+  CompleteStudyPlanInput,
+  CreateStudyLogInput,
+} from "@/shared/validations/studyLog";
+import { studyPlansKey } from "@/web/hooks/useStudyPlans";
 import { trackEvent } from "@/web/lib/analytics";
 
 // studyLogs（勉強の「実績」＝サーバー状態）の型・取得・queryKey をここに集約する。
@@ -7,6 +11,20 @@ import { trackEvent } from "@/web/lib/analytics";
 export type { StudyLog } from "@/shared/dto/study";
 import type { StudyLog } from "@/shared/dto/study";
 import { api } from "@/web/lib/api-client";
+
+// 実績の記録には入口が3つある（手入力・タイマー・予定の完了）が、GA4 へは
+// 同じ形で送る。イベント名の出し分けを2か所に書かないよう、ここにまとめる。
+type StudyLogRecordMethod = "manual" | "timer" | "plan";
+
+function trackStudyLogCreated(
+  isFirstStudyLog: boolean,
+  recordMethod: StudyLogRecordMethod
+) {
+  trackEvent(
+    isFirstStudyLog ? "first_study_log_created" : "study_log_created",
+    { record_method: recordMethod }
+  );
+}
 
 // studyLogs キャッシュの唯一の住所。invalidate も含め全員がこれを参照する。
 export const studyLogsKey = ["studyLogs"] as const;
@@ -39,12 +57,7 @@ export function useCreateStudyLog() {
         { fallbackMessage: "記録に失敗しました" }
       ),
     onSuccess: (created) => {
-      trackEvent(
-        created.isFirstStudyLog
-          ? "first_study_log_created"
-          : "study_log_created",
-        { record_method: "manual" }
-      );
+      trackStudyLogCreated(created.isFirstStudyLog, "manual");
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
     },
   });
@@ -82,6 +95,54 @@ export function useDeleteStudyLog() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
+    },
+  });
+}
+
+// タイマーで計った学習を保存するフック。
+//
+// 予定から始めた学習は「予定を完了して実績も記録する」別の API を呼ぶため、
+// 呼び出し先が planId の有無で変わる。この出し分けは保存という1つの操作の
+// 内側の話なので、画面ではなくここに置く。
+//
+// 実績が増えると予定側の「実績記録済み」も変わるので、どちらの経路でも
+// studyLogs と studyPlans の両方を無効化する。
+export type SaveStudySessionInput =
+  | { planId: null; data: CreateStudyLogInput }
+  | { planId: number; data: CompleteStudyPlanInput };
+
+export async function saveStudySession(input: SaveStudySessionInput) {
+  const result =
+    input.planId == null
+      ? await api.post<{ isFirstStudyLog?: boolean }>(
+          "/api/study-logs",
+          input.data,
+          { fallbackMessage: "実績を保存できませんでした" }
+        )
+      : await api.post<{ isFirstStudyLog?: boolean }>(
+          `/api/study-plans/${input.planId}/complete`,
+          input.data,
+          { fallbackMessage: "実績を保存できませんでした" }
+        );
+
+  // 応答に isFirstStudyLog が無い場合もあるので、ここで真偽に寄せる。
+  return {
+    isFirstStudyLog: result?.isFirstStudyLog === true,
+    recordMethod: input.planId == null ? ("timer" as const) : ("plan" as const),
+  };
+}
+
+export function useSaveStudySession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: saveStudySession,
+    onSuccess: async ({ isFirstStudyLog, recordMethod }) => {
+      trackStudyLogCreated(isFirstStudyLog, recordMethod);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: studyLogsKey }),
+        queryClient.invalidateQueries({ queryKey: studyPlansKey }),
+      ]);
     },
   });
 }
