@@ -1,7 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { daysUntil, formatExamDate } from "@/shared/date";
-import { useGoals, goalsKey, type Goal } from "@/web/hooks/useGoals";
+import {
+  useGoals,
+  useDeleteGoal,
+  useUpdateGoal,
+  type Goal,
+} from "@/web/hooks/useGoals";
 import { notifyDemoReadOnly } from "@/web/lib/demo-client";
 import { MoveHorizontal } from "lucide-react";
 import { Badge } from "@/web/components/ui/badge";
@@ -18,67 +22,39 @@ export default function GoalList({
   initialGoals,
   readOnly = false,
 }: Props) {
-  const queryClient = useQueryClient();
-
   // サーバー状態の取得。SSR で渡された initialGoals を初期キャッシュとして使う
   const { data: goals = [] } = useGoals(initialGoals);
 
-  // 削除
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "削除に失敗しました");
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: goalsKey });
-      toast.success("目標を削除しました");
-    },
-    onError: (error) => toast.error(error.message),
-  });
+  // 通信と一覧の再取得はフック側。ここでは結果をトーストで知らせるだけにする。
+  const deleteMutation = useDeleteGoal();
+  const firstChoiceMutation = useUpdateGoal();
+  const statusMutation = useUpdateGoal();
 
-  // 第一志望の設定/解除
-  const firstChoiceMutation = useMutation({
-    mutationFn: async ({ id, value }: { id: number; value: boolean }) => {
-      const res = await fetch(`/api/goals/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isFirstChoice: value }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "更新に失敗しました");
+  const showError = (error: Error) => toast.error(error.message);
+
+  const toggleFirstChoice = (goal: Goal) => {
+    const value = !goal.isFirstChoice;
+    firstChoiceMutation.mutate(
+      { id: goal.id, data: { isFirstChoice: value } },
+      {
+        onSuccess: () =>
+          toast.success(
+            value ? "第一志望に設定しました" : "第一志望を解除しました"
+          ),
+        onError: showError,
       }
-      return value;
-    },
-    onSuccess: (value) => {
-      queryClient.invalidateQueries({ queryKey: goalsKey });
-      toast.success(value ? "第一志望に設定しました" : "第一志望を解除しました");
-    },
-    onError: (error) => toast.error(error.message),
-  });
+    );
+  };
 
   // 候補 → 受験校に確定
-  const statusMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`/api/goals/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "decided" }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "更新に失敗しました");
+  const decide = (goal: Goal) =>
+    statusMutation.mutate(
+      { id: goal.id, data: { status: "decided" } },
+      {
+        onSuccess: () => toast.success("受験校に決めました"),
+        onError: showError,
       }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: goalsKey });
-      toast.success("受験校に決めました");
-    },
-    onError: (error) => toast.error(error.message),
-  });
+    );
 
   const runIfWritable = (action: () => void) => {
     if (readOnly) {
@@ -94,7 +70,10 @@ export default function GoalList({
     runIfWritable(() => {
       const label = `${goal.faculty.university.name} ${goal.faculty.name}`;
       if (!window.confirm(`${label}を削除しますか？`)) return;
-      deleteMutation.mutate(goal.id);
+      deleteMutation.mutate(goal.id, {
+        onSuccess: () => toast.success("目標を削除しました"),
+        onError: showError,
+      });
     });
 
   const decided = goals.filter((goal) => goal.status === "decided");
@@ -146,14 +125,7 @@ export default function GoalList({
                   ? "第一志望を解除"
                   : "第一志望にする"
             }
-            onClick={() =>
-              runIfWritable(() =>
-                firstChoiceMutation.mutate({
-                  id: goal.id,
-                  value: !goal.isFirstChoice,
-                })
-              )
-            }
+            onClick={() => runIfWritable(() => toggleFirstChoice(goal))}
             className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {goal.isFirstChoice ? "★ 第一志望" : "☆ 第一志望にする"}
@@ -266,11 +238,7 @@ export default function GoalList({
                                   ? "デモアカウントは閲覧専用です"
                                   : undefined
                               }
-                              onClick={() =>
-                                runIfWritable(() =>
-                                  statusMutation.mutate(goal.id)
-                                )
-                              }
+                              onClick={() => runIfWritable(() => decide(goal))}
                               disabled={statusMutation.isPending}
                               className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
