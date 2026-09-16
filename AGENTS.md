@@ -1,11 +1,12 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# これはあなたの知っている Next.js ではない
+## 構成の前提
 
-このバージョンには破壊的変更があり、API・規約・ファイル構成のすべてが学習
-データと異なる可能性がある。コードを書く前に、必ず
-`node_modules/next/dist/docs/` の該当ガイドを読むこと。非推奨（deprecation）の
-注意書きにも従うこと。
-<!-- END:nextjs-agent-rules -->
+このリポジトリは pnpm workspace のモノレポで、`apps/web` が React 19 + Vite の
+SPA、`apps/api` が Fastify 5（Node.js 24）のAPIサーバーである。本番は Fastify が
+APIとビルド済みSPAの両方を配る。Next.js は使っていない（2026-09に削除済み）ため、
+App Router・Server Components・Server Actions・`next/*` の作法を持ち込まないこと。
+
+DBは MySQL 8.4 で、ORM は使わず `mysql2` で SQL を直接書く。ルーティングは
+`apps/api/src/routes/`、業務ルールとSQLは `apps/api/src/services/` にある。
 
 ## 依存関係とlockfile
 
@@ -21,10 +22,9 @@
 
 ## 言語
 
-ユーザーへの応答は、この指示や読んだドキュメント（`node_modules/next/dist/docs/`
-を含む）の言語にかかわらず、常に日本語で行うこと。コード・識別子・コミット
-メッセージは各プロジェクトの既存の慣習に従うが、ユーザーへの会話としての返答は
-すべて日本語であること。
+ユーザーへの応答は、この指示や読んだドキュメントの言語にかかわらず、常に日本語
+で行うこと。コード・識別子・コミットメッセージは各プロジェクトの既存の慣習に従う
+が、ユーザーへの会話としての返答はすべて日本語であること。
 
 ## プロジェクトメモリ
 

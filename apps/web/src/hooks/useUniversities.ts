@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { api } from "@/web/lib/api-client";
 
 // Next.js では Server Component がサービス層を直接呼んでいた部分。
 // SPA では HTTP になるため、他のサーバー状態と同じくフックへ集約する。
@@ -31,11 +32,10 @@ export const universityDetailKey = (id: number) =>
 export function useUniversities() {
   return useQuery({
     queryKey: universitiesKey,
-    queryFn: async (): Promise<ExploreUniversity[]> => {
-      const res = await fetch("/api/universities");
-      if (!res.ok) throw new Error("大学一覧の取得に失敗しました");
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<ExploreUniversity[]>("/api/universities", {
+        fallbackMessage: "大学一覧の取得に失敗しました",
+      }),
   });
 }
 
@@ -43,13 +43,12 @@ export function useUniversityDetail(id: number) {
   return useQuery({
     queryKey: universityDetailKey(id),
     enabled: Number.isInteger(id),
-    queryFn: async (): Promise<{
-      university: UniversityDetail;
-      registeredFacultyIds: number[];
-    }> => {
-      const res = await fetch(`/api/universities/${id}`);
-      if (!res.ok) throw new Error("大学情報の取得に失敗しました");
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<{
+        university: UniversityDetail;
+        registeredFacultyIds: number[];
+      }>(`/api/universities/${id}`, {
+        fallbackMessage: "大学情報の取得に失敗しました",
+      }),
   });
 }

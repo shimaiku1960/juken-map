@@ -7,15 +7,16 @@ import { useQuery } from "@tanstack/react-query";
 // API 側はサービス（listStudyPlans）がこの形で組み立てて返す。
 export type { Textbook, StudyPlan } from "@/shared/dto/study";
 import type { StudyPlan } from "@/shared/dto/study";
+import { api } from "@/web/lib/api-client";
 
 // studyPlans キャッシュの唯一の住所。invalidate も含め全員がこれを参照する。
 export const studyPlansKey = ["studyPlans"] as const;
 
 // サーバーから最新の studyPlans を取得する（useQuery の queryFn）
 export async function fetchStudyPlans(): Promise<StudyPlan[]> {
-  const res = await fetch("/api/study-plans");
-  if (!res.ok) throw new Error("学習予定の取得に失敗しました");
-  return res.json();
+  return api.get<StudyPlan[]>("/api/study-plans", {
+    fallbackMessage: "学習予定の取得に失敗しました",
+  });
 }
 
 // studyPlans を購読するフック。SSR で取得済みの initialPlans があれば初期キャッシュに使う。
