@@ -14,6 +14,7 @@ import {
 } from "@/web/components/ui/form";
 import { toast } from "sonner";
 import { notifyDemoReadOnly } from "@/web/lib/demo-client";
+import { useUpdateProfile } from "@/web/hooks/useProfile";
 
 const ProfileEdit = ({
   currentNickname,
@@ -24,6 +25,8 @@ const ProfileEdit = ({
 }) => {
   const { refetch } = useSession();
   const [isEditing, setIsEditing] = useState(false);
+  // 通信はフック側。表示名はセッションが持っているので、反映はここで refetch する。
+  const updateProfile = useUpdateProfile();
 
   const form = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
@@ -32,25 +35,24 @@ const ProfileEdit = ({
     },
   });
 
-  const onSubmit = async (data: ProfileInput) => {
-    const res = await fetch("/api/profile", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    if (res.ok) {
-      toast.success("更新しました");
-      setIsEditing(false);
-      // Next.js では router.refresh() でサーバー再描画していた。SPA に相当物は無い。
-      // authClient.getSession() は単発取得で useSession の購読ストアを更新しないため、
-      // 表示が古いままになる（実際に踏んだ）。useSession の refetch を使うこと。
-      await refetch();
-    } else {
-      const result = await res.json();
-      toast.error(result.error || "更新に失敗しました");
-    }
-  };
+  // mutate ではなく mutateAsync を使う。送信中は「保存中…」を出して連打を防ぐが、
+  // それを見ている form.formState.isSubmitting は onSubmit が返す Promise が
+  // 解決するまでを送信中とみなすため、待てる形で返す必要がある。
+  // 失敗はトーストで知らせ済みなので、最後に catch で受けて未処理の拒否にしない。
+  const onSubmit = (data: ProfileInput) =>
+    updateProfile
+      .mutateAsync(data, {
+        onSuccess: async () => {
+          toast.success("更新しました");
+          setIsEditing(false);
+          // Next.js では router.refresh() でサーバー再描画していた。SPA に相当物は無い。
+          // authClient.getSession() は単発取得で useSession の購読ストアを更新しないため、
+          // 表示が古いままになる（実際に踏んだ）。useSession の refetch を使うこと。
+          await refetch();
+        },
+        onError: (error) => toast.error(error.message),
+      })
+      .catch(() => {});
 
   // 表示モード: 値 ＋ 右端に「編集」
   if (!isEditing) {

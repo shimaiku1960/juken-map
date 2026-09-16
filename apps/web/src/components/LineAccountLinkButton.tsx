@@ -1,34 +1,29 @@
 import { useState } from "react";
 import { Button } from "@/web/components/ui/button";
 import InlineFeedback from "@/web/components/feedback/InlineFeedback";
+import { useStartLineAccountLink } from "@/web/hooks/useLineLink";
 
 export default function LineAccountLinkButton({
   linkToken,
 }: {
   linkToken: string;
 }) {
-  const [isLinking, setIsLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const startLink = useStartLineAccountLink();
 
-  const link = async () => {
-    setIsLinking(true);
+  // 成功したら LINE へ遷移する。遷移の間もボタンは「LINEへ移動中…」のままに
+  // したいので、isPending だけでなく isSuccess も見る（成功で isPending は
+  // false に戻るため、それだけだと表示が一瞬元に戻る）。
+  const isLinking = startLink.isPending || startLink.isSuccess;
+
+  const link = () => {
     setError(null);
-    try {
-      const response = await fetch("/api/line/account-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ linkToken }),
-      });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.error || "連携を開始できませんでした");
-      window.location.href = result.redirectUrl;
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "連携を開始できませんでした"
-      );
-      setIsLinking(false);
-    }
+    startLink.mutate(linkToken, {
+      onSuccess: (result) => {
+        window.location.href = result.redirectUrl;
+      },
+      onError: (cause) => setError(cause.message),
+    });
   };
 
   return (

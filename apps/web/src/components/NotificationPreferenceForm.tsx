@@ -5,6 +5,12 @@ import { Checkbox } from "@/web/components/ui/checkbox";
 import { Label } from "@/web/components/ui/label";
 import InlineFeedback from "@/web/components/feedback/InlineFeedback";
 import { notifyDemoReadOnly } from "@/web/lib/demo-client";
+import {
+  useDisconnectLine,
+  useLineConnection,
+  useNotificationPreferences,
+  useSaveNotificationPreferences,
+} from "@/web/hooks/useNotificationPreferences";
 import type { NotificationPreferenceInput } from "@/shared/validations/notification";
 
 type Props = NotificationPreferenceInput & {
@@ -40,60 +46,56 @@ export default function NotificationPreferenceForm(props: Props) {
     lineMorningEnabled: props.lineMorningEnabled,
     lineEveningEnabled: props.lineEveningEnabled,
   };
-  // initial* はマウント時の値で固定される（あとから props が変わっても追従しない）。
-  // 画面側は取得が終わってからこの部品を描くこと。取得前の既定値を渡すと、それが
-  // 焼き付いて直らない。実際 LINE の連携状態でそれが起きた。
+  // 画面で編集中の下書きだけをここに持つ。initial* はマウント時の値で固定される
+  // （あとから props が変わっても追従しない）ので、画面側は取得が終わってから
+  // この部品を描くこと。取得前の既定値を渡すと、それが焼き付いて直らない。
   const [preference, setPreference] = useState(initialPreference);
-  const [savedPreference, setSavedPreference] = useState(initialPreference);
-  const [lineConnected, setLineConnected] = useState(props.initialLineConnected);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 「保存済みの値」はキャッシュを正とする。以前はここにも useState を置いて
+  // 保存のたびに手で書き写していたため、同じ値の置き場所が2つあった。
+  // 画面側（ProfilePage）が取得を待ってから描くので、data は揃っている。
+  const { data: saved } = useNotificationPreferences();
+  const { data: lineConnection } = useLineConnection();
+  const savedPreference = saved ?? initialPreference;
+  const lineConnected = lineConnection?.connected ?? props.initialLineConnected;
+
+  const savePreference = useSaveNotificationPreferences();
+  const disconnectLine = useDisconnectLine();
+  const isSaving = savePreference.isPending;
+  const isDisconnecting = disconnectLine.isPending;
   const isDirty = JSON.stringify(preference) !== JSON.stringify(savedPreference);
 
   const setValue = (key: keyof NotificationPreferenceInput, checked: boolean) =>
     setPreference((current) => ({ ...current, [key]: checked }));
 
-  const save = async () => {
+  const save = () => {
     if (readOnly) return notifyDemoReadOnly();
-    setIsSaving(true);
     setError(null);
-    try {
-      const response = await fetch("/api/notification-preferences", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(preference),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "保存に失敗しました");
-      setPreference(result);
-      setSavedPreference(result);
-      toast.success("通知設定を保存しました");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "保存に失敗しました");
-    } finally {
-      setIsSaving(false);
-    }
+    savePreference.mutate(preference, {
+      // 応答が保存後の値。下書きもそれに合わせておく（保存済みの値は
+      // フックがキャッシュへ入れるので、ここで書き写す必要はない）。
+      onSuccess: (result) => {
+        setPreference(result);
+        toast.success("通知設定を保存しました");
+      },
+      onError: (cause) => setError(cause.message),
+    });
   };
 
-  const disconnect = async () => {
+  const disconnect = () => {
     if (readOnly) return notifyDemoReadOnly();
     if (!window.confirm("LINE連携を解除しますか？LINE通知は停止しますが、メール通知は変わりません。")) return;
-    setIsDisconnecting(true);
     setError(null);
-    try {
-      const response = await fetch("/api/line/connection", { method: "DELETE" });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "LINE連携を解除できませんでした");
-      setLineConnected(false);
-      setPreference((current) => ({ ...current, lineMorningEnabled: false, lineEveningEnabled: false }));
-      setSavedPreference((current) => ({ ...current, lineMorningEnabled: false, lineEveningEnabled: false }));
-      toast.success("LINE連携を解除しました");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "LINE連携を解除できませんでした");
-    } finally {
-      setIsDisconnecting(false);
-    }
+    disconnectLine.mutate(undefined, {
+      // 解除するとサーバー側で LINE 通知の設定も落ちる。保存済みの値は
+      // フックの再取得で追いつくので、ここは下書きだけ合わせる。
+      onSuccess: () => {
+        setPreference((current) => ({ ...current, lineMorningEnabled: false, lineEveningEnabled: false }));
+        toast.success("LINE連携を解除しました");
+      },
+      onError: (cause) => setError(cause.message),
+    });
   };
 
   const busy = isSaving || isDisconnecting;
@@ -136,7 +138,7 @@ export default function NotificationPreferenceForm(props: Props) {
                 ? "LINEとの連携が完了しました。朝・夜のLINE通知を選べます。"
                 : "連携済みです。このLINEアカウントで通知を受け取れます。"}
             </InlineFeedback>
-            <Button type="button" variant="outline" size="lg" className="h-11" disabled={readOnly || busy} onClick={() => void disconnect()}>
+            <Button type="button" variant="outline" size="lg" className="h-11" disabled={readOnly || busy} onClick={disconnect}>
               {isDisconnecting ? "解除中…" : "LINE連携を解除"}
             </Button>
           </div>
@@ -152,7 +154,7 @@ export default function NotificationPreferenceForm(props: Props) {
           </div>
         )}
       </div>
-      <Button type="button" size="lg" className="h-11" disabled={!isDirty || busy || readOnly} onClick={() => void save()}>
+      <Button type="button" size="lg" className="h-11" disabled={!isDirty || busy || readOnly} onClick={save}>
         {isSaving ? "保存中…" : "通知設定を保存"}
       </Button>
     </div>

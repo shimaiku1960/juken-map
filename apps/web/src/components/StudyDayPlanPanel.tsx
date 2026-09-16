@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { StudyPlan } from "@/web/hooks/useStudyPlans";
-import { studyPlansKey } from "@/web/hooks/useStudyPlans";
-import type { UpdateStudyPlanInput } from "@/shared/validations/studyPlan";
+import {
+  useDeleteStudyPlan,
+  useUpdateStudyPlan,
+} from "@/web/hooks/useStudyPlans";
 import StudyPlanCreateDialog from "@/web/components/StudyPlanCreateDialog";
 import StudyPlanEditDialog from "@/web/components/StudyPlanEditDialog";
 import { studyPlanLabel } from "@/web/lib/studyPlan";
@@ -22,54 +23,22 @@ export default function StudyDayPlanPanel({
   readOnly: boolean;
   allowAdd?: boolean;
 }) {
-  const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editingPlan, setEditingPlan] = useState<StudyPlan | null>(null);
 
-  const updatePlan = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: UpdateStudyPlanInput }) => {
-      const response = await fetch(`/api/study-plans/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        const issueMessage = Array.isArray(body?.error)
-          ? body.error.find((issue: unknown) =>
-              typeof issue === "object" && issue !== null && "message" in issue
-            )?.message
-          : null;
-        throw new Error(
-          typeof body?.error === "string"
-            ? body.error
-            : typeof issueMessage === "string"
-              ? issueMessage
-              : "予定の更新に失敗しました"
-        );
-      }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: studyPlansKey });
+  // 通信と一覧の再取得はフック側。ここでは結果の知らせ方だけを決める。
+  // 完了の切り替えと編集ダイアログの保存で同じ知らせ方をするため、
+  // コールバックは1つにまとめて両方から渡す。
+  const updatePlan = useUpdateStudyPlan();
+  const deletePlan = useDeleteStudyPlan();
+
+  const updateCallbacks = {
+    onSuccess: () => {
       toast.success("学習予定を更新しました");
       setEditingPlan(null);
     },
-    onError: (error) => toast.error(error.message),
-  });
-
-  const deletePlan = useMutation({
-    mutationFn: async (id: number) => {
-      const response = await fetch(`/api/study-plans/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("予定の削除に失敗しました");
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: studyPlansKey });
-      toast.success("学習予定を削除しました");
-    },
-    onError: (error) => toast.error(error.message),
-  });
+    onError: (error: Error) => toast.error(error.message),
+  };
 
   const openEdit = (plan: StudyPlan) => {
     updatePlan.reset();
@@ -77,7 +46,7 @@ export default function StudyDayPlanPanel({
   };
 
   const toggleDone = (plan: StudyPlan) => {
-    updatePlan.mutate({ id: plan.id, data: { done: !plan.done } });
+    updatePlan.mutate({ id: plan.id, data: { done: !plan.done } }, updateCallbacks);
   };
 
   return (
@@ -171,7 +140,14 @@ export default function StudyDayPlanPanel({
                         return;
                       }
                       if (window.confirm("この学習予定を削除しますか？")) {
-                        deletePlan.mutate(plan.id);
+                        deletePlan.mutate(plan.id, {
+                          onSuccess: () =>
+                            toast.success("学習予定を削除しました"),
+                          // 削除は元々サーバーの文言を読んでおらず、常にこの
+                          // 一文を出していた。表示を変えないためここで固定する。
+                          onError: () =>
+                            toast.error("予定の削除に失敗しました"),
+                        });
                       }
                     }}
                   >
@@ -196,7 +172,7 @@ export default function StudyDayPlanPanel({
           saveError={updatePlan.error?.message ?? null}
           onSave={(data) => {
             updatePlan.reset();
-            updatePlan.mutate({ id: editingPlan.id, data });
+            updatePlan.mutate({ id: editingPlan.id, data }, updateCallbacks);
           }}
           onClose={() => setEditingPlan(null)}
         />

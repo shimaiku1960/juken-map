@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PatchGoalInput } from "@/shared/validations/goal";
-import { api } from "@/web/lib/api-client";
+import { ApiError, api } from "@/web/lib/api-client";
 
 // goals（サーバー状態）の型・取得・queryKey をここに集約する。
 // GoalList / FacultyList など複数コンポーネントで共有し、鍵や取得処理の
@@ -72,6 +72,38 @@ export function useUpdateGoal() {
         fallbackMessage: "更新に失敗しました",
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: goalsKey });
+    },
+  });
+}
+
+// 志望校を「気になる（候補）」として追加するフック。
+// 探す画面からの追加は必ず candidate で入る。比較検討は志望校ページで行うため、
+// ここで status を固定してよい。
+//
+// 409（すでに登録済み）はエラーとして扱わない。利用者から見れば「もう入っている」
+// だけで失敗ではないので、duplicated として返し、呼び出し側が文言を選ぶ。
+export function useCreateGoal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (facultyId: number): Promise<{ duplicated: boolean }> => {
+      try {
+        await api.post(
+          "/api/goals",
+          { facultyId, status: "candidate" },
+          { fallbackMessage: "追加に失敗しました" }
+        );
+        return { duplicated: false };
+      } catch (cause) {
+        if (cause instanceof ApiError && cause.status === 409) {
+          return { duplicated: true };
+        }
+        throw cause;
+      }
+    },
+    onSuccess: () => {
+      // ["goals"] を無効化 → GoalList 含め同じキャッシュを見る全員が最新に
       queryClient.invalidateQueries({ queryKey: goalsKey });
     },
   });
