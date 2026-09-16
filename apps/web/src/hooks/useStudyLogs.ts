@@ -12,6 +12,20 @@ export type { StudyLog } from "@/shared/dto/study";
 import type { StudyLog } from "@/shared/dto/study";
 import { api } from "@/web/lib/api-client";
 
+// 実績の記録には入口が3つある（手入力・タイマー・予定の完了）が、GA4 へは
+// 同じ形で送る。イベント名の出し分けを2か所に書かないよう、ここにまとめる。
+type StudyLogRecordMethod = "manual" | "timer" | "plan";
+
+function trackStudyLogCreated(
+  isFirstStudyLog: boolean,
+  recordMethod: StudyLogRecordMethod
+) {
+  trackEvent(
+    isFirstStudyLog ? "first_study_log_created" : "study_log_created",
+    { record_method: recordMethod }
+  );
+}
+
 // studyLogs キャッシュの唯一の住所。invalidate も含め全員がこれを参照する。
 export const studyLogsKey = ["studyLogs"] as const;
 
@@ -43,12 +57,7 @@ export function useCreateStudyLog() {
         { fallbackMessage: "記録に失敗しました" }
       ),
     onSuccess: (created) => {
-      trackEvent(
-        created.isFirstStudyLog
-          ? "first_study_log_created"
-          : "study_log_created",
-        { record_method: "manual" }
-      );
+      trackStudyLogCreated(created.isFirstStudyLog, "manual");
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
     },
   });
@@ -126,10 +135,7 @@ export function useSaveStudySession() {
       } as const;
     },
     onSuccess: async ({ isFirstStudyLog, recordMethod }) => {
-      trackEvent(
-        isFirstStudyLog ? "first_study_log_created" : "study_log_created",
-        { record_method: recordMethod }
-      );
+      trackStudyLogCreated(isFirstStudyLog, recordMethod);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: studyLogsKey }),
         queryClient.invalidateQueries({ queryKey: studyPlansKey }),
