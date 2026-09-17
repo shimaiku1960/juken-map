@@ -1,6 +1,7 @@
 import { execute, isDuplicateEntry, select } from "@/api/infra/db";
 import { getResend } from "@/api/infra/resend";
 import { pushLineText } from "@/api/infra/line";
+import { withDeadline } from "@/api/infra/timeout";
 import { logger } from "@/api/observability/logger";
 import { buildDailyNotification, tokyoDateRange, type NotificationSlot } from "@/api/domain/dailyNotification";
 
@@ -145,7 +146,11 @@ export async function sendDailyNotifications(slot: NotificationSlot, now = new D
 
       try {
         if (channel === "email") {
-          const { error } = await getResend().emails.send({ from: FROM, to: user.email!, ...message });
+          // 全員分を1回のリクエストで順に送るので、1人分が詰まると後ろが全部止まる。
+          const { error } = await withDeadline(
+            getResend().emails.send({ from: FROM, to: user.email!, ...message }),
+            "resend.dailyNotification"
+          );
           if (error) throw new Error(error.message);
         } else {
           await pushLineText(user.lineConnection!.lineUserId, message.text);
