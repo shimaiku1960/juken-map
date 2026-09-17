@@ -22,6 +22,7 @@
     "obs:start": "docker compose up -d prometheus grafana loki alloy tempo mailpit",
     "obs:stop": "docker compose stop prometheus grafana loki alloy tempo mailpit",
     "db:seed":"tsx --env-file=.env db/seed.ts",
+    "db:seed:synthetic": "tsx --env-file=.env db/seed-synthetic.ts",
     "capture:seed": "tsx --env-file=.env db/seed-capture.ts",
     "hooks:install": "git config core.hooksPath .githooks",
     "lock:check": "bash scripts/check-lockfile.sh",
