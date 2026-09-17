@@ -1,4 +1,4 @@
-import { client, type Blog } from "@/api/infra/microcms";
+import { getBlog, listBlogs, type Blog } from "@/api/infra/microcms";
 import { SITE_URL } from "@/shared/site";
 
 // Next.js では generateMetadata と app/sitemap.ts がこれを担っていた。SPA は誰が来ても
@@ -101,10 +101,7 @@ export async function metaForPath(pathname: string): Promise<PageMeta> {
   if (!article) return defaultMeta(pathname);
 
   try {
-    const blog = await client.get<Blog>({
-      endpoint: "blogs",
-      contentId: article[1]!,
-    });
+    const blog = await getBlog(article[1]!);
     const description = createDescription(blog);
 
     return {
@@ -196,10 +193,7 @@ export async function buildSitemap() {
   ];
 
   try {
-    const data = await client.getList<Blog>({
-      endpoint: "blogs",
-      queries: { fields: "id,updatedAt", limit: 100 },
-    });
+    const data = await listBlogs({ fields: "id,updatedAt", limit: 100 });
     for (const blog of data.contents) {
       entries.push({
         url: `${SITE_URL}/articles/${blog.id}`,

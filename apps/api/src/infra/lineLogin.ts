@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { abortAfter } from "@/api/infra/timeout";
 
 const LINE_LOGIN_API = "https://api.line.me";
 const LINE_LOGIN_AUTHORIZE = "https://access.line.me/oauth2/v2.1/authorize";
@@ -42,7 +43,8 @@ type VerifiedLineIdToken = { sub: string; nonce?: string };
 async function lineJson<T>(url: string, init: RequestInit): Promise<T> {
   // Next.js は fetch を拡張して既定でキャッシュしたため cache: "no-store" が要ったが、
   // 素の Node の fetch はキャッシュしないので指定しない。
-  const response = await fetch(url, init);
+  // ログインの途中で LINE が黙り込んだとき、利用者を待たせ続けないよう上限を設ける。
+  const response = await fetch(url, { ...init, signal: abortAfter(undefined, init.signal) });
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`LINE Login API ${response.status}: ${detail.slice(0, 300)}`);

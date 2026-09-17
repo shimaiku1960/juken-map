@@ -1,4 +1,5 @@
 import { getResend } from "@/api/infra/resend";
+import { withDeadline } from "@/api/infra/timeout";
 import { logger } from "@/api/observability/logger";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
@@ -19,23 +20,30 @@ function escapeHtml(value: string) {
 }
 
 export async function sendVerificationEmail(to: string, url: string) {
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: "【受験マップ】メールアドレスの確認",
-    html: `<p>以下のリンクをクリックしてメールアドレスを確認してください。</p>
+  // 登録・ログインの流れの中で待たされるので、Resend が詰まったら諦める。
+  await withDeadline(
+    getResend().emails.send({
+      from: FROM,
+      to,
+      subject: "【受験マップ】メールアドレスの確認",
+      html: `<p>以下のリンクをクリックしてメールアドレスを確認してください。</p>
 <p><a href="${url}">メールアドレスを確認する</a></p>`,
-  });
+    }),
+    "resend.sendVerificationEmail"
+  );
 }
 
 export async function sendPasswordResetEmail(to: string, url: string) {
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: "【受験マップ】パスワードの再設定",
-    html: `<p>以下のリンクからパスワードを再設定してください。</p>
+  await withDeadline(
+    getResend().emails.send({
+      from: FROM,
+      to,
+      subject: "【受験マップ】パスワードの再設定",
+      html: `<p>以下のリンクからパスワードを再設定してください。</p>
 <p><a href="${url}">パスワードを再設定する</a></p>`,
-  });
+    }),
+    "resend.sendPasswordResetEmail"
+  );
 }
 
 /**
@@ -59,17 +67,20 @@ export async function notifyAdminOfNewUser(user: RegisteredUser) {
   }).format(user.createdAt);
 
   try {
-    const { error } = await getResend().emails.send({
-      from: FROM,
-      to,
-      subject: "【受験マップ】新しいユーザーが登録しました",
-      html: `<p>受験マップに新しいユーザーが登録しました。</p>
+    const { error } = await withDeadline(
+      getResend().emails.send({
+        from: FROM,
+        to,
+        subject: "【受験マップ】新しいユーザーが登録しました",
+        html: `<p>受験マップに新しいユーザーが登録しました。</p>
 <dl>
   <dt>登録日時</dt><dd>${escapeHtml(registeredAt)}</dd>
   <dt>表示名</dt><dd>${escapeHtml(user.name)}</dd>
   <dt>メールアドレス</dt><dd>${escapeHtml(user.email)}</dd>
 </dl>`,
-    });
+      }),
+      "resend.notifyAdminOfNewUser"
+    );
 
     if (error) {
       throw new Error(error.message);

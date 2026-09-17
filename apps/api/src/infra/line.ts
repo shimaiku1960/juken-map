@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { abortAfter } from "@/api/infra/timeout";
 import { SITE_URL } from "@/shared/site";
 
 const LINE_API_BASE = "https://api.line.me/v2/bot";
@@ -25,6 +26,8 @@ export function verifyLineSignature(body: string, signature: string | null) {
 async function lineRequest(path: string, init: RequestInit) {
   const response = await fetch(`${LINE_API_BASE}${path}`, {
     ...init,
+    // 呼び出し側が signal を渡していれば、そちらと上限のどちらか早い方で止まる。
+    signal: abortAfter(undefined, init.signal),
     headers: {
       Authorization: `Bearer ${requiredEnv("LINE_CHANNEL_ACCESS_TOKEN")}`,
       "Content-Type": "application/json",
