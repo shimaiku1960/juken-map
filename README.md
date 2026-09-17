@@ -56,8 +56,8 @@
 
 - **入力から振り返りまでをつなぐ設計** — 学習の開始、実績保存、カレンダーへの反映を一連の流れとして扱い、記録の手間を抑えています。
 - **サーバー状態の一元管理** — TanStack Queryを使い、志望校、学習予定、実績、参考書の取得・更新とキャッシュを管理しています。
-- **バリデーションの一元化** — `lib/validations/` のZodスキーマをクライアントとAPIで共有しています。フロント、API、データベースの各層で不正な入力や重複を防ぎます。
-- **デモ環境の保護** — UIだけに依存せず、更新APIにも読み取り専用ガードを適用しています。
+- **多層防御** — 入力の検証を1か所で終わらせません。`src/shared/validations` のZodスキーマをクライアントとAPIで共有し、フロントはUXのため、APIは門番として同じルールで弾きます。重複の禁止はデータベースの一意制約で最後に受け止めます。デモユーザーの読み取り専用化も、UIのボタンを隠すのではなく更新系APIのガードで403を返して担保しています。UIだけの制限は防御になりません。
+- **推測ではなく計測してから直す** — 遅い箇所は`EXPLAIN ANALYZE`で実行計画を読んでから手を入れます。本番相当の36.9万行を投入した検証用スキーマでは、`(userId, date)`の複合索引で通知バッチのクエリが268ms から 1.75ms になりました（索引の可視・不可視を切り替えた前後比較の中央値）。一方で大学一覧はSQL自体が2.5msで索引の問題ではないと分かったため、手を入れていません。
 - **Infrastructure as Code** — VPC、EC2、RDS、セキュリティグループ、ECR、IAMをTerraformで管理しています。
 - **自動テストとデプロイ** — Vitest、Playwright、GitHub Actionsを使い、検査からAWSへのデプロイまでを自動化しています。
 
@@ -210,7 +210,7 @@ pnpm run db:shell -e "SHOW TABLES"       # SQLを1本だけ実行する
 
 ### メトリクス・ログ・トレースをGrafanaで見る
 
-APIのリクエスト数・エラー率・レスポンスタイム・CPU・メモリ（Prometheus）、APIのログ（Loki）、1回のリクエストの内訳（Tempo）を、手元のGrafanaで確認できます（本番にはまだ入れていません）。
+APIのリクエスト数・エラー率・レスポンスタイム・CPU・メモリ（Prometheus）、APIのログ（Loki）、1回のリクエストの内訳（Tempo）を、手元のGrafanaで確認できます（本番はGrafana Cloudへ送ります。下の「本番の可観測性」を参照）。
 
 1. `.env`に次の3行を足してから`pnpm dev`で起動する
    ```bash
@@ -226,6 +226,33 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 トレースは、ダッシュボードの一番下の表でTrace IDを押すと、Fastifyのフック・ハンドラ・SQL 1本ずつに何msかかったかが開きます（Better Authの認証とSQLも含む）。ログの行には`trace_id`が入るので、ログからトレースへ、トレースの画面から「そのトレースのログ」へ移れます。URLの`?`以降とパスワード再設定のトークンは、ログと同じくトレースにも残しません（`apps/api/src/observability/redact.ts`）。
 
 5xxの割合が5%を超えた状態が1分続くとアラートのメールが送られ、`http://localhost:8025`（Mailpit）で受け取れます。設定は[observability/](observability/)にあります。
+
+### 本番の可観測性（Grafana Cloud）
+
+本番のEC2は`t3.micro`（メモリ1GB）なので、Prometheus・Loki・Tempoの本体は載せず、収集役の
+[Grafana Alloy](https://grafana.com/docs/alloy/)だけをアプリの隣で動かし、保存と画面はGrafana Cloudの
+無料枠に任せます。設定は[observability/alloy/production.alloy](observability/alloy/production.alloy)で、
+デプロイのたびにこのファイルがEC2へ運ばれます（`.github/scripts/deploy-ec2.sh`）。
+
+| 信号 | 経路 |
+| --- | --- |
+| Logs | アプリの標準出力 → Dockerのログ → Alloy（`loki.source.docker`）→ Loki |
+| Metrics | アプリの`METRICS_PORT`（9464番）→ Alloyが30秒ごとに読む → Prometheus |
+| Traces | アプリのOTLP送信 → Alloy（4318番）→ Tempo |
+
+ログはDockerのログをそのまま読むので、`awslogs`ドライバへ替える場合と違い、SSMで入ったときの
+`docker logs juken-map`は今まで通り使えます。`/metrics`とAlloyの画面（12345番）はDockerネットワークの
+中だけに開くので、nginx越しには届きません。
+
+接続情報はSecrets Managerの`juken-map/production/runtime`に次のキーで入れます。
+**このキーが入っていない間は、Alloyもアプリの送信も起動しません**（本番は今まで通り動きます）。
+
+| キー | 値 |
+| --- | --- |
+| `GRAFANA_CLOUD_TOKEN` | Cloud Access Policyのトークン（3つで共通） |
+| `GRAFANA_CLOUD_LOKI_URL` / `GRAFANA_CLOUD_LOKI_USER` | Lokiの送信先URLとユーザーID |
+| `GRAFANA_CLOUD_PROM_URL` / `GRAFANA_CLOUD_PROM_USER` | Prometheusのremote write先URLとユーザーID |
+| `GRAFANA_CLOUD_OTLP_URL` / `GRAFANA_CLOUD_OTLP_USER` | OTLPの送信先URLとインスタンスID |
 
 ### 完了の確認
 
