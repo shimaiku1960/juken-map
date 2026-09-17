@@ -18,10 +18,38 @@ import { generateId } from "better-auth";
 import { hashPassword } from "better-auth/crypto";
 import { execute, runSeed, select } from "./seed-helpers";
 
+// 何を測りたいかで欲しいデータの性格が変わるので、シナリオで切り替える。
+// 人数と期間だけ変えても「どういう集団か」は変えられない。
+const SCENARIOS = {
+  // 迷ったらこれ。続く人と辞める人が現実的な比率で混ざる。
+  default: { mix: [0.2, 0.35, 0.3, 0.15], activity: 1, recency: 1 },
+  // 大半が辞めていく。継続率が低いときに通知バッチや集計がどう変わるかを見る。
+  churn: { mix: [0.08, 0.32, 0.25, 0.35], activity: 0.9, recency: 1 },
+  // よく使われている状態。1人あたりの行数が増え、書き込みの負荷が上がる。
+  engaged: { mix: [0.45, 0.3, 0.2, 0.05], activity: 1.25, recency: 1 },
+  // 最近になって登録が増えた状態。新しい利用者に偏り、過去のデータが薄い。
+  growth: { mix: [0.25, 0.35, 0.3, 0.1], activity: 1, recency: 2.5 },
+} as const;
+
+type ScenarioName = keyof typeof SCENARIOS;
+
+const SCENARIO = (process.env.SCENARIO ?? "default") as ScenarioName;
+if (!(SCENARIO in SCENARIOS)) {
+  throw new Error(`SCENARIO は ${Object.keys(SCENARIOS).join(" / ")} のどれかです（指定: ${SCENARIO}）`);
+}
+const scenario = SCENARIOS[SCENARIO];
+
 const USERS = Number(process.env.USERS ?? 300);
 const MONTHS = Number(process.env.MONTHS ?? 6);
 const SEED = Number(process.env.SEED ?? 20260917);
 const PASSWORD = process.env.SYNTHETIC_PASSWORD ?? "synthetic-password";
+// シナリオの既定値は、個別に上書きもできる（例: ACTIVITY=1.5 で全員の記録頻度を1.5倍）
+const ACTIVITY = Number(process.env.ACTIVITY ?? scenario.activity);
+// 1より大きいほど登録日が最近に寄る（新規が増えている状態）
+const RECENCY = Number(process.env.RECENCY ?? scenario.recency);
+const MIX = process.env.COHORT_MIX
+  ? process.env.COHORT_MIX.split(",").map(Number)
+  : scenario.mix;
 
 // 合成データだけを狙って消せるように、メールアドレスに印を付ける。
 // .invalid は「実在しないことが保証されたTLD」（RFC 2606）で、誤って実メールを送らない。
@@ -56,15 +84,16 @@ function dayAt(offset: number) {
 
 // 続き方の型。割合は「受験生向けサービスなら大半は続かない」という前提で置いた。
 // 実際の数字が分かったら、ここを現実に寄せていく。
+// 割合（weight）はシナリオが決める。順番は steady / fading / sporadic / dropped。
 const COHORTS = [
   // 続ける人。今日まで記録が続く。
-  { name: "steady", weight: 0.2, baseRate: 0.85, decay: 0.15, life: [1, 1] },
-  // 最初は熱心だが、だんだん減って途中で止まる。一番多い。
-  { name: "fading", weight: 0.35, baseRate: 0.8, decay: 0.85, life: [0.2, 0.6] },
+  { name: "steady", weight: MIX[0], baseRate: 0.85, decay: 0.15, life: [1, 1] },
+  // 最初は熱心だが、だんだん減って途中で止まる。
+  { name: "fading", weight: MIX[1], baseRate: 0.8, decay: 0.85, life: [0.2, 0.6] },
   // たまに思い出したように使い、いつの間にか来なくなる。
-  { name: "sporadic", weight: 0.3, baseRate: 0.25, decay: 0.3, life: [0.3, 1] },
+  { name: "sporadic", weight: MIX[2], baseRate: 0.25, decay: 0.3, life: [0.3, 1] },
   // 登録しただけ。数日で消える。
-  { name: "dropped", weight: 0.15, baseRate: 0.6, decay: 0.5, life: [0.02, 0.1] },
+  { name: "dropped", weight: MIX[3], baseRate: 0.6, decay: 0.5, life: [0.02, 0.1] },
 ] as const;
 
 function pickCohort() {
@@ -133,6 +162,13 @@ runSeed(async () => {
   await execute("DELETE FROM `user` WHERE email LIKE ?", [`%${EMAIL_DOMAIN}`]);
   if (removed > 0) console.log(`前回の合成ユーザーを削除: ${removed}人`);
 
+  // 合成データを消すだけで終わる（pnpm db:seed:synthetic:clear）。
+  // 実データは消さない＝消す対象は合成の印が付いたメールアドレスだけ。
+  if (process.env.CLEAR === "on") {
+    console.log("合成データを削除しました（実データには触れていません）");
+    return;
+  }
+
   // パスワードのハッシュは意図的に重い（scrypt）。全員同じパスワードなので1回だけ計算して使い回す。
   // 1人ずつ計算すると、ここだけで数分かかる。
   const passwordHash = await hashPassword(PASSWORD);
@@ -160,7 +196,8 @@ runSeed(async () => {
     const userId = generateId();
     const cohort = pickCohort();
     // 登録日。全員が同時に始めるわけではないので散らす。
-    const joinedOffset = -randInt(7, DAYS);
+    // RECENCY が大きいほど今日寄りに偏る（random()**RECENCY は 0 に寄るため）
+    const joinedOffset = -Math.max(7, Math.round(DAYS * random() ** RECENCY));
     // 主に使う科目。人によって偏りがある方が、科目別の集計が現実に近くなる。
     const mainSubject = pick(SUBJECTS);
     const subSubject = pick(SUBJECTS);
@@ -232,7 +269,7 @@ runSeed(async () => {
       const weekendBoost = weekday === 0 || weekday === 6 ? 1.15 : 1;
       // 受験が近づくほど全体的に増える（今日に近いほど少し上がる）
       const seasonBoost = 1 + 0.15 * elapsed;
-      const rate = Math.max(0, decayed * weekendBoost * seasonBoost);
+      const rate = Math.max(0, decayed * weekendBoost * seasonBoost * ACTIVITY);
       if (random() >= rate) {
         // 勉強しなかった日。予定だけ立てて手を付けなかった、は実際によく起きる。
         // ここが無いと「予定は必ず実行される」データになり、未完了の予定を探す
@@ -407,8 +444,45 @@ runSeed(async () => {
     [`%${EMAIL_DOMAIN}`]
   );
 
+  // 入れた結果どんな集団になったかを必ず出す。
+  // 設定値（割合や活動量）だけ見ても、出来上がりの継続率は分からない。
+  const [summary] = await select<{
+    users: number;
+    active7: number;
+    active30: number;
+    churned: number;
+    logs: number;
+    medianLogs: number;
+  }>(
+    `SELECT COUNT(*) AS users,
+            SUM(last7 > 0) AS active7,
+            SUM(last30 > 0) AS active30,
+            SUM(last30 = 0) AS churned,
+            SUM(total) AS logs,
+            ROUND(AVG(total)) AS medianLogs
+     FROM (
+       SELECT u.id,
+              COUNT(l.id) AS total,
+              SUM(l.date >= CURDATE() - INTERVAL 7 DAY) AS last7,
+              SUM(l.date >= CURDATE() - INTERVAL 30 DAY) AS last30
+       FROM \`user\` AS u
+       LEFT JOIN StudyLog AS l ON l.userId = u.id
+       WHERE u.email LIKE ?
+       GROUP BY u.id
+     ) AS perUser`,
+    [`%${EMAIL_DOMAIN}`]
+  );
+
+  const percent = (value: number) => `${Math.round((value / summary.users) * 100)}%`;
+  console.log("");
+  console.log(`できあがった集団（SCENARIO=${SCENARIO} / ACTIVITY=${ACTIVITY} / RECENCY=${RECENCY}）`);
+  console.log(`  直近7日に記録がある   ${summary.active7}人（${percent(summary.active7)}）`);
+  console.log(`  直近30日に記録がある  ${summary.active30}人（${percent(summary.active30)}）`);
+  console.log(`  30日以上使っていない  ${summary.churned}人（${percent(summary.churned)}）`);
+  console.log(`  1人あたりの学習実績   平均${summary.medianLogs}件`);
   console.log("");
   console.log(`k6 などからログインする場合:`);
   console.log(`  メール: synthetic00001${EMAIL_DOMAIN} 〜 synthetic${String(USERS).padStart(5, "0")}${EMAIL_DOMAIN}`);
   console.log(`  パスワード: ${PASSWORD}（全員共通）`);
+  console.log(`  消すとき: pnpm db:seed:synthetic:clear`);
 });
