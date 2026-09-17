@@ -1,6 +1,6 @@
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
-import { developmentTargets } from "@/api/observability/logger";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { developmentTargets, fastifyLoggingOptions } from "@/api/observability/logger";
 import { buildTestApp, takeLogLines } from "@/api/test-support";
 
 describe("developmentTargets", () => {
@@ -16,6 +16,25 @@ describe("developmentTargets", () => {
     expect(destination).toBe(
       path.resolve(import.meta.dirname, "../../../../logs/api.log")
     );
+  });
+});
+
+describe("reqId の採番", () => {
+  const original = process.env.NODE_ENV;
+  afterEach(() => {
+    process.env.NODE_ENV = original;
+  });
+
+  it("本番は UUID（デプロイをまたいでも取り違えない）", () => {
+    process.env.NODE_ENV = "production";
+    expect(fastifyLoggingOptions.genReqId()).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
+  });
+
+  it("開発は短くする（全行の先頭に出るので、長いと内容が押し出される）", () => {
+    process.env.NODE_ENV = "development";
+    expect(fastifyLoggingOptions.genReqId()).toMatch(/^[0-9a-f]{8}$/);
   });
 });
 
@@ -35,7 +54,8 @@ describe("リクエストのログ", () => {
     expect(lines).toEqual([
       expect.objectContaining({
         level: 30,
-        reqId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        // 本番以外は短い形（採番の使い分けは下の「reqId の採番」で確かめる）。
+        reqId: expect.stringMatching(/^[0-9a-f]{8}$/),
         req: { method: "GET", url: "/api/example" },
         res: { statusCode: 200 },
         responseTime: expect.any(Number),

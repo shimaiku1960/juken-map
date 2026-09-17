@@ -3,6 +3,7 @@ import Fastify, {
   type LightMyRequestResponse,
 } from "fastify";
 import { fastifyLoggingOptions, testLogLines } from "./observability/logger.ts";
+import { runWithRequestContext } from "./observability/requestContext.ts";
 
 /**
  * テスト用に、対象のルートだけを載せた Fastify を作る。
@@ -15,6 +16,12 @@ import { fastifyLoggingOptions, testLogLines } from "./observability/logger.ts";
  */
 export function buildTestApp(register: (app: FastifyInstance) => void) {
   const app = Fastify(fastifyLoggingOptions);
+
+  // server.ts と同じく、リクエストごとの文脈を一番先に張る。
+  // ここを省くと measured() や db.ts のログに reqId が付かず、テストが本番と別物になる。
+  app.addHook("onRequest", (request, _reply, done) => {
+    runWithRequestContext({ reqId: String(request.id) }, done);
+  });
 
   app.addContentTypeParser(
     "application/json",

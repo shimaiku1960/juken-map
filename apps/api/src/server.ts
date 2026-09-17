@@ -5,9 +5,11 @@ import fastifyCompress from "@fastify/compress";
 import fastifyStatic from "@fastify/static";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth.ts";
-import { select } from "./infra/db.ts";
+import { select, setQueryLogger } from "./infra/db.ts";
+import { logger } from "./observability/logger.ts";
 import { fastifyLoggingOptions } from "./observability/logger.ts";
 import { registerMetrics, startMetricsServer } from "./observability/metrics.ts";
+import { currentReqId, runWithRequestContext } from "./observability/requestContext.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { buildSitemap, injectMeta, metaForPath } from "./seo.ts";
 import { isKnownSpaRoute } from "@/shared/routes";
@@ -78,6 +80,11 @@ export async function buildServer() {
   // どこにも残らない（Fastify の既定のエラー処理はロガーへ書くため）。
   const app = Fastify(fastifyLoggingOptions);
 
+  // SQL を素の console.log ではなくロガーへ流す。こうすると reqId が付いて
+  // どのリクエストが投げた SQL か分かり、LOG_FILE を設定していればファイルにも残る
+  // （実際に書き出すかは db.ts 側の shouldLogQueries が開発中だけに絞る）。
+  setQueryLogger((entry) => logger.info({ reqId: currentReqId(), ...entry }));
+
   // 件数と所要時間は、下で横取りする Better Auth の分も含めて全リクエストで数える。
   registerMetrics(app);
 
@@ -91,6 +98,14 @@ export async function buildServer() {
   await app.register(fastifyCompress, {
     global: true,
     encodings: ["br", "gzip", "deflate"],
+  });
+
+  // ここから先の処理（下の better-auth の横取りも含む）を、リクエストごとの文脈に入れる。
+  // done() を runWithRequestContext の中で呼ぶと、そこから続く処理すべてが同じ文脈に入り、
+  // measured() と db.ts が引数を受け取らずに reqId を読めるようになる。
+  // 一番先に登録するのは、フックが登録順に走るため（better-auth が投げる SQL にも付く）。
+  app.addHook("onRequest", (request, _reply, done) => {
+    runWithRequestContext({ reqId: String(request.id) }, done);
   });
 
   // better-auth は Node のリクエストストリームを自分で読む。

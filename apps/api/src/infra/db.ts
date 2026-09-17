@@ -62,15 +62,38 @@ function shouldLogQueries() {
   return env !== "production" && env !== "test" && process.env.SQL_LOG !== "off";
 }
 
+export type QueryLogEntry = {
+  sql: string;
+  params: unknown[];
+  duration_ms: number;
+};
+
+let onQuery: ((entry: QueryLogEntry) => void) | undefined;
+
+/**
+ * SQL 1本ごとの書き出し先を差し込む。API は pino のロガーを繋ぐ（server.ts）。
+ *
+ * ここで logger を直接 import しないのは、この層を API 以外からも使うため。
+ * seed（db/seed-helpers.ts）とマイグレーションは apps/api の外から読み込むので、
+ * observability を巻き込むと fastify や pino まで道連れになる。
+ * 差し込まれなければ何も書かないので、seed は今までどおり静かなまま。
+ */
+export function setQueryLogger(fn: ((entry: QueryLogEntry) => void) | undefined) {
+  onQuery = fn;
+}
+
 async function run(db: Db, sql: string, params: unknown[]) {
   const startedAt = performance.now();
   // 値は必ず params で渡す。SQL 文字列に埋め込むと SQL インジェクションになる。
   // execute（プリペアドステートメント）ではなく query を使うのは、
   // `IN (?)` に配列を渡して展開させたいから。エスケープはドライバが行う。
   const [result] = await db.query(sql, params);
-  if (shouldLogQueries()) {
-    const ms = (performance.now() - startedAt).toFixed(1);
-    console.log(`[sql ${ms}ms] ${sql.replace(/\s+/g, " ").trim()}`, params);
+  if (onQuery && shouldLogQueries()) {
+    onQuery({
+      sql: sql.replace(/\s+/g, " ").trim(),
+      params,
+      duration_ms: Number((performance.now() - startedAt).toFixed(1)),
+    });
   }
   return result;
 }
