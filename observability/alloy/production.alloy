@@ -1,0 +1,143 @@
+// 本番（EC2）で動かす Alloy。アプリの Metrics・Logs・Traces を集めて Grafana Cloud へ送る。
+// 手元の config.alloy（学習用・ログだけ）と違い、3つとも扱い、送り先が外のサービスになる。
+//
+// t3.micro（メモリ1GB）にアプリと同居するので、重い保存側（Prometheus・Loki・Tempo 本体）は
+// Grafana Cloud に任せ、EC2 には収集役の Alloy だけを置く。
+//
+// 接続情報は環境変数で受け取る。値は Secrets Manager に置き、デプロイ時に
+// .github/scripts/deploy-ec2.sh が取り出して渡す（リポジトリには残さない）。
+
+// ---------------- Logs ----------------
+// Docker が持っているログをそのまま読む。アプリ側は今まで通り標準出力に書くだけなので、
+// ログドライバを変えずに済み、SSM で入ったときの `docker logs` も今まで通り使える。
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "api" {
+  targets = discovery.docker.containers.targets
+
+  // 集めるのはアプリのコンテナだけ（Alloy 自身のログを送り返して増やさない）。
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/juken-map"
+    action        = "keep"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "juken-map-api"
+  }
+}
+
+loki.source.docker "api" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.api.output
+  forward_to = [loki.process.api.receiver]
+}
+
+loki.process "api" {
+  // pino の JSON から、ラベルと時刻に使う値を取り出す（手元の config.alloy と同じ）。
+  stage.json {
+    expressions = {
+      level = "",
+      time  = "",
+    }
+  }
+
+  // pino のレベルは数字（30 = info、50 = error）なので、読める名前に直す。
+  stage.template {
+    source   = "level"
+    template = "{{ if eq .Value \"60\" }}fatal{{ else if eq .Value \"50\" }}error{{ else if eq .Value \"40\" }}warn{{ else if eq .Value \"30\" }}info{{ else if eq .Value \"20\" }}debug{{ else }}trace{{ end }}"
+  }
+
+  // ラベルは検索の入口になる少数の値だけにする（値の種類だけ Loki の保存単位が増えるため）。
+  stage.labels {
+    values = { level = "" }
+  }
+
+  // 読み込んだ時刻ではなく、ログを書いた時刻で並べる。
+  stage.timestamp {
+    source = "time"
+    format = "UnixMs"
+  }
+
+  forward_to = [loki.write.cloud.receiver]
+}
+
+loki.write "cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+      password = sys.env("GRAFANA_CLOUD_TOKEN")
+    }
+  }
+
+  // Grafana Cloud 側で、他の送信元と混ざらないよう目印を付ける。
+  external_labels = {
+    env     = "production",
+    service = "juken-map-api",
+  }
+}
+
+// ---------------- Metrics ----------------
+// アプリが METRICS_PORT で出す /metrics を、同じ Docker ネットワークの中から読む。
+// 外（nginx 経由）には出さないので、内部の数字が公開されることはない。
+
+prometheus.scrape "api" {
+  targets = [{
+    __address__ = "juken-map:9464",
+    job         = "juken-map-api",
+    env         = "production",
+  }]
+
+  // 無料枠に収めるため、手元（5秒）より粗くする。エラー率の監視には十分。
+  scrape_interval = "30s"
+  forward_to      = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.remote_write "cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROM_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROM_USER")
+      password = sys.env("GRAFANA_CLOUD_TOKEN")
+    }
+  }
+}
+
+// ---------------- Traces ----------------
+// アプリ（instrumentation.ts）が OTLP で送ってくるトレースを受け、まとめて転送する。
+// 受け口は Docker ネットワークの中だけに開く。
+
+otelcol.receiver.otlp "api" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlphttp.cloud.input]
+  }
+}
+
+otelcol.auth.basic "cloud" {
+  username = sys.env("GRAFANA_CLOUD_OTLP_USER")
+  password = sys.env("GRAFANA_CLOUD_TOKEN")
+}
+
+otelcol.exporter.otlphttp "cloud" {
+  client {
+    endpoint = sys.env("GRAFANA_CLOUD_OTLP_URL")
+    auth     = otelcol.auth.basic.cloud.handler
+  }
+}

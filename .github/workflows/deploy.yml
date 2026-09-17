@@ -61,7 +61,10 @@ jobs:
           set -euo pipefail
 
           deploy_script_b64="$(base64 < .github/scripts/deploy-ec2.sh | tr -d '\n')"
-          remote_command="echo '$deploy_script_b64' | base64 -d | bash -s -- '$IMAGE_TAG'"
+          # Alloy（可観測性の収集役）の設定も一緒に運ぶ。EC2 に置き去りの設定ファイルを作らず、
+          # リポジトリの中身がそのまま本番の設定になるようにする。
+          alloy_config_b64="$(base64 < observability/alloy/production.alloy | tr -d '\n')"
+          remote_command="echo '$deploy_script_b64' | base64 -d | bash -s -- '$IMAGE_TAG' '$alloy_config_b64'"
           parameters="$(jq -cn --arg command "$remote_command" '{commands: [$command]}')"
 
           command_id="$(aws ssm send-command \
