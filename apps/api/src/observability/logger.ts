@@ -70,13 +70,17 @@ export function developmentTargets(logFile: string | undefined): TransportTarget
       options: {
         translateTime: "SYS:HH:MM:ss",
         // リクエストの行は「GET /api/study-logs 200 12.3ms」、measured() の行は
-        // 「studyLog.list 3.2ms success=true」の1行にまとめる。
+        // 「studyLog.list 3.2ms success=true」、SQL の行は「[sql 8.4ms] SELECT ...」。
+        // 先頭に reqId を出して、同時に複数のリクエストが流れても目で束ねられるようにする。
         // 詳しく追いたいときは本番と同じ JSON（NODE_ENV=production）で見る。
         messageFormat:
+          "{if reqId}{reqId} {end}" +
           "{if req.method}{req.method} {req.url} {res.statusCode} {responseTime}ms {end}" +
-          "{if operation}{operation} {duration_ms}ms success={success} {end}{msg}",
+          "{if operation}{operation} {duration_ms}ms success={success} {end}" +
+          "{if sql}[sql {duration_ms}ms] {sql}{end}{msg}",
+        // params は出したままにする（どの値で引いたかが分からないと SQL だけ見ても追えない）。
         ignore:
-          "pid,hostname,reqId,req,res,responseTime,operation,duration_ms,success," +
+          "pid,hostname,reqId,req,res,responseTime,operation,duration_ms,success,sql," +
           // トレースを有効にしたとき（instrumentation.ts）に足される。ファイルの JSON には残る。
           "trace_id,span_id,trace_flags",
       },
@@ -144,6 +148,10 @@ export const fastifyLoggingOptions = {
   loggerInstance: logger as FastifyBaseLogger,
   logController: new RequestLogController(),
   // 既定の reqId は "req-1" からの連番で、再起動のたびに振り直しになる。
-  // デプロイをまたいでログを突き合わせても取り違えないよう、UUID にする。
-  genReqId: () => randomUUID(),
+  // デプロイをまたいでログを突き合わせても取り違えないよう、本番は UUID にする。
+  //
+  // 開発だけ短いのは、pino-pretty が全行の先頭に reqId を出すため。36文字あると
+  // 肝心の内容が押し出されて読めない。開発は自分1人が触るだけで、突き合わせる
+  // 相手も目の前の数行なので、衝突の心配より読みやすさを取る。
+  genReqId: () => (isProduction() ? randomUUID() : randomUUID().slice(0, 8)),
 };
