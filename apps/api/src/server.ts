@@ -10,6 +10,7 @@ import { fastifyLoggingOptions } from "./observability/logger.ts";
 import { registerMetrics, startMetricsServer } from "./observability/metrics.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { buildSitemap, injectMeta, metaForPath } from "./seo.ts";
+import { isKnownSpaRoute } from "@/shared/routes";
 
 // 本番では SPA のビルド成果物を API と同じプロセスから配る。nginx は :3000 へ丸ごと
 // 流すだけなので、本番ホストの設定を触らずに Next.js と入れ替えられる（切り戻しも
@@ -52,9 +53,18 @@ function registerSpa(app: FastifyInstance, root: string) {
       return reply.code(404).send({ error: "Not Found" });
     }
 
+    const pathname = new URL(request.url, "http://localhost").pathname;
+
+    // SPA は何を渡されても index.html を返せてしまうので、App.tsx が持たないパスは
+    // 画面（NotFoundPage）と同じ 404 で返す。200 のままだと、ボットのスキャンまで
+    // 「正常」に数えられてエラー率が当てにならず、検索エンジンにも soft 404 と見られる。
+    // 本文は変えない（SPA が読み込まれて NotFoundPage を描く）。
+    if (!isKnownSpaRoute(pathname)) {
+      reply.code(404);
+    }
+
     // SPA なのでクローラーと SNS は JS 実行前の HTML しか読まない。
     // Next.js の generateMetadata が担っていた分を、ここで head に差し込む。
-    const pathname = new URL(request.url, "http://localhost").pathname;
     const meta = await metaForPath(pathname);
 
     reply.type("text/html; charset=utf-8");
