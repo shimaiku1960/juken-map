@@ -3,8 +3,16 @@ import { Navigate, Route, Routes } from "react-router";
 import Header from "@/web/components/Header";
 import RequireAuth from "@/web/components/RequireAuth";
 import HomePage from "@/web/pages/HomePage";
+// 認証画面は最初の1本に入れる。LP やメールのリンクから直接開かれることが多く、
+// 分けると「最初の JS を実行 → 画面の JS を取りに行く」待ちが1段増える。
+// どれも小さい部品だけでできていて、足しても約10KB。
+import ForgotPasswordPage from "@/web/pages/auth/forgot-password";
+import LoginPage from "@/web/pages/auth/login";
+import ResetPasswordPage from "@/web/pages/auth/reset-password";
+import SignUpPage from "@/web/pages/auth/signup";
+import VerifyEmailPage from "@/web/pages/auth/verify-email";
 
-// トップ（LP）以外のページは開いたときに読み込む。
+// それ以外のページは開いたときに読み込む。
 // 最初の1本に全ページを入れると、LPだけ見る人にもダッシュボード等を配ってしまう。
 const DashboardPage = lazy(() => import("@/web/pages/DashboardPage"));
 const GoalsPage = lazy(() => import("@/web/pages/GoalsPage"));
@@ -15,11 +23,6 @@ const BlogPage = lazy(() => import("@/web/pages/BlogPage"));
 const ArticlePage = lazy(() => import("@/web/pages/ArticlePage"));
 const TermsPage = lazy(() => import("@/web/pages/TermsPage"));
 const PrivacyPage = lazy(() => import("@/web/pages/PrivacyPage"));
-const LoginPage = lazy(() => import("@/web/pages/auth/login"));
-const SignUpPage = lazy(() => import("@/web/pages/auth/signup"));
-const ForgotPasswordPage = lazy(() => import("@/web/pages/auth/forgot-password"));
-const ResetPasswordPage = lazy(() => import("@/web/pages/auth/reset-password"));
-const VerifyEmailPage = lazy(() => import("@/web/pages/auth/verify-email"));
 const LineLinkPage = lazy(() => import("@/web/pages/LineLinkPage"));
 const NotFoundPage = lazy(() => import("@/web/pages/NotFoundPage"));
 
