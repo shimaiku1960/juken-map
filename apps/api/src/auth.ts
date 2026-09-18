@@ -25,6 +25,15 @@ export const auth = betterAuth({
         type: "string",
         required: false,
       },
+      // 管理者ページの権限。セッションに載せて API と画面の両方から読めるようにする。
+      // input: false が無いと、サインアップや update-user の本文に role: "admin" を
+      // 混ぜるだけで誰でも管理者になれてしまう。付け替えは pnpm admin:grant だけで行う。
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "user",
+        input: false,
+      },
     },
   },
   databaseHooks: {

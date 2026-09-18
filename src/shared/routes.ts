@@ -32,6 +32,7 @@ export const SPA_ROUTES = [
   "/explore/:universityId",
   "/profile",
   "/schedule",
+  "/admin",
 
   // LINE のトークから開く
   "/line/link",

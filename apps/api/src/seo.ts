@@ -36,6 +36,7 @@ const NOINDEX_PREFIXES = [
   "/profile",
   "/explore",
   "/line",
+  "/admin",
 ];
 
 const STATIC_META: Record<string, { title: string; description: string }> = {

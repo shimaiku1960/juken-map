@@ -32,6 +32,8 @@ const Header = () => {
                     user.name?.trim() ||
                     user.email,
                   email: user.email,
+                  // メニューの出し分けだけに使う。守るのは API 側（requireAdmin）。
+                  isAdmin: (user as { role?: string | null }).role === "admin",
                 }
               : null
           }

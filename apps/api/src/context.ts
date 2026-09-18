@@ -46,3 +46,21 @@ export function denyDemoWrite(
   }
   return false;
 }
+
+/**
+ * 管理者専用のハンドラで使う。未認証なら 401、管理者でなければ 403 を送って null を返す。
+ * role は user テーブルの列で、Better Auth がセッションに載せてくる（auth.ts の additionalFields）。
+ * 画面側でもメニューの出し分けに使うが、守るのはここ。
+ */
+export async function requireAdmin(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<Session | null> {
+  const session = await requireSession(request, reply);
+  if (!session) return null;
+  if (session.user.role !== "admin") {
+    reply.code(403).send({ error: "Forbidden" });
+    return null;
+  }
+  return session;
+}

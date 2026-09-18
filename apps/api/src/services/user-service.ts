@@ -1,5 +1,5 @@
 import { execute, select } from "@/api/infra/db";
-import type { UserRow } from "@/api/infra/tables";
+import type { UserRole, UserRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 
 const USER_COLUMNS = `
@@ -55,5 +55,28 @@ export function findSignUpMethod(userId: string) {
     return account?.providerId === "google" || account?.providerId === "github"
       ? account.providerId
       : "email";
+  });
+}
+
+/**
+ * メールアドレスでユーザーを探して role を付け替える（pnpm admin:grant が使う）。
+ * メール確認前のユーザーには admin を付けない。他人のアドレスで登録されただけの
+ * アカウントを、確認前に管理者にしてしまわないため。
+ */
+export function setUserRoleByEmail(email: string, role: UserRole) {
+  return measured("user.setRoleByEmail", async () => {
+    const [user] = await select<Pick<UserRow, "id" | "emailVerified" | "role">>(
+      "SELECT id, emailVerified, role FROM `user` WHERE email = ?",
+      [email]
+    );
+    if (!user) return { result: "not_found" as const };
+    if (role === "admin" && !user.emailVerified) return { result: "unverified" as const };
+
+    await execute("UPDATE `user` SET role = ?, updatedAt = ? WHERE id = ?", [
+      role,
+      new Date(),
+      user.id,
+    ]);
+    return { result: "updated" as const, previous: user.role };
   });
 }

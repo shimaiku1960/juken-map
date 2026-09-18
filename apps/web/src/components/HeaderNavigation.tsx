@@ -9,6 +9,7 @@ import {
   Newspaper,
   Play,
   Search,
+  ShieldCheck,
   Target,
   UserRound,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import TrackedSignupLink from "@/web/components/analytics/TrackedSignupLink";
 type HeaderUser = {
   name: string;
   email: string;
+  isAdmin?: boolean;
 };
 
 type HeaderNavigationProps = {
@@ -208,6 +210,15 @@ const HeaderNavigation = ({ user }: HeaderNavigationProps) => {
               >
                 ブログ
               </MenuLink>
+              {user.isAdmin ? (
+                <MenuLink
+                  href="/admin"
+                  icon={ShieldCheck}
+                  onNavigate={() => setMenuOpen(false)}
+                >
+                  管理
+                </MenuLink>
+              ) : null}
             </div>
             <div className="border-t pt-1">
               <button

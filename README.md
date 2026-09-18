@@ -343,6 +343,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `pnpm run db:logs` | MySQLコンテナのログを表示する |
 | `pnpm run db:migrate` | まだ当てていないマイグレーション（`db/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
+| `pnpm run admin:grant <メール>` | そのユーザーを管理者（`/admin`を開ける）にする。メール確認済みのユーザーだけ。`--revoke`で戻す |
 | `pnpm run db:shell` | ローカルDB（`juken_map`）のMySQL対話画面を開く（`exit`で終了）。`-e "SQL"`を付けると1本だけ実行する |
 | `pnpm run obs:start` | Prometheus（9090番）・Grafana（3001番）・Loki（3100番）・Alloy（12345番）・Tempo（3200番）・Mailpit（8025番）を起動する |
 | `pnpm run obs:stop` | Prometheus・Grafana・Loki・Alloy・Tempo・Mailpitを停止する |
@@ -388,6 +389,20 @@ GitHub Actionsでは、次の3ジョブを実行します。
 7. スモークテストに失敗した場合は直前のイメージへ戻します。
 
 デプロイジョブには `concurrency` を設定し、複数のデプロイが同時に本番環境を変更しないようにしています。
+
+### 本番で管理者を付ける
+
+管理者ページ（`/admin`）の権限は`user.role`列で決まり、画面からは付けられません。
+本番のRDSには外から繋げないので、SSMでEC2に入り、動いているAPIのコンテナの中で実行します。
+
+```bash
+aws ssm start-session --target <インスタンスID>
+sudo docker exec -w /app/apps/api juken-map \
+  ./node_modules/.bin/tsx src/grant-admin.ts <メールアドレス>          # 戻すときは --revoke
+```
+
+付け替えは、そのユーザーが次にログインし直したときに画面へ反映されます
+（APIの判定はセッションを読むたびなので、すぐ効きます）。
 
 ## 主なディレクトリ
 
