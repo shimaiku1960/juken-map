@@ -1,12 +1,22 @@
+import { lazy } from "react";
 import { Link } from "react-router";
-import LandingPage from "@/web/components/LandingPage";
-import StudySessionManager from "@/web/components/StudySessionManager";
 import { ymdLocal, todayYmd } from "@/shared/date";
 import { DEMO_EMAIL } from "@/shared/demo";
 import { buttonVariants } from "@/web/components/ui/button";
 import { cn } from "@/web/lib/utils";
 import { useSession } from "@/web/lib/auth-client";
 import { useFirstChoiceGoal } from "@/web/hooks/useFirstChoiceGoal";
+
+// 未ログインは LP、ログイン済みは学習開始だけを使う。どちらか片方しか要らないので分けて読む。
+// （LP のアニメーション用ライブラリをログイン後の人に、学習記録のフォームを LP の人に配らない）
+const loadLandingPage = () => import("@/web/components/LandingPage");
+const LandingPage = lazy(loadLandingPage);
+// トップを直接開いたときは、ログイン判定の完了を待たずに LP の取得を始める。
+// 待つと「判定 → LP の取得」が直列になり、初めて来た人ほど表示が遅れる。
+if (window.location.pathname === "/") void loadLandingPage();
+const StudySessionManager = lazy(
+  () => import("@/web/components/StudySessionManager")
+);
 
 export default function HomePage() {
   const { data: session, isPending } = useSession();
