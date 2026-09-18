@@ -10,6 +10,8 @@
 ```
 ブラウザ
   ↓ https://juken-map.com（443）
+[ Cloudflare（プロキシ）]  ← 2026-09-18 に確認
+  ↓ 443
 [ nginx 1.28.3（Ubuntu）]  ← EC2 ホスト上。Docker の外
   ↓ http://localhost:3000
 [ Docker コンテナ juken-map（Next.js）]
@@ -38,6 +40,7 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;   # 2026-09-18 追加
         proxy_cache_bypass $http_upgrade;
     }
 
@@ -82,6 +85,16 @@ server {
 
 ## 注意
 
+- **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（Better Auth）はログインの回数制限を
+  接続元 IP ごとに数えるが、IP をこのヘッダーからしか読まない。無いと全員が1つの枠で数えられる。
+  `$proxy_add_x_forwarded_for`（届いた値に追記）ではなく `$remote_addr` で上書きし、
+  利用者が送ってきた値をそのまま信用しないようにしている。変更前の設定は
+  `/etc/nginx/sites-available/default.bak-20260918` に残してある
+- **nginx の前には Cloudflare のプロキシ（オレンジ雲）がいる。** そのままだと `$remote_addr` は
+  利用者ではなく Cloudflare のサーバーの IP になる。そこで [`cloudflare-realip.conf`](./cloudflare-realip.conf)
+  を `/etc/nginx/conf.d/` に置き、Cloudflare の IP 範囲から来た接続に限って
+  `CF-Connecting-IP` を本当の利用者の IP として `$remote_addr` に入れる。範囲外から直接つないで
+  ヘッダーを偽っても使われない。Cloudflare が IP 範囲を変えたら、このファイルも更新する
 - **この README は現状の記録であって、適用される設定ではない。** 実物はサーバー上にある
 - `www` → apex の寄せは nginx ではなく Certbot が入れた 301 で行われている。
   `cleanup-after-merges` にある「www→apex 一本化」の検討と関係する
