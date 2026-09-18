@@ -1,0 +1,51 @@
+name: Lighthouse
+
+# 本番の表示の速さを、デプロイのたびに同じ条件で測る。
+# 手で npx lighthouse を回していたのを自動にしたもの。結果は実行ページの Summary に表で出る。
+# 本番を測るので、PR の段階では動かさない（まだ本番に無い変更は測れない）。
+
+on:
+  workflow_run:
+    workflows: [Deploy to EC2]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: lighthouse
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    # デプロイが成功したときだけ（失敗・ロールバックした回は測っても意味がない）。
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # 既定はモバイル想定（回線・CPU を絞る）。これまで手で測っていた条件と同じ。
+      # 回ごとの揺れが大きいので、1つの URL を3回測って中央値と幅を見る。
+      - name: Run Lighthouse
+        id: lhci
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: |
+            https://juken-map.com/
+            https://juken-map.com/login
+          runs: 3
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: Summary
+        env:
+          RESULTS_PATH: ${{ steps.lhci.outputs.resultsPath }}
+          LINKS: ${{ steps.lhci.outputs.links }}
+        run: |
+          {
+            echo "## Lighthouse（${{ github.event.workflow_run.head_sha || github.sha }}）"
+            node scripts/lighthouse-summary.mjs "$RESULTS_PATH" "$LINKS"
+          } >> "$GITHUB_STEP_SUMMARY"
