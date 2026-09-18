@@ -29,7 +29,6 @@ GitHub Actions（`.github/workflows/simulation.yml`）が毎時 `sim/run-hour.ts
 - `/api/sim/*` は `SIMULATION_ENABLED=on` のときだけ存在する（無ければ 404）
 - `SIMULATION_SECRET` の Bearer が必須（未設定なら常に 401）
 - `/api/sim/*` が触れるのは `delivered+simNNNNN@resend.dev` の利用者だけ
-- 合成ユーザーの登録は運営者へ通知しない（`notifyAdminOfNewUser`）
 - 通知（朝・夜のメール）は ON にしない。送信が逐次なので、実際の利用者への通知まで遅れる
 - `SIM_BASE_URL` は手元（`http://localhost:*`）か `https://juken-map.com` だけ。`--hour` は手元でだけ使える
 
@@ -44,8 +43,11 @@ GitHub Actions（`.github/workflows/simulation.yml`）が毎時 `sim/run-hour.ts
 | GitHub Variables | `SIMULATION_SCHEDULE` | `on` で毎時の実行を始める。無ければ手動実行だけ |
 | GitHub Variables | `SIGNUPS_PER_DAY` | 1日の新規登録の人数（既定 20） |
 
-⚠️ Resend の無料枠は 1日100通・月3,000通で、実際の利用者の確認メールと同じ枠を使う。
-合成ユーザーの登録1人につき1通。`SIGNUPS_PER_DAY` は枠に余裕を残して決める。
+合成ユーザーの登録も、実際と同じく運営者（`ADMIN_NOTIFICATION_EMAIL`）へ通知が届く。
+件名と本文の `delivered+sim` でメールのフィルタを作り、実際の利用者の通知と分けて読む。
+
+⚠️ Resend の無料枠は 1日100通・月3,000通で、実際の利用者のメールと同じ枠を使う（テスト用アドレス宛ても数える）。
+合成ユーザーの登録1人につき2通（本人への確認メール＋運営者への通知）。`SIGNUPS_PER_DAY` は枠に余裕を残して決める。
 
 ## 手元で動かす
 

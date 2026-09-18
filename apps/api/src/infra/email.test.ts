@@ -88,23 +88,3 @@ describe("notifyAdminOfNewUser", () => {
     ]);
   });
 });
-
-describe("合成ユーザー（シミュレーション）", () => {
-  beforeEach(() => {
-    process.env.ADMIN_NOTIFICATION_EMAIL = "owner@example.com";
-    send.mockReset();
-    vi.mocked(getResend).mockReturnValue({
-      emails: { send },
-    } as unknown as ReturnType<typeof getResend>);
-  });
-
-  it("登録しても運営者へは通知しない", async () => {
-    await notifyAdminOfNewUser({
-      name: "合成",
-      email: "delivered+sim00001@resend.dev",
-      createdAt: new Date(),
-    });
-
-    expect(send).not.toHaveBeenCalled();
-  });
-});
