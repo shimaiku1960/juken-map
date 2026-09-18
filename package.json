@@ -25,6 +25,7 @@
     "db:seed:synthetic": "tsx --env-file=.env db/seed-synthetic.ts",
     "db:seed:synthetic:clear": "CLEAR=on tsx --env-file=.env db/seed-synthetic.ts",
     "sim:run": "tsx --env-file-if-exists=.env sim/run-hour.ts",
+    "sim:plan": "tsx --env-file-if-exists=.env sim/plan.ts",
     "capture:seed": "tsx --env-file=.env db/seed-capture.ts",
     "hooks:install": "git config core.hooksPath .githooks",
     "lock:check": "bash scripts/check-lockfile.sh",

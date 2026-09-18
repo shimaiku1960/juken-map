@@ -18,16 +18,17 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { Browser, HttpError, SharedPacer, SimApi } from "./client";
 import { chooseGoals, dailyRecord, ensureSignedIn, signUp } from "./flows";
-import {
-  createRandom,
-  dayPlanFor,
-  isPastLife,
-  mixSeed,
-  personaFor,
-  signupHours,
-  type CohortName,
-} from "./persona";
+import { createRandom, dayPlanFor, isPastLife, mixSeed, personaFor, signupHours } from "./persona";
 import { ResendInbox } from "./resend-inbox";
+import {
+  dayNumber,
+  goalChance,
+  tokyoDate,
+  tokyoNow,
+  visitorsOn,
+  weekdayOf,
+  ymdFromDayNumber,
+} from "./schedule";
 
 const PRODUCTION_URL = "https://juken-map.com";
 
@@ -67,34 +68,6 @@ const dryRun = args["dry-run"];
 const stateDir = env("SIM_STATE_DIR", path.join(process.cwd(), "sim", ".state"));
 const cookieFile = path.join(stateDir, `cookies-${new URL(baseUrl).host.replace(":", "_")}.json`);
 
-/** Asia/Tokyo の今日（YYYY-MM-DD）と今の時（0〜23）。 */
-function tokyoNow() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date());
-  const get = (type: string) => parts.find((p) => p.type === type)!.value;
-  return { today: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) };
-}
-
-function tokyoDate(iso: string) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(new Date(iso));
-}
-
-/** 1970-01-01 からの日数。日付の差と、乱数の種に使う。 */
-function dayNumber(ymd: string) {
-  const [y, m, d] = ymd.split("-").map(Number);
-  return Math.round(Date.UTC(y, m - 1, d) / 86_400_000);
-}
-
-function ymdFromDayNumber(n: number) {
-  return new Date(n * 86_400_000).toISOString().slice(0, 10);
-}
-
 function loadCookies(): Record<string, string> {
   try {
     return JSON.parse(readFileSync(cookieFile, "utf-8"));
@@ -113,7 +86,7 @@ async function main() {
   const today = now.today;
   const hour = args.hour === undefined ? now.hour : Number(args.hour);
   const todayNumber = dayNumber(today);
-  const weekday = new Date(todayNumber * 86_400_000).getUTCDay();
+  const weekday = weekdayOf(todayNumber);
   const runId = `${today}T${String(hour).padStart(2, "0")}-${process.pid}`;
 
   const sim = new SimApi(baseUrl, env("SIMULATION_SECRET"));
@@ -129,6 +102,7 @@ async function main() {
   });
 
   const state = await sim.state();
+  const lastActedOn = new Map(state.users.map((u) => [u.seq, u.lastActedOn]));
   const cookies = loadCookies();
   const summary = {
     runId,
@@ -144,38 +118,25 @@ async function main() {
   };
 
   // 2. 寿命を過ぎた人に「来なくなった日」を付ける
-  const active: { seq: number; dayIndex: number; cohort: CohortName }[] = [];
   for (const user of state.users) {
     if (user.dormantFrom) continue;
     const persona = personaFor(user.seq, baseSeed);
     const joinedNumber = dayNumber(tokyoDate(user.createdAt));
-    const dayIndex = todayNumber - joinedNumber;
-    if (isPastLife(persona, dayIndex)) {
-      summary.becameDormant++;
-      if (!dryRun) {
-        await sim.updateUser(user.seq, {
-          dormantFrom: ymdFromDayNumber(joinedNumber + persona.lifeDays + 1),
-        });
-      }
-      continue;
-    }
-    // 登録した日の動きは登録の流れの中でやる。今日すでに動いた人も除く。
-    if (dayIndex >= 1 && user.lastActedOn !== today) {
-      active.push({ seq: user.seq, dayIndex, cohort: persona.cohort });
+    if (!isPastLife(persona, todayNumber - joinedNumber)) continue;
+    summary.becameDormant++;
+    if (!dryRun) {
+      await sim.updateUser(user.seq, {
+        dormantFrom: ymdFromDayNumber(joinedNumber + persona.lifeDays + 1),
+      });
     }
   }
 
-  // 3. 今日この時間に使う人
-  const due = active
-    .filter(({ seq, dayIndex }) => {
-      const plan = dayPlanFor(personaFor(seq, baseSeed), dayIndex, todayNumber, weekday, baseSeed);
-      return plan.active && plan.hour === hour;
-    })
+  // 3. 今日この時間に使う人。今日すでに動いた人は除く。
+  const due = visitorsOn(state.users, todayNumber, baseSeed)
+    .filter(({ seq, plan }) => plan.hour === hour && lastActedOn.get(seq) !== today)
     .slice(0, userLimit);
 
-  for (const { seq, dayIndex } of due) {
-    const persona = personaFor(seq, baseSeed);
-    const plan = dayPlanFor(persona, dayIndex, todayNumber, weekday, baseSeed);
+  for (const { seq, dayIndex, persona, plan } of due) {
     if (dryRun) {
       console.log(`[dry-run] #${seq} ${persona.cohort} 実績${plan.logCount}件 予定${plan.makesPlan ? "あり" : "なし"}`);
       summary.acted++;
@@ -186,7 +147,7 @@ async function main() {
       if (await ensureSignedIn(browser, seq)) summary.signedIn++;
       // 登録から1週間は、まだ志望校を決めていなければ探しに行くことがある。
       const random = createRandom(mixSeed(baseSeed, seq, todayNumber, 3));
-      if (dayIndex <= 7 && random() < 0.3) await chooseGoals(browser, random);
+      if (random() < goalChance(dayIndex)) await chooseGoals(browser, random);
       await dailyRecord(browser, persona, plan, today, baseSeed);
       await sim.updateUser(seq, { lastActedOn: today });
       summary.acted++;
@@ -218,7 +179,7 @@ async function main() {
       // 登録した日は、そのまま画面を見て少し使う。
       const plan = dayPlanFor(persona, 0, todayNumber, weekday, baseSeed);
       const random = createRandom(mixSeed(baseSeed, persona.seq, todayNumber, 3));
-      if (random() < 0.6) await chooseGoals(browser, random);
+      if (random() < goalChance(0)) await chooseGoals(browser, random);
       await dailyRecord(browser, persona, plan, today, baseSeed);
       await sim.updateUser(persona.seq, { lastActedOn: today });
     } catch (error) {
