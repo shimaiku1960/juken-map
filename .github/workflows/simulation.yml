@@ -1,0 +1,111 @@
+name: Simulation
+
+# 合成ユーザーが本番（https://juken-map.com）を実際の利用者と同じ HTTP の動線で使い、
+# 「運用されているサービスの状態」を毎日少しずつ積み上げる。仕組みと止め方は sim/README.md。
+#
+# 毎時の実行は、リポジトリ変数 SIMULATION_SCHEDULE を "on" にしたときだけ動く。
+# マージしただけでは始まらない。手動実行（workflow_dispatch）はいつでもできる。
+
+on:
+  schedule:
+    # 毎時5分（UTC）。正時は GitHub 側の混雑で遅れやすいので少しずらす。
+    - cron: "5 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 何もせず、動く予定の人だけ表示する
+        type: boolean
+        default: true
+      users:
+        description: 既存の利用者のうち今回動かす人数の上限（空欄なら上限なし）
+        type: string
+        default: ""
+      signups:
+        description: 今日の新規登録の人数（空欄なら SIGNUPS_PER_DAY）
+        type: string
+        default: ""
+
+# 前の回が長引いても重ねて走らせない。Cookie の引き継ぎと登録人数の数え方が崩れるため。
+concurrency:
+  group: simulation
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: github.event_name == 'workflow_dispatch' || vars.SIMULATION_SCHEDULE == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      SIM_BASE_URL: https://juken-map.com
+      SIM_STATE_DIR: ${{ github.workspace }}/sim/.state
+      SIGNUPS_PER_DAY: ${{ vars.SIGNUPS_PER_DAY || '20' }}
+      SIMULATION_SECRET: ${{ secrets.SIMULATION_SECRET }}
+      RESEND_READ_API_KEY: ${{ secrets.RESEND_READ_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 合成ユーザーのログイン状態（Cookie）を前の回から引き継ぐ。無くてもログインし直すだけ。
+      # 公開リポジトリのキャッシュはフォークからの PR のワークフローでも読めるので、
+      # SIMULATION_SECRET で暗号化した状態でだけ置く。
+      - name: Restore cookies
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: sim-cookies.enc
+          key: sim-cookies-${{ github.run_id }}
+          restore-keys: sim-cookies-
+
+      - name: Decrypt cookies
+        if: steps.restore.outputs.cache-matched-key != ''
+        run: |
+          mkdir -p "$SIM_STATE_DIR"
+          file="$SIM_STATE_DIR/cookies-juken-map.com.json"
+          if ! openssl enc -d -aes-256-cbc -pbkdf2 -pass env:SIMULATION_SECRET \
+            -in sim-cookies.enc -out "$file"; then
+            rm -f "$file"
+            echo "Cookie を復号できませんでした（シークレットを変えた？）。ログインし直します"
+          fi
+
+      - name: Run simulation
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          USERS: ${{ inputs.users }}
+          SIGNUPS: ${{ inputs.signups }}
+        run: |
+          args=()
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          [ -n "$USERS" ] && args+=(--users "$USERS")
+          [ -n "$SIGNUPS" ] && args+=(--signups "$SIGNUPS")
+          pnpm run sim:run "${args[@]}"
+
+      # 途中で失敗しても、それまでにログインした人の Cookie は残す。
+      - name: Encrypt cookies
+        id: encrypt
+        if: always()
+        run: |
+          file="$SIM_STATE_DIR/cookies-juken-map.com.json"
+          if [ -f "$file" ]; then
+            openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:SIMULATION_SECRET \
+              -in "$file" -out sim-cookies.enc
+            echo "saved=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save cookies
+        if: always() && steps.encrypt.outputs.saved == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: sim-cookies.enc
+          key: sim-cookies-${{ github.run_id }}

@@ -16,6 +16,11 @@ export type UserRow = {
   emailVerified: boolean;
   firstStudyLogAt: Date | null;
   analyticsSignUpTrackedAt: Date | null;
+  // シミュレーションの合成ユーザーだけが持つ。実ユーザーは全部 NULL。
+  simSeq: number | null;
+  simCohort: string | null;
+  simDormantFrom: Date | null;
+  simLastActedOn: Date | null;
 };
 
 export type UniversityRow = {

@@ -13,6 +13,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 type RequestContext = {
   /** Fastify が採番した reqId（genReqId）。ログを1本の線に束ねるための鍵。 */
   reqId: string;
+  /**
+   * シミュレーション（sim/）からのリクエストなら true。X-Sim-Run ヘッダーで判断する。
+   * ログに sim:true が付くので、Grafana で実ユーザーと合成を分けて読める。
+   */
+  sim?: boolean;
 };
 
 const storage = new AsyncLocalStorage<RequestContext>();
@@ -36,4 +41,9 @@ export function runWithRequestContext<T>(
  */
 export function currentReqId(): string | undefined {
   return storage.getStore()?.reqId;
+}
+
+/** 今処理中のリクエストがシミュレーションからなら true。それ以外は undefined（ログに出さない）。 */
+export function currentSim(): true | undefined {
+  return storage.getStore()?.sim ? true : undefined;
 }

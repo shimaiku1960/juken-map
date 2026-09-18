@@ -9,7 +9,7 @@ import { select, setQueryLogger } from "./infra/db.ts";
 import { logger } from "./observability/logger.ts";
 import { fastifyLoggingOptions } from "./observability/logger.ts";
 import { registerMetrics, startMetricsServer } from "./observability/metrics.ts";
-import { currentReqId, runWithRequestContext } from "./observability/requestContext.ts";
+import { currentReqId, currentSim, runWithRequestContext } from "./observability/requestContext.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { buildSitemap, injectMeta, metaForPath } from "./seo.ts";
 import { isKnownSpaRoute } from "@/shared/routes";
@@ -83,7 +83,7 @@ export async function buildServer() {
   // SQL を素の console.log ではなくロガーへ流す。こうすると reqId が付いて
   // どのリクエストが投げた SQL か分かり、LOG_FILE を設定していればファイルにも残る
   // （実際に書き出すかは db.ts 側の shouldLogQueries が開発中だけに絞る）。
-  setQueryLogger((entry) => logger.info({ reqId: currentReqId(), ...entry }));
+  setQueryLogger((entry) => logger.info({ reqId: currentReqId(), sim: currentSim(), ...entry }));
 
   // 件数と所要時間は、下で横取りする Better Auth の分も含めて全リクエストで数える。
   registerMetrics(app);
@@ -104,8 +104,11 @@ export async function buildServer() {
   // done() を runWithRequestContext の中で呼ぶと、そこから続く処理すべてが同じ文脈に入り、
   // measured() と db.ts が引数を受け取らずに reqId を読めるようになる。
   // 一番先に登録するのは、フックが登録順に走るため（better-auth が投げる SQL にも付く）。
-  app.addHook("onRequest", (request, _reply, done) => {
-    runWithRequestContext({ reqId: String(request.id) }, done);
+  app.addHook("onRequest", (request, reply, done) => {
+    // シミュレーションからのリクエストは、リクエストの行（request completed）にも印を付ける。
+    const sim = request.headers["x-sim-run"] !== undefined;
+    if (sim) request.log = reply.log = request.log.child({ sim: true });
+    runWithRequestContext({ reqId: String(request.id), sim }, done);
   });
 
   // better-auth は Node のリクエストストリームを自分で読む。

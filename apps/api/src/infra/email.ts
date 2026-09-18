@@ -1,6 +1,7 @@
 import { getResend } from "@/api/infra/resend";
 import { withDeadline } from "@/api/infra/timeout";
 import { logger } from "@/api/observability/logger";
+import { isSyntheticEmail } from "@/shared/synthetic";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
 
@@ -51,6 +52,11 @@ export async function sendPasswordResetEmail(to: string, url: string) {
  * 通知先の設定漏れやResendの障害はサーバーログで検知する。
  */
 export async function notifyAdminOfNewUser(user: RegisteredUser) {
+  // シミュレーションの合成ユーザーの登録は運営者に知らせない。毎日何十通も届くうえ、
+  // Resend の送信枠（無料枠は1日100通）を実ユーザーの確認メールと取り合ってしまう。
+  // 合成ユーザー本人への確認メールは、実際の動線と同じく普通に送る。
+  if (isSyntheticEmail(user.email)) return;
+
   const to = process.env.ADMIN_NOTIFICATION_EMAIL;
 
   if (!to) {
