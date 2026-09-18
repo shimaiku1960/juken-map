@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mergeCookies } from "./client";
 import { dayPlanFor, personaFor, signupHours, HOUR_WEIGHTS } from "./persona";
 import { extractVerificationPath } from "./resend-inbox";
+import { dayNumber, planDays, signupSlots, visitorsOn } from "./schedule";
 
 const SEED = 20260918;
 
@@ -60,5 +61,53 @@ describe("mergeCookies", () => {
       "a=; Max-Age=0; Path=/",
     ]);
     expect(merged).toBe("b=3; c=4");
+  });
+});
+
+describe("planDays", () => {
+  const today = dayNumber("2026-09-18");
+
+  it("まっさらなら、登録は時刻の早い順に連番1から振られ、翌日の来訪に数えられる", () => {
+    const [first, second] = planDays({ users: [], nextSeq: 1, from: today, days: 2, signupsPerDay: 5, baseSeed: SEED });
+    const signups = first.events.filter((e) => e.kind === "signup");
+    expect(signups.map((e) => e.hour)).toEqual(signupSlots(5, today, SEED));
+    expect(signups.map((e) => e.seq).sort()).toEqual([1, 2, 3, 4, 5]);
+    expect(signups.every((e) => !e.done)).toBe(true);
+    expect(first.events.some((e) => e.kind === "visit")).toBe(false);
+
+    // 翌日の新規登録は6番から。来訪は前日に登録した人の中から選ばれる。
+    const nextSignups = second.events.filter((e) => e.kind === "signup");
+    expect(Math.min(...nextSignups.map((e) => e.seq))).toBe(6);
+    for (const visit of second.events.filter((e) => e.kind === "visit")) {
+      expect(visit.seq).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("今日すでに登録・来訪した人は「済」になり、連番はその続きから振られる", () => {
+    const users = [
+      { seq: 1, createdAt: "2026-09-17T12:00:00+09:00", dormantFrom: null, lastActedOn: "2026-09-18" },
+      { seq: 2, createdAt: "2026-09-18T09:00:00Z", dormantFrom: null, lastActedOn: "2026-09-18" },
+    ];
+    const [day] = planDays({ users, nextSeq: 3, from: today, days: 1, signupsPerDay: 3, baseSeed: SEED });
+    const signups = day.events.filter((e) => e.kind === "signup").sort((a, b) => a.seq - b.seq);
+    expect(signups.map((e) => [e.seq, e.done])).toEqual([
+      [2, true],
+      [3, false],
+      [4, false],
+    ]);
+    // 来訪の顔ぶれと時間は、毎時の実行が使う visitorsOn と同じ。
+    const visits = day.events.filter((e) => e.kind === "visit");
+    expect(visits.map((e) => [e.seq, e.hour])).toEqual(
+      visitorsOn(users, today, SEED).map((v) => [v.seq, v.plan.hour])
+    );
+    for (const visit of visits) expect(visit.done).toBe(true);
+  });
+
+  it("来なくなった人は予定に出ない", () => {
+    const users = [
+      { seq: 1, createdAt: "2026-09-01T12:00:00+09:00", dormantFrom: "2026-09-10", lastActedOn: null },
+    ];
+    const [day] = planDays({ users, nextSeq: 2, from: today, days: 1, signupsPerDay: 0, baseSeed: SEED });
+    expect(day.events).toEqual([]);
   });
 });

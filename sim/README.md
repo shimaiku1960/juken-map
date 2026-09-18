@@ -65,6 +65,23 @@ pnpm run sim:run --hour 21 --signups 5             # 実際に登録・記録す
 `SIM_ORIGIN` は画面の住所。ブラウザは Origin に画面の住所を付けるので、それに合わせる
 （Better Auth の `trustedOrigins` に無い住所だと 403）。本番は画面と API が同じ住所なので要らない。
 
+## 予定を見る
+
+`pnpm run sim:plan` は、今日と明日の「何時に誰が来て何をするか」（登録・志望校・予定・記録）を出す。
+毎時の実行と同じ計算（`schedule.ts`）を使い、何も書き換えない。今日の分には印が付く。
+
+- `済` … もう登録した・今日もう来た
+- `遅れ（次の回で登録）` … 登録の時刻を過ぎたが、まだ登録していない。次の回で取り戻す
+- `飛ばされた` … 来る時刻に実行が無かった。来訪は取り戻さないので、その人は今日は来ない
+
+```sh
+SIM_BASE_URL=https://juken-map.com SIMULATION_SECRET=... pnpm run sim:plan            # 今日と明日
+SIM_BASE_URL=https://juken-map.com SIMULATION_SECRET=... pnpm run sim:plan --days 3   # 3日分
+```
+
+本番の分は、毎時の実行が終わるたびに Actions の実行結果の画面（Summary）にも出る。
+`SIMULATION_SECRET` を手元に置かなくても、そこで見られる。
+
 ## 止め方
 
 1. GitHub の Variables から `SIMULATION_SCHEDULE` を消す（毎時の実行が止まる）

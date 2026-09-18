@@ -91,6 +91,22 @@ jobs:
           [ -n "$SIGNUPS" ] && args+=(--signups "$SIGNUPS")
           pnpm run sim:run "${args[@]}"
 
+      # 今日と明日の予定（今日の分は済・飛ばされたの印付き）を実行結果の画面に出す。
+      # SIMULATION_SECRET を手元に置かずに予定を見られるようにするため。
+      - name: Show plan
+        if: always()
+        env:
+          SIGNUPS: ${{ inputs.signups }}
+        run: |
+          args=()
+          [ -n "$SIGNUPS" ] && args+=(--signups "$SIGNUPS")
+          {
+            echo '## シミュレーションの予定'
+            echo '```'
+            pnpm -s run sim:plan "${args[@]}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # 途中で失敗しても、それまでにログインした人の Cookie は残す。
       - name: Encrypt cookies
         id: encrypt
