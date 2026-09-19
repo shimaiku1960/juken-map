@@ -1,3 +1,5 @@
+// Zod より先に読み込む（理由はファイル内）。
+import "@/web/lib/zod-jitless";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
