@@ -11,6 +11,7 @@ import { fastifyLoggingOptions } from "./observability/logger.ts";
 import { registerMetrics, startMetricsServer } from "./observability/metrics.ts";
 import { currentReqId, currentSim, runWithRequestContext } from "./observability/requestContext.ts";
 import { registerRoutes } from "./routes/index.ts";
+import { registerSecurityHeaders } from "./security-headers.ts";
 import { buildSitemap, injectMeta, metaForPath } from "./seo.ts";
 import { isKnownSpaRoute } from "@/shared/routes";
 
@@ -110,6 +111,9 @@ export async function buildServer() {
     if (sim) request.log = reply.log = request.log.child({ sim: true });
     runWithRequestContext({ reqId: String(request.id), sim }, done);
   });
+
+  // セキュリティヘッダーは、下で横取りする Better Auth の応答にも付くよう、その前に積む。
+  registerSecurityHeaders(app);
 
   // better-auth は Node のリクエストストリームを自分で読む。
   // Fastify は既定で application/json を先に読み切ってしまうため、そのままだと
