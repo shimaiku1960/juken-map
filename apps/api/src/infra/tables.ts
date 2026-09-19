@@ -21,7 +21,11 @@ export type UserRow = {
   simCohort: string | null;
   simDormantFrom: Date | null;
   simLastActedOn: Date | null;
+  // 管理者ページの権限（db/migrations/20260919090000_add_user_role）。
+  role: UserRole;
 };
+
+export type UserRole = "user" | "admin";
 
 export type UniversityRow = {
   id: number;

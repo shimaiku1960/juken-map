@@ -16,6 +16,7 @@
 // 同じ SEED なら何度流しても同じデータになる（毎回入れ直す）。
 import { generateId } from "better-auth";
 import { hashPassword } from "better-auth/crypto";
+import { SEED_EMAIL_DOMAIN } from "../src/shared/synthetic";
 import { execute, runSeed, select } from "./seed-helpers";
 
 // 何を測りたいかで欲しいデータの性格が変わるので、シナリオで切り替える。
@@ -51,9 +52,8 @@ const MIX = process.env.COHORT_MIX
   ? process.env.COHORT_MIX.split(",").map(Number)
   : scenario.mix;
 
-// 合成データだけを狙って消せるように、メールアドレスに印を付ける。
-// .invalid は「実在しないことが保証されたTLD」（RFC 2606）で、誤って実メールを送らない。
-const EMAIL_DOMAIN = "@synthetic.juken-map.invalid";
+// 合成データだけを狙って消せるように、メールアドレスに印を付ける（管理者ページの集計も同じ印で分ける）。
+const EMAIL_DOMAIN = SEED_EMAIL_DOMAIN;
 const DAYS = Math.round(MONTHS * 30.4);
 
 /**

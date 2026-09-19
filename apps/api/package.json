@@ -6,6 +6,7 @@
     "dev": "tsx watch --env-file=../../.env --import ./src/instrumentation.ts src/server.ts",
     "start": "tsx --env-file-if-exists=../../.env src/server.ts",
     "migrate": "tsx --env-file-if-exists=../../.env src/migrate.ts",
+    "admin:grant": "tsx --env-file-if-exists=../../.env src/grant-admin.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
