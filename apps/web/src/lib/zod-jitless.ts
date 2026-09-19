@@ -9,3 +9,6 @@
 // Zod が実際にこの値を読むことを確かめている（Zod を上げて名前が変わればテストが落ちる）。
 const target = globalThis as { __zod_globalConfig?: { jitless?: boolean } };
 target.__zod_globalConfig = { ...target.__zod_globalConfig, jitless: true };
+
+// 副作用だけのファイルだが、型検査でモジュールとして扱わせる（テストから import するため）。
+export {};
