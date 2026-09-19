@@ -142,6 +142,14 @@ function analyticsTag() {
     </script>`;
 }
 
+// 画面のエラーの送り先（Grafana Faro の collector URL）。GA4 と同じ理由で実行時に差し込み、
+// 画面側（apps/web/src/lib/faro.ts）がこの meta を読んで送信を始める。無ければ送らない。
+function faroTag() {
+  const collectorUrl = process.env.FARO_COLLECTOR_URL;
+  if (!collectorUrl) return "";
+  return `<meta name="faro-collector-url" content="${escapeAttribute(collectorUrl)}"/>`;
+}
+
 // index.html の <title> を差し替え、</head> の直前に meta を差し込む。
 export function injectMeta(html: string, meta: PageMeta) {
   const tags = [
@@ -170,6 +178,7 @@ export function injectMeta(html: string, meta: PageMeta) {
     `<meta name="twitter:description" content="${escapeAttribute(meta.description)}"/>`,
     `<meta name="twitter:image" content="${escapeAttribute(meta.ogImage)}"/>`,
     analyticsTag(),
+    faroTag(),
   ]
     .filter(Boolean)
     .join("\n    ");

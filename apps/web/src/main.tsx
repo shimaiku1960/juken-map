@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router";
 import { Toaster } from "@/web/components/ui/sonner";
 import { queryClient } from "@/web/lib/query-client";
+import { startFaro } from "@/web/lib/faro";
 import App from "@/web/App";
 import "@/web/index.css";
 
@@ -17,3 +18,5 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>
 );
+
+void startFaro();
