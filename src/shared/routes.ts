@@ -33,6 +33,7 @@ export const SPA_ROUTES = [
   "/profile",
   "/schedule",
   "/admin",
+  "/admin/masters",
 
   // LINE のトークから開く
   "/line/link",

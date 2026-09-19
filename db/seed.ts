@@ -1,6 +1,11 @@
 // ローカル・CI の DB を初期状態にする seed。大学マスター（全国の大学・一部の学部・系統タグ）と
 // デモユーザーを入れる。何度流しても同じ状態になる（upsert とデモのリセット）。
 // 実行: pnpm run db:seed
+//
+// ⚠️ 本番（RDS）には流さない。本番の大学・学部は管理者ページ（/admin/masters）で編集するので、本番の DB が正。
+// ここは大学を名前で upsert（都道府県・種別を上書き）し、学部を名前で照合してタグを置き換えるため、
+// 本番に流すと画面での編集を上書きしたり、名前を変えた学部を二重に作ったりする。
+// 接続先の名前では止められない（本番へはトンネル経由で localhost としてつなぐ）ので、ここに書いて守る。
 import { readFileSync } from "fs";
 import { seedDemoUser } from "./demo-user";
 import { execute, runSeed, select } from "./seed-helpers";

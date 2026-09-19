@@ -24,6 +24,7 @@ const ArticlePage = lazy(() => import("@/web/pages/ArticlePage"));
 const TermsPage = lazy(() => import("@/web/pages/TermsPage"));
 const PrivacyPage = lazy(() => import("@/web/pages/PrivacyPage"));
 const AdminPage = lazy(() => import("@/web/pages/AdminPage"));
+const AdminMastersPage = lazy(() => import("@/web/pages/AdminMastersPage"));
 const LineLinkPage = lazy(() => import("@/web/pages/LineLinkPage"));
 const NotFoundPage = lazy(() => import("@/web/pages/NotFoundPage"));
 
@@ -71,6 +72,7 @@ export default function App() {
 
           {/* 管理者だけ（権限は API が判定し、それ以外には「権限がありません」を出す） */}
           <Route path="/admin" element={protectedRoute(<AdminPage />)} />
+          <Route path="/admin/masters" element={protectedRoute(<AdminMastersPage />)} />
 
           {/* LINE のトークから開く。ログインは画面内で判定するので protectedRoute にしない。 */}
           <Route path="/line/link" element={<LineLinkPage />} />

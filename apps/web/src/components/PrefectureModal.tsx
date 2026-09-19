@@ -9,7 +9,7 @@ import {
 } from "@/web/components/ui/dialog";
 import { Button } from "@/web/components/ui/button";
 import { Checkbox } from "@/web/components/ui/checkbox";
-import { REGIONS } from "@/web/lib/prefectures";
+import { REGIONS } from "@/shared/prefectures";
 
 type Props = {
   value: Set<string>;

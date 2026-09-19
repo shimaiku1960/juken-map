@@ -37,3 +37,6 @@ export const REGIONS: { region: string; prefs: string[] }[] = [
     prefs: ["福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"],
   },
 ];
+
+/** 47都道府県を北から順に並べたもの。大学マスターの入力チェック（validations/master.ts）にも使う。 */
+export const PREFECTURES: string[] = REGIONS.flatMap((region) => region.prefs);

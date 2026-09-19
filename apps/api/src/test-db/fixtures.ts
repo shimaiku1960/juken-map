@@ -215,6 +215,11 @@ export async function createUniversity(values: {
   return { id: university.insertId, facultyIds };
 }
 
+/** API 経由で作った大学も、テストの最後に消す対象へ入れる。 */
+export function trackUniversity(id: number) {
+  createdUniversityIds.push(id);
+}
+
 const createdTextbookMasterIds: number[] = [];
 
 /** 参考書マスターと総量の候補。ISBN に UNIQUE 制約があるので乱数を付ける。 */
