@@ -1,7 +1,7 @@
 // シミュレーションの予定を表示する。何も書き換えない（/api/sim/state を読むだけ）。
 //
 // 今日と明日、何時に誰が来て何をするか（登録・志望校・予定・記録）を、毎時の実行と
-// 同じ計算で出す。今日の分は「済」「飛ばされた」も付くので、実際に動いたかの確認にも使える。
+// 同じ計算で出す。今日の分は「済」「遅れ」も付くので、実際に動いたかの確認にも使える。
 //
 // 実行例:
 //   SIM_BASE_URL=https://juken-map.com SIMULATION_SECRET=... pnpm run sim:plan
@@ -48,8 +48,8 @@ function describeStatus(event: PlannedEvent, isToday: boolean, nowHour: number) 
   if (event.done) return "済";
   if (event.hour > nowHour) return "";
   if (event.hour === nowHour) return "この時間";
-  // 登録は次の回で取り戻すが、来訪はその時間を逃すとその日は来ない（run-hour.ts）。
-  return event.kind === "signup" ? "遅れ（次の回で登録）" : "飛ばされた";
+  // 時間を過ぎても、同じ日のうちなら次の回で取り戻す（run-hour.ts）。
+  return event.kind === "signup" ? "遅れ（次の回で登録）" : "遅れ（次の回で来訪）";
 }
 
 async function main() {

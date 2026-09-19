@@ -80,6 +80,19 @@ export function visitorsOn(users: SimUser[], day: number, baseSeed: number): Vis
   return visits;
 }
 
+/**
+ * その時間の回で動かす人。予定の時間を過ぎていて、今日まだ動いていない人を予定の早い順に。
+ * GitHub Actions の定時実行はよく間引かれるので、予定ちょうどの回だけを見ると来訪ごと消える。
+ * 同じ日のうちなら次の回で拾う（日付をまたいだら、その日の来訪は無かったことになる）。
+ */
+export function dueVisitors(users: SimUser[], day: number, hour: number, baseSeed: number): Visit[] {
+  const ymd = ymdFromDayNumber(day);
+  const lastActedOn = new Map(users.map((u) => [u.seq, u.lastActedOn]));
+  return visitorsOn(users, day, baseSeed)
+    .filter(({ seq, plan }) => plan.hour <= hour && lastActedOn.get(seq) !== ymd)
+    .sort((a, b) => a.plan.hour - b.plan.hour);
+}
+
 /** その日の新規登録の時刻を早い順に。連番はこの順に振られる。 */
 export function signupSlots(count: number, day: number, baseSeed: number) {
   return signupHours(count, day, baseSeed).sort((a, b) => a - b);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mergeCookies } from "./client";
 import { dayPlanFor, personaFor, signupHours, HOUR_WEIGHTS } from "./persona";
 import { extractVerificationPath } from "./resend-inbox";
-import { dayNumber, planDays, signupSlots, visitorsOn } from "./schedule";
+import { dayNumber, dueVisitors, planDays, signupSlots, visitorsOn } from "./schedule";
 
 const SEED = 20260918;
 
@@ -109,5 +109,44 @@ describe("planDays", () => {
     ];
     const [day] = planDays({ users, nextSeq: 2, from: today, days: 1, signupsPerDay: 0, baseSeed: SEED });
     expect(day.events).toEqual([]);
+  });
+});
+
+describe("dueVisitors", () => {
+  const today = dayNumber("2026-09-19");
+  // 前日までに登録した100人。来訪する人・時間はペルソナで決まる。
+  const users = Array.from({ length: 100 }, (_, i) => ({
+    seq: i + 1,
+    createdAt: "2026-09-10T12:00:00+09:00",
+    dormantFrom: null,
+    lastActedOn: null as string | null,
+  }));
+  const visits = visitorsOn(users, today, SEED);
+
+  it("予定の時間を過ぎた人も拾う（定時実行が飛ばされた回の分）", () => {
+    const due = dueVisitors(users, today, 23, SEED);
+    expect(due.map((v) => v.seq).sort((a, b) => a - b)).toEqual(visits.map((v) => v.seq).sort((a, b) => a - b));
+    expect(due.map((v) => v.plan.hour)).toEqual([...due.map((v) => v.plan.hour)].sort((a, b) => a - b));
+  });
+
+  it("まだ来ていない時間の人は拾わない", () => {
+    const hour = 12;
+    const due = dueVisitors(users, today, hour, SEED);
+    expect(due.length).toBe(visits.filter((v) => v.plan.hour <= hour).length);
+    for (const v of due) expect(v.plan.hour).toBeLessThanOrEqual(hour);
+  });
+
+  it("今日すでに動いた人は拾わない（前日に動いた人は拾う）", () => {
+    const [acted, actedYesterday] = visits;
+    const marked = users.map((u) =>
+      u.seq === acted.seq
+        ? { ...u, lastActedOn: "2026-09-19" }
+        : u.seq === actedYesterday.seq
+          ? { ...u, lastActedOn: "2026-09-18" }
+          : u
+    );
+    const seqs = dueVisitors(marked, today, 23, SEED).map((v) => v.seq);
+    expect(seqs).not.toContain(acted.seq);
+    expect(seqs).toContain(actedYesterday.seq);
   });
 });
