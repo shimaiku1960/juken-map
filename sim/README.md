@@ -12,7 +12,7 @@ GitHub Actions（`.github/workflows/simulation.yml`）が毎時 `sim/run-hour.ts
 
 1. `GET /api/sim/state` で合成ユーザーの一覧を受け取る
 2. 寿命を過ぎた人に「来なくなった日」を付ける
-3. 今日この時間に使う人を、ペルソナ（`persona.ts`）と日付から決めて、画面と同じ順番で API を叩く（`flows.ts`）
+3. 今日この時間までに使うはずだった人（飛ばされた回の分も含む）を、ペルソナ（`persona.ts`）と日付から決めて、画面と同じ順番で API を叩く（`flows.ts`）
 4. 今日の新規登録のうち、この時間までに済んでいるべき人数に足りない分を登録する
 
 - **登録も実際と同じ経路を通る。** 宛先は Resend のテスト用アドレス（`delivered+simNNNNN@resend.dev`）。
@@ -21,6 +21,7 @@ GitHub Actions（`.github/workflows/simulation.yml`）が毎時 `sim/run-hour.ts
 - ペルソナは連番と日付だけから決まる純粋関数なので、ランナーがまっさらでも同じ人は同じように振る舞う。
   DB に残すのは「実際に起きたこと」（`user.simLastActedOn` / `simDormantFrom`）だけ。
 - 「今日すでにやったか」を DB の値で判断するので、同じ時間に2回動いても二重にはならない。
+- GitHub Actions の定時実行はよく間引かれる（2026-09-18〜19 は約24時間で6回）。来訪も登録も、同じ日のうちなら次の回で取り戻す。日付をまたいだ分は取り戻さない。
 - ログイン状態（Cookie）は暗号化して `actions/cache` で次の回へ引き継ぐ。消えてもログインし直すだけ。
 - シミュレーターのリクエストには `X-Sim-Run` ヘッダーが付き、API のログに `sim:true` が出るので、Grafana Cloud で実際の利用者と分けて読める。
 

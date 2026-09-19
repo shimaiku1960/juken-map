@@ -3,11 +3,11 @@
 // やること（今の時刻 = Asia/Tokyo の日付と時）:
 //   1. /api/sim/state で合成ユーザーの一覧を受け取る
 //   2. 寿命を過ぎた人に「来なくなった日」を付ける
-//   3. 今日この時間に使う人を、ペルソナと日付から決めて、画面と同じ順番で API を叩く
+//   3. 今日この時間までに使うはずだった人を、ペルソナと日付から決めて、画面と同じ順番で API を叩く
 //   4. 今日の新規登録のうち、この時間までに済んでいるべき人数に足りない分を登録する
 //
 // どれも「今日すでにやったか」を DB の値（最終操作日・登録日時）で判断するので、
-// 同じ時間に2回動いても二重にはならない。1時間抜けても次の回で登録の遅れを取り戻す。
+// 同じ時間に2回動いても二重にはならない。回が抜けても、同じ日のうちなら次の回で来訪・登録の遅れを取り戻す。
 //
 // 実行例（手元）:
 //   SIM_BASE_URL=http://localhost:4100 SIM_ORIGIN=http://localhost:5173 SIMULATION_SECRET=... \
@@ -22,10 +22,10 @@ import { createRandom, dayPlanFor, isPastLife, mixSeed, personaFor, signupHours 
 import { ResendInbox } from "./resend-inbox";
 import {
   dayNumber,
+  dueVisitors,
   goalChance,
   tokyoDate,
   tokyoNow,
-  visitorsOn,
   weekdayOf,
   ymdFromDayNumber,
 } from "./schedule";
@@ -102,7 +102,6 @@ async function main() {
   });
 
   const state = await sim.state();
-  const lastActedOn = new Map(state.users.map((u) => [u.seq, u.lastActedOn]));
   const cookies = loadCookies();
   const summary = {
     runId,
@@ -131,10 +130,8 @@ async function main() {
     }
   }
 
-  // 3. 今日この時間に使う人。今日すでに動いた人は除く。
-  const due = visitorsOn(state.users, todayNumber, baseSeed)
-    .filter(({ seq, plan }) => plan.hour === hour && lastActedOn.get(seq) !== today)
-    .slice(0, userLimit);
+  // 3. 今日この時間までに使うはずだった人。飛ばされた回の分もここで拾う。
+  const due = dueVisitors(state.users, todayNumber, hour, baseSeed).slice(0, userLimit);
 
   for (const { seq, dayIndex, persona, plan } of due) {
     if (dryRun) {
