@@ -48,3 +48,39 @@ export type AdminUserList = {
   page: number;
   pageSize: number;
 };
+
+// ---- マスター編集（/admin/masters） ----
+
+export type AdminUniversity = {
+  id: number;
+  name: string;
+  prefecture: string;
+  type: string;
+  facultyCount: number;
+  /** 配下の学部を志望校にしている件数。1件でもあれば大学は削除できない。 */
+  goalCount: number;
+};
+
+export type AdminUniversityList = {
+  universities: AdminUniversity[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type AdminTag = { id: number; name: string };
+
+export type AdminFaculty = {
+  id: number;
+  name: string;
+  /** YYYY-MM-DD（UTC の0時で保存している日付部分）。 */
+  examDate: string;
+  tags: AdminTag[];
+  /** この学部を志望校にしている件数。1件でもあれば削除できない。 */
+  goalCount: number;
+};
+
+export type AdminUniversityDetail = {
+  university: AdminUniversity;
+  faculties: AdminFaculty[];
+};

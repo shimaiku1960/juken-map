@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import PageShell from "@/web/components/layout/PageShell";
 import PageHeader from "@/web/components/layout/PageHeader";
 import SectionHeader from "@/web/components/layout/SectionHeader";
@@ -65,7 +66,15 @@ export default function AdminPage() {
 
   return (
     <PageShell className="max-w-6xl">
-      <PageHeader title="管理" description="利用状況とユーザーの一覧です（閲覧のみ）。" />
+      <PageHeader
+        title="管理"
+        description="利用状況とユーザーの一覧です（閲覧のみ）。"
+        action={
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/masters">マスター編集</Link>
+          </Button>
+        }
+      />
 
       <section>
         <SectionHeader title="利用状況" />
