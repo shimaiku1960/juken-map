@@ -3,6 +3,7 @@ import { registerAdminRoutes } from "./admin.ts";
 import { registerAnalyticsRoutes } from "./analytics.ts";
 import { registerBlogRoutes } from "./blog.ts";
 import { registerCronRoutes } from "./cron.ts";
+import { registerCspReportRoutes } from "./csp-report.ts";
 import { registerGoalRoutes } from "./goals.ts";
 import { registerHomeRoutes } from "./home.ts";
 import { registerLineRoutes } from "./line.ts";
@@ -21,6 +22,7 @@ export function registerRoutes(app: FastifyInstance) {
   registerAnalyticsRoutes(app);
   registerBlogRoutes(app);
   registerCronRoutes(app);
+  registerCspReportRoutes(app);
   registerGoalRoutes(app);
   registerHomeRoutes(app);
   registerLineRoutes(app);

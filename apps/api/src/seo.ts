@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getBlog, listBlogs, type Blog } from "@/api/infra/microcms";
 import { SITE_URL } from "@/shared/site";
 
@@ -127,19 +128,33 @@ export async function metaForPath(pathname: string): Promise<PageMeta> {
 // 差し込んでいた。SPA のバンドルに焼き込むと環境ごとに再ビルドが要るので、
 // meta と同じくサーバー側で差し込んで実行時の環境変数のまま扱う。
 // 画面遷移の計測は GA4 の拡張計測（履歴の変化を自動で拾う）に任せる。
+function analyticsInlineScript(id: string) {
+  return `
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      window.gtag = gtag;
+      gtag('js', new Date());
+      gtag('config', '${id}');
+    `;
+}
+
 function analyticsTag() {
   const measurementId = process.env.GA_MEASUREMENT_ID;
   if (!measurementId) return "";
 
   const id = escapeAttribute(measurementId);
   return `<script async src="https://www.googletagmanager.com/gtag/js?id=${id}"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      window.gtag = gtag;
-      gtag('js', new Date());
-      gtag('config', '${id}');
-    </script>`;
+    <script>${analyticsInlineScript(id)}</script>`;
+}
+
+// CSP でインラインスクリプトを許すための sha256。'unsafe-inline' で全部を許す代わりに、
+// 上の GA4 の1本だけを中身のハッシュで許す（1文字でも違えば実行されない）。
+export function inlineScriptHashes() {
+  const measurementId = process.env.GA_MEASUREMENT_ID;
+  if (!measurementId) return [];
+
+  const script = analyticsInlineScript(escapeAttribute(measurementId));
+  return [`'sha256-${createHash("sha256").update(script).digest("base64")}'`];
 }
 
 // 画面のエラーの送り先（Grafana Faro の collector URL）。GA4 と同じ理由で実行時に差し込み、
