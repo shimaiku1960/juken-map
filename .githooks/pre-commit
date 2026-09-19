@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+readonly DEP_FILES=(
+  package.json
+  pnpm-lock.yaml
+  pnpm-workspace.yaml
+  apps/api/package.json
+  apps/web/package.json
+)
+
+if git diff --cached --quiet -- "${DEP_FILES[@]}"; then
+  exit 0
+fi
+
+echo "依存ファイルの変更を検出したため、コミット予定の内容でlockfileを確認します。"
+bash "$PROJECT_ROOT/scripts/check-lockfile.sh" --staged

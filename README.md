@@ -136,7 +136,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    pnpm run hooks:install
    ```
 
-   `hooks:install`は、依存ファイルを含むpushの前だけLinux環境でlockfileを確認するGitフックを有効にします。
+   `hooks:install`は、依存ファイルをコミットするときだけ、ステージ済みの内容でlockfileを確認するGitフックを有効にします。
 
 3. 環境変数ファイルを作成します。
 
@@ -366,7 +366,7 @@ pnpm run check
 
 ルートと`apps/*`はpnpm workspaceです。各アプリの依存はそれぞれの`package.json`に宣言し、解決結果はルートの`pnpm-lock.yaml`で共有します。依存追加は、例えば`pnpm --filter @juken-map/web add パッケージ名`、ルートの開発依存なら`pnpm add -Dw パッケージ名`を使います。
 
-manifest・`pnpm-workspace.yaml`・`pnpm-lock.yaml`を含むpushでは、pre-pushフックが非破壊の`pnpm run lock:check`を実行します。依存変更後は`pnpm install`に続けて`pnpm run lock:linux`でLinux/amd64のインストール成功を確認し、manifestとlockfileを一緒にコミットしてください。CIでも`pnpm install --frozen-lockfile`を使います。
+manifest・`pnpm-workspace.yaml`・`pnpm-lock.yaml`を含むコミットでは、pre-commitフックがステージ済みの内容に対して非破壊のlockfile検証を実行します。依存変更後は`pnpm install`に続けて`pnpm run lock:linux`でLinux/amd64のインストール成功を確認し、manifestとlockfileを一緒にコミットしてください。CIでも`pnpm install --frozen-lockfile`を使います。
 
 依存パッケージのinstall scriptは`pnpm-workspace.yaml`の`allowBuilds`で必要なものだけ許可しています。新しい依存でビルド未承認のエラーが出た場合は、スクリプトの内容を確認してこの設定を更新します。
 
