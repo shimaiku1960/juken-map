@@ -41,6 +41,12 @@ if [ -n "$LINE_LOGIN_CHANNEL_ID" ] && [ -n "$LINE_LOGIN_CHANNEL_SECRET" ]; then
   printf 'LINE_LOGIN_CHANNEL_ID=%s\n' "$LINE_LOGIN_CHANNEL_ID" >> "$RUNTIME_ENV_FILE"
   printf 'LINE_LOGIN_CHANNEL_SECRET=%s\n' "$LINE_LOGIN_CHANNEL_SECRET" >> "$RUNTIME_ENV_FILE"
 fi
+# 画面のエラーの送り先（Grafana Faro）。ブラウザへ渡す前提の値で秘密ではないが、
+# Grafana Cloud の設定を1か所にまとめるため同じシークレットに置く。無ければ画面は送信しない。
+FARO_COLLECTOR_URL="$(jq -r '.FARO_COLLECTOR_URL // empty' <<<"$secret_json")"
+if [ -n "$FARO_COLLECTOR_URL" ]; then
+  printf 'FARO_COLLECTOR_URL=%s\n' "$FARO_COLLECTOR_URL" >> "$RUNTIME_ENV_FILE"
+fi
 # 可観測性（Grafana Cloud）の接続情報。同じシークレットに入れているので IAM の変更は要らない。
 # まだ入れていない間は空になり、その場合はアプリの送信も Alloy も起動しない（今まで通り動く）。
 GRAFANA_CLOUD_TOKEN="$(jq -r '.GRAFANA_CLOUD_TOKEN // empty' <<<"$secret_json")"
