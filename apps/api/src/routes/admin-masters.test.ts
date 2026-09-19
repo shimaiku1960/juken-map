@@ -8,9 +8,18 @@ vi.mock("../auth.ts", () => ({
 const { auth } = await import("../auth.ts");
 const { registerAdminMasterRoutes } = await import("./admin-masters.ts");
 const { buildTestApp, request, loggedInSession, takeLogLines } = await import("../test-support.ts");
-const { select } = await import("@/api/infra/db");
-const { cleanup, createFinalGoal, createTag, createUniversity, createUser, trackUniversity } =
-  await import("../test-db/fixtures.ts");
+const { execute, select } = await import("@/api/infra/db");
+const {
+  cleanup,
+  createFinalGoal,
+  createTag,
+  createTextbook,
+  createTextbookMaster,
+  createUniversity,
+  createUser,
+  trackTextbookMaster,
+  trackUniversity,
+} = await import("../test-db/fixtures.ts");
 
 const getSession = auth.api.getSession as unknown as Mock;
 const app = buildTestApp(registerAdminMasterRoutes);
@@ -37,6 +46,10 @@ describe("管理者ガード", () => {
     ["POST", "/api/admin/faculties"],
     ["PATCH", "/api/admin/faculties/1"],
     ["DELETE", "/api/admin/faculties/1"],
+    ["GET", "/api/admin/textbook-masters"],
+    ["POST", "/api/admin/textbook-masters"],
+    ["PATCH", "/api/admin/textbook-masters/1"],
+    ["DELETE", "/api/admin/textbook-masters/1"],
   ];
 
   it.each(cases)("%s %s は未ログインなら401", async (method, url) => {
@@ -178,5 +191,91 @@ describe("学部", () => {
 
     expect((await request(app, "DELETE", `/api/admin/faculties/${facultyIds[1]}`)).statusCode).toBe(204);
     expect(await select("SELECT id FROM Faculty WHERE id = ?", [facultyIds[1]])).toEqual([]);
+  });
+});
+
+// ISBN に一意制約があるので、テストごとに重ならない13桁を作る。
+const uniqueIsbn = () => `978${String(Date.now()).slice(-6)}${String(Math.floor(Math.random() * 1e4)).padStart(4, "0")}`;
+
+const masterBody = (overrides: Record<string, unknown> = {}) => ({
+  name: `参考書-${randomUUID()}`,
+  publisher: "旺文社",
+  edition: null,
+  isbn: uniqueIsbn(),
+  metrics: [
+    { unit: "page", totalAmount: 320, isDefault: true },
+    { unit: "number", totalAmount: 1900, isDefault: false },
+  ],
+  ...overrides,
+});
+
+describe("参考書", () => {
+  it("作成・検索・編集でき、ISBN のハイフンは取り除いて保存する", async () => {
+    const body = masterBody();
+    const hyphenated = `${body.isbn.slice(0, 3)}-${body.isbn.slice(3)}`;
+    const created = await request(app, "POST", "/api/admin/textbook-masters", { ...body, isbn: hyphenated });
+    expect(created.statusCode).toBe(201);
+    const master = created.json() as { id: number; isbn: string };
+    trackTextbookMaster(master.id);
+    expect(master.isbn).toBe(body.isbn);
+
+    const list = await request(app, "GET", `/api/admin/textbook-masters?q=${encodeURIComponent(body.name)}`);
+    expect(list.json()).toMatchObject([{ id: master.id, textbookCount: 0, metrics: [{ unit: "page" }, { unit: "number" }] }]);
+
+    const updated = await request(app, "PATCH", `/api/admin/textbook-masters/${master.id}`, {
+      ...body,
+      edition: "改訂版",
+      metrics: [{ unit: "section", totalAmount: 19, isDefault: true }],
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toMatchObject({
+      edition: "改訂版",
+      metrics: [{ unit: "section", totalAmount: 19, isDefault: true }],
+    });
+
+    const logs = takeLogLines().filter((line) => line.msg === "admin master change");
+    expect(logs.map((line) => [line.table, line.action])).toEqual([
+      ["TextbookMaster", "create"],
+      ["TextbookMaster", "update"],
+    ]);
+  });
+
+  it("ISBN の重複は409、形式・総量・既定の単位が不正なら400", async () => {
+    const body = masterBody();
+    const created = await request(app, "POST", "/api/admin/textbook-masters", body);
+    trackTextbookMaster((created.json() as { id: number }).id);
+
+    expect((await request(app, "POST", "/api/admin/textbook-masters", { ...body, name: "別" })).statusCode).toBe(409);
+    const invalid = [
+      { isbn: "12345" },
+      { metrics: [] },
+      { metrics: [{ unit: "page", totalAmount: 0, isDefault: true }] },
+      { metrics: [{ unit: "page", totalAmount: 10, isDefault: false }] },
+      {
+        metrics: [
+          { unit: "page", totalAmount: 10, isDefault: true },
+          { unit: "page", totalAmount: 20, isDefault: false },
+        ],
+      },
+      { metrics: [{ unit: "kg", totalAmount: 10, isDefault: true }] },
+    ];
+    for (const overrides of invalid) {
+      expect((await request(app, "POST", "/api/admin/textbook-masters", masterBody(overrides))).statusCode).toBe(400);
+    }
+  });
+
+  it("利用者の参考書に使われていれば削除できず、使われていなければ総量の候補ごと消える", async () => {
+    const used = await createTextbookMaster({ metrics: [{ unit: "page", totalAmount: 100, isDefault: true }] });
+    const user = await createUser();
+    const textbookId = await createTextbook(user.id);
+    await execute("UPDATE Textbook SET masterId = ? WHERE id = ?", [used, textbookId]);
+
+    const blocked = await request(app, "DELETE", `/api/admin/textbook-masters/${used}`);
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json()).toEqual({ error: "この参考書は利用者の1冊に使われているため削除できません" });
+
+    const unused = await createTextbookMaster({ metrics: [{ unit: "page", totalAmount: 100, isDefault: true }] });
+    expect((await request(app, "DELETE", `/api/admin/textbook-masters/${unused}`)).statusCode).toBe(204);
+    expect(await select("SELECT id FROM TextbookMasterMetric WHERE masterId = ?", [unused])).toEqual([]);
   });
 });

@@ -84,3 +84,14 @@ export type AdminUniversityDetail = {
   university: AdminUniversity;
   faculties: AdminFaculty[];
 };
+
+export type AdminTextbookMaster = {
+  id: number;
+  name: string;
+  publisher: string | null;
+  edition: string | null;
+  isbn: string;
+  metrics: { unit: string; totalAmount: number; isDefault: boolean }[];
+  /** この参考書から登録された利用者の参考書の数。1冊でもあれば削除できない。 */
+  textbookCount: number;
+};

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import TextbookMastersSection from "@/web/components/admin/TextbookMastersSection";
 import PageShell from "@/web/components/layout/PageShell";
 import PageHeader from "@/web/components/layout/PageHeader";
 import SectionHeader from "@/web/components/layout/SectionHeader";
@@ -37,7 +38,8 @@ import {
   universityInputSchema,
 } from "@/shared/validations/master";
 
-// 管理者ページのマスター編集（大学・学部）。大学を検索して選ぶと、その学部の一覧が出る。
+// 管理者ページのマスター編集。タブで大学・学部と参考書（components/admin/TextbookMastersSection）を切り替える。
+// 大学・学部は、大学を検索して選ぶとその学部の一覧が出る。
 // 削除は誰にも使われていない行だけ（使われていれば API が 409 と理由を返す）。
 // 権限の判定は API（requireAdmin）。403 なら「権限がありません」を出すだけ。
 
@@ -47,37 +49,63 @@ const errorMessage = (error: unknown) =>
 
 const selectClass = "mt-2 h-10 w-full rounded-lg border bg-transparent px-3 text-sm";
 
+type Tab = "universities" | "textbooks";
+
+const TAB_LABELS: Record<Tab, string> = { universities: "大学・学部", textbooks: "参考書" };
+
 export default function AdminMastersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const tab: Tab = searchParams.get("tab") === "textbooks" ? "textbooks" : "universities";
   const selectedId = Number(searchParams.get("university")) || null;
   const select = (id: number | null) =>
     setSearchParams(id === null ? {} : { university: String(id) }, { replace: true });
+  const switchTab = (next: Tab) =>
+    setSearchParams(next === "textbooks" ? { tab: "textbooks" } : {}, { replace: true });
 
   return (
     <PageShell className="max-w-6xl">
       <PageHeader
         title="マスター編集"
-        description="大学・学部を追加・編集します。変更はすぐに「大学を探す」や志望校の選択肢に反映されます。"
+        description="大学・学部と参考書を追加・編集します。変更はすぐに利用者の画面（大学を探す・志望校・参考書の候補）に反映されます。"
         action={
           <Button asChild variant="outline" size="sm">
             <Link to="/admin">管理トップへ</Link>
           </Button>
         }
       />
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <section>
-          <SectionHeader title="大学" />
-          <UniversityListSection selectedId={selectedId} onSelect={select} />
-        </section>
-        <section>
-          <SectionHeader title="学部" />
-          {selectedId === null ? (
-            <p className="text-sm text-muted-foreground">左の一覧から大学を選んでください。</p>
-          ) : (
-            <UniversityDetailSection id={selectedId} onDeleted={() => select(null)} />
-          )}
-        </section>
+      <div className="mb-6 flex gap-1" role="tablist" aria-label="マスターの種類">
+        {(Object.keys(TAB_LABELS) as Tab[]).map((value) => (
+          <Button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={tab === value}
+            variant={tab === value ? "default" : "outline"}
+            size="sm"
+            onClick={() => switchTab(value)}
+          >
+            {TAB_LABELS[value]}
+          </Button>
+        ))}
       </div>
+      {tab === "textbooks" ? (
+        <TextbookMastersSection />
+      ) : (
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <section>
+            <SectionHeader title="大学" />
+            <UniversityListSection selectedId={selectedId} onSelect={select} />
+          </section>
+          <section>
+            <SectionHeader title="学部" />
+            {selectedId === null ? (
+              <p className="text-sm text-muted-foreground">左の一覧から大学を選んでください。</p>
+            ) : (
+              <UniversityDetailSection id={selectedId} onDeleted={() => select(null)} />
+            )}
+          </section>
+        </div>
+      )}
     </PageShell>
   );
 }

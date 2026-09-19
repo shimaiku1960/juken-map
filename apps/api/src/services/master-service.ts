@@ -1,21 +1,28 @@
 import type { PoolConnection } from "mysql2/promise";
 import { execute, isDuplicateEntry, select, transaction } from "@/api/infra/db";
-import type { FacultyRow, TagRow, UniversityRow } from "@/api/infra/tables";
+import type { FacultyRow, TagRow, TextbookMasterRow, UniversityRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 import type {
   AdminFaculty,
   AdminTag,
+  AdminTextbookMaster,
   AdminUniversity,
   AdminUniversityDetail,
   AdminUniversityList,
 } from "@/shared/dto/admin";
-import type { CreateFacultyInput, FacultyInput, UniversityInput } from "@/shared/validations/master";
+import type {
+  CreateFacultyInput,
+  FacultyInput,
+  TextbookMasterInput,
+  UniversityInput,
+} from "@/shared/validations/master";
 
-// 管理者ページのマスター編集（大学・学部）。
+// 管理者ページのマスター編集（大学・学部・参考書）。
 //
 // 削除は「誰にも使われていない行」に限る。
 //   - 学部：志望校（FinalGoal）が参照していれば消せない（DB も ON DELETE RESTRICT で拒む）
 //   - 大学：学部は CASCADE で一緒に消えるので、配下の学部がどれか志望校に使われていれば止める
+//   - 参考書：利用者の参考書（Textbook.masterId）は SET NULL で黙って紐づきが外れるので、1冊でもあれば止める
 // 事前に数えて断るのが基本で、数えたあとに志望校が増えた場合も、DB の外部キーが拒んだエラーを
 // 同じ「使われている」に読み替える（二重の守り）。
 
@@ -25,7 +32,7 @@ type Outcome<T> =
   | { result: "ok"; value: T }
   | { result: "not_found" }
   | { result: "duplicate" }
-  | { result: "in_use"; goalCount: number }
+  | { result: "in_use"; count: number }
   | { result: "invalid_tags" };
 
 // COUNT / SUM は BIGINT・DECIMAL で返り、mysql2 は文字列にすることがあるので数値に直す。
@@ -178,11 +185,11 @@ export function deleteUniversity(id: number) {
   return measured("master.deleteUniversity", async (): Promise<Outcome<AdminUniversity>> => {
     const university = await findAdminUniversity(id);
     if (!university) return { result: "not_found" };
-    if (university.goalCount > 0) return { result: "in_use", goalCount: university.goalCount };
+    if (university.goalCount > 0) return { result: "in_use", count: university.goalCount };
     try {
       await execute("DELETE FROM University WHERE id = ?", [id]);
     } catch (error) {
-      if (isReferenced(error)) return { result: "in_use", goalCount: university.goalCount };
+      if (isReferenced(error)) return { result: "in_use", count: university.goalCount };
       throw error;
     }
     return { result: "ok", value: university };
@@ -296,14 +303,148 @@ export function deleteFaculty(id: number) {
       "SELECT COUNT(*) AS goalCount FROM FinalGoal WHERE facultyId = ?",
       [id]
     );
-    if (Number(goalCount) > 0) return { result: "in_use", goalCount: Number(goalCount) };
+    if (Number(goalCount) > 0) return { result: "in_use", count: Number(goalCount) };
     try {
       // 中間テーブルの行は外部キーの CASCADE で一緒に消える。
       await execute("DELETE FROM Faculty WHERE id = ?", [id]);
     } catch (error) {
-      if (isReferenced(error)) return { result: "in_use", goalCount: Number(goalCount) };
+      if (isReferenced(error)) return { result: "in_use", count: Number(goalCount) };
       throw error;
     }
     return { result: "ok", value: faculty };
+  });
+}
+
+// ---- 参考書 ----
+
+type TextbookMasterListRow = Pick<TextbookMasterRow, "id" | "name" | "publisher" | "edition" | "isbn"> & {
+  textbookCount: number | string;
+  unit: string | null;
+  totalAmount: number | null;
+  isDefault: boolean | null;
+};
+
+const ADMIN_TEXTBOOK_MASTERS_LIMIT = 200;
+
+async function selectAdminTextbookMasters(where: string, params: unknown[], db?: PoolConnection) {
+  const rows = await select<TextbookMasterListRow>(
+    `SELECT tm.id, tm.name, tm.publisher, tm.edition, tm.isbn,
+            (SELECT COUNT(*) FROM Textbook t WHERE t.masterId = tm.id) AS textbookCount,
+            m.unit, m.totalAmount, m.isDefault
+     FROM (SELECT * FROM TextbookMaster tm ${where} ORDER BY tm.id ASC LIMIT ${ADMIN_TEXTBOOK_MASTERS_LIMIT}) AS tm
+     LEFT JOIN TextbookMasterMetric m ON m.masterId = tm.id
+     ORDER BY tm.id ASC, m.id ASC`,
+    params,
+    db
+  );
+  // 行は（参考書 × 総量の候補）の数だけ並ぶ。同じ参考書の行は隣り合うので、直前と比べて束ねる。
+  const masters: AdminTextbookMaster[] = [];
+  for (const row of rows) {
+    let master = masters.at(-1);
+    if (master?.id !== row.id) {
+      master = {
+        id: row.id,
+        name: row.name,
+        publisher: row.publisher,
+        edition: row.edition,
+        isbn: row.isbn,
+        metrics: [],
+        textbookCount: Number(row.textbookCount),
+      };
+      masters.push(master);
+    }
+    if (row.unit !== null) {
+      master.metrics.push({ unit: row.unit, totalAmount: row.totalAmount!, isDefault: row.isDefault! });
+    }
+  }
+  return masters;
+}
+
+async function findAdminTextbookMaster(id: number, db?: PoolConnection) {
+  const [master] = await selectAdminTextbookMasters("WHERE tm.id = ?", [id], db);
+  return master ?? null;
+}
+
+/** 参考書マスターの一覧（名前・出版社・ISBN の部分一致）。件数は少ないので先頭200件まで。 */
+export function listAdminTextbookMasters(q?: string) {
+  return measured("master.listTextbookMasters", async () =>
+    q
+      ? selectAdminTextbookMasters("WHERE tm.name LIKE ? OR tm.publisher LIKE ? OR tm.isbn LIKE ?", [
+          likePattern(q),
+          likePattern(q),
+          likePattern(q),
+        ])
+      : selectAdminTextbookMasters("", [])
+  );
+}
+
+async function replaceMetrics(db: PoolConnection, masterId: number, metrics: TextbookMasterInput["metrics"]) {
+  await execute("DELETE FROM TextbookMasterMetric WHERE masterId = ?", [masterId], db);
+  const now = new Date();
+  await execute(
+    `INSERT INTO TextbookMasterMetric (masterId, unit, totalAmount, isDefault, createdAt, updatedAt)
+     VALUES ${metrics.map(() => "(?, ?, ?, ?, ?, ?)").join(", ")}`,
+    metrics.flatMap((metric) => [masterId, metric.unit, metric.totalAmount, metric.isDefault, now, now]),
+    db
+  );
+}
+
+export function createTextbookMaster(input: TextbookMasterInput) {
+  return measured("master.createTextbookMaster", async (): Promise<Outcome<AdminTextbookMaster>> => {
+    try {
+      return await transaction(async (tx) => {
+        const now = new Date();
+        const created = await execute(
+          `INSERT INTO TextbookMaster (name, publisher, edition, isbn, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [input.name, input.publisher, input.edition, input.isbn, now, now],
+          tx
+        );
+        await replaceMetrics(tx, created.insertId, input.metrics);
+        return { result: "ok" as const, value: (await findAdminTextbookMaster(created.insertId, tx))! };
+      });
+    } catch (error) {
+      if (isDuplicateEntry(error)) return { result: "duplicate" };
+      throw error;
+    }
+  });
+}
+
+/**
+ * 参考書マスターを書き換える。利用者がすでに登録した参考書（Textbook）は総量を自分の行に
+ * 写し取っているので、ここで総量を変えても既存の利用者の参考書は変わらない（これから登録する人から効く）。
+ */
+export function updateTextbookMaster(id: number, input: TextbookMasterInput) {
+  return measured(
+    "master.updateTextbookMaster",
+    async (): Promise<Outcome<{ before: AdminTextbookMaster; after: AdminTextbookMaster }>> => {
+      try {
+        return await transaction(async (tx) => {
+          const before = await findAdminTextbookMaster(id, tx);
+          if (!before) return { result: "not_found" as const };
+          await execute(
+            "UPDATE TextbookMaster SET name = ?, publisher = ?, edition = ?, isbn = ?, updatedAt = ? WHERE id = ?",
+            [input.name, input.publisher, input.edition, input.isbn, new Date(), id],
+            tx
+          );
+          await replaceMetrics(tx, id, input.metrics);
+          return { result: "ok" as const, value: { before, after: (await findAdminTextbookMaster(id, tx))! } };
+        });
+      } catch (error) {
+        if (isDuplicateEntry(error)) return { result: "duplicate" };
+        throw error;
+      }
+    }
+  );
+}
+
+export function deleteTextbookMaster(id: number) {
+  return measured("master.deleteTextbookMaster", async (): Promise<Outcome<AdminTextbookMaster>> => {
+    const master = await findAdminTextbookMaster(id);
+    if (!master) return { result: "not_found" };
+    if (master.textbookCount > 0) return { result: "in_use", count: master.textbookCount };
+    // 総量の候補は外部キーの CASCADE で一緒に消える。
+    await execute("DELETE FROM TextbookMaster WHERE id = ?", [id]);
+    return { result: "ok", value: master };
   });
 }

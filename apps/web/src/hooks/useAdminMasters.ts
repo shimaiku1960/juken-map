@@ -1,23 +1,37 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/web/lib/api-client";
+import { textbookMastersKey } from "@/web/hooks/useTextbooks";
 import { universitiesKey } from "@/web/hooks/useUniversities";
 import type {
   AdminTag,
+  AdminTextbookMaster,
   AdminUniversity,
   AdminUniversityDetail,
   AdminUniversityList,
 } from "@/shared/dto/admin";
-import type { CreateFacultyInput, FacultyInput, UniversityInput } from "@/shared/validations/master";
+import type {
+  CreateFacultyInput,
+  FacultyInput,
+  TextbookMasterInput,
+  UniversityInput,
+} from "@/shared/validations/master";
 
-export type { AdminFaculty, AdminTag, AdminUniversity, AdminUniversityDetail } from "@/shared/dto/admin";
+export type {
+  AdminFaculty,
+  AdminTag,
+  AdminTextbookMaster,
+  AdminUniversity,
+  AdminUniversityDetail,
+} from "@/shared/dto/admin";
 
-// 管理者ページのマスター編集（/admin/masters）。権限が無ければ API が 403 を返す。
+// 管理者ページのマスター編集（/admin/masters、大学・学部・参考書）。権限が無ければ API が 403 を返す。
 
 const mastersKey = ["admin", "masters"] as const;
 export const adminUniversitiesKey = (params: { q: string; page: number }) =>
   [...mastersKey, "universities", params] as const;
 export const adminUniversityKey = (id: number) => [...mastersKey, "university", id] as const;
 export const adminTagsKey = [...mastersKey, "tags"] as const;
+export const adminTextbookMastersKey = (q: string) => [...mastersKey, "textbookMasters", q] as const;
 
 const noRetryOnForbidden = (failureCount: number, error: unknown) =>
   (error as { status?: number }).status !== 403 && failureCount < 2;
@@ -50,14 +64,49 @@ export function useAdminTags() {
   });
 }
 
-// 変更のあとは管理画面の一覧・詳細に加えて、利用者向けの大学一覧（大学を探す）も取り直す。
+// 変更のあとは管理画面の一覧・詳細に加えて、利用者向けの一覧（大学を探す・参考書の候補）も取り直す。
 function useInvalidateMasters() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: mastersKey }),
       queryClient.invalidateQueries({ queryKey: universitiesKey }),
+      queryClient.invalidateQueries({ queryKey: textbookMastersKey }),
     ]);
+}
+
+export function useAdminTextbookMasters(q: string) {
+  const search = q ? `?${new URLSearchParams({ q })}` : "";
+  return useQuery({
+    queryKey: adminTextbookMastersKey(q),
+    queryFn: () => api.get<AdminTextbookMaster[]>(`/api/admin/textbook-masters${search}`),
+    retry: noRetryOnForbidden,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useSaveTextbookMaster() {
+  const invalidate = useInvalidateMasters();
+  return useMutation({
+    mutationFn: ({ id, data }: { id?: number; data: TextbookMasterInput }) =>
+      id === undefined
+        ? api.post<AdminTextbookMaster>("/api/admin/textbook-masters", data, {
+            fallbackMessage: "参考書を追加できませんでした",
+          })
+        : api.patch<AdminTextbookMaster>(`/api/admin/textbook-masters/${id}`, data, {
+            fallbackMessage: "参考書を保存できませんでした",
+          }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteTextbookMaster() {
+  const invalidate = useInvalidateMasters();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api.del<void>(`/api/admin/textbook-masters/${id}`, { fallbackMessage: "参考書を削除できませんでした" }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useSaveUniversity() {
