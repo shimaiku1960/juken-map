@@ -222,6 +222,11 @@ export function trackUniversity(id: number) {
 
 const createdTextbookMasterIds: number[] = [];
 
+/** API 経由で作った参考書マスターも、テストの最後に消す対象へ入れる。 */
+export function trackTextbookMaster(id: number) {
+  createdTextbookMasterIds.push(id);
+}
+
 /** 参考書マスターと総量の候補。ISBN に UNIQUE 制約があるので乱数を付ける。 */
 export async function createTextbookMaster(values: {
   name?: string;
