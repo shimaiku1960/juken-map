@@ -1,16 +1,30 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
+import { toast } from "sonner";
 import PageShell from "@/web/components/layout/PageShell";
 import PageHeader from "@/web/components/layout/PageHeader";
 import SectionHeader from "@/web/components/layout/SectionHeader";
 import { Badge } from "@/web/components/ui/badge";
 import { Button } from "@/web/components/ui/button";
 import { Card, CardContent } from "@/web/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/web/components/ui/dialog";
 import { Input } from "@/web/components/ui/input";
+import { Label } from "@/web/components/ui/label";
+import { useSession } from "@/web/lib/auth-client";
 import { cn } from "@/web/lib/utils";
+import { DEMO_EMAIL } from "@/shared/demo";
 import {
   useAdminOverview,
   useAdminUsers,
+  useBanUser,
+  useDeleteUser,
   type AdminOverview,
   type AdminUser,
   type UserKind,
@@ -68,7 +82,7 @@ export default function AdminPage() {
     <PageShell className="max-w-6xl">
       <PageHeader
         title="管理"
-        description="利用状況とユーザーの一覧です（閲覧のみ）。"
+        description="利用状況とユーザーの一覧です。停止・削除もここから行います。"
         action={
           <Button asChild variant="outline" size="sm">
             <Link to="/admin/masters">マスター編集</Link>
@@ -179,8 +193,27 @@ function UserListSection() {
   const [draft, setDraft] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const users = useAdminUsers({ kind, q, page });
   const list = users.data;
+
+  // 自分自身には手を出せない（API も 409 で断るが、押せないほうが分かりやすい）。
+  const { data: session } = useSession();
+  const banUser = useBanUser();
+
+  const handleBan = (user: AdminUser) => {
+    const banned = user.bannedAt === null;
+    const label = userLabel(user);
+    if (banned && !window.confirm(`${label} を停止しますか？ ログイン中の画面はすぐに切れます。`))
+      return;
+    banUser.mutate(
+      { id: user.id, banned },
+      {
+        onSuccess: () => toast.success(banned ? "停止しました" : "停止を解除しました"),
+        onError: (error) => toast.error(error.message),
+      }
+    );
+  };
 
   const handleSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -252,11 +285,19 @@ function UserListSection() {
                     <th className="px-4 py-2 font-medium">最終ログイン</th>
                     <th className="px-4 py-2 text-right font-medium">記録</th>
                     <th className="px-4 py-2 font-medium">最終記録</th>
+                    <th className="px-4 py-2 text-right font-medium">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {list.users.map((user) => (
-                    <UserRow key={user.id} user={user} />
+                    <UserRow
+                      key={user.id}
+                      user={user}
+                      protectedReason={protectedReason(user, session?.user.id)}
+                      busy={banUser.isPending}
+                      onBan={() => handleBan(user)}
+                      onDelete={() => setDeleteTarget(user)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -287,22 +328,57 @@ function UserListSection() {
           </div>
         </>
       )}
+
+      {deleteTarget ? (
+        <DeleteUserDialog user={deleteTarget} onClose={() => setDeleteTarget(null)} />
+      ) : null}
     </div>
   );
 }
 
-function UserRow({ user }: { user: AdminUser }) {
+const userLabel = (user: AdminUser) =>
+  user.email ?? user.nickname?.trim() ?? user.name?.trim() ?? user.id;
+
+/**
+ * 停止・削除ができない相手なら、その理由の文言を返す（できるなら null）。
+ * 判定は API（admin-service.ts の findTarget）と同じ3つ。ここは押せなくするためだけで、
+ * 守っているのはサーバー側である。
+ */
+function protectedReason(user: AdminUser, currentUserId: string | undefined): string | null {
+  if (user.id === currentUserId) return "自分自身は操作できません";
+  if (user.role === "admin") return "他の管理者は操作できません";
+  if (user.email === DEMO_EMAIL) return "デモアカウントは操作できません";
+  return null;
+}
+
+function UserRow({
+  user,
+  protectedReason: reason,
+  busy,
+  onBan,
+  onDelete,
+}: {
+  user: AdminUser;
+  protectedReason: string | null;
+  busy: boolean;
+  onBan: () => void;
+  onDelete: () => void;
+}) {
   const displayName = user.nickname?.trim() || user.name?.trim() || "（名前なし）";
 
   return (
-    <tr className="align-top">
+    <tr className={cn("align-top", user.bannedAt && "bg-muted/40")}>
       <td className="px-4 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="font-medium">{displayName}</span>
           {user.role === "admin" ? <Badge variant="info">管理者</Badge> : null}
+          {user.bannedAt ? <Badge variant="destructive">停止中</Badge> : null}
           {!user.emailVerified ? <Badge variant="warning">未確認</Badge> : null}
         </div>
         <p className="text-xs text-muted-foreground">{user.email ?? "—"}</p>
+        {user.bannedAt ? (
+          <p className="text-xs text-muted-foreground">{formatDateTime(user.bannedAt)} に停止</p>
+        ) : null}
       </td>
       <td className="whitespace-nowrap px-4 py-2 tabular-nums">{formatDateTime(user.createdAt)}</td>
       <td className="px-4 py-2">
@@ -315,6 +391,96 @@ function UserRow({ user }: { user: AdminUser }) {
       <td className="whitespace-nowrap px-4 py-2 tabular-nums">
         {formatDateTime(user.lastStudyLogAt)}
       </td>
+      <td className="whitespace-nowrap px-4 py-2 text-right">
+        <div className="flex justify-end gap-1" title={reason ?? undefined}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={reason !== null || busy}
+            onClick={onBan}
+          >
+            {user.bannedAt ? "解除" : "停止"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            disabled={reason !== null}
+            onClick={onDelete}
+          >
+            削除
+          </Button>
+        </div>
+      </td>
     </tr>
+  );
+}
+
+/**
+ * 削除の確認。押し間違いで消えないよう、本人のメールアドレスを打ち込ませる。
+ * 打った文字はそのままサーバーへ送り、あちらでも本人のものと突き合わせる
+ * （一覧が古くて別の行を指していた場合に、id だけを信じないため）。
+ */
+function DeleteUserDialog({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const [typed, setTyped] = useState("");
+  const deleteUser = useDeleteUser();
+  const email = user.email ?? "";
+  const matches = typed.trim().toLowerCase() === email.toLowerCase() && email !== "";
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!matches) return;
+    deleteUser.mutate(
+      { id: user.id, email: typed.trim() },
+      {
+        onSuccess: () => {
+          toast.success("ユーザーを削除しました");
+          onClose();
+        },
+        onError: (error) => toast.error(error.message),
+      }
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <DialogHeader>
+            <DialogTitle>ユーザーを削除</DialogTitle>
+            <DialogDescription>
+              学習記録・予定・参考書・志望校もすべて消えます。取り消せません。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="delete-user-email">
+              確認のため <span className="font-medium text-foreground">{email || "（メール未設定）"}</span> と入力
+            </Label>
+            <Input
+              id="delete-user-email"
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+              autoComplete="off"
+              placeholder={email}
+            />
+            <p className="text-xs text-muted-foreground">
+              記録 {user.studyLogCount.toLocaleString()} 件が一緒に消えます。
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              やめる
+            </Button>
+            <Button type="submit" variant="destructive" disabled={!matches || deleteUser.isPending}>
+              {deleteUser.isPending ? "削除中…" : "削除する"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

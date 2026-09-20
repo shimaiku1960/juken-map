@@ -23,6 +23,8 @@ export type UserRow = {
   simLastActedOn: Date | null;
   // 管理者ページの権限（db/migrations/20260919090000_add_user_role）。
   role: UserRole;
+  // 管理者に停止された日時。NULL なら停止していない（db/migrations/20260920090000_add_user_banned）。
+  bannedAt: Date | null;
 };
 
 export type UserRole = "user" | "admin";

@@ -114,6 +114,10 @@ export const api = {
 
   // delete は予約語なので del。呼び出し側で api.delete と書けないのは
   // このためで、意図的な命名である。
-  del: <T>(path: string, options?: RequestOptions) =>
-    request<T>("DELETE", path, undefined, options),
+  //
+  // body を取れるのは、取り消せない削除に確認を添えるため（ユーザー削除は
+  // 打ち込んだメールアドレスを送り、サーバーが本人のものと突き合わせる）。
+  // URL に載せるとアクセスログに残るので本文で送る。
+  del: <T>(path: string, options?: RequestOptions & { body?: unknown }) =>
+    request<T>("DELETE", path, options?.body, options),
 };
