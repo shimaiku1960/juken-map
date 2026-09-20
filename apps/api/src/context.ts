@@ -28,6 +28,13 @@ export async function requireSession(
     reply.code(401).send({ error: "Unauthorized" });
     return null;
   }
+  // 停止された利用者。停止時にその人の session は消しているので普通はここに来ないが、
+  // 消す直前に始まっていたリクエストが残ることはある。bannedAt はセッションに載っている
+  // （auth.ts の additionalFields）ので、DB を引き直さずに断れる。
+  if (session.user.bannedAt) {
+    reply.code(403).send({ error: "このアカウントは利用を停止されています。" });
+    return null;
+  }
   return session;
 }
 

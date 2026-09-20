@@ -111,6 +111,18 @@ export async function createAccount(
   );
 }
 
+/** ログイン中の印。停止したときに消えることを確かめるテストが使う。 */
+export async function createSession(userId: string) {
+  const id = randomUUID();
+  const now = new Date();
+  await execute(
+    `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, userId, randomUUID(), new Date(now.getTime() + 24 * 60 * 60 * 1000), now, now]
+  );
+  return id;
+}
+
 export async function createNotificationPreference(
   userId: string,
   values: {

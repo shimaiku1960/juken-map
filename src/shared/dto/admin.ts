@@ -34,6 +34,8 @@ export type AdminUser = {
   kind: UserKind;
   role: "user" | "admin";
   emailVerified: boolean;
+  /** 管理者に停止された日時。null なら停止していない。停止中はログインできない。 */
+  bannedAt: string | null;
   createdAt: string;
   /** 認証方法（account.providerId）。"credential" はメール＋パスワード。 */
   providers: string[];

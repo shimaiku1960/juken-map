@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
-import { pool } from "@/api/infra/db";
+import { APIError } from "better-auth/api";
+import { pool, select } from "@/api/infra/db";
 import {
   notifyAdminOfNewUser,
   sendVerificationEmail,
@@ -34,9 +35,39 @@ export const auth = betterAuth({
         defaultValue: "user",
         input: false,
       },
+      // 管理者に停止された日時。セッションに載せておくと、requireSession（context.ts）が
+      // DB を引き直さずに停止中を弾ける。role と同じく input: false で利用者からは書けない。
+      bannedAt: {
+        type: "date",
+        required: false,
+        input: false,
+      },
     },
   },
   databaseHooks: {
+    session: {
+      // 停止された利用者のログインを断る。ここはメール＋パスワードも Google / GitHub も
+      // 必ず通る一本道（sign-in も OAuth の callback も最後はセッションを1行作る）なので、
+      // 入口ごとに同じ判定を書かずに済む。
+      //
+      // 停止のときに既存の session は消しているが（admin-service.ts）、それだけでは
+      // ログインし直せてしまう。新しいセッションを作らせないのがこの関数の役目。
+      create: {
+        before: async (session) => {
+          const [user] = await select<{ bannedAt: Date | null }>(
+            "SELECT bannedAt FROM `user` WHERE id = ?",
+            [session.userId]
+          );
+          if (user?.bannedAt) {
+            // false を返してもログインは止まるが、画面には「Failed to create session」しか
+            // 出ない。理由が利用者に伝わるよう、文言を持った APIError を投げる。
+            throw new APIError("FORBIDDEN", {
+              message: "このアカウントは利用を停止されています。",
+            });
+          }
+        },
+      },
+    },
     user: {
       create: {
         after: async (user) => {

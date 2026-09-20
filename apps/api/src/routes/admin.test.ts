@@ -7,12 +7,13 @@ vi.mock("../auth.ts", () => ({
 
 const { auth } = await import("../auth.ts");
 const { registerAdminRoutes } = await import("./admin.ts");
-const { buildTestApp, request, loggedInSession } = await import("../test-support.ts");
+const { buildTestApp, request, loggedInSession, takeLogLines } = await import("../test-support.ts");
 const { execute } = await import("@/api/infra/db");
 const { setUserRoleByEmail } = await import("@/api/services/user-service");
-const { cleanup, createAccount, createStudyLog, createUser } = await import(
-  "../test-db/fixtures.ts"
-);
+const { cleanup, createAccount, createSession, createStudyLog, createStudyPlan, createUser } =
+  await import("../test-db/fixtures.ts");
+const { select } = await import("@/api/infra/db");
+const { DEMO_EMAIL } = await import("@/shared/demo");
 
 const getSession = auth.api.getSession as unknown as Mock;
 const app = buildTestApp(registerAdminRoutes);
@@ -32,6 +33,7 @@ const listUsers = async (query: string) => {
 beforeEach(() => {
   vi.clearAllMocks();
   getSession.mockResolvedValue(adminSession);
+  takeLogLines();
 });
 
 afterAll(cleanup);
@@ -49,6 +51,19 @@ describe("管理者ガード", () => {
       expect((await request(app, "GET", url)).statusCode).toBe(403);
     }
   );
+
+  // 停止・削除は影響が大きいので、読み取りとは別に否定のテストを持つ。
+  it.each([
+    ["POST", "/api/admin/users/someone/ban"],
+    ["POST", "/api/admin/users/someone/unban"],
+    ["DELETE", "/api/admin/users/someone"],
+  ] as const)("%s %s は未ログインなら401、一般ユーザーなら403", async (method, url) => {
+    getSession.mockResolvedValue(null);
+    expect((await request(app, method, url)).statusCode).toBe(401);
+
+    getSession.mockResolvedValue({ user: { ...loggedInSession.user, role: "user" } });
+    expect((await request(app, method, url)).statusCode).toBe(403);
+  });
 });
 
 describe("GET /api/admin/overview", () => {
@@ -140,5 +155,158 @@ describe("setUserRoleByEmail（pnpm admin:grant）", () => {
     expect(await setUserRoleByEmail(`${randomUUID()}@example.test`, "admin")).toEqual({
       result: "not_found",
     });
+  });
+});
+
+describe("停止・解除・削除", () => {
+  // 管理者本人として振る舞うため、操作する側の id を都度入れ替える。
+  const actAs = (id: string) => getSession.mockResolvedValue({ user: { id, email: "a@example.com", role: "admin" } });
+
+  const bannedAt = async (id: string) => {
+    const [row] = await select<{ bannedAt: Date | null }>(
+      "SELECT bannedAt FROM `user` WHERE id = ?",
+      [id]
+    );
+    return row?.bannedAt ?? null;
+  };
+
+  it("停止すると bannedAt が入り、その人の session が消える", async () => {
+    const user = await createUser();
+    await createSession(user.id);
+    await createSession(user.id);
+
+    const res = await request(app, "POST", `/api/admin/users/${user.id}/ban`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ id: user.id, sessionsRemoved: 2 });
+    expect(await bannedAt(user.id)).not.toBeNull();
+    const [{ remaining }] = await select<{ remaining: number }>(
+      "SELECT COUNT(*) AS remaining FROM session WHERE userId = ?",
+      [user.id]
+    );
+    expect(Number(remaining)).toBe(0);
+  });
+
+  it("停止を押し直しても最初に止めた日時は変わらない", async () => {
+    const user = await createUser();
+    await request(app, "POST", `/api/admin/users/${user.id}/ban`);
+    const first = await bannedAt(user.id);
+
+    await request(app, "POST", `/api/admin/users/${user.id}/ban`);
+
+    expect(await bannedAt(user.id)).toEqual(first);
+  });
+
+  it("解除すると bannedAt が NULL に戻る", async () => {
+    const user = await createUser();
+    await request(app, "POST", `/api/admin/users/${user.id}/ban`);
+
+    const res = await request(app, "POST", `/api/admin/users/${user.id}/unban`);
+
+    expect(res.statusCode).toBe(200);
+    expect(await bannedAt(user.id)).toBeNull();
+  });
+
+  it("自分自身は停止できない", async () => {
+    const user = await createUser();
+    actAs(user.id);
+
+    const res = await request(app, "POST", `/api/admin/users/${user.id}/ban`);
+
+    expect(res.statusCode).toBe(409);
+    expect(await bannedAt(user.id)).toBeNull();
+  });
+
+  it("他の管理者は停止できない", async () => {
+    const user = await createUser();
+    await execute("UPDATE `user` SET role = 'admin' WHERE id = ?", [user.id]);
+
+    const res = await request(app, "POST", `/api/admin/users/${user.id}/ban`);
+
+    expect(res.statusCode).toBe(409);
+    expect(await bannedAt(user.id)).toBeNull();
+  });
+
+  it("デモアカウントは停止できない", async () => {
+    // 手元の DB には seed 済みのデモがいる。いなければ作る（どちらでも 409 で何も変わらない）。
+    const [existing] = await select<{ id: string }>("SELECT id FROM `user` WHERE email = ?", [
+      DEMO_EMAIL,
+    ]);
+    let demoId = existing?.id;
+    if (!demoId) {
+      const user = await createUser();
+      await execute("UPDATE `user` SET email = ? WHERE id = ?", [DEMO_EMAIL, user.id]);
+      demoId = user.id;
+    }
+
+    expect((await request(app, "POST", `/api/admin/users/${demoId}/ban`)).statusCode).toBe(409);
+  });
+
+  it("誰が誰に何をしたかを監査ログに残す", async () => {
+    const user = await createUser();
+
+    await request(app, "POST", `/api/admin/users/${user.id}/ban`);
+    await request(app, "POST", `/api/admin/users/${user.id}/unban`);
+
+    const logs = takeLogLines().filter((line) => line.msg === "admin user action");
+    expect(logs.map((line) => line.action)).toEqual(["ban", "unban"]);
+    expect(logs[0]).toMatchObject({
+      adminId: "admin-1",
+      targetId: user.id,
+      targetEmail: user.session.user.email,
+    });
+  });
+
+  it("いないユーザーは404", async () => {
+    expect((await request(app, "POST", `/api/admin/users/${randomUUID()}/ban`)).statusCode).toBe(404);
+  });
+
+  it("削除はメールアドレスが一致して初めて消え、学習データも一緒に消える", async () => {
+    const user = await createUser();
+    await createStudyLog(user.id);
+    await createStudyPlan(user.id);
+
+    const wrong = await request(app, "DELETE", `/api/admin/users/${user.id}`, {
+      email: "other@example.test",
+    });
+    expect(wrong.statusCode).toBe(400);
+
+    const res = await request(app, "DELETE", `/api/admin/users/${user.id}`, {
+      email: user.session.user.email,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ removed: { studyLogs: 1, studyPlans: 1 } });
+    const [{ remaining }] = await select<{ remaining: number }>(
+      "SELECT COUNT(*) AS remaining FROM StudyLog WHERE userId = ?",
+      [user.id]
+    );
+    expect(Number(remaining)).toBe(0);
+  });
+
+  it("削除もメールアドレスの大文字小文字は問わない", async () => {
+    const user = await createUser();
+
+    const res = await request(app, "DELETE", `/api/admin/users/${user.id}`, {
+      email: user.session.user.email.toUpperCase(),
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("自分自身は削除できない", async () => {
+    const user = await createUser();
+    actAs(user.id);
+
+    const res = await request(app, "DELETE", `/api/admin/users/${user.id}`, {
+      email: user.session.user.email,
+    });
+
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("確認用のメールアドレスが無ければ400", async () => {
+    const user = await createUser();
+    expect((await request(app, "DELETE", `/api/admin/users/${user.id}`)).statusCode).toBe(400);
   });
 });

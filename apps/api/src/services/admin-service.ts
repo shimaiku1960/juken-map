@@ -1,4 +1,4 @@
-import { select } from "@/api/infra/db";
+import { execute, select, transaction } from "@/api/infra/db";
 import type { UserRole } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 import { DEMO_EMAIL } from "@/shared/demo";
@@ -99,6 +99,7 @@ type AdminUserRow = {
   kind: UserKind;
   role: UserRole;
   emailVerified: boolean;
+  bannedAt: Date | null;
   createdAt: Date;
   providers: string | null;
   lastLoginAt: Date | null;
@@ -132,14 +133,14 @@ export function listAdminUsers(params: { kind: UserKind; q?: string; page: numbe
     // 内側に LIMIT があるので MySQL は派生表を外へ展開せず、集計は50人分で済む。
     // 手元の合成データ（2000人・StudyLog 16.7万件）でも全件を数えない。
     const rows = await select<AdminUserRow>(
-      `SELECT u.id, u.email, u.nickname, u.name, u.kind, u.role, u.emailVerified, u.createdAt,
+      `SELECT u.id, u.email, u.nickname, u.name, u.kind, u.role, u.emailVerified, u.bannedAt, u.createdAt,
               (SELECT GROUP_CONCAT(DISTINCT a.providerId ORDER BY a.providerId)
                  FROM account a WHERE a.userId = u.id) AS providers,
               (SELECT MAX(s.createdAt) FROM session s WHERE s.userId = u.id) AS lastLoginAt,
               (SELECT COUNT(*) FROM StudyLog l WHERE l.userId = u.id) AS studyLogCount,
               (SELECT MAX(l.createdAt) FROM StudyLog l WHERE l.userId = u.id) AS lastStudyLogAt
        FROM (
-         SELECT u.id, u.email, u.nickname, u.name, u.role, u.emailVerified, u.createdAt,
+         SELECT u.id, u.email, u.nickname, u.name, u.role, u.emailVerified, u.bannedAt, u.createdAt,
                 ${KIND_SQL} AS kind
          FROM \`user\` u
          WHERE ${whereSql}
@@ -164,6 +165,7 @@ export function listAdminUsers(params: { kind: UserKind; q?: string; page: numbe
         kind: row.kind,
         role: row.role,
         emailVerified: row.emailVerified,
+        bannedAt: row.bannedAt?.toISOString() ?? null,
         createdAt: row.createdAt.toISOString(),
         providers: row.providers ? row.providers.split(",") : [],
         lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
@@ -174,5 +176,146 @@ export function listAdminUsers(params: { kind: UserKind; q?: string; page: numbe
       page: params.page,
       pageSize: ADMIN_USERS_PAGE_SIZE,
     };
+  });
+}
+
+// ---- 停止・削除（/admin のユーザー操作） ----
+//
+// 守りは3つ。自分自身・他の管理者・デモアカウントには手を出せない。
+// 「自分自身」は、最後の管理者が自分を締め出して誰も入れなくなるのを防ぐため。
+// 「他の管理者」は、管理者どうしで潰し合えないようにするため（付け替えは pnpm admin:grant だけ）。
+// デモは面接官向けの共有アカウントで、消えると /login のデモボタンが動かなくなる。
+
+export type ProtectedReason = "self" | "admin" | "demo";
+
+export type UserActionOutcome<T> =
+  | { result: "ok"; value: T }
+  | { result: "not_found" }
+  | { result: "protected"; reason: ProtectedReason }
+  | { result: "email_mismatch" };
+
+type TargetRow = {
+  id: string;
+  email: string | null;
+  role: UserRole;
+  bannedAt: Date | null;
+};
+
+/** 操作できる相手かを確かめる。できないときは理由を返す。 */
+async function findTarget(
+  id: string,
+  actorId: string
+): Promise<{ result: "ok"; value: TargetRow } | { result: "not_found" } | { result: "protected"; reason: ProtectedReason }> {
+  const [user] = await select<TargetRow>(
+    "SELECT id, email, role, bannedAt FROM `user` WHERE id = ?",
+    [id]
+  );
+  if (!user) return { result: "not_found" };
+  if (user.id === actorId) return { result: "protected", reason: "self" };
+  if (user.role === "admin") return { result: "protected", reason: "admin" };
+  if (user.email === DEMO_EMAIL) return { result: "protected", reason: "demo" };
+  return { result: "ok", value: user };
+}
+
+export type BanResult = { id: string; email: string | null; bannedAt: string; sessionsRemoved: number };
+
+/**
+ * 利用者を停止する。すでに停止済みなら最初に止めた日時を保つ（押し直しても上書きしない）。
+ * session を消すのは今つながっている画面をすぐ落とすため。次のログインは auth.ts の
+ * session.create.before が断る。両方そろって初めて「止まった」と言える。
+ */
+export function banUser(id: string, actorId: string) {
+  return measured("admin.banUser", async (): Promise<UserActionOutcome<BanResult>> => {
+    const target = await findTarget(id, actorId);
+    if (target.result !== "ok") return target;
+
+    const now = new Date();
+    return transaction(async (db) => {
+      await execute(
+        "UPDATE `user` SET bannedAt = COALESCE(bannedAt, ?), updatedAt = ? WHERE id = ?",
+        [now, now, id],
+        db
+      );
+      const removed = await execute("DELETE FROM session WHERE userId = ?", [id], db);
+      return {
+        result: "ok" as const,
+        value: {
+          id,
+          email: target.value.email,
+          bannedAt: (target.value.bannedAt ?? now).toISOString(),
+          sessionsRemoved: removed.affectedRows,
+        },
+      };
+    });
+  });
+}
+
+/** 停止を解除する。止まっていなければ何も変わらない（押しても壊れない）。 */
+export function unbanUser(id: string) {
+  return measured("admin.unbanUser", async (): Promise<UserActionOutcome<{ id: string; email: string | null }>> => {
+    const [user] = await select<TargetRow>(
+      "SELECT id, email, role, bannedAt FROM `user` WHERE id = ?",
+      [id]
+    );
+    if (!user) return { result: "not_found" };
+
+    await execute("UPDATE `user` SET bannedAt = NULL, updatedAt = ? WHERE id = ?", [new Date(), id]);
+    return { result: "ok", value: { id, email: user.email } };
+  });
+}
+
+export type DeleteResult = {
+  id: string;
+  email: string | null;
+  /** 一緒に消えた行数。外部キーの CASCADE が消すので、数えるのは記録のためだけ。 */
+  removed: { studyLogs: number; studyPlans: number; textbooks: number; finalGoals: number };
+};
+
+/**
+ * 利用者を消す。確認のため、呼び出し側が渡すメールアドレスが本人のものと一致しないと消さない。
+ * 一覧が古いまま別の行を消してしまう事故を、id だけに頼らずここでも止める。
+ *
+ * ぶら下がっている行（StudyLog・StudyPlan・Textbook・FinalGoal・session・account・
+ * NotificationPreference / NotificationDelivery・LINE 関連・Support 関連）は
+ * 外部キーの ON DELETE CASCADE で一緒に消える。SupportCheckoutInvitation だけは
+ * SET NULL なので、請求の記録は残って利用者との結び付きだけが外れる。
+ */
+export function deleteUser(id: string, actorId: string, email: string) {
+  return measured("admin.deleteUser", async (): Promise<UserActionOutcome<DeleteResult>> => {
+    const target = await findTarget(id, actorId);
+    if (target.result !== "ok") return target;
+    if ((target.value.email ?? "").toLowerCase() !== email.trim().toLowerCase()) {
+      return { result: "email_mismatch" };
+    }
+
+    return transaction(async (db) => {
+      const [counts] = await select<{
+        studyLogs: number | string;
+        studyPlans: number | string;
+        textbooks: number | string;
+        finalGoals: number | string;
+      }>(
+        `SELECT (SELECT COUNT(*) FROM StudyLog WHERE userId = ?) AS studyLogs,
+                (SELECT COUNT(*) FROM StudyPlan WHERE userId = ?) AS studyPlans,
+                (SELECT COUNT(*) FROM Textbook WHERE userId = ?) AS textbooks,
+                (SELECT COUNT(*) FROM FinalGoal WHERE userId = ?) AS finalGoals`,
+        [id, id, id, id],
+        db
+      );
+      await execute("DELETE FROM `user` WHERE id = ?", [id], db);
+      return {
+        result: "ok" as const,
+        value: {
+          id,
+          email: target.value.email,
+          removed: {
+            studyLogs: Number(counts?.studyLogs ?? 0),
+            studyPlans: Number(counts?.studyPlans ?? 0),
+            textbooks: Number(counts?.textbooks ?? 0),
+            finalGoals: Number(counts?.finalGoals ?? 0),
+          },
+        },
+      };
+    });
   });
 }
