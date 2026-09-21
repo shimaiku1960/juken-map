@@ -3,8 +3,7 @@ import { redactPath } from "../observability/redact.ts";
 import { CSP_REPORT_PATH } from "../security-headers.ts";
 
 // ブラウザが送ってくる CSP の違反の報告を、ログ（本番は Grafana の Loki）に残す。
-// CSP は止めるモードなので、ここに出たものは「実際にブラウザが読み込みを拒んだ箇所」になる。
-// 正当な読み込みが出ていたら、security-headers.ts の許可の一覧に漏れがある。
+// 今の CSP は Report-Only なので、ここに出たものが「止めるモードにしたら壊れる箇所」になる。
 //
 // 報告の形は2種類ある。
 // - report-uri: application/csp-report、{"csp-report": {"document-uri": ...}}（今使っているのはこちら）

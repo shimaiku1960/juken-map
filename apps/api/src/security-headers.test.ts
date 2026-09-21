@@ -34,9 +34,9 @@ describe("registerSecurityHeaders", () => {
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["x-frame-options"]).toBe("DENY");
     expect(res.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
-    // 報告だけのモードは卒業し、違反は止める。
-    expect(res.headers["content-security-policy-report-only"]).toBeUndefined();
-    expect(res.headers["content-security-policy"]).toContain("default-src 'self'");
+    // まだ止めない（報告だけ）。
+    expect(res.headers["content-security-policy"]).toBeUndefined();
+    expect(res.headers["content-security-policy-report-only"]).toContain("default-src 'self'");
   });
 });
 
