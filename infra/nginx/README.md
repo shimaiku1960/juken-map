@@ -10,12 +10,14 @@
 ```
 ブラウザ
   ↓ https://juken-map.com（443）
-[ Cloudflare（プロキシ）]  ← 2026-09-18 に確認
-  ↓ 443
 [ nginx 1.28.3（Ubuntu）]  ← EC2 ホスト上。Docker の外
   ↓ http://localhost:3000
-[ Docker コンテナ juken-map（Next.js）]
+[ Docker コンテナ juken-map（Fastify 5＝API＋ビルド済み SPA）]
 ```
+
+**2026-09-21 更新**：Cloudflare のプロキシ（オレンジ雲）は経路から外れた。DNS は EC2 の
+アドレスを直接指しており、応答に `cf-*` ヘッダーは付かない。これに伴い
+`cloudflare-realip.conf` を撤去した（下の「注意」を参照）。
 
 - nginx が 80 と 443 を持ち、Docker が 3000 を持つ
 - 設定は `/etc/nginx/sites-enabled/default`（`sites-available/default` へのシンボリックリンク）
@@ -90,11 +92,13 @@ server {
   `$proxy_add_x_forwarded_for`（届いた値に追記）ではなく `$remote_addr` で上書きし、
   利用者が送ってきた値をそのまま信用しないようにしている。変更前の設定は
   `/etc/nginx/sites-available/default.bak-20260918` に残してある
-- **nginx の前には Cloudflare のプロキシ（オレンジ雲）がいる。** そのままだと `$remote_addr` は
-  利用者ではなく Cloudflare のサーバーの IP になる。そこで [`cloudflare-realip.conf`](./cloudflare-realip.conf)
-  を `/etc/nginx/conf.d/` に置き、Cloudflare の IP 範囲から来た接続に限って
-  `CF-Connecting-IP` を本当の利用者の IP として `$remote_addr` に入れる。範囲外から直接つないで
-  ヘッダーを偽っても使われない。Cloudflare が IP 範囲を変えたら、このファイルも更新する
+- **`cloudflare-realip.conf` は 2026-09-21 に撤去した。** Cloudflare を経由していた間は、
+  `$remote_addr` が利用者ではなく Cloudflare のサーバーの IP になるため、Cloudflare の IP 範囲から
+  来た接続に限って `CF-Connecting-IP` を利用者の IP として扱っていた。いまは Cloudflare が経路に
+  いないので `$remote_addr` がそのまま利用者の IP である。
+  **中継を信頼する設定は、その中継が経路から外れたら一緒に外す。** 残しておくと、nginx が見る
+  接続元と実際の接続元が食い違いうる（ログインの回数制限はこの値で数えている）。
+  将来ふたたび Cloudflare や ALB を前に置くときは、そのときの経路に合わせて入れ直す
 - **この README は現状の記録であって、適用される設定ではない。** 実物はサーバー上にある
 - `www` → apex の寄せは nginx ではなく Certbot が入れた 301 で行われている。
   `cleanup-after-merges` にある「www→apex 一本化」の検討と関係する
