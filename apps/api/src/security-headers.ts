@@ -13,8 +13,10 @@ export const CSP_REPORT_PATH = "/api/csp-report";
 /**
  * 画面が読み込んでよいものの一覧（Content-Security-Policy）。
  *
- * 今は Report-Only で送る＝止めずに違反を報告させるだけ。許可の漏れがあると画面が壊れるため、
- * 本番の報告（Grafana の Loki で `csp violation`）を見て一覧を直してから、止めるモードに切り替える。
+ * 2026-09-19 から2日ほど Report-Only（止めずに報告だけ）で流し、本番の主要画面を実ブラウザで
+ * ひと通り踏んでも違反が0件だったため、2026-09-21 に止めるモードへ切り替えた。
+ * 許可の漏れがあると画面が壊れるので、一覧を増やすときは先に Report-Only で確かめること。
+ * 違反は報告され続ける（`report-uri` → routes/csp-report.ts → Grafana の Loki で `csp violation`）。
  */
 export function contentSecurityPolicy(env: NodeJS.ProcessEnv = process.env) {
   // Faro（画面のエラーの送り先）。apps/web/src/lib/faro.ts が使う。
@@ -64,7 +66,7 @@ export function securityHeaders(env: NodeJS.ProcessEnv = process.env): Record<st
     "X-Frame-Options": "DENY",
     // 他のサイトへ移るときは、オリジンだけ伝える（URL のトークンを外へ出さない）。
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Content-Security-Policy-Report-Only": contentSecurityPolicy(env),
+    "Content-Security-Policy": contentSecurityPolicy(env),
   };
 }
 
