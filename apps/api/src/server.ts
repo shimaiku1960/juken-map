@@ -5,6 +5,7 @@ import fastifyCompress from "@fastify/compress";
 import fastifyStatic from "@fastify/static";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth.ts";
+import { BODY_LIMIT, errorBody, registerErrorHandling } from "./error-handling.ts";
 import { select, setQueryLogger } from "./infra/db.ts";
 import { logger } from "./observability/logger.ts";
 import { fastifyLoggingOptions } from "./observability/logger.ts";
@@ -53,7 +54,7 @@ function registerSpa(app: FastifyInstance, root: string) {
     // API の 404 まで index.html を返すと、JSON を期待しているクライアントが壊れる。
     // 存在しない API は API のまま 404 を返す。
     if (request.url.startsWith("/api/")) {
-      return reply.code(404).send({ error: "Not Found" });
+      return reply.code(404).send(errorBody(404, "NOT_FOUND", String(request.id)));
     }
 
     const pathname = new URL(request.url, "http://localhost").pathname;
@@ -79,7 +80,7 @@ function registerSpa(app: FastifyInstance, root: string) {
 export async function buildServer() {
   // ログを切っていると、ハンドラで想定外の例外が起きて 500 を返しても、その中身は
   // どこにも残らない（Fastify の既定のエラー処理はロガーへ書くため）。
-  const app = Fastify(fastifyLoggingOptions);
+  const app = Fastify({ ...fastifyLoggingOptions, bodyLimit: BODY_LIMIT });
 
   // SQL を素の console.log ではなくロガーへ流す。こうすると reqId が付いて
   // どのリクエストが投げた SQL か分かり、LOG_FILE を設定していればファイルにも残る
@@ -88,6 +89,9 @@ export async function buildServer() {
 
   // 件数と所要時間は、下で横取りする Better Auth の分も含めて全リクエストで数える。
   registerMetrics(app);
+
+  // エラー応答の形と reqId のヘッダー。圧縮プラグインより前に積んで onSend を先に走らせる。
+  registerErrorHandling(app);
 
   // Next.js は応答を既定で圧縮していたが、Fastify は何もしない。SPA のバンドルは
   // 800KB 超あり、無圧縮のまま配ると回線の細い端末で目に見えて遅くなる。

@@ -2,6 +2,7 @@ import Fastify, {
   type FastifyInstance,
   type LightMyRequestResponse,
 } from "fastify";
+import { BODY_LIMIT, registerErrorHandling } from "./error-handling.ts";
 import { fastifyLoggingOptions, testLogLines } from "./observability/logger.ts";
 import { runWithRequestContext } from "./observability/requestContext.ts";
 
@@ -10,18 +11,21 @@ import { runWithRequestContext } from "./observability/requestContext.ts";
  *
  * buildServer() をそのまま使わないのは、全ルートを読み込むと microCMS や Resend の
  * クライアント生成が走り、テストに関係のない環境変数を要求するため。
- * JSON の解析だけは本番と同じ挙動にしておく（不正な JSON を 400 にせず undefined を
- * 渡し、認証チェックを先に効かせる。理由は server.ts のコメント参照）。
+ * JSON の解析とボディ上限・エラー応答の形は本番と同じにしておく（不正な JSON を 400 に
+ * せず undefined を渡し、認証チェックを先に効かせる。理由は server.ts のコメント参照）。
  * ロガーも本番と同じものを渡す（テストでは画面に出さず testLogLines に溜まる）。
  */
 export function buildTestApp(register: (app: FastifyInstance) => void) {
-  const app = Fastify(fastifyLoggingOptions);
+  const app = Fastify({ ...fastifyLoggingOptions, bodyLimit: BODY_LIMIT });
 
   // server.ts と同じく、リクエストごとの文脈を一番先に張る。
   // ここを省くと measured() や db.ts のログに reqId が付かず、テストが本番と別物になる。
   app.addHook("onRequest", (request, _reply, done) => {
     runWithRequestContext({ reqId: String(request.id) }, done);
   });
+
+  // エラー応答の形（5xx の内部情報を隠す・reqId を返す）も本番と同じにする。
+  registerErrorHandling(app);
 
   app.addContentTypeParser(
     "application/json",

@@ -28,6 +28,19 @@ export default defineConfig({
           name: "api",
           include: ["src/**/*.test.ts"],
           exclude: ["**/node_modules/**", "src/generated/**", MIGRATIONS_TEST],
+          // ファイルを同時に走らせない。
+          //
+          // これらのテストは本物の MySQL を共有しており、別々のファイルが同じ親
+          // （user・Faculty）を参照する行を同時に INSERT すると、InnoDB のロックが
+          // ぶつかって `ER_LOCK_DEADLOCK` で落ちる。2026-09-20 の CI では 2 回連続で、
+          // しかも別のファイル（goals.test.ts の FinalGoal、study-plans.test.ts の
+          // StudyPlan）が落ちた。落ちる場所が毎回変わるので、個別のテストの書き方の
+          // 問題ではなく同時実行そのものが原因。
+          //
+          // 代わりに each INSERT を再試行する手もあるが、それは本番コードに無い
+          // 挙動をテストだけに足すことになり、本番で起きるデッドロックを隠す。
+          // 手元で 3.2 秒 → 10.5 秒になるだけなので、確定性を取る。
+          fileParallelism: false,
         },
       },
       {
