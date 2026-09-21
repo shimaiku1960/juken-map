@@ -127,16 +127,37 @@ const MEMOS = [
 
 type Row = unknown[];
 
-/** 行をまとめて INSERT する。1本のSQLに詰め込みすぎると max_allowed_packet に当たるので区切る。 */
-async function insertMany(table: string, columns: string[], rows: Row[], chunkSize = 400) {
-  if (rows.length === 0) return;
+/**
+ * 行をまとめて INSERT し、最初の行に採番された id を返す。
+ * 1本のSQLに詰め込みすぎると max_allowed_packet に当たるので区切る。
+ *
+ * 返り値を使うのは「1文の INSERT には連続した id が割り当てられる」前提に立っている。
+ * seed は接続1本で順番に流すので他の書き手と混ざらないが、取り違えたまま数百万行を
+ * 入れると後から気付けないので、呼び出し側で assertContiguous を使って検算する。
+ */
+async function insertMany(table: string, columns: string[], rows: Row[], chunkSize = 1000) {
+  if (rows.length === 0) return 0;
   const placeholders = `(${columns.map(() => "?").join(", ")})`;
+  let firstInsertId = 0;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    await execute(
+    const result = await execute(
       `INSERT INTO \`${table}\` (${columns.map((c) => `\`${c}\``).join(", ")})
        VALUES ${chunk.map(() => placeholders).join(", ")}`,
       chunk.flat()
+    );
+    if (i === 0) firstInsertId = result.insertId;
+  }
+  return firstInsertId;
+}
+
+/** insertMany が返した先頭 id から count 件が本当に連続しているかを確かめる。 */
+async function assertContiguous(table: string, firstId: number, count: number) {
+  if (count === 0) return;
+  const [row] = await select<{ maxId: number }>(`SELECT MAX(id) AS maxId FROM \`${table}\``);
+  if (Number(row.maxId) !== firstId + count - 1) {
+    throw new Error(
+      `${table} の id が連続していません（先頭 ${firstId} / ${count}件 / 実際の最大 ${row.maxId}）`
     );
   }
 }
@@ -173,14 +194,8 @@ runSeed(async () => {
   // 1人ずつ計算すると、ここだけで数分かかる。
   const passwordHash = await hashPassword(PASSWORD);
 
-  const users: Row[] = [];
-  const accounts: Row[] = [];
-  const goals: Row[] = [];
-  const textbooks: { userId: string; name: string; subject: string; totalAmount: number }[] = [];
-  const preferences: Row[] = [];
-  // 予定と実績は id を採番してから紐づけたいので、いったん貯めて後でまとめて入れる
-  const plans: { userId: string; offset: number; subject: string; content: string; done: boolean }[] = [];
-  const logs: {
+  type PlanDraft = { userId: string; offset: number; subject: string; content: string; done: boolean };
+  type LogDraft = {
     userId: string;
     offset: number;
     subject: string;
@@ -190,7 +205,110 @@ runSeed(async () => {
     textbookIndex: number | null;
     rangeStart: number | null;
     rangeEnd: number | null;
-  }[] = [];
+  };
+  type TextbookDraft = { userId: string; name: string; subject: string; totalAmount: number };
+
+  let users: Row[] = [];
+  let accounts: Row[] = [];
+  let goals: Row[] = [];
+  let textbooks: TextbookDraft[] = [];
+  let preferences: Row[] = [];
+  // 予定と実績は id を採番してから紐づけたいので、いったん貯めて後でまとめて入れる
+  let plans: PlanDraft[] = [];
+  let logs: LogDraft[] = [];
+
+  // 1,000万行を一度に組み立てると、DBへ入れる前に Node のヒープが尽きる。
+  // 利用者を小分けにして「作る→入れる→捨てる」を繰り返し、メモリを1区切り分に抑える。
+  // 予定と実績の紐づけも区切りの中で閉じるので、採番した id を全部覚えておく必要がない。
+  const CHUNK_USERS = Number(process.env.CHUNK_USERS ?? 250);
+  const totals = { users: 0, goals: 0, textbooks: 0, preferences: 0, plans: 0, logs: 0 };
+  const startedAt = Date.now();
+
+  async function flush() {
+    if (users.length === 0) return;
+    const now = new Date();
+
+    await insertMany(
+      "user",
+      ["id", "email", "name", "nickname", "emailVerified", "createdAt", "updatedAt"],
+      users
+    );
+    await insertMany(
+      "account",
+      ["id", "userId", "accountId", "providerId", "password", "createdAt", "updatedAt"],
+      accounts
+    );
+    await insertMany(
+      "FinalGoal",
+      ["userId", "facultyId", "isFirstChoice", "note", "status", "createdAt"],
+      goals
+    );
+
+    const firstBookId = await insertMany(
+      "Textbook",
+      ["userId", "name", "subject", "totalAmount", "rangeUnit", "createdAt", "updatedAt"],
+      textbooks.map((book) => [book.userId, book.name, book.subject, book.totalAmount, "ページ", now, now])
+    );
+    await assertContiguous("Textbook", firstBookId, textbooks.length);
+
+    if (preferences.length > 0) {
+      await insertMany(
+        "NotificationPreference",
+        ["userId", "morningEnabled", "eveningEnabled", "createdAt", "updatedAt"],
+        preferences
+      );
+    }
+
+    const firstPlanId = await insertMany(
+      "StudyPlan",
+      ["userId", "date", "content", "subject", "done", "createdAt", "updatedAt"],
+      plans.map((plan) => [plan.userId, dayAt(plan.offset), plan.content, plan.subject, plan.done, now, now])
+    );
+    await assertContiguous("StudyPlan", firstPlanId, plans.length);
+
+    await insertMany(
+      "StudyLog",
+      [
+        "userId", "date", "subject", "minutes", "memo",
+        "studyPlanId", "textbookId", "rangeStart", "rangeEnd", "rangeUnit",
+        "createdAt", "updatedAt",
+      ],
+      logs.map((log) => [
+        log.userId,
+        dayAt(log.offset),
+        log.subject,
+        log.minutes,
+        log.memo,
+        log.planIndex === null ? null : firstPlanId + log.planIndex,
+        log.textbookIndex === null ? null : firstBookId + log.textbookIndex,
+        log.rangeStart,
+        log.rangeEnd,
+        log.rangeStart === null ? null : "ページ",
+        now,
+        now,
+      ])
+    );
+
+    totals.users += users.length;
+    totals.goals += goals.length;
+    totals.textbooks += textbooks.length;
+    totals.preferences += preferences.length;
+    totals.plans += plans.length;
+    totals.logs += logs.length;
+
+    users = [];
+    accounts = [];
+    goals = [];
+    textbooks = [];
+    preferences = [];
+    plans = [];
+    logs = [];
+
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    console.log(
+      `投入中 ${totals.users}/${USERS}人 実績${totals.logs.toLocaleString()}件 予定${totals.plans.toLocaleString()}件 (${elapsed}秒)`
+    );
+  }
 
   for (let i = 0; i < USERS; i++) {
     const userId = generateId();
@@ -350,90 +468,18 @@ runSeed(async () => {
         });
       }
     }
+
+    // 区切りごとにDBへ流して手元の配列を空にする（詳しくは flush の説明）。
+    if ((i + 1) % CHUNK_USERS === 0) await flush();
   }
 
-  const now = new Date();
-  await insertMany(
-    "user",
-    ["id", "email", "name", "nickname", "emailVerified", "createdAt", "updatedAt"],
-    users
-  );
-  console.log(`ユーザーを投入: ${users.length}人`);
-
-  await insertMany(
-    "account",
-    ["id", "userId", "accountId", "providerId", "password", "createdAt", "updatedAt"],
-    accounts
-  );
-
-  await insertMany(
-    "FinalGoal",
-    ["userId", "facultyId", "isFirstChoice", "note", "status", "createdAt"],
-    goals
-  );
-  console.log(`志望校を投入: ${goals.length}件`);
-
-  await insertMany(
-    "Textbook",
-    ["userId", "name", "subject", "totalAmount", "rangeUnit", "createdAt", "updatedAt"],
-    textbooks.map((book) => [book.userId, book.name, book.subject, book.totalAmount, "ページ", now, now])
-  );
-  console.log(`参考書を投入: ${textbooks.length}件`);
-
-  if (preferences.length > 0) {
-    await insertMany(
-      "NotificationPreference",
-      ["userId", "morningEnabled", "eveningEnabled", "createdAt", "updatedAt"],
-      preferences
-    );
-    console.log(`通知の設定を投入: ${preferences.length}件`);
-  }
-
-  await insertMany(
-    "StudyPlan",
-    ["userId", "date", "content", "subject", "done", "createdAt", "updatedAt"],
-    plans.map((plan) => [plan.userId, dayAt(plan.offset), plan.content, plan.subject, plan.done, now, now])
-  );
-  console.log(`学習予定を投入: ${plans.length}件`);
-
-  // 実績から予定・参考書へ繋ぐために、採番された id を取り直す。
-  // 入れた順に id が増えるので、投入順の配列とそのまま対応させられる。
-  const planIds = await select<{ id: number }>(
-    `SELECT p.id FROM StudyPlan AS p
-     JOIN \`user\` AS u ON u.id = p.userId
-     WHERE u.email LIKE ? ORDER BY p.id ASC`,
-    [`%${EMAIL_DOMAIN}`]
-  );
-  const bookIds = await select<{ id: number }>(
-    `SELECT t.id FROM Textbook AS t
-     JOIN \`user\` AS u ON u.id = t.userId
-     WHERE u.email LIKE ? ORDER BY t.id ASC`,
-    [`%${EMAIL_DOMAIN}`]
-  );
-
-  await insertMany(
-    "StudyLog",
-    [
-      "userId", "date", "subject", "minutes", "memo",
-      "studyPlanId", "textbookId", "rangeStart", "rangeEnd", "rangeUnit",
-      "createdAt", "updatedAt",
-    ],
-    logs.map((log) => [
-      log.userId,
-      dayAt(log.offset),
-      log.subject,
-      log.minutes,
-      log.memo,
-      log.planIndex === null ? null : (planIds[log.planIndex]?.id ?? null),
-      log.textbookIndex === null ? null : (bookIds[log.textbookIndex]?.id ?? null),
-      log.rangeStart,
-      log.rangeEnd,
-      log.rangeStart === null ? null : "ページ",
-      now,
-      now,
-    ])
-  );
-  console.log(`学習実績を投入: ${logs.length}件`);
+  await flush();
+  console.log(`ユーザーを投入: ${totals.users}人`);
+  console.log(`志望校を投入: ${totals.goals}件`);
+  console.log(`参考書を投入: ${totals.textbooks}件`);
+  console.log(`通知の設定を投入: ${totals.preferences}件`);
+  console.log(`学習予定を投入: ${totals.plans}件`);
+  console.log(`学習実績を投入: ${totals.logs}件`);
 
   // 「初回の記録」の印を、実際の最初の実績に合わせる（通知やお祝いの分岐が現実的になる）
   await execute(
