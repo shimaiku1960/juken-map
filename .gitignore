@@ -64,3 +64,6 @@ memory/
 # Vite のビルド成果物
 /apps/web/dist
 /.standards
+
+# 負荷試験の実測結果（数字は auto-memory 側に残す）
+/load-tests/results
