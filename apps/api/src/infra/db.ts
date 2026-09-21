@@ -13,7 +13,10 @@ import mysql, {
 
 const pool: Pool = mysql.createPool({
   ...parseDatabaseUrl(process.env.DATABASE_URL),
-  connectionLimit: 5,
+  // 同時に張るDB接続の本数。ここが実質の同時処理数の上限で、超えた分はアプリ側で
+  // 順番待ちになる（DBが混む前にここで詰まる）。負荷試験で上限を動かして
+  // 影響を測れるよう環境変数で変えられるが、既定は今までどおり5。
+  connectionLimit: Number(process.env.DB_POOL_LIMIT ?? 5),
   // MySQL の DATETIME は時間帯を持たない「ただの日時」で、どの時間帯として
   // 読み書きするかはクライアントが決める。既定はプロセスのローカル時刻なので、
   // Mac（JST）で動かすと Prisma が保存してきた値と9時間ずれる。
