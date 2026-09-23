@@ -1,16 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ymdLocal } from "@/shared/date";
 import type {
   CompleteStudyPlanInput,
   CreateStudyLogInput,
 } from "@/shared/validations/studyLog";
+import { dashboardKey } from "@/web/hooks/dashboard-key";
 import { studyPlansKey } from "@/web/hooks/useStudyPlans";
 import { trackEvent } from "@/web/lib/analytics";
 
 // studyLogs（勉強の「実績」＝サーバー状態）の型・取得・queryKey をここに集約する。
 // 型は src/shared/dto/study.ts が正（re-export）。理由は useStudyPlans.ts のコメント参照。
-export type { DailyStudyMinutes, StudyDashboard, StudyLog } from "@/shared/dto/study";
-import type { DailyStudyMinutes, StudyDashboard, StudyLog } from "@/shared/dto/study";
+export type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
+import type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
 import { api } from "@/web/lib/api-client";
 
 // 実績の記録には入口が3つある（手入力・タイマー・予定の完了）が、GA4 へは
@@ -84,37 +84,6 @@ export function useStudyLogs(range: StudyLogRange, options?: { enabled?: boolean
   return useQuery({ ...studyLogsQueryOptions(range), enabled: options?.enabled ?? true });
 }
 
-/**
- * ダッシュボードの初回表示ぶんを1回で取るフック。
- *
- * 併せて、返ってきた明細のうち対象月ぶんを「その月のキャッシュ」に書き込む。
- * カレンダーは月ごとのキャッシュを見る作りのままなので、こうしておくと
- * 当月を表示するあいだは取得が起きない（staleTime が Infinity のため）。
- * カレンダーの側にコードは要らず、月を送ったときだけ通常どおり取りに行く。
- */
-export function useStudyDashboard() {
-  const queryClient = useQueryClient();
-
-  return useQuery({
-    queryKey: [...studyLogsKey, "dashboard"],
-    queryFn: async () => {
-      const data = await api.get<StudyDashboard>("/api/study-logs/dashboard", {
-        fallbackMessage: "学習実績の取得に失敗しました",
-      });
-      const range = monthRange(data.month);
-      queryClient.setQueryData(
-        studyLogsQueryOptions(range).queryKey,
-        data.logs.filter((log) => {
-          const ymd = ymdLocal(log.date);
-          return ymd >= range.from && ymd <= range.to;
-        })
-      );
-      return data;
-    },
-    ...STUDY_LOG_CACHE,
-  });
-}
-
 // "YYYY-MM" の1日〜末日。カレンダーが月ごとに取る範囲と同じ形にする。
 export function monthRange(month: string): { from: string; to: string } {
   const [year, m] = month.split("-").map(Number);
@@ -148,6 +117,7 @@ export function useCreateStudyLog() {
     onSuccess: (created) => {
       trackStudyLogCreated(created.isFirstStudyLog, "manual");
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
+      queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
   });
 }
@@ -169,6 +139,7 @@ export function useUpdateStudyLog() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
+      queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
   });
 }
@@ -184,6 +155,7 @@ export function useDeleteStudyLog() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
+      queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
   });
 }
@@ -231,6 +203,7 @@ export function useSaveStudySession() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: studyLogsKey }),
         queryClient.invalidateQueries({ queryKey: studyPlansKey }),
+        queryClient.invalidateQueries({ queryKey: dashboardKey }),
       ]);
     },
   });

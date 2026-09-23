@@ -2,6 +2,7 @@ import { execute, select, transaction, type Db } from "@/api/infra/db";
 import type { StudyLogRow, StudyPlanRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 import type { StudyPlan } from "@/shared/dto/study";
+import { userDateConditions, type DateRange } from "./date-range.ts";
 import {
   LOG_COLUMNS,
   PLAN_COLUMNS,
@@ -20,24 +21,37 @@ import {
 // 1日に複数の予定を入れるのは普通なので、同じ日付の中は作った順（id 昇順）に固定する。
 // ORDER BY date だけでは同じ日付の中の順番が決まらない（Prisma 版も DB 任せで、
 // 既存データでは結果的に id 昇順になっていた）。
-const LIST_SQL = `
-  SELECT ${PLAN_COLUMNS}, ${TEXTBOOK_COLUMNS}, l.id AS log_id
-  FROM StudyPlan AS p
-  LEFT JOIN Textbook AS t ON t.id = p.textbookId
-  LEFT JOIN StudyLog AS l ON l.studyPlanId = p.id
-  WHERE p.userId = ?
-  ORDER BY p.date ASC, p.id ASC
-`;
+/**
+ * 応答の件数の上限。期間で絞ったうえでの安全網で、ページングではない。
+ * 予定は日付の昇順で返すので、超えたときに落ちるのは期間の新しい側。
+ */
+const MAX_PLANS = 1000;
 
 /**
  * 自分の予定の一覧を、画面へ返す形（src/shared/dto/study.ts の StudyPlan）で返す。
- * 呼び出し元は GET /api/study-plans だけなので、日時もここで ISO 文字列にしておく。
+ * 日時もここで ISO 文字列にしておく。
+ *
+ * 期間で絞るのは実績と同じ理由＝以前は全期間・全件を返していて、2026-09-23の実測では
+ * 利用者あたり平均75.5KB あり、1画面の中でいちばん大きな応答になっていた。
  */
-export function listStudyPlans(userId: string): Promise<StudyPlan[]> {
+export function listStudyPlans(
+  userId: string,
+  range: DateRange
+): Promise<StudyPlan[]> {
   return measured("studyPlan.list", async () => {
+    const { where, params } = userDateConditions("p", userId, range);
     const rows = await select<
       StudyPlanRow & TextbookColumns & { log_id: number | null }
-    >(LIST_SQL, [userId]);
+    >(
+      `SELECT ${PLAN_COLUMNS}, ${TEXTBOOK_COLUMNS}, l.id AS log_id
+       FROM StudyPlan AS p
+       LEFT JOIN Textbook AS t ON t.id = p.textbookId
+       LEFT JOIN StudyLog AS l ON l.studyPlanId = p.id
+       WHERE ${where}
+       ORDER BY p.date ASC, p.id ASC
+       LIMIT ?`,
+      [...params, MAX_PLANS]
+    );
 
     return rows.map((row) => ({
       id: row.id,

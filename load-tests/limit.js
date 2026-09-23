@@ -34,10 +34,23 @@ if (!allowedBaseUrls.has(baseUrl)) {
 // 書き込み（記録の追加）は1割。実際の使われ方に寄せないと、
 // 一番重い一覧の負荷が薄まって限界点が甘く出る。
 // key は k6 のメトリクス名に使う（英数字と _ しか使えない）。name は結果の見出し。
+// カレンダーが月送りで取りにいく範囲。画面と同じ範囲で叩かないと応答の大きさが変わる。
+function monthBounds() {
+  const now = new Date();
+  const first = `${now.toISOString().slice(0, 7)}-01`;
+  const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+    .toISOString()
+    .slice(0, 10);
+  return [first, last];
+}
+const [MONTH_FIRST, MONTH_LAST] = monthBounds();
+
 const MIX = [
-  // ダッシュボードを1回開くと実績はこの1本。期間はサーバーが決めるので指定しない。
-  { key: "get_study_dashboard", name: "GET /api/study-logs/dashboard", weight: 30, kind: "read", path: "/api/study-logs/dashboard" },
-  { key: "get_study_plans", name: "GET /api/study-plans", weight: 25, kind: "read", path: "/api/study-plans" },
+  // ダッシュボードを1回開くとこの1本。実績・予定・連続記録日数がまとまって返る。
+  // 期間はサーバーが決めるので指定しない。
+  { key: "get_dashboard", name: "GET /api/dashboard", weight: 30, kind: "read", path: "/api/dashboard" },
+  // カレンダーの月送り。当月はダッシュボードに同梱されるので、これは他の月を見る動き。
+  { key: "get_study_plans_month", name: "GET /api/study-plans 月ぶん", weight: 25, kind: "read", path: `/api/study-plans?from=${MONTH_FIRST}&to=${MONTH_LAST}` },
   { key: "get_goals", name: "GET /api/goals", weight: 20, kind: "read", path: "/api/goals" },
   { key: "get_textbooks", name: "GET /api/textbooks", weight: 10, kind: "read", path: "/api/textbooks" },
   { key: "get_universities", name: "GET /api/universities", weight: 5, kind: "read", path: "/api/universities" },

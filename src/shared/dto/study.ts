@@ -35,13 +35,19 @@ export type StudyPlan = {
   updatedAt: string;
 };
 
+// 両端を含む期間（"YYYY-MM-DD"）。サーバーが何を返したかを画面へ伝えるのに使う。
+export type DateRange = { from: string; to: string };
+
 // ダッシュボードの初回表示ぶん。1画面を1リクエストで賄うためにまとめた形。
-// logs は「月初と7日前の早い方 〜 月末」で、画面側が用途ごとに絞って使う。
-export type StudyDashboard = {
-  month: string; // "YYYY-MM"（サーバーが決めた対象月）
-  from: string; // "YYYY-MM-DD"
-  to: string; // "YYYY-MM-DD"
+// 期間はサーバーが決める（画面・シミュレーション・負荷試験で計算が散らばらないように）。
+// 実績は過去だけなので当月＋直近7日、予定は未来にもあるので当月＋今週。
+// どちらも画面側が用途ごとに絞って使う。
+export type Dashboard = {
+  month: string; // "YYYY-MM"（今日の月）
+  logRange: DateRange;
   logs: StudyLog[];
+  planRange: DateRange;
+  plans: StudyPlan[];
   dailyMinutes: DailyStudyMinutes[];
 };
 

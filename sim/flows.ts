@@ -44,23 +44,17 @@ async function openHome(browser: Browser) {
 }
 
 /**
- * ダッシュボードが実績を取りにいく1本。期間はサーバーが決めるので、画面と同じく
- * パラメータ無しで叩く（useStudyDashboard と揃える）。
+ * 画面の「/dashboard」を開いたとき。
+ * 実績・予定・連続記録日数は1本の集約APIから来る（期間はサーバーが決める）。
  */
-function studyLogRequests(browser: Browser) {
-  return [browser.request("GET", "/api/study-logs/dashboard")];
-}
-
-/** 画面の「/dashboard」を開いたとき。 */
 async function openDashboard(browser: Browser) {
   await browser.request("GET", "/api/auth/get-session");
-  const [, , plans] = await Promise.all([
+  const [, , dashboard] = await Promise.all([
     browser.request("POST", "/api/analytics/registration"),
     browser.request<Goal[]>("GET", "/api/goals"),
-    browser.request<StudyPlan[]>("GET", "/api/study-plans"),
-    ...studyLogRequests(browser),
+    browser.request<{ plans: StudyPlan[] }>("GET", "/api/dashboard"),
   ]);
-  return plans;
+  return dashboard.plans;
 }
 
 /**
@@ -209,12 +203,12 @@ export async function dailyRecord(
         ...(memo ? { memo } : {}),
       });
     }
-    // 保存のあとは実績と予定の両方が取り直される（useStudyLogs の invalidate）。
-    const [latestPlans] = await Promise.all([
-      browser.request<StudyPlan[]>("GET", "/api/study-plans"),
-      ...studyLogRequests(browser),
-    ]);
-    plans = latestPlans;
+    // 保存のあとは集約APIが取り直される（useStudyLogs の invalidate）。
+    const refreshed = await browser.request<{ plans: StudyPlan[] }>(
+      "GET",
+      "/api/dashboard"
+    );
+    plans = refreshed.plans;
   }
 
   // D. たまにしか起きないこと

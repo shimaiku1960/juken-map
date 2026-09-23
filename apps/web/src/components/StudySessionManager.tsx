@@ -58,29 +58,26 @@ function reviewValuesOf(session: ActiveStudySession): ReviewValues {
  *   - 終了後の確認と保存 → studySession/StudySessionReviewDialog
  */
 export default function StudySessionManager({
-  initialPlans,
   userId,
   readOnly = false,
   variant = "compact",
 }: {
-  // SPA では初期データをサーバーから渡せないので任意にする。
-  // [] を既定値にすると TanStack Query が initialData ありと判断して staleTime の間
-  // フェッチせず空表示になるため、undefined を通すこと。
-  initialPlans?: StudyPlan[];
   userId: string;
   readOnly?: boolean;
   /** hero: ログイン直後の集中スタート画面向けに、ボタンを中央・大きく表示する */
   variant?: "compact" | "hero";
 }) {
   const saveSession = useSaveStudySession();
-  const { data: studyPlans = [] } = useStudyPlans(initialPlans);
+  // この画面が使うのは「今日の予定」だけなので、その1日ぶんしか取らない。
+  const today = todayYmd();
+  const { data: studyPlans = [] } = useStudyPlans({ from: today, to: today });
   // 今日の予定のうち、まだ実績を記録していないものだけを選ばせる。
   const selectablePlans = useMemo<SelectablePlan[]>(
     () =>
       studyPlans
         .filter(
           (plan) =>
-            plan.date.slice(0, 10) === todayYmd() && plan.studyLogId == null
+            plan.date.slice(0, 10) === today && plan.studyLogId == null
         )
         .map((plan) => ({
           id: plan.id,

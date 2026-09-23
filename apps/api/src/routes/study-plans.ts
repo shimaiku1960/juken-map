@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { isDuplicateEntry } from "@/api/infra/db";
+import { shiftYmd, todayYmdTokyo } from "@/shared/date";
 import {
   createStudyPlansSchema,
   updateStudyPlanSchema,
@@ -20,12 +22,36 @@ import { denyDemoWrite, requireSession } from "../context.ts";
 
 type IdParams = { id: string };
 
+// 期間を省いて呼ばれたときの幅。予定は未来にもあるので前後に取る。画面はどれも
+// 明示して呼ぶので、これは古いクライアントや手で叩いたときのための既定値。
+const DEFAULT_PAST_DAYS = 90;
+const DEFAULT_FUTURE_DAYS = 90;
+
+const ymdField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "日付は YYYY-MM-DD で指定してください");
+
+const rangeQuerySchema = z.object({
+  from: ymdField.optional(),
+  to: ymdField.optional(),
+});
+
 export function registerStudyPlanRoutes(app: FastifyInstance) {
   app.get("/api/study-plans", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
 
-    return listStudyPlans(session.user.id);
+    const parsed = rangeQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues });
+    }
+
+    // 今日は日本時間で決める（利用者も通知も日本時間で動いている）。
+    const today = todayYmdTokyo();
+    return listStudyPlans(session.user.id, {
+      from: parsed.data.from ?? shiftYmd(today, -DEFAULT_PAST_DAYS),
+      to: parsed.data.to ?? shiftYmd(today, DEFAULT_FUTURE_DAYS),
+    });
   });
 
   app.post("/api/study-plans", async (request, reply) => {

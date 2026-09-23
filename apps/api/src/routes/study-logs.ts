@@ -4,11 +4,10 @@ import { createStudyLogSchema } from "@/shared/validations/studyLog";
 import { shiftYmd, todayYmdTokyo } from "@/shared/date";
 import {
   createStudyLog,
-  getStudyDashboard,
   listDailyStudyMinutes,
   listStudyLogs,
-  type StudyLogRange,
 } from "@/api/services/study-log-service";
+import type { DateRange } from "@/api/services/date-range";
 import { findOwnedTextbook } from "@/api/services/textbook-service";
 import { textbookRangeError } from "@/api/domain/textbookRange";
 import { denyDemoWrite, requireSession } from "../context.ts";
@@ -35,37 +34,14 @@ const rangeQuerySchema = z.object({
 function toRange(
   query: z.infer<typeof rangeQuerySchema>,
   defaultDays: number
-): StudyLogRange {
+): DateRange {
   return {
     from: query.from ?? shiftYmd(todayYmdTokyo(), -(defaultDays - 1)),
     to: query.to,
   };
 }
 
-const monthQuerySchema = z.object({
-  month: z
-    .string()
-    .regex(/^\d{4}-\d{2}$/, "月は YYYY-MM で指定してください")
-    .optional(),
-});
-
 export function registerStudyLogRoutes(app: FastifyInstance) {
-  // ダッシュボードの初回表示ぶんを1回で返す。別々に取ると1画面で3リクエストになり、
-  // そのたびにセッション照会が走る（2026-09-23の限界点試験で効いていると分かった）。
-  app.get("/api/study-logs/dashboard", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-
-    const parsed = monthQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
-    }
-
-    // 月を省いたら今日の月。日本時間で決めるのは、利用者も通知も日本時間で動いているため。
-    const month = parsed.data.month ?? todayYmdTokyo().slice(0, 7);
-    return getStudyDashboard(session.user.id, month);
-  });
-
   app.get("/api/study-logs", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;

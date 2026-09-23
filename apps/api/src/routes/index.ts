@@ -12,6 +12,7 @@ import { registerNotificationPreferenceRoutes } from "./notification-preferences
 import { registerProfileRoutes } from "./profile.ts";
 import { registerSimRoutes } from "./sim.ts";
 import { registerStudyLogItemRoutes } from "./study-log-item.ts";
+import { registerDashboardRoutes } from "./dashboard.ts";
 import { registerStudyLogRoutes } from "./study-logs.ts";
 import { registerStudyPlanRoutes } from "./study-plans.ts";
 import { registerTextbookMasterRoutes } from "./textbook-masters.ts";
@@ -31,6 +32,7 @@ export function registerRoutes(app: FastifyInstance) {
   registerNotificationPreferenceRoutes(app);
   registerProfileRoutes(app);
   registerSimRoutes(app);
+  registerDashboardRoutes(app);
   registerStudyLogRoutes(app);
   registerStudyLogItemRoutes(app);
   registerStudyPlanRoutes(app);
