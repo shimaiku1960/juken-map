@@ -16,6 +16,31 @@ ALLOY_IMAGE="grafana/alloy:v1.19.2"
 ALLOY_DIR="/home/ubuntu/juken-map/alloy"
 METRICS_PORT="9464"
 
+# ---- 転送先のポートを決める（AWS も Docker も触る前に済ませる）----
+# ここだけを手元で試せるよう、パスは環境変数で差し替えられるようにし、
+# DEPLOY_PORTS_ONLY=1 なら判断結果だけ出して終わる（scripts/test-deploy-ports.sh）。
+UPSTREAM_CONF="${UPSTREAM_CONF:-/etc/nginx/conf.d/juken-map-upstream.conf}"
+SITE_CONF="${SITE_CONF:-/etc/nginx/sites-available/default}"
+PORT_A=3000
+PORT_B=3001
+
+# いま nginx が向いている先。ファイルがまだ無い初回は、これまで通り3000で動いているとみなす。
+#
+# ⚠️ ここで `sed ... "$UPSTREAM_CONF" | head -1` と書くと、ファイルが無い初回に sed が
+# exit 2 を返し、pipefail と set -e でスクリプトが無言で死ぬ（2026-09-23に本番で踏んだ）。
+# 読む前に必ず存在を確かめること。
+CURRENT_PORT="$PORT_A"
+if [ -f "$UPSTREAM_CONF" ]; then
+  found="$(sed -nE 's/.*127\.0\.0\.1:([0-9]+).*/\1/p' "$UPSTREAM_CONF" | head -1)"
+  [ -n "$found" ] && CURRENT_PORT="$found"
+fi
+if [ "$CURRENT_PORT" = "$PORT_A" ]; then NEW_PORT="$PORT_B"; else NEW_PORT="$PORT_A"; fi
+
+if [ "${DEPLOY_PORTS_ONLY:-}" = "1" ]; then
+  echo "CURRENT_PORT=$CURRENT_PORT NEW_PORT=$NEW_PORT"
+  exit 0
+fi
+
 # Secrets Managerから取得した値はコンテナ作成時だけ一時ファイルに置く。
 # 既存.envから移行対象キーを除外し、同じ環境変数が重複しない状態でDockerへ渡す。
 RUNTIME_ENV_FILE="$(mktemp)"
@@ -88,11 +113,6 @@ docker pull "$REPO:$IMAGE_TAG"
 # 切り替わるまで古いコンテナが応え続けるので、無人の時間が生まれない。
 # おまけに、起動に失敗しても切り替えないだけで済む＝本番には何も起きない。
 
-UPSTREAM_CONF="/etc/nginx/conf.d/juken-map-upstream.conf"
-SITE_CONF="/etc/nginx/sites-available/default"
-PORT_A=3000
-PORT_B=3001
-
 write_upstream() {
   cat > "$UPSTREAM_CONF" <<EOF
 # .github/scripts/deploy-ec2.sh がデプロイのたびに書き換える。手で編集しない。
@@ -105,10 +125,6 @@ EOF
 host_port_of() {
   docker inspect --format '{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{.HostPort}}{{"\n"}}{{end}}{{end}}' "$1" 2>/dev/null | head -1
 }
-
-# いま nginx が向いている先。ファイルが無ければ、これまで通り3000で動いているとみなす。
-CURRENT_PORT="$(sed -nE 's/.*127\.0\.0\.1:([0-9]+).*/\1/p' "$UPSTREAM_CONF" 2>/dev/null | head -1)"
-CURRENT_PORT="${CURRENT_PORT:-$PORT_A}"
 
 # 初回だけ: nginx を upstream 経由にする。中身は今のポートのままなので挙動は変わらない。
 [ -f "$UPSTREAM_CONF" ] || write_upstream "$CURRENT_PORT"
@@ -139,7 +155,6 @@ if docker inspect juken-map-next >/dev/null 2>&1; then
   fi
 fi
 
-if [ "$CURRENT_PORT" = "$PORT_A" ]; then NEW_PORT="$PORT_B"; else NEW_PORT="$PORT_A"; fi
 echo "deploy: nginx は $CURRENT_PORT を向いている -> 新しいコンテナを $NEW_PORT で起こす"
 
 docker run -d \
