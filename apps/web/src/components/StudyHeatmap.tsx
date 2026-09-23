@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   type StudyLog,
   useDeleteStudyLog,
+  useStudyLogs,
 } from "@/web/hooks/useStudyLogs";
 import type { StudyPlan } from "@/web/hooks/useStudyPlans";
 import StudyDayPlanPanel from "@/web/components/StudyDayPlanPanel";
@@ -55,17 +56,22 @@ function planDate(plan: StudyPlan): string {
   return plan.date.slice(0, 10);
 }
 
+// 表示中の月（"YYYY-MM-01"）の1日〜末日。実績はこの範囲だけ取れば足りる。
+function monthRange(monthYmd: string): { from: string; to: string } {
+  const [year, month] = monthYmd.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return { from: monthYmd, to: `${monthYmd.slice(0, 7)}-${lastDay}` };
+}
+
 export type StudyHeatmapHandle = {
   showToday: (openCreate: boolean) => void;
 };
 
 const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
-  logs: StudyLog[];
   plans: StudyPlan[];
   today: string;
   readOnly: boolean;
 }>(function StudyHeatmap({
-  logs,
   plans,
   today,
   readOnly,
@@ -73,6 +79,9 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
   const deleteLog = useDeleteStudyLog();
   const currentMonth = `${today.slice(0, 7)}-01`;
   const [displayMonth, setDisplayMonth] = useState(currentMonth);
+  // グリッドも下の明細も表示中の月しか使わないので、実績はその月ぶんだけ取る。
+  // 月を送ると取り直しになるが、1か月ぶんは小さく、一度見た月はキャッシュに残る。
+  const { data: logs = [] } = useStudyLogs(monthRange(displayMonth));
   const [selectedYmd, setSelectedYmd] = useState(today);
   const [recordDate, setRecordDate] = useState<string | null>(null);
   const [editingLog, setEditingLog] = useState<StudyLog | null>(null);

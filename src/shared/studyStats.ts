@@ -1,4 +1,4 @@
-import { ymdLocal } from "@/shared/date";
+import { shiftYmd, ymdLocal } from "@/shared/date";
 import { SUBJECTS } from "@/shared/subjects";
 
 // 集計に必要な最小限の形（実績＝日付・学習時間・科目だけ見る）
@@ -7,14 +7,6 @@ export type StatLog = {
   minutes: number;
   subject?: string | null;
 };
-
-// "YYYY-MM-DD" を n 日ずらした "YYYY-MM-DD" を返す（ローカル基準）
-function shiftYmd(ymd: string, days: number): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  return ymdLocal(dt);
-}
 
 // その日に学習時間が1分でもある日を「達成日」とし、
 // 今日から遡って連続する達成日数を返す。

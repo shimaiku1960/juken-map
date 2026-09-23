@@ -37,6 +37,15 @@ export function todayYmdTokyo(): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+// "YYYY-MM-DD" を n 日ずらした "YYYY-MM-DD"（負の数で過去へ）。
+// 月またぎ・うるう年は Date に任せる。時刻を持たないので時間帯の影響を受けない。
+export function shiftYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return ymdLocal(date);
+}
+
 // 今日から n 日後の "YYYY-MM-DD"
 export function ymdAfterDays(n: number): string {
   const d = new Date();

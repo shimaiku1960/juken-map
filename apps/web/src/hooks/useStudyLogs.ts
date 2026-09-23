@@ -8,8 +8,8 @@ import { trackEvent } from "@/web/lib/analytics";
 
 // studyLogs（勉強の「実績」＝サーバー状態）の型・取得・queryKey をここに集約する。
 // 型は src/shared/dto/study.ts が正（re-export）。理由は useStudyPlans.ts のコメント参照。
-export type { StudyLog } from "@/shared/dto/study";
-import type { StudyLog } from "@/shared/dto/study";
+export type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
+import type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
 import { api } from "@/web/lib/api-client";
 
 // 実績の記録には入口が3つある（手入力・タイマー・予定の完了）が、GA4 へは
@@ -26,22 +26,46 @@ function trackStudyLogCreated(
   );
 }
 
+// 実績を取りにいく期間（両端を含む "YYYY-MM-DD"）。
+//
+// 期間を必ず指定するのは、API が全期間・全件を返していた頃、使い込んだ利用者で
+// 1件の応答が610KBになっていたため。画面が本当に要る範囲だけを取る。
+export type StudyLogRange = { from: string; to?: string };
+
 // studyLogs キャッシュの唯一の住所。invalidate も含め全員がこれを参照する。
+// 期間ごとに別のキャッシュになるが、無効化はこの前方一致でまとめて効く。
 export const studyLogsKey = ["studyLogs"] as const;
 
-// サーバーから最新の studyLogs を取得する（useQuery の queryFn）
-export async function fetchStudyLogs(): Promise<StudyLog[]> {
-  return api.get<StudyLog[]>("/api/study-logs", {
+function rangeQuery(range: StudyLogRange): string {
+  const params = new URLSearchParams({ from: range.from });
+  if (range.to !== undefined) params.set("to", range.to);
+  return params.toString();
+}
+
+// サーバーから期間ぶんの studyLogs を取得する（useQuery の queryFn）
+export async function fetchStudyLogs(range: StudyLogRange): Promise<StudyLog[]> {
+  return api.get<StudyLog[]>(`/api/study-logs?${rangeQuery(range)}`, {
     fallbackMessage: "学習実績の取得に失敗しました",
   });
 }
 
-// studyLogs を購読するフック。SSR で取得済みの initialLogs があれば初期キャッシュに使う。
-export function useStudyLogs(initialLogs?: StudyLog[]) {
+// 期間ぶんの実績の明細を購読するフック。
+export function useStudyLogs(range: StudyLogRange) {
   return useQuery({
-    queryKey: studyLogsKey,
-    queryFn: fetchStudyLogs,
-    initialData: initialLogs,
+    queryKey: [...studyLogsKey, "list", range.from, range.to ?? null],
+    queryFn: () => fetchStudyLogs(range),
+  });
+}
+
+// 日ごとの合計学習時間だけを購読するフック。連続記録日数のように、
+// 明細は要らないが長い期間が要る集計に使う。
+export function useDailyStudyMinutes(range: StudyLogRange) {
+  return useQuery({
+    queryKey: [...studyLogsKey, "daily", range.from, range.to ?? null],
+    queryFn: () =>
+      api.get<DailyStudyMinutes[]>(`/api/study-logs/daily?${rangeQuery(range)}`, {
+        fallbackMessage: "学習実績の取得に失敗しました",
+      }),
   });
 }
 

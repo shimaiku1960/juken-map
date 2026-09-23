@@ -35,6 +35,13 @@ export type StudyPlan = {
   updatedAt: string;
 };
 
+// 日別の合計学習時間。ヒートマップの連続記録日数のように「その日に何分やったか」
+// しか要らない画面のために、明細ではなくこの形で返す（1年ぶんでも数十KBに収まる）。
+export type DailyStudyMinutes = {
+  date: string; // ISO 文字列（StudyLog.date と同じ形）
+  minutes: number;
+};
+
 export type StudyLog = {
   id: number;
   userId: string;

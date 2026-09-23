@@ -1,11 +1,11 @@
 import { useRef } from "react";
-import { useStudyLogs, type StudyLog } from "@/web/hooks/useStudyLogs";
+import { useDailyStudyMinutes, useStudyLogs } from "@/web/hooks/useStudyLogs";
 import { useStudyPlans, type StudyPlan } from "@/web/hooks/useStudyPlans";
 import {
   computeStreak,
   computeSubjectMinutes,
 } from "@/shared/studyStats";
-import { ymdLocal, todayYmd, ymdAfterDays } from "@/shared/date";
+import { shiftYmd, ymdLocal, todayYmd, ymdAfterDays } from "@/shared/date";
 import { formatMinutes } from "@/web/lib/studyLog";
 import StreakBadge from "@/web/components/StreakBadge";
 import StudyHeatmap, { type StudyHeatmapHandle } from "@/web/components/StudyHeatmap";
@@ -14,21 +14,30 @@ import TodayStudyPlans from "@/web/components/TodayStudyPlans";
 import { Card, CardContent } from "@/web/components/ui/card";
 import { studyPlanLabel } from "@/web/lib/studyPlan";
 
+// この画面が明細を要るのは「今日」と「直近7日」だけ。
+// 連続記録日数はもっと遡る必要があるが、日ごとの合計しか見ないので別の軽い API から取る。
+const RECENT_DAYS = 7;
+const STREAK_DAYS = 365;
+
 // 実績（StudyLog）まわりのダッシュボード。記録するとキャッシュ更新で
 // ストリーク・ヒートマップ・科目別バーが即座に伸びる（クライアントで集計）。
 export default function StudyRecordDashboard({
-  initialLogs,
   initialPlans,
   readOnly = false,
 }: {
   // SPA では初期データをサーバーから渡せないので任意にする。
   // ここで [] を既定値にすると TanStack Query が initialData ありと判断して
   // staleTime の間フェッチせず、空のまま表示されてしまうので undefined を通す。
-  initialLogs?: StudyLog[];
   initialPlans?: StudyPlan[];
   readOnly?: boolean;
 }) {
-  const { data: logs = [] } = useStudyLogs(initialLogs);
+  const today = todayYmd();
+  // 直近7日間（今日を含む）
+  const weekFrom = ymdAfterDays(-(RECENT_DAYS - 1));
+  const { data: logs = [] } = useStudyLogs({ from: weekFrom });
+  const { data: dailyMinutes = [] } = useDailyStudyMinutes({
+    from: shiftYmd(today, -(STREAK_DAYS - 1)),
+  });
   const {
     data: plans = [],
     isPending: plansLoading,
@@ -36,9 +45,8 @@ export default function StudyRecordDashboard({
     refetch: refetchPlans,
   } = useStudyPlans(initialPlans);
 
-  const today = todayYmd();
   const heatmapRef = useRef<StudyHeatmapHandle>(null);
-  const streak = computeStreak(logs, today);
+  const streak = computeStreak(dailyMinutes, today);
 
   const todayMinutes = logs
     .filter((l) => ymdLocal(l.date) === today)
@@ -70,7 +78,6 @@ export default function StudyRecordDashboard({
   }).length;
 
   // 直近7日間（今日を含む）の科目別合計
-  const weekFrom = ymdAfterDays(-6);
   const subjectMinutes = computeSubjectMinutes(logs, weekFrom, today);
 
   const showTodayInCalendar = (openCreate: boolean) => {
@@ -124,7 +131,6 @@ export default function StudyRecordDashboard({
             </p>
             <StudyHeatmap
               ref={heatmapRef}
-              logs={logs}
               plans={plans}
               today={today}
               readOnly={readOnly}

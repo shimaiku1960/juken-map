@@ -1,7 +1,7 @@
 import { execute, select, transaction, type Db } from "@/api/infra/db";
 import type { StudyLogRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
-import type { StudyLog } from "@/shared/dto/study";
+import type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
 import {
   LOG_COLUMNS,
   TEXTBOOK_COLUMNS,
@@ -10,11 +10,49 @@ import {
 } from "./study-columns.ts";
 
 /**
+ * 一覧・日別集計が対象にする期間。両端を含む "YYYY-MM-DD"。to を省くと上限なし。
+ *
+ * 期間を必須にしているのは、以前ここが全期間・全件を返していて、使い込んだ利用者で
+ * 1,500件・610KB になっていたため（2026-09-21の限界点試験で、アプリ全体の
+ * throughput を決めているのがこの応答の大きさだと分かった）。
+ */
+export type StudyLogRange = { from: string; to?: string };
+
+/**
+ * 応答の件数の上限。期間で絞ったうえでの安全網で、ページングではない。
+ * 新しい日付から詰めるので、超えたときに落ちるのは期間の古い側。
+ */
+const MAX_LOGS = 1000;
+
+/**
+ * 期間を DATETIME の比較に使える半開区間 [from, toExclusive) にする。
+ *
+ * 実績の date は「その日の 00:00 UTC」で入っている（infra/db.ts が timezone: "Z" で、
+ * 記録時に new Date("YYYY-MM-DD") を渡しているため）。to の当日ぶんを含めたいので、
+ * 上限は to の翌日の 00:00 にする。
+ */
+function rangeConditions(userId: string, range: StudyLogRange) {
+  const conditions = ["l.userId = ?", "l.date >= ?"];
+  const params: unknown[] = [userId, new Date(range.from)];
+  if (range.to !== undefined) {
+    conditions.push("l.date < ?");
+    const toExclusive = new Date(range.to);
+    toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+    params.push(toExclusive);
+  }
+  return { where: conditions.join(" AND "), params };
+}
+
+/**
  * 自分の実績の一覧を、画面へ返す形（src/shared/dto/study.ts の StudyLog）で返す。
  * 呼び出し元は GET /api/study-logs だけなので、日時もここで ISO 文字列にしておく。
  */
-export function listStudyLogs(userId: string): Promise<StudyLog[]> {
+export function listStudyLogs(
+  userId: string,
+  range: StudyLogRange
+): Promise<StudyLog[]> {
   return measured("studyLog.list", async () => {
+    const { where, params } = rangeConditions(userId, range);
     // Prisma の include は実績と参考書で SQL を2本に分けていた。LEFT JOIN 1本にする。
     //
     // 実績の日付は日単位なので、同じ日付の実績はよくある。ORDER BY date だけでは
@@ -24,9 +62,10 @@ export function listStudyLogs(userId: string): Promise<StudyLog[]> {
       `SELECT ${LOG_COLUMNS}, ${TEXTBOOK_COLUMNS}
        FROM StudyLog AS l
        LEFT JOIN Textbook AS t ON t.id = l.textbookId
-       WHERE l.userId = ?
-       ORDER BY l.date DESC, l.id ASC`,
-      [userId]
+       WHERE ${where}
+       ORDER BY l.date DESC, l.id ASC
+       LIMIT ?`,
+      [...params, MAX_LOGS]
     );
     return rows.map((row) => ({
       id: row.id,
@@ -43,6 +82,37 @@ export function listStudyLogs(userId: string): Promise<StudyLog[]> {
       studyPlanId: row.studyPlanId,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+    }));
+  });
+}
+
+/**
+ * 日ごとの合計学習時間を返す。連続記録日数（ストリーク）のように
+ * 「その日に何分やったか」しか要らない画面のためのもの。
+ *
+ * 明細を全部返して画面側で合計していたのをこちらへ移した。1件あたり参考書もメモも
+ * 範囲も付いてこないので、1年ぶんでも明細の数十分の1で済む。
+ * (userId, date) の索引がそのまま GROUP BY に効くので、並べ替えも起きない。
+ */
+export function listDailyStudyMinutes(
+  userId: string,
+  range: StudyLogRange
+): Promise<DailyStudyMinutes[]> {
+  return measured("studyLog.daily", async () => {
+    const { where, params } = rangeConditions(userId, range);
+    const rows = await select<{ date: Date; minutes: string }>(
+      `SELECT l.date, SUM(l.minutes) AS minutes
+       FROM StudyLog AS l
+       WHERE ${where}
+       GROUP BY l.date
+       ORDER BY l.date DESC
+       LIMIT ?`,
+      [...params, MAX_LOGS]
+    );
+    return rows.map((row) => ({
+      date: row.date.toISOString(),
+      // SUM() は INT でも DECIMAL になり、mysql2 は文字列で返す。
+      minutes: Number(row.minutes),
     }));
   });
 }

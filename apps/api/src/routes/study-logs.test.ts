@@ -27,7 +27,12 @@ const {
 const getSession = auth.api.getSession as unknown as Mock;
 const app = buildTestApp(registerStudyLogRoutes);
 
-const get = () => request(app, "GET", "/api/study-logs");
+// 既定の期間（直近90日）は「今日」に対して決まるので、固定日付の実績を読むテストは
+// 期間を明示して叩く。既定の側は専用のテストで確かめる。
+const get = (query = "?from=2026-02-01&to=2026-02-28") =>
+  request(app, "GET", `/api/study-logs${query}`);
+const getDaily = (query = "?from=2026-02-01&to=2026-02-28") =>
+  request(app, "GET", `/api/study-logs/daily${query}`);
 const post = (body: unknown) => request(app, "POST", "/api/study-logs", body);
 
 const validBody = { date: "2026-02-20", minutes: 60, subject: "english" };
@@ -93,6 +98,63 @@ describe("GET /api/study-logs", () => {
       updatedAt: expect.stringMatching(/Z$/),
     });
     expect(body[2].textbook).toBeNull();
+  });
+
+  it("期間の外の実績は返さない（両端は含む）", async () => {
+    const before = await createStudyLog(owner.id, { date: new Date("2026-02-09T00:00:00.000Z") });
+    const first = await createStudyLog(owner.id, { date: new Date("2026-02-10T00:00:00.000Z") });
+    const last = await createStudyLog(owner.id, { date: new Date("2026-02-12T00:00:00.000Z") });
+    const after = await createStudyLog(owner.id, { date: new Date("2026-02-13T00:00:00.000Z") });
+
+    const res = await get("?from=2026-02-10&to=2026-02-12");
+
+    expect(res.statusCode).toBe(200);
+    const ids = res.json().map((log: { id: number }) => log.id);
+    expect(ids).toEqual([last, first]);
+    expect(ids).not.toContain(before);
+    expect(ids).not.toContain(after);
+  });
+
+  it("期間を省くと直近90日だけを返す（全期間は返さない）", async () => {
+    const today = new Date();
+    const recent = await createStudyLog(owner.id, { date: today });
+    const old = await createStudyLog(owner.id, {
+      date: new Date(today.getTime() - 200 * 24 * 60 * 60 * 1000),
+    });
+
+    const ids = (await get("")).json().map((log: { id: number }) => log.id);
+
+    expect(ids).toContain(recent);
+    expect(ids).not.toContain(old);
+  });
+
+  it("日付の形が違えば 400 を返す", async () => {
+    expect((await get("?from=2026-2-1")).statusCode).toBe(400);
+  });
+});
+
+describe("GET /api/study-logs/daily", () => {
+  it("未ログインなら 401 を返す", async () => {
+    getSession.mockResolvedValue(null);
+
+    expect((await getDaily()).statusCode).toBe(401);
+  });
+
+  it("同じ日の実績を合計して、新しい日付順に返す", async () => {
+    await createStudyLog(owner.id, { date: new Date("2026-02-20T00:00:00.000Z"), minutes: 60 });
+    await createStudyLog(owner.id, { date: new Date("2026-02-20T00:00:00.000Z"), minutes: 30 });
+    await createStudyLog(owner.id, { date: new Date("2026-02-19T00:00:00.000Z"), minutes: 45 });
+    const other = await createUser();
+    await createStudyLog(other.id, { date: new Date("2026-02-20T00:00:00.000Z"), minutes: 999 });
+
+    const res = await getDaily();
+
+    expect(res.statusCode).toBe(200);
+    // 明細は付けず、日付と合計分だけを返す（応答を小さく保つのが目的）。
+    expect(res.json()).toEqual([
+      { date: "2026-02-20T00:00:00.000Z", minutes: 90 },
+      { date: "2026-02-19T00:00:00.000Z", minutes: 45 },
+    ]);
   });
 });
 
