@@ -30,37 +30,20 @@ if (!allowedBaseUrls.has(baseUrl)) {
   fail(`本番や外部は対象にしません: ${baseUrl}`);
 }
 
-// ダッシュボードが実績を取りにいく期間。画面と同じ範囲で叩かないと、
-// 応答の大きさが実際と変わって限界点が正しく出ない。
-// （2026-09-23以降、一覧APIは期間を指定して呼ぶ。指定しないと既定の90日が返る）
-function ymd(offsetDays) {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + offsetDays);
-  return date.toISOString().slice(0, 10);
-}
-const MONTH_FIRST = `${ymd(0).slice(0, 7)}-01`;
-const MONTH_LAST = new Date(
-  Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0)
-)
-  .toISOString()
-  .slice(0, 10);
-
 // 画面がどのAPIを何回呼ぶかの比率。ダッシュボードを開く動きが中心で、
 // 書き込み（記録の追加）は1割。実際の使われ方に寄せないと、
 // 一番重い一覧の負荷が薄まって限界点が甘く出る。
 // key は k6 のメトリクス名に使う（英数字と _ しか使えない）。name は結果の見出し。
 const MIX = [
-  // ダッシュボードを1回開くと実績は3本に分かれる（直近7日の明細・当月の明細・1年ぶんの日別合計）。
-  { key: "get_study_logs_recent", name: "GET /api/study-logs 直近7日", weight: 10, kind: "read", path: `/api/study-logs?from=${ymd(-6)}` },
-  { key: "get_study_logs_month", name: "GET /api/study-logs 当月", weight: 10, kind: "read", path: `/api/study-logs?from=${MONTH_FIRST}&to=${MONTH_LAST}` },
-  { key: "get_study_logs_daily", name: "GET /api/study-logs/daily 1年", weight: 10, kind: "read", path: `/api/study-logs/daily?from=${ymd(-364)}` },
+  // ダッシュボードを1回開くと実績はこの1本。期間はサーバーが決めるので指定しない。
+  { key: "get_study_dashboard", name: "GET /api/study-logs/dashboard", weight: 30, kind: "read", path: "/api/study-logs/dashboard" },
   { key: "get_study_plans", name: "GET /api/study-plans", weight: 25, kind: "read", path: "/api/study-plans" },
   { key: "get_goals", name: "GET /api/goals", weight: 20, kind: "read", path: "/api/goals" },
   { key: "get_textbooks", name: "GET /api/textbooks", weight: 10, kind: "read", path: "/api/textbooks" },
   { key: "get_universities", name: "GET /api/universities", weight: 5, kind: "read", path: "/api/universities" },
   { key: "post_study_logs", name: "POST /api/study-logs", weight: 10, kind: "write", path: "/api/study-logs" },
 ];
-// 比率は MIX_WEIGHTS で上書きできる（例: MIX_WEIGHTS=0,0,0,0,50,50,0,0 で軽いAPIだけ）。
+// 比率は MIX_WEIGHTS で上書きできる（例: MIX_WEIGHTS=0,0,50,50,0,0 で軽いAPIだけ）。
 // 何が詰まりの原因かを切り分けるとき、重い一覧を外した比率と比べる。
 if (__ENV.MIX_WEIGHTS) {
   const weights = __ENV.MIX_WEIGHTS.split(",").map(Number);

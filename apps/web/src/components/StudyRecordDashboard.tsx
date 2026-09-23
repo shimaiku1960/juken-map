@@ -1,11 +1,11 @@
 import { useRef } from "react";
-import { useDailyStudyMinutes, useStudyLogs } from "@/web/hooks/useStudyLogs";
+import { useStudyDashboard } from "@/web/hooks/useStudyLogs";
 import { useStudyPlans, type StudyPlan } from "@/web/hooks/useStudyPlans";
 import {
   computeStreak,
   computeSubjectMinutes,
 } from "@/shared/studyStats";
-import { shiftYmd, ymdLocal, todayYmd, ymdAfterDays } from "@/shared/date";
+import { ymdLocal, todayYmd, ymdAfterDays } from "@/shared/date";
 import { formatMinutes } from "@/web/lib/studyLog";
 import StreakBadge from "@/web/components/StreakBadge";
 import StudyHeatmap, { type StudyHeatmapHandle } from "@/web/components/StudyHeatmap";
@@ -15,9 +15,8 @@ import { Card, CardContent } from "@/web/components/ui/card";
 import { studyPlanLabel } from "@/web/lib/studyPlan";
 
 // この画面が明細を要るのは「今日」と「直近7日」だけ。
-// 連続記録日数はもっと遡る必要があるが、日ごとの合計しか見ないので別の軽い API から取る。
+// 取得はサーバーが範囲を決めて1回で返すので、ここでは絞り込みにしか使わない。
 const RECENT_DAYS = 7;
-const STREAK_DAYS = 365;
 
 // 実績（StudyLog）まわりのダッシュボード。記録するとキャッシュ更新で
 // ストリーク・ヒートマップ・科目別バーが即座に伸びる（クライアントで集計）。
@@ -34,12 +33,11 @@ export default function StudyRecordDashboard({
   const today = todayYmd();
   // 直近7日間（今日を含む）
   const weekFrom = ymdAfterDays(-(RECENT_DAYS - 1));
-  const { data: logs = [], isPending: logsLoading } = useStudyLogs({
-    from: weekFrom,
-  });
-  const { data: dailyMinutes = [] } = useDailyStudyMinutes({
-    from: shiftYmd(today, -(STREAK_DAYS - 1)),
-  });
+  // 1画面ぶんを1リクエストで取る。返るのは当月＋直近7日を覆う範囲なので、
+  // 明細はここで直近7日に絞ってから集計する。
+  const { data: dashboard, isPending: logsLoading } = useStudyDashboard();
+  const logs = dashboard?.logs.filter((log) => ymdLocal(log.date) >= weekFrom) ?? [];
+  const dailyMinutes = dashboard?.dailyMinutes ?? [];
   const {
     data: plans = [],
     isPending: plansLoading,
@@ -137,6 +135,7 @@ export default function StudyRecordDashboard({
               plans={plans}
               today={today}
               readOnly={readOnly}
+              ready={!logsLoading}
             />
           </CardContent>
         </Card>

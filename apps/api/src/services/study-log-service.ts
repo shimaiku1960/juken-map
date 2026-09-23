@@ -2,6 +2,7 @@ import { execute, select, transaction, type Db } from "@/api/infra/db";
 import type { StudyLogRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 import type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
+import { shiftYmd, todayYmdTokyo } from "@/shared/date";
 import {
   LOG_COLUMNS,
   TEXTBOOK_COLUMNS,
@@ -23,6 +24,17 @@ export type StudyLogRange = { from: string; to?: string };
  * 新しい日付から詰めるので、超えたときに落ちるのは期間の古い側。
  */
 const MAX_LOGS = 1000;
+
+/** ダッシュボードが明細を使う直近の日数（今日を含む）。科目別バーと同じ幅。 */
+const RECENT_DAYS = 7;
+/** 連続記録日数をさかのぼる日数。ここを超える連続は数え切れない。 */
+const STREAK_DAYS = 365;
+
+/** "YYYY-MM" の末日を "YYYY-MM-DD" で返す。 */
+function lastDayOfMonth(month: string): string {
+  const [year, m] = month.split("-").map(Number);
+  return `${month}-${new Date(year, m, 0).getDate()}`;
+}
 
 /**
  * 期間を DATETIME の比較に使える半開区間 [from, toExclusive) にする。
@@ -115,6 +127,34 @@ export function listDailyStudyMinutes(
       minutes: Number(row.minutes),
     }));
   });
+}
+
+/**
+ * ダッシュボードの初回表示に要るものを1回でまとめて返す。
+ *
+ * 画面は「直近7日の明細」「表示中の月の明細」「連続記録日数」を使うが、別々のAPIに
+ * すると1画面で3リクエストになり、そのたびにセッション照会が走る。2026-09-23の実測では
+ * リクエストが3倍になったぶんが、応答を小さくした効果をかなり食っていた。
+ *
+ * 直近7日はたいてい当月の中に収まるので、取る範囲を「月初と7日前の早い方」から
+ * 「月末」までの1本にまとめれば、明細のクエリは1回で足りる（月の頭の数日だけ前月へ伸びる）。
+ * 画面側はこの配列を絞って使う。
+ */
+export async function getStudyDashboard(userId: string, month: string) {
+  const monthStart = `${month}-01`;
+  const monthEnd = lastDayOfMonth(month);
+  const recentStart = shiftYmd(todayYmdTokyo(), -(RECENT_DAYS - 1));
+  const from = recentStart < monthStart ? recentStart : monthStart;
+
+  const [logs, dailyMinutes] = await Promise.all([
+    listStudyLogs(userId, { from, to: monthEnd }),
+    // 連続記録日数は明細を見ないが、長い期間が要る。日ごとの合計だけを取る。
+    listDailyStudyMinutes(userId, {
+      from: shiftYmd(todayYmdTokyo(), -(STREAK_DAYS - 1)),
+    }),
+  ]);
+
+  return { month, from, to: monthEnd, logs, dailyMinutes };
 }
 
 // ここから下は書き込み。HTTP は知らない。
