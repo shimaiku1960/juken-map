@@ -45,28 +45,39 @@ test("タイマーで学習した実績がダッシュボードに反映され�
 });
 
 // 実績の一覧は全期間ではなく期間を指定して取る（応答が大きくなりすぎないように）。
-// カレンダーは表示中の月ぶんしか持たないので、月を送ったら取り直しになる。
-test("月を送ると、その月の範囲だけを取り直す", async ({ page }) => {
+// カレンダーは表示中の月しか持たないので、隣の月は裏で先読みしておく。
+test("カレンダーは表示中の月だけを取り、前の月は先読みしておく", async ({ page }) => {
+  // 実績を取りにいった期間を全部控える
+  const queries: string[] = [];
+  page.on("request", (req) => {
+    const url = new URL(req.url());
+    if (url.pathname.startsWith("/api/study-logs")) queries.push(url.search);
+  });
+
   await login(page, E2E_EMAIL, E2E_PASSWORD);
   await page.getByRole("link", { name: "記録・予定" }).click();
-  // 当月ぶんの取得が終わってから操作する
   await settledMinutes(page.getByText(/今日の学習時間：/));
 
-  const previousMonthFetch = page.waitForResponse(
-    (res) => res.url().includes("/api/study-logs?from=") && res.status() === 200
-  );
-  await page.getByRole("button", { name: "前の月" }).click();
-  const url = new URL((await previousMonthFetch).url());
-
-  // 前の月の1日から末日まで。上限のない全期間の取得にはならない。
   const today = new Date();
   const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const yyyymm = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}`;
-  const lastDay = new Date(previous.getFullYear(), previous.getMonth() + 1, 0).getDate();
-  expect(url.searchParams.get("from")).toBe(`${yyyymm}-01`);
-  expect(url.searchParams.get("to")).toBe(`${yyyymm}-${lastDay}`);
+  const prevFrom = `from=${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}-01`;
+  const prevLabel = `${previous.getFullYear()}年${previous.getMonth() + 1}月`;
 
-  // 「今日」で当月へ戻ると、今日の実績がまた見える
+  // 表示する前に、前の月を裏で取り終えている
+  await expect
+    .poll(() => queries.filter((q) => q.includes(prevFrom)).length)
+    .toBe(1);
+
+  await page.getByRole("button", { name: "前の月" }).click();
+  await expect(page.getByText(prevLabel)).toBeVisible();
+
+  // 先読み済みなので、その月をもう一度取りにはいかない（さらに前の月の先読みは起きる）
+  expect(queries.filter((q) => q.includes(prevFrom))).toHaveLength(1);
+
+  // どの取得も期間を指定している＝全期間を返していた頃には戻っていない
+  expect(queries.every((q) => q.includes("from="))).toBe(true);
+
+  // 「今日」で当月へ戻れる
   await page.getByRole("button", { name: "今日", exact: true }).click();
   await expect(page.getByRole("heading", { name: "今日の予定と実績" })).toBeVisible();
 });

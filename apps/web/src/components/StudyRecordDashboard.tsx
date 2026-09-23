@@ -34,7 +34,9 @@ export default function StudyRecordDashboard({
   const today = todayYmd();
   // 直近7日間（今日を含む）
   const weekFrom = ymdAfterDays(-(RECENT_DAYS - 1));
-  const { data: logs = [] } = useStudyLogs({ from: weekFrom });
+  const { data: logs = [], isPending: logsLoading } = useStudyLogs({
+    from: weekFrom,
+  });
   const { data: dailyMinutes = [] } = useDailyStudyMinutes({
     from: shiftYmd(today, -(STREAK_DAYS - 1)),
   });
@@ -125,8 +127,9 @@ export default function StudyRecordDashboard({
             ) : null}
             <p className="mb-4 text-sm text-muted-foreground">
               今日の学習時間：
+              {/* 取得前は 0 分になる。まだ分からないことを 0 と言い切らない。 */}
               <span className="font-bold text-foreground">
-                {formatMinutes(todayMinutes)}
+                {logsLoading ? "—" : formatMinutes(todayMinutes)}
               </span>
             </p>
             <StudyHeatmap
