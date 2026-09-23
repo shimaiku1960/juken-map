@@ -7,8 +7,10 @@ vi.mock("../auth.ts", () => ({
 const { auth } = await import("../auth.ts");
 const { registerUniversityRoutes } = await import("./universities.ts");
 const { buildTestApp, request } = await import("../test-support.ts");
-const { cleanup, createFinalGoal, createTag, createUniversity, createUser } =
+const { cleanup, createFinalGoal, createTag, createUniversity, createUser, trackUniversity } =
   await import("../test-db/fixtures.ts");
+const { invalidateUniversitiesForExplore } = await import("../services/university-service.ts");
+const masterService = await import("../services/master-service.ts");
 
 const getSession = auth.api.getSession as unknown as Mock;
 const app = buildTestApp(registerUniversityRoutes);
@@ -19,6 +21,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   owner = await createUser();
   getSession.mockResolvedValue(owner.session);
+  // fixtures は管理画面を通さず DB に直接入れるので、一覧のキャッシュは自分で捨てる。
+  invalidateUniversitiesForExplore();
 });
 
 afterAll(cleanup);
@@ -51,6 +55,71 @@ describe("GET /api/universities", () => {
     ]);
     // 学部が1つも無い大学も、faculties: [] で含まれる
     expect(body.find((u) => u.id === empty.id)?.faculties).toEqual([]);
+  });
+
+  it("ETag を付けて返し、同じ ETag で聞かれたら本文なしの304を返す", async () => {
+    const first = await request(app, "GET", "/api/universities");
+    const etag = first.headers.etag as string;
+    expect(first.headers["cache-control"]).toBe("private, no-cache");
+    expect(etag).toMatch(/^"[\w-]+"$/);
+
+    const notModified = await request(app, "GET", "/api/universities", undefined, {
+      "if-none-match": etag,
+    });
+    expect(notModified.statusCode).toBe(304);
+    expect(notModified.body).toBe("");
+    expect(notModified.headers.etag).toBe(etag);
+
+    // 途中で圧縮し直されて弱い ETag になっても、複数並んでいても一致とみなす
+    const weak = await request(app, "GET", "/api/universities", undefined, {
+      "if-none-match": `"other", W/${etag}`,
+    });
+    expect(weak.statusCode).toBe(304);
+
+    const stale = await request(app, "GET", "/api/universities", undefined, {
+      "if-none-match": '"other"',
+    });
+    expect(stale.statusCode).toBe(200);
+  });
+
+  it("DB を直接変えても、キャッシュの間は同じ一覧を返す", async () => {
+    const before = await request(app, "GET", "/api/universities");
+    const added = await createUniversity();
+
+    const cached = await request(app, "GET", "/api/universities");
+    expect(cached.headers.etag).toBe(before.headers.etag);
+    expect(cached.json().some((u: { id: number }) => u.id === added.id)).toBe(false);
+  });
+
+  it("管理画面で大学・学部を変えたら、次の一覧に反映される", async () => {
+    const first = await request(app, "GET", "/api/universities");
+
+    const created = await masterService.createUniversity({
+      name: `管理で追加-${crypto.randomUUID()}`,
+      prefecture: "東京都",
+      type: "私立",
+    });
+    if (created.result !== "ok") throw new Error("大学を作れなかった");
+    trackUniversity(created.value.id);
+
+    const afterUniversity = await request(app, "GET", "/api/universities");
+    expect(afterUniversity.headers.etag).not.toBe(first.headers.etag);
+    expect(afterUniversity.json().some((u: { id: number }) => u.id === created.value.id)).toBe(true);
+
+    // 学部はトランザクションの中で作るので、確定後に捨てていることも確かめる
+    const faculty = await masterService.createFaculty({
+      universityId: created.value.id,
+      name: "法学部",
+      examDate: "2027-02-15",
+      tagIds: [],
+    });
+    expect(faculty.result).toBe("ok");
+
+    const afterFaculty = await request(app, "GET", "/api/universities");
+    const university = afterFaculty
+      .json()
+      .find((u: { id: number }) => u.id === created.value.id);
+    expect(university.faculties).toEqual([{ tags: [] }]);
   });
 });
 

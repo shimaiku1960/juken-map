@@ -1,10 +1,19 @@
 import type { FastifyInstance } from "fastify";
 import {
   findUniversityDetail,
-  listUniversitiesForExplore,
+  getUniversitiesForExplore,
 } from "@/api/services/university-service";
 import { listGoalFacultyIds } from "@/api/services/goal-service";
 import { requireSession } from "../context.ts";
+
+// If-None-Match は複数の値をカンマで並べられる。途中で nginx などが圧縮し直すと
+// ETag は弱い形（W/"..."）に書き換わって戻ってくるので、W/ を外して比べる。
+function matchesEtag(ifNoneMatch: string | undefined, etag: string) {
+  if (!ifNoneMatch) return false;
+  return ifNoneMatch
+    .split(",")
+    .some((value) => value.trim().replace(/^W\//, "") === etag);
+}
 
 // Next.js では Server Component がサービス層を関数として直接呼んでいたため、
 // これらに HTTP の入口が無かった。SPA からは HTTP でしか取れないので新設する。
@@ -14,7 +23,15 @@ export function registerUniversityRoutes(app: FastifyInstance) {
     const session = await requireSession(request, reply);
     if (!session) return;
 
-    return listUniversitiesForExplore();
+    // 中身は全員共通で、変わるのは管理画面の編集だけ。ブラウザには毎回確かめさせ（no-cache）、
+    // 変わっていなければ 304 で本文を省く。ログインが要る応答なので共有キャッシュには置かせない。
+    const { json, etag } = await getUniversitiesForExplore();
+    reply.header("Cache-Control", "private, no-cache");
+    reply.header("ETag", etag);
+    if (matchesEtag(request.headers["if-none-match"], etag)) {
+      return reply.code(304).send();
+    }
+    return reply.type("application/json; charset=utf-8").send(json);
   });
 
   app.get<{ Params: { id: string } }>(

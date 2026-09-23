@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { select } from "@/api/infra/db";
 import type { FacultyRow, TagRow, UniversityRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
@@ -50,6 +51,56 @@ export function listUniversitiesForExplore() {
     }
     return universities;
   });
+}
+
+// 大学一覧は全員に同じものを返し、変わるのは管理画面でマスターを編集したときだけ。
+// 毎回 DB を引くと一番重い API（大学 823 件 × LEFT JOIN 4本）になるので、JSON にした
+// 状態でメモリに持つ。圧縮後は 8KB ほどしかなく、形を削っても 1 割も減らない。
+// 効くのは DB を引かないことと、変わっていなければ 304 で中身を送らないこと。
+//
+// 管理画面の編集は master-service が invalidate を呼んで捨てる。seed の直接投入や、
+// 無停止デプロイで新旧のプロセスが並ぶ間の編集はそれでは届かないので、期限でも捨てる。
+const EXPLORE_CACHE_TTL_MS = 10 * 60 * 1000;
+
+type ExploreSnapshot = { json: string; etag: string; expiresAt: number };
+
+let exploreSnapshot: ExploreSnapshot | null = null;
+let exploreLoading: Promise<ExploreSnapshot> | null = null;
+// 読み込み中に invalidate されたら、その読み込み結果は古いかもしれないので置かない。
+let exploreGeneration = 0;
+
+/** 大学一覧を JSON 文字列と ETag で返す。キャッシュが生きていれば DB を引かない。 */
+export async function getUniversitiesForExplore(): Promise<{ json: string; etag: string }> {
+  if (exploreSnapshot && exploreSnapshot.expiresAt > Date.now()) return exploreSnapshot;
+
+  // 期限切れの直後に同時に来たリクエストは、1回の読み込みを待ち合わせる。
+  if (exploreLoading) return exploreLoading;
+
+  const generation = exploreGeneration;
+  const loading = (async () => {
+    const json = JSON.stringify(await listUniversitiesForExplore());
+    const snapshot = {
+      json,
+      etag: `"${createHash("sha1").update(json).digest("base64url")}"`,
+      expiresAt: Date.now() + EXPLORE_CACHE_TTL_MS,
+    };
+    if (generation === exploreGeneration) exploreSnapshot = snapshot;
+    return snapshot;
+  })();
+  exploreLoading = loading;
+  // 途中で invalidate されて次の読み込みが始まっていたら、そちらを消さない。
+  const settle = () => {
+    if (exploreLoading === loading) exploreLoading = null;
+  };
+  loading.then(settle, settle);
+  return loading;
+}
+
+/** 大学・学部・タグのつながりを変えたら呼ぶ。次のリクエストで DB から作り直す。 */
+export function invalidateUniversitiesForExplore() {
+  exploreGeneration++;
+  exploreSnapshot = null;
+  exploreLoading = null;
 }
 
 type DetailRow = UniversityRow & {

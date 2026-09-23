@@ -2,6 +2,7 @@ import type { PoolConnection } from "mysql2/promise";
 import { execute, isDuplicateEntry, select, transaction } from "@/api/infra/db";
 import type { FacultyRow, TagRow, TextbookMasterRow, UniversityRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
+import { invalidateUniversitiesForExplore } from "@/api/services/university-service";
 import type {
   AdminFaculty,
   AdminTag,
@@ -25,6 +26,9 @@ import type {
 //   - 参考書：利用者の参考書（Textbook.masterId）は SET NULL で黙って紐づきが外れるので、1冊でもあれば止める
 // 事前に数えて断るのが基本で、数えたあとに志望校が増えた場合も、DB の外部キーが拒んだエラーを
 // 同じ「使われている」に読み替える（二重の守り）。
+//
+// 大学・学部を変えたら、利用者向けの大学一覧のキャッシュを捨てる（university-service 参照）。
+// 変わったときだけ捨てればよいので、成功（ok）のときに限る。
 
 export const ADMIN_UNIVERSITIES_PAGE_SIZE = 50;
 
@@ -151,6 +155,7 @@ export function createUniversity(input: UniversityInput) {
         "INSERT INTO University (name, prefecture, type, createdAt) VALUES (?, ?, ?, ?)",
         [input.name, input.prefecture, input.type, new Date()]
       );
+      invalidateUniversitiesForExplore();
       return { result: "ok", value: (await findAdminUniversity(created.insertId))! };
     } catch (error) {
       if (isDuplicateEntry(error)) return { result: "duplicate" };
@@ -176,6 +181,7 @@ export function updateUniversity(id: number, input: UniversityInput) {
         if (isDuplicateEntry(error)) return { result: "duplicate" };
         throw error;
       }
+      invalidateUniversitiesForExplore();
       return { result: "ok", value: { before, after: (await findAdminUniversity(id))! } };
     }
   );
@@ -192,6 +198,7 @@ export function deleteUniversity(id: number) {
       if (isReferenced(error)) return { result: "in_use", count: university.goalCount };
       throw error;
     }
+    invalidateUniversitiesForExplore();
     return { result: "ok", value: university };
   });
 }
@@ -251,9 +258,17 @@ async function replaceTags(db: PoolConnection, facultyId: number, tagIds: number
   }
 }
 
+// トランザクションの中で捨てると、確定前に別のリクエストが古い一覧を読み直して置き直せる。
+// 確定（commit）してから捨てる。
+async function afterCommit<T extends { result: string }>(committed: Promise<T>) {
+  const outcome = await committed;
+  if (outcome.result === "ok") invalidateUniversitiesForExplore();
+  return outcome;
+}
+
 export function createFaculty(input: CreateFacultyInput) {
   return measured("master.createFaculty", async (): Promise<Outcome<FacultySnapshot>> =>
-    transaction(async (tx) => {
+    afterCommit(transaction(async (tx): Promise<Outcome<FacultySnapshot>> => {
       const [university] = await select<{ id: number }>(
         "SELECT id FROM University WHERE id = ? FOR UPDATE",
         [input.universityId],
@@ -270,7 +285,7 @@ export function createFaculty(input: CreateFacultyInput) {
       );
       await replaceTags(tx, created.insertId, input.tagIds);
       return { result: "ok", value: (await findFacultySnapshot(created.insertId, tx))! };
-    })
+    }))
   );
 }
 
@@ -278,7 +293,7 @@ export function updateFaculty(id: number, input: FacultyInput) {
   return measured(
     "master.updateFaculty",
     async (): Promise<Outcome<{ before: FacultySnapshot; after: FacultySnapshot }>> =>
-      transaction(async (tx) => {
+      afterCommit(transaction(async (tx): Promise<Outcome<{ before: FacultySnapshot; after: FacultySnapshot }>> => {
         const before = await findFacultySnapshot(id, tx);
         if (!before) return { result: "not_found" };
         if (await hasFacultyNamed(tx, before.universityId, input.name, id)) return { result: "duplicate" };
@@ -291,7 +306,7 @@ export function updateFaculty(id: number, input: FacultyInput) {
         ], tx);
         await replaceTags(tx, id, input.tagIds);
         return { result: "ok", value: { before, after: (await findFacultySnapshot(id, tx))! } };
-      })
+      }))
   );
 }
 
@@ -311,6 +326,7 @@ export function deleteFaculty(id: number) {
       if (isReferenced(error)) return { result: "in_use", count: Number(goalCount) };
       throw error;
     }
+    invalidateUniversitiesForExplore();
     return { result: "ok", value: faculty };
   });
 }
