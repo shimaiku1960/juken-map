@@ -158,6 +158,50 @@ describe("GET /api/study-logs/daily", () => {
   });
 });
 
+describe("GET /api/study-logs/dashboard", () => {
+  const dashboard = (query = "") =>
+    request(app, "GET", `/api/study-logs/dashboard${query}`);
+
+  it("未ログインなら 401 を返す", async () => {
+    getSession.mockResolvedValue(null);
+
+    expect((await dashboard()).statusCode).toBe(401);
+  });
+
+  it("対象月と直近7日を覆う1本の範囲で、明細と日別合計をまとめて返す", async () => {
+    const inMonth = await createStudyLog(owner.id, {
+      date: new Date("2026-02-20T00:00:00.000Z"),
+      minutes: 60,
+    });
+    await createStudyLog(owner.id, { date: new Date("2026-01-05T00:00:00.000Z") });
+
+    const res = await dashboard("?month=2026-02");
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // サーバーが範囲を決めて返す（画面が期間を組み立てないで済むように）
+    expect(body.month).toBe("2026-02");
+    expect(body.to).toBe("2026-02-28");
+    expect(body.from <= "2026-02-01").toBe(true);
+    expect(body.logs.map((log: { id: number }) => log.id)).toContain(inMonth);
+    expect(body.dailyMinutes).toBeInstanceOf(Array);
+  });
+
+  it("対象月の外（前の月）の実績は明細に入らない", async () => {
+    const older = await createStudyLog(owner.id, {
+      date: new Date("2026-01-05T00:00:00.000Z"),
+    });
+
+    const body = (await dashboard("?month=2026-02")).json();
+
+    expect(body.logs.map((log: { id: number }) => log.id)).not.toContain(older);
+  });
+
+  it("月の形が違えば 400 を返す", async () => {
+    expect((await dashboard("?month=2026-2")).statusCode).toBe(400);
+  });
+});
+
 describe("POST /api/study-logs", () => {
   it("未ログインなら 401 を返す", async () => {
     getSession.mockResolvedValue(null);

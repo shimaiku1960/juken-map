@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   type StudyLog,
+  monthRange,
   studyLogsQueryOptions,
   useDeleteStudyLog,
   useStudyLogs,
@@ -58,13 +59,6 @@ function planDate(plan: StudyPlan): string {
   return plan.date.slice(0, 10);
 }
 
-// 表示中の月（"YYYY-MM-01"）の1日〜末日。実績はこの範囲だけ取れば足りる。
-function monthRange(monthYmd: string): { from: string; to: string } {
-  const [year, month] = monthYmd.split("-").map(Number);
-  const lastDay = new Date(year, month, 0).getDate();
-  return { from: monthYmd, to: `${monthYmd.slice(0, 7)}-${lastDay}` };
-}
-
 export type StudyHeatmapHandle = {
   showToday: (openCreate: boolean) => void;
 };
@@ -73,10 +67,14 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
   plans: StudyPlan[];
   today: string;
   readOnly: boolean;
+  // ダッシュボードの取得が終わったか。当月の明細はその応答に同梱されるので、
+  // 終わる前に自分で取りに行くと同じ月を二重に取ってしまう。
+  ready: boolean;
 }>(function StudyHeatmap({
   plans,
   today,
   readOnly,
+  ready,
 }, ref) {
   const deleteLog = useDeleteStudyLog();
   const currentMonth = `${today.slice(0, 7)}-01`;
@@ -84,7 +82,8 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
   // グリッドも下の明細も表示中の月しか使わないので、実績はその月ぶんだけ取る。
   // 月を送ると取り直しになるが、1か月ぶんは小さく、一度見た月はキャッシュに残る。
   const { data: logs = [], isPending: logsLoading } = useStudyLogs(
-    monthRange(displayMonth)
+    monthRange(displayMonth.slice(0, 7)),
+    { enabled: ready }
   );
 
   // 表示中の月が届いてから、前の月を裏で取っておく。月送りは過去へ遡る動きが
@@ -94,7 +93,7 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
   useEffect(() => {
     if (logsLoading) return;
     void queryClient.prefetchQuery(
-      studyLogsQueryOptions(monthRange(shiftMonth(displayMonth, -1)))
+      studyLogsQueryOptions(monthRange(shiftMonth(displayMonth, -1).slice(0, 7)))
     );
   }, [displayMonth, logsLoading, queryClient]);
   const [selectedYmd, setSelectedYmd] = useState(today);

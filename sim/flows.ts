@@ -3,7 +3,6 @@
 // 順番と body は apps/web のコードから確かめてある（詳細はプランの①）。
 // 画面を開いたときに自動で走る GET と、保存のあとに追いかける再取得の GET も省かない。
 // 省くと、実際より軽いデータと負荷になる。
-import { shiftYmd, todayYmdTokyo } from "../src/shared/date";
 import { simEmailFor } from "../src/shared/synthetic";
 import { Browser, HttpError, type SimApi } from "./client";
 import { createRandom, mixSeed, type DayPlan, type Persona } from "./persona";
@@ -45,22 +44,11 @@ async function openHome(browser: Browser) {
 }
 
 /**
- * ダッシュボードが実績を取りにいく3本。画面と同じ期間で叩かないと、
- * 本番で見える応答の大きさとずれる（useStudyLogs / useDailyStudyMinutes と揃える）。
+ * ダッシュボードが実績を取りにいく1本。期間はサーバーが決めるので、画面と同じく
+ * パラメータ無しで叩く（useStudyDashboard と揃える）。
  */
 function studyLogRequests(browser: Browser) {
-  const today = todayYmdTokyo();
-  const monthFirst = `${today.slice(0, 7)}-01`;
-  const monthLast = new Date(
-    Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)
-  )
-    .toISOString()
-    .slice(0, 10);
-  return [
-    browser.request("GET", `/api/study-logs?from=${shiftYmd(today, -6)}`),
-    browser.request("GET", `/api/study-logs?from=${monthFirst}&to=${monthLast}`),
-    browser.request("GET", `/api/study-logs/daily?from=${shiftYmd(today, -364)}`),
-  ];
+  return [browser.request("GET", "/api/study-logs/dashboard")];
 }
 
 /** 画面の「/dashboard」を開いたとき。 */

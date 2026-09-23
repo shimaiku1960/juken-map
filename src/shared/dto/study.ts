@@ -35,6 +35,16 @@ export type StudyPlan = {
   updatedAt: string;
 };
 
+// ダッシュボードの初回表示ぶん。1画面を1リクエストで賄うためにまとめた形。
+// logs は「月初と7日前の早い方 〜 月末」で、画面側が用途ごとに絞って使う。
+export type StudyDashboard = {
+  month: string; // "YYYY-MM"（サーバーが決めた対象月）
+  from: string; // "YYYY-MM-DD"
+  to: string; // "YYYY-MM-DD"
+  logs: StudyLog[];
+  dailyMinutes: DailyStudyMinutes[];
+};
+
 // 日別の合計学習時間。ヒートマップの連続記録日数のように「その日に何分やったか」
 // しか要らない画面のために、明細ではなくこの形で返す（1年ぶんでも数十KBに収まる）。
 export type DailyStudyMinutes = {
