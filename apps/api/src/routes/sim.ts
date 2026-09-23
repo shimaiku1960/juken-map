@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { isDuplicateEntry } from "@/api/infra/db";
 import {
   getSimulationState,
   markSimulationUser,
@@ -54,16 +53,10 @@ export function registerSimRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "入力が不正です" });
     }
     const { email, ...data } = parsed.data;
-    try {
-      const found = await markSimulationUser(email, data);
-      if (!found) return reply.code(404).send({ error: "ユーザーが見つかりません" });
-      return reply.code(204).send();
-    } catch (error) {
-      if (isDuplicateEntry(error)) {
-        return reply.code(409).send({ error: "この連番はすでに使われています" });
-      }
-      throw error;
-    }
+    const result = await markSimulationUser(email, data);
+    if (result === "not_found") return reply.code(404).send({ error: "ユーザーが見つかりません" });
+    if (result === "duplicate") return reply.code(409).send({ error: "この連番はすでに使われています" });
+    return reply.code(204).send();
   });
 
   app.patch<{ Params: { seq: string } }>("/api/sim/users/:seq", async (request, reply) => {

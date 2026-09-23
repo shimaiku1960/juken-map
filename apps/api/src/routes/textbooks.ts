@@ -1,13 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { isDuplicateEntry } from "@/api/infra/db";
 import {
   createTextbookSchema,
   updateTextbookProgressSchema,
 } from "@/shared/validations/textbook";
 import {
   createTextbook,
+  createTextbookFromMaster,
   findOwnedTextbook,
-  findTextbookMaster,
   listTextbooks,
   updateTextbookProgress,
 } from "@/api/services/textbook-service";
@@ -33,52 +32,25 @@ export function registerTextbookRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: parsed.error.issues });
     }
 
-    try {
-      let textbookData: {
-        name: string;
-        userId: string;
-        masterId?: number;
-        totalAmount?: number;
-        rangeUnit?: string;
-        subject?: string | null;
-      };
+    const outcome =
+      "masterId" in parsed.data
+        ? await createTextbookFromMaster(session.user.id, parsed.data.masterId)
+        : await createTextbook({
+            name: parsed.data.name,
+            userId: session.user.id,
+            subject: parsed.data.subject,
+            rangeUnit: parsed.data.rangeUnit,
+          });
 
-      if ("masterId" in parsed.data) {
-        const master = await findTextbookMaster(parsed.data.masterId);
-        if (!master) {
-          return reply.code(404).send({ error: "参考書マスターが見つかりません" });
-        }
-        const defaultMetric =
-          master.metrics.find((metric) => metric.isDefault) ?? master.metrics[0];
-        if (!defaultMetric) {
-          return reply
-            .code(400)
-            .send({ error: "参考書の総量データが登録されていません" });
-        }
-        textbookData = {
-          name: master.name,
-          userId: session.user.id,
-          masterId: master.id,
-          totalAmount: defaultMetric.totalAmount,
-          rangeUnit: defaultMetric.unit,
-        };
-      } else {
-        textbookData = {
-          name: parsed.data.name,
-          userId: session.user.id,
-          subject: parsed.data.subject,
-          rangeUnit: parsed.data.rangeUnit,
-        };
-      }
-
-      const textbook = await createTextbook(textbookData);
-      return reply.code(201).send(textbook);
-    } catch (error) {
-      // 同じ名前の参考書は (userId, name) の UNIQUE 制約で弾かれる。
-      if (isDuplicateEntry(error)) {
+    switch (outcome.result) {
+      case "master_not_found":
+        return reply.code(404).send({ error: "参考書マスターが見つかりません" });
+      case "master_without_metric":
+        return reply.code(400).send({ error: "参考書の総量データが登録されていません" });
+      case "duplicate":
         return reply.code(409).send({ error: "この参考書はすでに登録されています" });
-      }
-      throw error;
+      case "ok":
+        return reply.code(201).send(outcome.value);
     }
   });
 

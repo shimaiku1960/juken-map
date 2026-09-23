@@ -1,5 +1,6 @@
-import { execute, select, transaction, type Db } from "@/api/infra/db";
-import type { StudyLogRow, StudyPlanRow } from "@/api/infra/tables";
+import { execute, isDuplicateEntry, select, transaction, type Db } from "@/api/infra/db";
+import { textbookRangeError } from "@/api/domain/textbookRange";
+import type { StudyLogRow, StudyPlanRow, TextbookRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 import type { StudyPlan } from "@/shared/dto/study";
 import { userDateConditions, type DateRange } from "./date-range.ts";
@@ -96,7 +97,7 @@ export function findOwnedStudyPlan(id: number, userId: string) {
 }
 
 /** 完了処理用。参考書と、既に実績が紐づいているかを一度に引く。 */
-export function findOwnedStudyPlanForComplete(id: number, userId: string) {
+function findOwnedStudyPlanForComplete(id: number, userId: string) {
   return measured("studyPlan.findOwnedForComplete", async () => {
     // Prisma 版は include: { studyLog: true } で実績の全列を取っていたが、
     // 使うのは「有るか無いか」だけなので id だけにした。
@@ -168,18 +169,21 @@ export function createStudyPlans(input: {
 }
 
 /** この予定に紐づく実績の件数。完了を取り消してよいかの判断に使う。 */
-export function countLinkedStudyLogs(planId: number) {
-  return measured("studyPlan.countLinkedLogs", async () => {
-    const [row] = await select<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM StudyLog WHERE studyPlanId = ?",
-      [planId]
-    );
-    // COUNT(*) は BIGINT。ドライバの設定によっては文字列や BigInt で返るので数値に揃える。
-    return Number(row.count);
-  });
+async function countLinkedStudyLogs(planId: number) {
+  const [row] = await select<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM StudyLog WHERE studyPlanId = ?",
+    [planId]
+  );
+  // COUNT(*) は BIGINT。ドライバの設定によっては文字列や BigInt で返るので数値に揃える。
+  return Number(row.count);
 }
 
-/** 送られてきた項目だけを更新する。 */
+/**
+ * 送られてきた項目だけを更新する。
+ *
+ * 実績を記録済みの予定は未完了へ戻せない（戻すと実績だけが宙に浮く）。
+ * このルールはどの入口から呼んでも効くよう、ここで判定する。
+ */
 export function updateStudyPlan(
   id: number,
   data: {
@@ -193,7 +197,11 @@ export function updateStudyPlan(
     done?: boolean;
   }
 ) {
-  return measured("studyPlan.update", async () => {
+  return measured("studyPlan.update", async (): Promise<UpdateOutcome> => {
+    if (data.done === false && (await countLinkedStudyLogs(id)) > 0) {
+      return { result: "has_log" };
+    }
+
     // 「送られてきた列だけ SET する」を自分で組み立てる。
     // 列名はこのコードに書いた固定の名前だけで、利用者の入力は値として ? で渡す。
     const changes: [column: string, value: unknown][] = [];
@@ -217,15 +225,78 @@ export function updateStudyPlan(
     // Prisma もここで SELECT をもう1本流していた。
     const updated = await findPlanById(id);
     if (!updated) throw new Error(`StudyPlan ${id} が見つかりません`);
-    return updated;
+    return { result: "ok", value: updated };
   });
 }
+
+type UpdateOutcome = { result: "ok"; value: StudyPlanRow } | { result: "has_log" };
 
 export function deleteStudyPlan(id: number) {
   return measured("studyPlan.delete", async () => {
     // 紐づく実績の studyPlanId は、外部キーの ON DELETE SET NULL で DB が NULL にする。
     await execute("DELETE FROM StudyPlan WHERE id = ?", [id]);
   });
+}
+
+type CompleteOutcome =
+  | {
+      result: "ok";
+      value: {
+        log: StudyLogRow & { textbook: TextbookRow | null };
+        plan: StudyPlanRow;
+        isFirstStudyLog: boolean;
+      };
+    }
+  | { result: "not_found" }
+  | { result: "already_completed" }
+  | { result: "invalid_range"; message: string };
+
+/**
+ * 自分の予定を完了にし、実績を1件作る。完了に関するルールはすべてここで判定する。
+ *
+ * - 他人の予定・存在しない予定は not_found（区別しない）
+ * - 実績が既にあれば already_completed。同時に完了した場合も一意制約で同じ結果になる
+ * - 範囲は送られてきたものを優先し、無ければ予定の値を使う。参考書の逆算設定と
+ *   噛み合わなければ invalid_range（実績の記録と同じ規則 `textbookRangeError`）
+ */
+export async function completeOwnedStudyPlan(input: {
+  userId: string;
+  planId: number;
+  minutes: number;
+  rangeStart?: number | null;
+  rangeEnd?: number | null;
+  rangeUnit?: string | null;
+  memo?: string | null;
+}): Promise<CompleteOutcome> {
+  const plan = await findOwnedStudyPlanForComplete(input.planId, input.userId);
+  if (!plan) return { result: "not_found" };
+  if (plan.studyLog) return { result: "already_completed" };
+
+  const rangeStart = input.rangeStart !== undefined ? input.rangeStart : plan.rangeStart;
+  const rangeEnd = input.rangeEnd !== undefined ? input.rangeEnd : plan.rangeEnd;
+  const rangeUnit = input.rangeUnit !== undefined ? input.rangeUnit : plan.rangeUnit;
+
+  if (plan.textbook) {
+    const message = textbookRangeError(plan.textbook, { rangeEnd, rangeUnit });
+    if (message) return { result: "invalid_range", message };
+  }
+
+  try {
+    const { log, updatedPlan, isFirstStudyLog } = await completeStudyPlan({
+      userId: input.userId,
+      plan,
+      minutes: input.minutes,
+      rangeStart: rangeStart ?? null,
+      rangeEnd: rangeEnd ?? null,
+      rangeUnit: rangeUnit ?? null,
+      memo: input.memo ?? null,
+    });
+    return { result: "ok", value: { log, plan: updatedPlan, isFirstStudyLog } };
+  } catch (error) {
+    // 同じ予定を同時に完了すると一意制約に当たる。これは「すでに記録済み」と同じ。
+    if (isDuplicateEntry(error)) return { result: "already_completed" };
+    throw error;
+  }
 }
 
 /**
@@ -237,7 +308,7 @@ export function deleteStudyPlan(id: number) {
  * 「初回記録」の印は UPDATE の WHERE に firstStudyLogAt IS NULL を入れて
  * DB 側で判定させる。先に読んでから書くと、同時アクセスで両方が初回になり得る。
  */
-export function completeStudyPlan(input: {
+function completeStudyPlan(input: {
   userId: string;
   plan: { id: number; date: Date; subject: string | null; textbookId: number | null };
   minutes: number;
@@ -259,7 +330,7 @@ export function completeStudyPlan(input: {
       );
 
       // 同じ予定の実績が既にあれば、studyPlanId の UNIQUE 制約で ER_DUP_ENTRY になり、
-      // transaction() が ROLLBACK して例外を投げ直す。ルートがそれを 409 に翻訳する。
+      // transaction() が ROLLBACK して例外を投げ直す。completeOwnedStudyPlan が already_completed に読み替える。
       const inserted = await execute(
         `INSERT INTO StudyLog
            (userId, studyPlanId, date, minutes, subject, textbookId,

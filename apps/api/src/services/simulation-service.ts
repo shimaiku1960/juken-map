@@ -1,4 +1,4 @@
-import { execute, select } from "@/api/infra/db";
+import { execute, isDuplicateEntry, select } from "@/api/infra/db";
 import { measured } from "@/api/observability/measured";
 import { SIM_EMAIL_LIKE } from "@/shared/synthetic";
 
@@ -61,12 +61,18 @@ export function markSimulationUser(
   data: { seq: number; cohort: string }
 ) {
   return measured("simulation.markUser", async () => {
-    const result = await execute(
-      `UPDATE \`user\` SET simSeq = ?, simCohort = ?, updatedAt = ?
-       WHERE email = ? AND email LIKE ?`,
-      [data.seq, data.cohort, new Date(), email, SIM_EMAIL_LIKE]
-    );
-    return result.affectedRows > 0;
+    try {
+      const result = await execute(
+        `UPDATE \`user\` SET simSeq = ?, simCohort = ?, updatedAt = ?
+         WHERE email = ? AND email LIKE ?`,
+        [data.seq, data.cohort, new Date(), email, SIM_EMAIL_LIKE]
+      );
+      return result.affectedRows > 0 ? "ok" : "not_found";
+    } catch (error) {
+      // 連番（simSeq）は UNIQUE。同じ連番を2人に付けようとするとここに来る。
+      if (isDuplicateEntry(error)) return "duplicate";
+      throw error;
+    }
   });
 }
 

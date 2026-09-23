@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { isDuplicateEntry } from "@/api/infra/db";
 import { shiftYmd, todayYmdTokyo } from "@/shared/date";
 import {
   createStudyPlansSchema,
@@ -8,12 +7,10 @@ import {
 } from "@/shared/validations/studyPlan";
 import { completeStudyPlanSchema } from "@/shared/validations/studyLog";
 import {
-  completeStudyPlan,
-  countLinkedStudyLogs,
+  completeOwnedStudyPlan,
   createStudyPlans,
   deleteStudyPlan,
   findOwnedStudyPlan,
-  findOwnedStudyPlanForComplete,
   listStudyPlans,
   updateStudyPlan,
 } from "@/api/services/study-plan-service";
@@ -105,16 +102,6 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Not found" });
     }
 
-    // 実績を記録済みの予定を未完了へ戻すと、実績だけが宙に浮く
-    if (parsed.data.done === false) {
-      const linkedLog = await countLinkedStudyLogs(plan.id);
-      if (linkedLog > 0) {
-        return reply
-          .code(409)
-          .send({ error: "実績を記録済みの予定は未完了に戻せません" });
-      }
-    }
-
     // 参考書を指定する場合は、自分の所有分だけを許可する
     if (parsed.data.textbookId != null) {
       const owned = await countOwnedTextbooks(
@@ -126,7 +113,13 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
       }
     }
 
-    return updateStudyPlan(id, parsed.data);
+    const outcome = await updateStudyPlan(id, parsed.data);
+    if (outcome.result === "has_log") {
+      return reply
+        .code(409)
+        .send({ error: "実績を記録済みの予定は未完了に戻せません" });
+    }
+    return outcome.value;
   });
 
   app.delete<{ Params: IdParams }>("/api/study-plans/:id", async (request, reply) => {
@@ -161,63 +154,22 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: parsed.error.issues });
       }
 
-      const plan = await findOwnedStudyPlanForComplete(planId, session.user.id);
-      if (!plan) {
-        return reply.code(404).send({ error: "Not found" });
-      }
-      if (plan.studyLog) {
-        return reply
-          .code(409)
-          .send({ error: "この予定の実績はすでに記録されています" });
-      }
-
-      // 範囲は送られてきたものを優先し、無ければ予定の値をそのまま使う
-      const rangeStart =
-        parsed.data.rangeStart !== undefined ? parsed.data.rangeStart : plan.rangeStart;
-      const rangeEnd =
-        parsed.data.rangeEnd !== undefined ? parsed.data.rangeEnd : plan.rangeEnd;
-      const rangeUnit =
-        parsed.data.rangeUnit !== undefined ? parsed.data.rangeUnit : plan.rangeUnit;
-
-      if (
-        rangeEnd != null &&
-        plan.textbook?.rangeUnit != null &&
-        rangeUnit !== plan.textbook.rangeUnit
-      ) {
-        return reply
-          .code(400)
-          .send({ error: "範囲の単位を参考書の逆算設定に合わせてください" });
-      }
-      if (
-        rangeEnd != null &&
-        plan.textbook?.totalAmount != null &&
-        rangeEnd > plan.textbook.totalAmount
-      ) {
-        return reply.code(400).send({
-          error: `終了位置は参考書の総量（${plan.textbook.totalAmount}）以下にしてください`,
-        });
-      }
-
-      try {
-        const { log, updatedPlan, isFirstStudyLog } = await completeStudyPlan({
-          userId: session.user.id,
-          plan,
-          minutes: parsed.data.minutes,
-          rangeStart: rangeStart ?? null,
-          rangeEnd: rangeEnd ?? null,
-          rangeUnit: rangeUnit ?? null,
-          memo: parsed.data.memo ?? null,
-        });
-
-        return reply.code(201).send({ log, plan: updatedPlan, isFirstStudyLog });
-      } catch (error) {
-        // 同じ予定を同時に完了すると一意制約に当たる。これは「すでに記録済み」なので 409。
-        if (isDuplicateEntry(error)) {
+      const outcome = await completeOwnedStudyPlan({
+        userId: session.user.id,
+        planId,
+        ...parsed.data,
+      });
+      switch (outcome.result) {
+        case "not_found":
+          return reply.code(404).send({ error: "Not found" });
+        case "already_completed":
           return reply
             .code(409)
             .send({ error: "この予定の実績はすでに記録されています" });
-        }
-        throw error;
+        case "invalid_range":
+          return reply.code(400).send({ error: outcome.message });
+        case "ok":
+          return reply.code(201).send(outcome.value);
       }
     }
   );
