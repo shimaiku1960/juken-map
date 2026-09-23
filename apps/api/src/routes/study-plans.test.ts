@@ -321,6 +321,36 @@ describe("POST /api/study-plans/:id/complete", () => {
     expect(Math.abs(firstStudyLogAt!.getTime() - startedAt)).toBeLessThan(60_000);
   });
 
+  it("範囲が参考書の逆算設定と噛み合わなければ400で、何も記録しない", async () => {
+    const textbookId = await createTextbook(owner.id, { totalAmount: 300, rangeUnit: "page" });
+    const planId = await createStudyPlan(owner.id, {
+      textbookId,
+      rangeStart: 1,
+      rangeEnd: 10,
+      rangeUnit: "page",
+    });
+
+    const wrongUnit = await complete(planId, { minutes: 30, rangeUnit: "chapter" });
+    expect(wrongUnit.statusCode).toBe(400);
+    expect(wrongUnit.json()).toEqual({
+      error: "範囲の単位を参考書の逆算設定に合わせてください",
+    });
+
+    const overTotal = await complete(planId, {
+      minutes: 30,
+      rangeStart: 1,
+      rangeEnd: 301,
+      rangeUnit: "page",
+    });
+    expect(overTotal.statusCode).toBe(400);
+    expect(overTotal.json()).toEqual({
+      error: "終了位置は参考書の総量（300）以下にしてください",
+    });
+
+    expect((await findStudyPlan(planId))?.done).toBe(false);
+    expect(await findStudyLogs(owner.id)).toHaveLength(0);
+  });
+
   it("2件目の記録は初回扱いにせず、初回記録の日時も上書きしない", async () => {
     const first = await createStudyPlan(owner.id);
     const second = await createStudyPlan(owner.id);

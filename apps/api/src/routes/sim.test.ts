@@ -70,7 +70,7 @@ describe("/api/sim/*", () => {
     });
 
     it("連番と型を付ける", async () => {
-      vi.mocked(service.markSimulationUser).mockResolvedValue(true);
+      vi.mocked(service.markSimulationUser).mockResolvedValue("ok");
       const app = appWith({ enabled: "on", secret: "s" });
       const res = await request(
         app,
@@ -81,6 +81,19 @@ describe("/api/sim/*", () => {
       );
       expect(res.statusCode).toBe(204);
       expect(service.markSimulationUser).toHaveBeenCalledWith(SIM, { seq: 1, cohort: "steady" });
+    });
+
+    it("連番が使用済みなら409", async () => {
+      vi.mocked(service.markSimulationUser).mockResolvedValue("duplicate");
+      const app = appWith({ enabled: "on", secret: "s" });
+      const res = await request(
+        app,
+        "POST",
+        "/api/sim/users",
+        { email: SIM, seq: 1, cohort: "steady" },
+        auth("s")
+      );
+      expect(res.statusCode).toBe(409);
     });
   });
 

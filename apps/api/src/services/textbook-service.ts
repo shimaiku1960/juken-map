@@ -1,4 +1,4 @@
-import { execute, select } from "@/api/infra/db";
+import { execute, isDuplicateEntry, select } from "@/api/infra/db";
 import type {
   TextbookMasterMetricRow,
   TextbookMasterRow,
@@ -107,7 +107,7 @@ export function listTextbooks(userId: string) {
 }
 
 /** マスター登録から作るときの元データ。総量の候補（metrics）も一緒に引く。 */
-export function findTextbookMaster(id: number) {
+function findTextbookMaster(id: number) {
   return measured("textbookMaster.find", async () => {
     const [master] = groupMasters(
       await select<MasterWithMetricRow>(`${MASTER_SQL} WHERE tm.id = ? ORDER BY m.id ASC`, [id])
@@ -125,9 +125,15 @@ async function findTextbookById(id: number) {
   return row;
 }
 
+type CreateOutcome =
+  | { result: "ok"; value: TextbookRow }
+  | { result: "duplicate" }
+  | { result: "master_not_found" }
+  | { result: "master_without_metric" };
+
 /**
- * 参考書を登録する。同名の重複は DB の一意制約（userId, name）が弾き、
- * ER_DUP_ENTRY の例外になる。ルートがそれを 409 に翻訳する。
+ * 参考書を登録する。同名の重複は DB の一意制約（userId, name）が弾くので、
+ * それを duplicate として返す。
  */
 export function createTextbook(data: {
   name: string;
@@ -137,24 +143,55 @@ export function createTextbook(data: {
   rangeUnit?: string;
   subject?: string | null;
 }) {
-  return measured("textbook.create", async () => {
+  return measured("textbook.create", async (): Promise<CreateOutcome> => {
     const now = new Date();
-    const inserted = await execute(
-      `INSERT INTO Textbook
-         (userId, name, masterId, totalAmount, rangeUnit, subject, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        data.userId,
-        data.name,
-        data.masterId ?? null,
-        data.totalAmount ?? null,
-        data.rangeUnit ?? null,
-        data.subject ?? null,
-        now,
-        now,
-      ]
-    );
-    return findTextbookById(inserted.insertId);
+    let insertId: number;
+    try {
+      const inserted = await execute(
+        `INSERT INTO Textbook
+           (userId, name, masterId, totalAmount, rangeUnit, subject, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          data.userId,
+          data.name,
+          data.masterId ?? null,
+          data.totalAmount ?? null,
+          data.rangeUnit ?? null,
+          data.subject ?? null,
+          now,
+          now,
+        ]
+      );
+      insertId = inserted.insertId;
+    } catch (error) {
+      if (isDuplicateEntry(error)) return { result: "duplicate" };
+      throw error;
+    }
+    return { result: "ok", value: await findTextbookById(insertId) };
+  });
+}
+
+/**
+ * マスター登録から参考書を作る。総量はマスターの既定（isDefault）を使い、
+ * 既定が無ければ先頭（id が最小）の候補を使う。
+ */
+export async function createTextbookFromMaster(
+  userId: string,
+  masterId: number
+): Promise<CreateOutcome> {
+  const master = await findTextbookMaster(masterId);
+  if (!master) return { result: "master_not_found" };
+
+  const defaultMetric =
+    master.metrics.find((metric) => metric.isDefault) ?? master.metrics[0];
+  if (!defaultMetric) return { result: "master_without_metric" };
+
+  return createTextbook({
+    name: master.name,
+    userId,
+    masterId: master.id,
+    totalAmount: defaultMetric.totalAmount,
+    rangeUnit: defaultMetric.unit,
   });
 }
 

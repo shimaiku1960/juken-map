@@ -1,5 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import { isDuplicateEntry } from "@/api/infra/db";
 import { goalSchema, updateGoalSchema, patchGoalSchema } from "@/shared/validations/goal";
 import {
   applyGoalPatch,
@@ -31,21 +30,15 @@ export function registerGoalRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: parsed.error.issues });
     }
 
-    try {
-      const goal = await createGoal({
-        userId: session.user.id,
-        facultyId: parsed.data.facultyId,
-        status: parsed.data.status,
-      });
-      return reply.code(201).send(goal);
-    } catch (error) {
-      // 一意制約違反だけは「すでに登録済み」という意味なので 409 に翻訳する。
-      // それ以外は握りつぶさず投げ直す。
-      if (isDuplicateEntry(error)) {
-        return reply.code(409).send({ error: "この学部はすでに登録されています" });
-      }
-      throw error;
+    const outcome = await createGoal({
+      userId: session.user.id,
+      facultyId: parsed.data.facultyId,
+      status: parsed.data.status,
+    });
+    if (outcome.result === "duplicate") {
+      return reply.code(409).send({ error: "この学部はすでに登録されています" });
     }
+    return reply.code(201).send(outcome.value);
   });
 
   app.put<{ Params: IdParams }>("/api/goals/:id", async (request, reply) => {

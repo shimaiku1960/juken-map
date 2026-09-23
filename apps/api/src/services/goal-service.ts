@@ -1,4 +1,4 @@
-import { execute, select, transaction, type Db } from "@/api/infra/db";
+import { execute, isDuplicateEntry, select, transaction, type Db } from "@/api/infra/db";
 import type { FacultyRow, FinalGoalRow, TagRow, UniversityRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 
@@ -165,21 +165,31 @@ export function findOwnedGoal(id: number, userId: string) {
   });
 }
 
-/** 志望校を登録する。同じ学部の重複は DB の一意制約（userId, facultyId）が弾く。 */
+/**
+ * 志望校を登録する。同じ学部の重複は DB の一意制約（userId, facultyId）が弾くので、
+ * それを duplicate として返す。
+ */
 export function createGoal(input: {
   userId: string;
   facultyId: number;
   status?: string;
 }) {
   return measured("goal.create", async () => {
-    const inserted = await execute(
-      "INSERT INTO FinalGoal (userId, facultyId, status, createdAt) VALUES (?, ?, ?, ?)",
-      [input.userId, input.facultyId, input.status ?? "decided", new Date()]
-    );
+    let insertId: number;
+    try {
+      const inserted = await execute(
+        "INSERT INTO FinalGoal (userId, facultyId, status, createdAt) VALUES (?, ?, ?, ?)",
+        [input.userId, input.facultyId, input.status ?? "decided", new Date()]
+      );
+      insertId = inserted.insertId;
+    } catch (error) {
+      if (isDuplicateEntry(error)) return { result: "duplicate" as const };
+      throw error;
+    }
     // 画面は学部名・大学名を表示するので、それも付けて返す。
-    const created = await findGoalWithFaculty("WHERE g.id = ?", [inserted.insertId]);
-    if (!created) throw new Error(`FinalGoal ${inserted.insertId} が見つかりません`);
-    return created;
+    const created = await findGoalWithFaculty("WHERE g.id = ?", [insertId]);
+    if (!created) throw new Error(`FinalGoal ${insertId} が見つかりません`);
+    return { result: "ok" as const, value: created };
   });
 }
 
