@@ -1,4 +1,4 @@
-# nginx（リバースプロキシ）の現状
+# nginx（リバースプロキシ）
 
 **この内容は 2026-09-09 に SSM 経由で本番 EC2（`i-0eeb166295363e11d`）から読み取った実物である。**
 設定はサーバー上に手で置かれており、これまでリポジトリ管理外だった。フロントエンド／
@@ -37,7 +37,7 @@ server {
     root /var/www/html;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://juken_map_app;   # 2026-09-23、無停止デプロイのため upstream 経由へ
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -48,6 +48,7 @@ server {
 
     listen [::]:443 ssl ipv6only=on;   # managed by Certbot
     listen 443 ssl;                    # managed by Certbot
+    http2 on;                          # 2026-09-19 追加
     ssl_certificate     /etc/letsencrypt/live/juken-map.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/juken-map.com/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
@@ -67,6 +68,47 @@ server {
     return 404;
 }
 ```
+
+## 無停止デプロイ（2026-09-23 追加）
+
+転送先のポートを `conf.d/juken-map-upstream.conf` に切り出し、`sites-available/default` は
+その名前を見るだけにした。**このリポジトリの `conf.d/juken-map-upstream.conf` が、その形の控え**
+（実際の中身は `.github/scripts/deploy-ec2.sh` がデプロイのたびに書き換える）。
+
+```
+[nginx] ──▶ upstream juken_map_app ──▶ 127.0.0.1:3000 か 3001（入れ替わる）
+```
+
+デプロイの流れ：
+
+1. 空いている方のポートで新しいコンテナ（`juken-map-next`）を起こす
+2. `/login` と `/api/health` が 200 を返すのを確かめる **← ここまで利用者は古い方を見ている**
+3. upstream ファイルを書き換えて `nginx -t` → `systemctl reload nginx`
+4. **5秒待つ**（下の「落とし穴」）
+5. 古いコンテナを止め、`juken-map-next` を `juken-map` に改名する
+
+**起動に失敗したら切り替えないだけ**で、本番には何も起きない。以前の「新しいのを入れてから
+駄目なら戻す」より安全になった。
+
+### 落とし穴（手元のリハーサルで実際に踏んだもの）
+
+`scripts/rehearse-zero-downtime.sh` が、本番と同じ形を小さく再現して旧方式と新方式を比べる。
+
+- **`nginx -s reload` の直後に古いコンテナを止めると、1件だけ502が出る。**
+  reload はすぐ返るが、古いワーカーは処理中の接続を終えるまで「旧設定」で動き続ける＝
+  まだ古いコンテナへ転送している。だから手順4の待ちが要る
+- **nginx は接続に失敗した転送先を一定時間「死んでいる」と覚える**（`fail_timeout`、既定10秒）。
+  実測では、アプリが復帰してから**さらに約6秒**502が続いた。
+  つまり**今まで本番で見えていた502の窓は、コンテナが不在だった時間より長い**
+- 名前を `juken-map` に戻すのは Alloy のため。メトリクス（`juken-map:9464`）もログの
+  絞り込み（`/juken-map`）もコンテナ名で引いている。`docker rename` は Docker の DNS も追随する
+
+リハーサルの結果（起動待ち5秒で比較）：
+
+| 方式 | 結果 |
+| --- | --- |
+| 旧（同じポートで stop → run） | 53件中 **44件が502** |
+| 新（別ポート → 向け替え） | 100件中 **0件** ✅ |
 
 ## Step 3 で必要になる変更
 
@@ -99,7 +141,8 @@ server {
   **中継を信頼する設定は、その中継が経路から外れたら一緒に外す。** 残しておくと、nginx が見る
   接続元と実際の接続元が食い違いうる（ログインの回数制限はこの値で数えている）。
   将来ふたたび Cloudflare や ALB を前に置くときは、そのときの経路に合わせて入れ直す
-- **この README は現状の記録であって、適用される設定ではない。** 実物はサーバー上にある
+- **この README の設定は現状の記録であって、適用される設定ではない。** 実物はサーバー上にある。
+  ただし `conf.d/juken-map-upstream.conf` だけは例外で、デプロイスクリプトが同じ形で書き出す
 - `www` → apex の寄せは nginx ではなく Certbot が入れた 301 で行われている。
   `cleanup-after-merges` にある「www→apex 一本化」の検討と関係する
 - 既定ファイル（`sites-available/default`）を直接編集しているため、nginx のパッケージ更新時に

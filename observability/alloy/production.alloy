@@ -19,9 +19,11 @@ discovery.relabel "api" {
   targets = discovery.docker.containers.targets
 
   // 集めるのはアプリのコンテナだけ（Alloy 自身のログを送り返して増やさない）。
+  // 無停止デプロイの入れ替え中だけ、新しいコンテナが juken-map-next という名前で動く。
+  // ここを広げておかないと、切り替わるまでの起動ログが Loki に残らない。
   rule {
     source_labels = ["__meta_docker_container_name"]
-    regex         = "/juken-map"
+    regex         = "/juken-map(-next)?"
     action        = "keep"
   }
 
@@ -87,6 +89,9 @@ loki.write "cloud" {
 // アプリが METRICS_PORT で出す /metrics を、同じ Docker ネットワークの中から読む。
 // 外（nginx 経由）には出さないので、内部の数字が公開されることはない。
 
+// 入れ替え中の新コンテナ（juken-map-next）はここでは拾わない。切り替え後に
+// deploy-ec2.sh が juken-map へ名前を戻すので、数十秒ぶんだけ間が空く。
+// 30秒間隔の粗い収集なので、1点欠けても率の監視には響かない。
 prometheus.scrape "api" {
   targets = [{
     __address__ = "juken-map:9464",
