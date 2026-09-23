@@ -2,7 +2,7 @@ import { execute, select, transaction, type Db } from "@/api/infra/db";
 import type { StudyLogRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 import type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
-import { shiftYmd, todayYmdTokyo } from "@/shared/date";
+import { userDateConditions, type DateRange } from "./date-range.ts";
 import {
   LOG_COLUMNS,
   TEXTBOOK_COLUMNS,
@@ -11,49 +11,10 @@ import {
 } from "./study-columns.ts";
 
 /**
- * 一覧・日別集計が対象にする期間。両端を含む "YYYY-MM-DD"。to を省くと上限なし。
- *
- * 期間を必須にしているのは、以前ここが全期間・全件を返していて、使い込んだ利用者で
- * 1,500件・610KB になっていたため（2026-09-21の限界点試験で、アプリ全体の
- * throughput を決めているのがこの応答の大きさだと分かった）。
- */
-export type StudyLogRange = { from: string; to?: string };
-
-/**
  * 応答の件数の上限。期間で絞ったうえでの安全網で、ページングではない。
  * 新しい日付から詰めるので、超えたときに落ちるのは期間の古い側。
  */
 const MAX_LOGS = 1000;
-
-/** ダッシュボードが明細を使う直近の日数（今日を含む）。科目別バーと同じ幅。 */
-const RECENT_DAYS = 7;
-/** 連続記録日数をさかのぼる日数。ここを超える連続は数え切れない。 */
-const STREAK_DAYS = 365;
-
-/** "YYYY-MM" の末日を "YYYY-MM-DD" で返す。 */
-function lastDayOfMonth(month: string): string {
-  const [year, m] = month.split("-").map(Number);
-  return `${month}-${new Date(year, m, 0).getDate()}`;
-}
-
-/**
- * 期間を DATETIME の比較に使える半開区間 [from, toExclusive) にする。
- *
- * 実績の date は「その日の 00:00 UTC」で入っている（infra/db.ts が timezone: "Z" で、
- * 記録時に new Date("YYYY-MM-DD") を渡しているため）。to の当日ぶんを含めたいので、
- * 上限は to の翌日の 00:00 にする。
- */
-function rangeConditions(userId: string, range: StudyLogRange) {
-  const conditions = ["l.userId = ?", "l.date >= ?"];
-  const params: unknown[] = [userId, new Date(range.from)];
-  if (range.to !== undefined) {
-    conditions.push("l.date < ?");
-    const toExclusive = new Date(range.to);
-    toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
-    params.push(toExclusive);
-  }
-  return { where: conditions.join(" AND "), params };
-}
 
 /**
  * 自分の実績の一覧を、画面へ返す形（src/shared/dto/study.ts の StudyLog）で返す。
@@ -61,10 +22,10 @@ function rangeConditions(userId: string, range: StudyLogRange) {
  */
 export function listStudyLogs(
   userId: string,
-  range: StudyLogRange
+  range: DateRange
 ): Promise<StudyLog[]> {
   return measured("studyLog.list", async () => {
-    const { where, params } = rangeConditions(userId, range);
+    const { where, params } = userDateConditions("l", userId, range);
     // Prisma の include は実績と参考書で SQL を2本に分けていた。LEFT JOIN 1本にする。
     //
     // 実績の日付は日単位なので、同じ日付の実績はよくある。ORDER BY date だけでは
@@ -108,10 +69,10 @@ export function listStudyLogs(
  */
 export function listDailyStudyMinutes(
   userId: string,
-  range: StudyLogRange
+  range: DateRange
 ): Promise<DailyStudyMinutes[]> {
   return measured("studyLog.daily", async () => {
-    const { where, params } = rangeConditions(userId, range);
+    const { where, params } = userDateConditions("l", userId, range);
     const rows = await select<{ date: Date; minutes: string }>(
       `SELECT l.date, SUM(l.minutes) AS minutes
        FROM StudyLog AS l
@@ -127,34 +88,6 @@ export function listDailyStudyMinutes(
       minutes: Number(row.minutes),
     }));
   });
-}
-
-/**
- * ダッシュボードの初回表示に要るものを1回でまとめて返す。
- *
- * 画面は「直近7日の明細」「表示中の月の明細」「連続記録日数」を使うが、別々のAPIに
- * すると1画面で3リクエストになり、そのたびにセッション照会が走る。2026-09-23の実測では
- * リクエストが3倍になったぶんが、応答を小さくした効果をかなり食っていた。
- *
- * 直近7日はたいてい当月の中に収まるので、取る範囲を「月初と7日前の早い方」から
- * 「月末」までの1本にまとめれば、明細のクエリは1回で足りる（月の頭の数日だけ前月へ伸びる）。
- * 画面側はこの配列を絞って使う。
- */
-export async function getStudyDashboard(userId: string, month: string) {
-  const monthStart = `${month}-01`;
-  const monthEnd = lastDayOfMonth(month);
-  const recentStart = shiftYmd(todayYmdTokyo(), -(RECENT_DAYS - 1));
-  const from = recentStart < monthStart ? recentStart : monthStart;
-
-  const [logs, dailyMinutes] = await Promise.all([
-    listStudyLogs(userId, { from, to: monthEnd }),
-    // 連続記録日数は明細を見ないが、長い期間が要る。日ごとの合計だけを取る。
-    listDailyStudyMinutes(userId, {
-      from: shiftYmd(todayYmdTokyo(), -(STREAK_DAYS - 1)),
-    }),
-  ]);
-
-  return { month, from, to: monthEnd, logs, dailyMinutes };
 }
 
 // ここから下は書き込み。HTTP は知らない。

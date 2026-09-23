@@ -1,6 +1,5 @@
 import { useRef } from "react";
-import { useStudyDashboard } from "@/web/hooks/useStudyLogs";
-import { useStudyPlans, type StudyPlan } from "@/web/hooks/useStudyPlans";
+import { useDashboard } from "@/web/hooks/useDashboard";
 import {
   computeStreak,
   computeSubjectMinutes,
@@ -21,29 +20,25 @@ const RECENT_DAYS = 7;
 // 実績（StudyLog）まわりのダッシュボード。記録するとキャッシュ更新で
 // ストリーク・ヒートマップ・科目別バーが即座に伸びる（クライアントで集計）。
 export default function StudyRecordDashboard({
-  initialPlans,
   readOnly = false,
 }: {
-  // SPA では初期データをサーバーから渡せないので任意にする。
-  // ここで [] を既定値にすると TanStack Query が initialData ありと判断して
-  // staleTime の間フェッチせず、空のまま表示されてしまうので undefined を通す。
-  initialPlans?: StudyPlan[];
   readOnly?: boolean;
 }) {
   const today = todayYmd();
   // 直近7日間（今日を含む）
   const weekFrom = ymdAfterDays(-(RECENT_DAYS - 1));
-  // 1画面ぶんを1リクエストで取る。返るのは当月＋直近7日を覆う範囲なので、
-  // 明細はここで直近7日に絞ってから集計する。
-  const { data: dashboard, isPending: logsLoading } = useStudyDashboard();
-  const logs = dashboard?.logs.filter((log) => ymdLocal(log.date) >= weekFrom) ?? [];
-  const dailyMinutes = dashboard?.dailyMinutes ?? [];
+  // 1画面ぶんを1リクエストで取る。返るのは当月と今日の前後を覆う範囲なので、
+  // ここで用途ごとに絞ってから集計する。
   const {
-    data: plans = [],
-    isPending: plansLoading,
-    isError: plansError,
-    refetch: refetchPlans,
-  } = useStudyPlans(initialPlans);
+    data: dashboard,
+    isPending: loading,
+    isError: loadError,
+    refetch,
+  } = useDashboard();
+  const logs =
+    dashboard?.logs.filter((log) => ymdLocal(log.date) >= weekFrom) ?? [];
+  const plans = dashboard?.plans ?? [];
+  const dailyMinutes = dashboard?.dailyMinutes ?? [];
 
   const heatmapRef = useRef<StudyHeatmapHandle>(null);
   const streak = computeStreak(dailyMinutes, today);
@@ -96,10 +91,10 @@ export default function StudyRecordDashboard({
         <TodayStudyPlans
           plans={todayPlans}
           weekCount={weekPlanCount}
-          hasError={plansError}
-          isLoading={plansLoading}
+          hasError={loadError}
+          isLoading={loading}
           readOnly={readOnly}
-          onRetry={() => void refetchPlans()}
+          onRetry={() => void refetch()}
           onShowToday={showTodayInCalendar}
         />
       </section>
@@ -111,13 +106,13 @@ export default function StudyRecordDashboard({
         </div>
         <Card>
           <CardContent className="px-3 py-5 sm:px-6">
-            {plansError ? (
+            {loadError ? (
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 <span>学習予定を更新できませんでした。表示が古い可能性があります。</span>
                 <button
                   type="button"
                   className="font-medium underline underline-offset-2"
-                  onClick={() => refetchPlans()}
+                  onClick={() => refetch()}
                 >
                   再試行
                 </button>
@@ -127,15 +122,14 @@ export default function StudyRecordDashboard({
               今日の学習時間：
               {/* 取得前は 0 分になる。まだ分からないことを 0 と言い切らない。 */}
               <span className="font-bold text-foreground">
-                {logsLoading ? "—" : formatMinutes(todayMinutes)}
+                {loading ? "—" : formatMinutes(todayMinutes)}
               </span>
             </p>
             <StudyHeatmap
               ref={heatmapRef}
-              plans={plans}
               today={today}
               readOnly={readOnly}
-              ready={!logsLoading}
+              ready={!loading}
             />
           </CardContent>
         </Card>

@@ -8,27 +8,63 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 export type { Textbook, StudyPlan } from "@/shared/dto/study";
 import type { StudyPlan } from "@/shared/dto/study";
 import { api } from "@/web/lib/api-client";
+import { dashboardKey } from "@/web/hooks/dashboard-key";
 import type {
   CreateStudyPlansInput,
   UpdateStudyPlanInput,
 } from "@/shared/validations/studyPlan";
 
+// 予定を取りにいく期間（両端を含む "YYYY-MM-DD"）。
+//
+// 期間を必ず指定するのは、API が全期間・全件を返していた頃、平均75.5KBあって
+// 1画面でいちばん大きな応答になっていたため。画面が本当に要る範囲だけを取る。
+export type StudyPlanRange = { from: string; to: string };
+
 // studyPlans キャッシュの唯一の住所。invalidate も含め全員がこれを参照する。
+// 期間ごとに別のキャッシュになるが、無効化はこの前方一致でまとめて効く。
 export const studyPlansKey = ["studyPlans"] as const;
 
-// サーバーから最新の studyPlans を取得する（useQuery の queryFn）
-export async function fetchStudyPlans(): Promise<StudyPlan[]> {
-  return api.get<StudyPlan[]>("/api/study-plans", {
+// 予定のキャッシュの持ち方。実績と同じ考え方（useStudyLogs の STUDY_LOG_CACHE 参照）。
+// 予定が変わるのは本人が作る・直す・完了するときだけで、そのとき invalidate が走る。
+const STUDY_PLAN_CACHE = {
+  staleTime: Infinity,
+  gcTime: 60 * 60 * 1000,
+} as const;
+
+// サーバーから期間ぶんの studyPlans を取得する（useQuery の queryFn）
+export async function fetchStudyPlans(range: StudyPlanRange): Promise<StudyPlan[]> {
+  const params = new URLSearchParams({ from: range.from, to: range.to });
+  return api.get<StudyPlan[]>(`/api/study-plans?${params}`, {
     fallbackMessage: "学習予定の取得に失敗しました",
   });
 }
 
-// studyPlans を購読するフック。SSR で取得済みの initialPlans があれば初期キャッシュに使う。
-export function useStudyPlans(initialPlans?: StudyPlan[]) {
+/**
+ * 期間ぶんの予定のクエリ設定。useQuery と prefetchQuery の両方から使う。
+ * 先読みと購読で queryKey がずれると別のキャッシュになってしまうので、1か所にまとめる。
+ */
+export function studyPlansQueryOptions(range: StudyPlanRange) {
+  return {
+    queryKey: [...studyPlansKey, "list", range.from, range.to],
+    queryFn: () => fetchStudyPlans(range),
+    ...STUDY_PLAN_CACHE,
+  };
+}
+
+/**
+ * 期間ぶんの予定を購読するフック。
+ *
+ * `enabled: false` のあいだは取りに行かない。カレンダーが当月を表示するときに使う＝
+ * 当月の予定はダッシュボードの応答に同梱されてキャッシュへ入るので、それを待たずに
+ * 走らせると同じ月を二重に取ってしまう。
+ */
+export function useStudyPlans(
+  range: StudyPlanRange,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
-    queryKey: studyPlansKey,
-    queryFn: fetchStudyPlans,
-    initialData: initialPlans,
+    ...studyPlansQueryOptions(range),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -45,6 +81,7 @@ export function useCreateStudyPlan() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: studyPlansKey });
+      await queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
   });
 }
@@ -60,6 +97,7 @@ export function useUpdateStudyPlan() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: studyPlansKey });
+      await queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
   });
 }
@@ -75,6 +113,7 @@ export function useDeleteStudyPlan() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: studyPlansKey });
+      await queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
   });
 }

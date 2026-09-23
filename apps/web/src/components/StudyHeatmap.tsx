@@ -8,7 +8,11 @@ import {
   useDeleteStudyLog,
   useStudyLogs,
 } from "@/web/hooks/useStudyLogs";
-import type { StudyPlan } from "@/web/hooks/useStudyPlans";
+import {
+  type StudyPlan,
+  studyPlansQueryOptions,
+  useStudyPlans,
+} from "@/web/hooks/useStudyPlans";
 import StudyDayPlanPanel from "@/web/components/StudyDayPlanPanel";
 import StudyLogEditDialog from "@/web/components/StudyLogEditDialog";
 import QuickManualStudyLogDialog from "@/web/components/QuickManualStudyLogDialog";
@@ -64,14 +68,12 @@ export type StudyHeatmapHandle = {
 };
 
 const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
-  plans: StudyPlan[];
   today: string;
   readOnly: boolean;
-  // ダッシュボードの取得が終わったか。当月の明細はその応答に同梱されるので、
+  // ダッシュボードの取得が終わったか。当月の実績と予定はその応答に同梱されるので、
   // 終わる前に自分で取りに行くと同じ月を二重に取ってしまう。
   ready: boolean;
 }>(function StudyHeatmap({
-  plans,
   today,
   readOnly,
   ready,
@@ -81,10 +83,13 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
   const [displayMonth, setDisplayMonth] = useState(currentMonth);
   // グリッドも下の明細も表示中の月しか使わないので、実績はその月ぶんだけ取る。
   // 月を送ると取り直しになるが、1か月ぶんは小さく、一度見た月はキャッシュに残る。
-  const { data: logs = [], isPending: logsLoading } = useStudyLogs(
-    monthRange(displayMonth.slice(0, 7)),
-    { enabled: ready }
-  );
+  const month = monthRange(displayMonth.slice(0, 7));
+  const { data: logs = [], isPending: logsLoading } = useStudyLogs(month, {
+    enabled: ready,
+  });
+  // 予定も同じ月ぶんだけ取る。全期間を返していた頃は平均75.5KBあり、1画面で
+  // いちばん大きな応答だった（2026-09-23実測）。
+  const { data: plans = [] } = useStudyPlans(month, { enabled: ready });
 
   // 表示中の月が届いてから、前の月を裏で取っておく。月送りは過去へ遡る動きが
   // ほとんどで、戻ってくる先（次の月）は来た時点でキャッシュに載っている。
@@ -92,9 +97,9 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
   const queryClient = useQueryClient();
   useEffect(() => {
     if (logsLoading) return;
-    void queryClient.prefetchQuery(
-      studyLogsQueryOptions(monthRange(shiftMonth(displayMonth, -1).slice(0, 7)))
-    );
+    const previous = monthRange(shiftMonth(displayMonth, -1).slice(0, 7));
+    void queryClient.prefetchQuery(studyLogsQueryOptions(previous));
+    void queryClient.prefetchQuery(studyPlansQueryOptions(previous));
   }, [displayMonth, logsLoading, queryClient]);
   const [selectedYmd, setSelectedYmd] = useState(today);
   const [recordDate, setRecordDate] = useState<string | null>(null);

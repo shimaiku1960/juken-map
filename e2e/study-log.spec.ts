@@ -47,15 +47,12 @@ test("タイマーで学習した実績がダッシュボードに反映され�
 // 実績の一覧は全期間ではなく期間を指定して取る（応答が大きくなりすぎないように）。
 // カレンダーは表示中の月しか持たないので、隣の月は裏で先読みしておく。
 test("カレンダーは表示中の月だけを取り、前の月は先読みしておく", async ({ page }) => {
-  // 実績を取りにいった期間を全部控える
-  const queries: { dashboard: boolean; search: string }[] = [];
+  // 実績と予定を取りにいった期間を全部控える
+  const queries: { path: string; search: string }[] = [];
   page.on("request", (req) => {
     const url = new URL(req.url());
-    if (!url.pathname.startsWith("/api/study-logs")) return;
-    queries.push({
-      dashboard: url.pathname === "/api/study-logs/dashboard",
-      search: url.search,
-    });
+    if (!/^\/api\/(dashboard|study-logs|study-plans)/.test(url.pathname)) return;
+    queries.push({ path: url.pathname, search: url.search });
   });
 
   await login(page, E2E_EMAIL, E2E_PASSWORD);
@@ -67,24 +64,26 @@ test("カレンダーは表示中の月だけを取り、前の月は先読み�
   const prevFrom = `from=${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}-01`;
   const prevLabel = `${previous.getFullYear()}年${previous.getMonth() + 1}月`;
 
-  // 表示する前に、前の月を裏で取り終えている
+  // 表示する前に、前の月を実績・予定とも裏で取り終えている
   await expect
     .poll(() => queries.filter((q) => q.search.includes(prevFrom)).length)
-    .toBe(1);
+    .toBe(2);
 
   await page.getByRole("button", { name: "前の月" }).click();
   await expect(page.getByText(prevLabel)).toBeVisible();
 
   // 先読み済みなので、その月をもう一度取りにはいかない（さらに前の月の先読みは起きる）
-  expect(queries.filter((q) => q.search.includes(prevFrom))).toHaveLength(1);
+  expect(queries.filter((q) => q.search.includes(prevFrom))).toHaveLength(2);
 
   // 月ごとの取得はどれも期間を指定している＝全期間を返していた頃には戻っていない
-  // （ダッシュボードの1本だけは、期間をサーバーが決めるのでパラメータを持たない）
+  // （集約の /api/dashboard だけは、期間をサーバーが決めるのでパラメータを持たない）
   expect(
-    queries.filter((q) => !q.dashboard).every((q) => q.search.includes("from="))
+    queries
+      .filter((q) => q.path !== "/api/dashboard")
+      .every((q) => q.search.includes("from="))
   ).toBe(true);
 
-  // 当月の明細はダッシュボードの応答に同梱されるので、当月だけを取る通信は起きない
+  // 当月の実績と予定はダッシュボードの応答に同梱されるので、当月だけを取る通信は起きない
   const currentFrom = `from=${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
   expect(queries.filter((q) => q.search.includes(currentFrom))).toHaveLength(0);
 

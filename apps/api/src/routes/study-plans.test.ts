@@ -30,6 +30,11 @@ const {
 const getSession = auth.api.getSession as unknown as Mock;
 const app = buildTestApp(registerStudyPlanRoutes);
 
+// 既定の期間（今日の前後90日）は「今日」に対して決まるので、固定日付の予定を読む
+// テストは期間を明示して叩く。既定の側は専用のテストで確かめる。
+const get = (query = "?from=2027-02-01&to=2027-02-28") =>
+  request(app, "GET", `/api/study-plans${query}`);
+
 let owner: Awaited<ReturnType<typeof createUser>>;
 
 beforeEach(async () => {
@@ -55,7 +60,7 @@ describe("GET /api/study-plans", () => {
     const other = await createUser();
     await createStudyPlan(other.id);
 
-    const res = await request(app, "GET", "/api/study-plans");
+    const res = await get();
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -75,6 +80,38 @@ describe("GET /api/study-plans", () => {
       studyLogId: logId,
     });
   });
+
+  it("期間の外の予定は返さない（両端は含む）", async () => {
+    const before = await createStudyPlan(owner.id, { date: new Date("2027-02-09T00:00:00.000Z") });
+    const first = await createStudyPlan(owner.id, { date: new Date("2027-02-10T00:00:00.000Z") });
+    const last = await createStudyPlan(owner.id, { date: new Date("2027-02-12T00:00:00.000Z") });
+    const after = await createStudyPlan(owner.id, { date: new Date("2027-02-13T00:00:00.000Z") });
+
+    const ids = (await get("?from=2027-02-10&to=2027-02-12"))
+      .json()
+      .map((plan: { id: number }) => plan.id);
+
+    expect(ids).toEqual([first, last]);
+    expect(ids).not.toContain(before);
+    expect(ids).not.toContain(after);
+  });
+
+  it("期間を省くと今日の前後90日だけを返す（全期間は返さない）", async () => {
+    const today = new Date();
+    const soon = await createStudyPlan(owner.id, { date: today });
+    const farFuture = await createStudyPlan(owner.id, {
+      date: new Date(today.getTime() + 200 * 24 * 60 * 60 * 1000),
+    });
+
+    const ids = (await get("")).json().map((plan: { id: number }) => plan.id);
+
+    expect(ids).toContain(soon);
+    expect(ids).not.toContain(farFuture);
+  });
+
+  it("日付の形が違えば 400 を返す", async () => {
+    expect((await get("?from=2027-2-1")).statusCode).toBe(400);
+  });
 });
 
 describe("POST /api/study-plans", () => {
@@ -90,7 +127,7 @@ describe("POST /api/study-plans", () => {
 
     expect(res.statusCode).toBe(201);
     expect(res.json()).toEqual({ count: 2 });
-    const listed = (await request(app, "GET", "/api/study-plans")).json();
+    const listed = (await get()).json();
     expect(listed).toEqual([
       expect.objectContaining({ date: "2027-02-20T00:00:00.000Z", textbookId, rangeEnd: 10 }),
       expect.objectContaining({ date: "2027-02-20T00:00:00.000Z", content: "自由入力" }),
@@ -108,7 +145,7 @@ describe("POST /api/study-plans", () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect((await request(app, "GET", "/api/study-plans")).json()).toEqual([]);
+    expect((await get()).json()).toEqual([]);
   });
 });
 
