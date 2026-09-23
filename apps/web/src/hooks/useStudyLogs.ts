@@ -49,12 +49,32 @@ export async function fetchStudyLogs(range: StudyLogRange): Promise<StudyLog[]> 
   });
 }
 
-// 期間ぶんの実績の明細を購読するフック。
-export function useStudyLogs(range: StudyLogRange) {
-  return useQuery({
+// 実績のキャッシュの持ち方。全クエリ共通の既定（staleTime 30秒）より長く持つ。
+//
+// 過ぎた日の記録は、本人が編集しない限り変わらない。編集・削除・新規記録はどれも
+// studyLogsKey を invalidate するので、そのときは staleTime に関係なく取り直される。
+// つまり「古いまま見えてしまう」経路が無く、期限で切る理由が無い。
+// カレンダーの月送りを往復しても通信が起きないのは、この2つの設定のおかげ。
+const STUDY_LOG_CACHE = {
+  staleTime: Infinity,
+  gcTime: 60 * 60 * 1000, // 画面から外れた月も1時間は捨てない
+} as const;
+
+/**
+ * 期間ぶんの明細のクエリ設定。useQuery と prefetchQuery の両方から使う。
+ * 先読みと購読で queryKey がずれると別のキャッシュになってしまうので、1か所にまとめる。
+ */
+export function studyLogsQueryOptions(range: StudyLogRange) {
+  return {
     queryKey: [...studyLogsKey, "list", range.from, range.to ?? null],
     queryFn: () => fetchStudyLogs(range),
-  });
+    ...STUDY_LOG_CACHE,
+  };
+}
+
+// 期間ぶんの実績の明細を購読するフック。
+export function useStudyLogs(range: StudyLogRange) {
+  return useQuery(studyLogsQueryOptions(range));
 }
 
 // 日ごとの合計学習時間だけを購読するフック。連続記録日数のように、
@@ -66,6 +86,7 @@ export function useDailyStudyMinutes(range: StudyLogRange) {
       api.get<DailyStudyMinutes[]>(`/api/study-logs/daily?${rangeQuery(range)}`, {
         fallbackMessage: "学習実績の取得に失敗しました",
       }),
+    ...STUDY_LOG_CACHE,
   });
 }
 

@@ -1,7 +1,9 @@
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   type StudyLog,
+  studyLogsQueryOptions,
   useDeleteStudyLog,
   useStudyLogs,
 } from "@/web/hooks/useStudyLogs";
@@ -81,7 +83,20 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
   const [displayMonth, setDisplayMonth] = useState(currentMonth);
   // グリッドも下の明細も表示中の月しか使わないので、実績はその月ぶんだけ取る。
   // 月を送ると取り直しになるが、1か月ぶんは小さく、一度見た月はキャッシュに残る。
-  const { data: logs = [] } = useStudyLogs(monthRange(displayMonth));
+  const { data: logs = [], isPending: logsLoading } = useStudyLogs(
+    monthRange(displayMonth)
+  );
+
+  // 表示中の月が届いてから、前の月を裏で取っておく。月送りは過去へ遡る動きが
+  // ほとんどで、戻ってくる先（次の月）は来た時点でキャッシュに載っている。
+  // 表示中の取得と競争させないよう、届いたあとに動かす。
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (logsLoading) return;
+    void queryClient.prefetchQuery(
+      studyLogsQueryOptions(monthRange(shiftMonth(displayMonth, -1)))
+    );
+  }, [displayMonth, logsLoading, queryClient]);
   const [selectedYmd, setSelectedYmd] = useState(today);
   const [recordDate, setRecordDate] = useState<string | null>(null);
   const [editingLog, setEditingLog] = useState<StudyLog | null>(null);
@@ -167,7 +182,12 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
       </div>
 
       <div className="overflow-x-auto pb-1">
-        <div className="min-w-80">
+        {/* 読み込み中の空のマスは「その月は勉強していない」と見分けが付かない。
+            薄くして aria-busy を立て、確定した表示と区別できるようにする。 */}
+        <div
+          className={`min-w-80 ${logsLoading ? "animate-pulse opacity-50" : ""}`}
+          aria-busy={logsLoading}
+        >
           <div className="mb-0.5 grid grid-cols-7 gap-0.5">
             {WEEKDAYS.map((weekday) => (
               <div key={weekday} className="text-center text-xs text-muted-foreground">
@@ -340,7 +360,12 @@ const StudyHeatmap = forwardRef<StudyHeatmapHandle, {
         {selectedLogs.length === 0 ? (
           selectedIsPast || selectedIsToday ? (
             <div className="rounded-lg bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
-              <p>この日の学習時間はまだ記録されていません。</p>
+              {/* 取得前に「記録されていません」と書くと、事実と違うことを言ってしまう。 */}
+              <p>
+                {logsLoading
+                  ? "学習実績を読み込んでいます…"
+                  : "この日の学習時間はまだ記録されていません。"}
+              </p>
             </div>
           ) : null
         ) : (
