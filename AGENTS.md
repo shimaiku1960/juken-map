@@ -42,19 +42,25 @@ auto-memory の該当トピックに残す。`./.standards` が無い環境で�
 
 ## プロジェクトメモリとタスク管理
 
-過去の決定・ユーザーの作業上の好み・残タスクは、Claude Code の auto-memory を正
+過去の決定・経緯・実測値・ユーザーの作業上の好みは、Claude Code の auto-memory を正
 （source of truth）として扱う。入口はリポジトリ内の gitignore 済みの
 `./.agent-memory/MEMORY.md`（索引）で、詳細が要るときだけ、そこから参照されている
 トピックファイルを読む。リポジトリ内の `memory/MEMORY.md` は使わない（あちらは
 Claude から Codex への移行状態を記録するもの）。
 
-- **作業開始時**は `git -C .agent-memory pull --rebase` で最新を取り込み、MEMORY.md で
-  「次にやること」と関連トピックの現状を把握する。
-- **これからやるタスク**は、該当トピックファイルの「次回ここから」「今後やること」に
-  書く。完了したら書き換え、古くなった記述は削除する。
+「これからやるタスク」は Linear（ワークスペース `juken-map`、チームキー `JUK`）を正とし、
+Linear MCP で読み書きする。メモリは「なぜ」、Linear は「次に何をやるか」と分ける。
+
+- **作業開始時**は `git -C .agent-memory pull --rebase` で最新を取り込み、Linear の
+  In Progress / Todo と、MEMORY.md から辿る関連トピックの文脈を把握する。
+- **これからやるタスク**は Linear の Issue にする。完了したら Done、やめたら Canceled に
+  する。作業の文脈（なぜ・注意点・実測値）は今までどおりトピックファイルに書く。
+- **ブランチ名か PR 本文に `JUK-xx` を入れる**（Linear の GitHub 連携で状態が動く）。
+  GitHub Issues は使わない。
+- **Linear MCP が使えない環境**では、タスクをメモリに書いて済ませず、ユーザーに伝える。
 - **メモリを更新したら** `.agent-memory` の中で commit して push する。
 - **脆弱性・セキュリティ穴は公開の場に書かない**（本番リポジトリは public）。
-  GitHub Security Advisory（非公開）で扱う。
+  GitHub Security Advisory（非公開）で扱い、Linear にも書かない。
 - **MEMORY.md は索引として短く保つ**。1トピック1行・120字以内。経緯・実測値・PR番号は
   トピックファイル側へ書く。毎セッション必ず読み込まれるファイルだからである。
 
