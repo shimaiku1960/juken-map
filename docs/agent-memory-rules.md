@@ -59,7 +59,10 @@ Claude Code でも Codex でもないエージェント（例えば Cursor の�
 
 「これからやるタスク」は Linear で管理する（2026-09-23〜）。ワークスペースは `juken-map`、
 チームキーは `JUK`。両エージェント（Claude Code / Codex）とも公式の Linear MCP
-（`https://mcp.linear.app/mcp`）を user スコープで登録して使う。共通のルール：
+（`https://mcp.linear.app/mcp`）を使う。Claude Code はリポジトリの `.mcp.json`（project
+スコープ）で読み込むので、他のプロジェクトではツール一覧の分のトークンを払わず、ワークツリー
+でも同じ設定が効く。初回は `/mcp` で承認と OAuth ログインをする。Codex は
+`~/.codex/config.toml` の `[mcp_servers.linear]` で読み込む。共通のルール：
 
 - **作業開始時**は、Linear の In Progress / Todo でタスクの全体像を、auto-memory
   （`MEMORY.md` と関連トピックファイル）で決定・方針・次の一手の文脈を把握する。
