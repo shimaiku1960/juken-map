@@ -11,6 +11,7 @@ import { logger } from "./observability/logger.ts";
 import { fastifyLoggingOptions } from "./observability/logger.ts";
 import { registerMetrics, startMetricsServer } from "./observability/metrics.ts";
 import { currentReqId, currentSim, runWithRequestContext } from "./observability/requestContext.ts";
+import { DEFAULT_MAX_IN_FLIGHT, registerOverloadProtection } from "./overload.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { registerSecurityHeaders } from "./security-headers.ts";
 import { buildSitemap, injectMeta, metaForPath } from "./seo.ts";
@@ -92,6 +93,13 @@ export async function buildServer() {
 
   // エラー応答の形と reqId のヘッダー。圧縮プラグインより前に積んで onSend を先に走らせる。
   registerErrorHandling(app);
+
+  // 混雑時に上限を超えた API を 503 で断る。断った分も件数に数えるよう metrics の後、
+  // Better Auth のサインインも対象に含めるよう、下の横取りより前に積む。
+  registerOverloadProtection(
+    app,
+    Number(process.env.OVERLOAD_MAX_IN_FLIGHT ?? DEFAULT_MAX_IN_FLIGHT)
+  );
 
   // Next.js は応答を既定で圧縮していたが、Fastify は何もしない。SPA のバンドルは
   // 800KB 超あり、無圧縮のまま配ると回線の細い端末で目に見えて遅くなる。
