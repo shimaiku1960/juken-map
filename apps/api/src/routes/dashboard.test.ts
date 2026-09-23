@@ -63,6 +63,20 @@ describe("GET /api/dashboard", () => {
     expect(body.planRange.to >= body.logRange.to).toBe(true);
   });
 
+  it("他人の実績・予定は混ざらない", async () => {
+    // 集約APIは1回で何種類も返すぶん、1か所でも userId の絞りが抜けると
+    // 他人のデータがまとめて漏れる。3種類すべてを見る。
+    const other = await createUser();
+    const othersLog = await createStudyLog(other.id, { date: new Date(), minutes: 99 });
+    const othersPlan = await createStudyPlan(other.id, { date: new Date() });
+
+    const body = (await get()).json();
+
+    expect(body.logs.map((l: { id: number }) => l.id)).not.toContain(othersLog);
+    expect(body.plans.map((p: { id: number }) => p.id)).not.toContain(othersPlan);
+    expect(body.dailyMinutes.some((d: { minutes: number }) => d.minutes === 99)).toBe(false);
+  });
+
   it("遠い過去・遠い未来は含まない（全期間は返さない）", async () => {
     const oldLog = await createStudyLog(owner.id, { date: daysFromToday(-200) });
     const farPlan = await createStudyPlan(owner.id, { date: daysFromToday(200) });
