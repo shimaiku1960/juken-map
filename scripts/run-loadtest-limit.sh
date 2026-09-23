@@ -108,9 +108,11 @@ for rate in $RATES; do
     <<<"$line" >> "$result_file"
 
   jq -r '"  実測 \(.rps_actual) RPS / 失敗率 \(.failed_rate*100|floor)% / 5xx \(.status["5xx"]) / 取りこぼし \(.dropped_iterations) / p95 \(.overall_ms.p95)ms / p99 \(.overall_ms.p99)ms"' <<<"$line"
+  jq -r '"  成功 \(.ok_rps) 件/秒（p95 \(.ok_ms.p95)ms） / 混雑で断った \(.status.shed)件"' <<<"$line"
   echo "  DB: Threads_running最大 ${threads_max:-?} / CPU最大 ${db_cpu_max:-?}%  API: CPU最大 ${api_cpu_max:-?}% / RSS ${api_rss_mb:-?}MB"
 
   if [ "$k6_exit" -ne 0 ]; then
+    broke_at="${broke_at:-$rate}"
     echo "  → この段階で基準を割った: $(jq -r '.thresholds_failed | join(", ")' <<<"$line")"
     if [ "${CONTINUE_AFTER_BREAK:-off}" != "on" ]; then
       echo ""
@@ -123,4 +125,8 @@ for rate in $RATES; do
 done
 
 echo ""
-echo "全段階で基準を満たしました。結果: $result_file"
+if [ -n "${broke_at:-}" ]; then
+  echo "最初に基準を割ったのは ${broke_at} RPS。結果: $result_file"
+else
+  echo "全段階で基準を満たしました。結果: $result_file"
+fi

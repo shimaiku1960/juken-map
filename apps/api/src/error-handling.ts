@@ -17,6 +17,7 @@ const CLIENT_MESSAGES: Record<string, string> = {
 
 const FALLBACK_CLIENT_MESSAGE = "リクエストを処理できませんでした";
 const SERVER_MESSAGE = "サーバー側で問題が発生しました";
+const OVERLOADED_MESSAGE = "ただいま混み合っています。少し待ってからもう一度お試しください";
 
 /** エラー応答の形。フロントの api-client.ts が読むのは error だけで、残りは調査用。 */
 export type ErrorBody = {
@@ -28,7 +29,9 @@ export type ErrorBody = {
 export function errorBody(statusCode: number, code: string, reqId: string): ErrorBody {
   return {
     error:
-      statusCode >= 500
+      code === "OVERLOADED"
+        ? OVERLOADED_MESSAGE
+        : statusCode >= 500
         ? SERVER_MESSAGE
         : (CLIENT_MESSAGES[code] ?? FALLBACK_CLIENT_MESSAGE),
     code,

@@ -79,6 +79,11 @@ const status2xx = new Counter("status_2xx");
 const status4xx = new Counter("status_4xx");
 const status5xx = new Counter("status_5xx");
 const statusFailed = new Counter("status_failed"); // 接続できなかった（status 0）
+// 混雑時にサーバーが意図して断った分（apps/api/src/overload.ts）。想定外の 5xx とは分けて数える。
+const statusShed = new Counter("status_shed");
+// 成功した応答だけの所要時間。断った 503 は一瞬で返るので、全体の p95 に混ぜると
+// 「受け付けた分がどれだけ速く返ったか」が実際より良く見える。
+const latencyOk = new Trend("lat_ok", true);
 
 export const options = {
   discardResponseBodies: false,
@@ -154,9 +159,13 @@ export default function () {
   bytes[entry.key].add(response.body ? response.body.length : 0);
 
   if (response.status === 0) statusFailed.add(1);
+  else if (response.status === 503 && response.json("code") === "OVERLOADED") statusShed.add(1);
   else if (response.status >= 500) status5xx.add(1);
   else if (response.status >= 400) status4xx.add(1);
-  else status2xx.add(1);
+  else {
+    status2xx.add(1);
+    latencyOk.add(response.timings.duration);
+  }
 }
 
 // 段階ごとの数字を1行のJSONで出す。段階を跨いで比べたいのはここに入れた項目だけで、
@@ -198,8 +207,11 @@ export function handleSummary(data) {
       "4xx": count("status_4xx"),
       "5xx": count("status_5xx"),
       failed: count("status_failed"),
+      shed: count("status_shed"),
     },
+    ok_rps: Math.round((count("status_2xx") / (data.state.testRunDurationMs / 1000)) * 10) / 10,
     overall_ms: trend("http_req_duration"),
+    ok_ms: trend("lat_ok"),
     endpoints,
     thresholds_failed: Object.entries(data.metrics)
       .filter(([, metric]) =>
