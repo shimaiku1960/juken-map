@@ -181,6 +181,47 @@ describe("PATCH /api/study-plans/:id", () => {
   });
 });
 
+// 予定の削除は、他人のものを消せてしまうと被害が大きいのに否定のテストが1本も無かった
+// （2026-09-23に認可の否定テストを洗い直して発見）。実績の削除と同じ形で揃える。
+describe("DELETE /api/study-plans/:id", () => {
+  const remove = (id: number) => request(app, "DELETE", `/api/study-plans/${id}`);
+
+  it("未ログインなら401を返す（削除しない）", async () => {
+    const planId = await createStudyPlan(owner.id);
+    getSession.mockResolvedValue(null);
+
+    expect((await remove(planId)).statusCode).toBe(401);
+    expect(await findStudyPlan(planId)).not.toBeNull();
+  });
+
+  it("デモアカウントなら403を返す（削除しない）", async () => {
+    const planId = await createStudyPlan(owner.id);
+    getSession.mockResolvedValue(demoSession);
+
+    expect((await remove(planId)).statusCode).toBe(403);
+    expect(await findStudyPlan(planId)).not.toBeNull();
+  });
+
+  it("他人の予定なら404を返し、削除しない", async () => {
+    const other = await createUser();
+    const planId = await createStudyPlan(other.id);
+
+    expect((await remove(planId)).statusCode).toBe(404);
+    expect(await findStudyPlan(planId)).not.toBeNull();
+  });
+
+  it("存在しない予定なら404を返す", async () => {
+    expect((await remove(999999999)).statusCode).toBe(404);
+  });
+
+  it("自分の予定なら削除する", async () => {
+    const planId = await createStudyPlan(owner.id);
+
+    expect((await remove(planId)).statusCode).toBe(200);
+    expect(await findStudyPlan(planId)).toBeNull();
+  });
+});
+
 describe("POST /api/study-plans/:id/complete", () => {
   const complete = (planId: number, body: unknown) =>
     request(app, "POST", `/api/study-plans/${planId}/complete`, body);
