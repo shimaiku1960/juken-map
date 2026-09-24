@@ -40,6 +40,9 @@ Issue ごとに `pnpm wt:new <ブランチ名>` で worktree を作り、その�
   いないコミットがあれば止まるか、ブランチを残す。
 - Claude Code の組み込みの worktree（`.claude/worktrees/`）は、リンク・ポート・install を
   用意しないので使わない。
+- Claude Code では、本体で `main` 以外へ移る `git switch` / `git checkout` / `gh pr checkout` を
+  フック（`.claude/settings.json` → `scripts/guard-main-checkout.py`）が止める。Codex には
+  この仕組みが無いので、ルールとして守る。
 
 ## 言語
 

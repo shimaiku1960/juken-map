@@ -72,6 +72,10 @@ jobs:
       - name: Deploy script port logic
         run: bash scripts/test-deploy-ports.sh
 
+      # 本体のチェックアウトを main 以外へ動かすコマンドを止める Claude Code のフック（JUK-42）。
+      - name: Main checkout guard hook
+        run: bash scripts/test-guard-main-checkout.sh
+
       - name: Type check
         run: pnpm exec tsc --noEmit
 
