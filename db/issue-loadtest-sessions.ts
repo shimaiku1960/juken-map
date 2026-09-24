@@ -15,7 +15,9 @@ import { execute, runSeed, select } from "./seed-helpers";
 
 const COUNT = Number(process.env.COUNT ?? 500);
 const ACTIVE_DAYS = Number(process.env.ACTIVE_DAYS ?? 7);
-const COOKIE_NAME = "better-auth.session_token";
+// HTTPS で動く本番（と本番の AMI から複製した試験環境）では、Better Auth が
+// __Secure- を前に付けた名前で読む。手元の http では付かない。
+const COOKIE_NAME = `${process.env.SECURE_COOKIE === "on" ? "__Secure-" : ""}better-auth.session_token`;
 
 runSeed(async () => {
   const secret = process.env.BETTER_AUTH_SECRET;

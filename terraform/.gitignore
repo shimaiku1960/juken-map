@@ -3,3 +3,5 @@
 *.tfstate.*
 *.tfvars
 *.tfvars.json
+# plan -out のファイル。変数や生成したパスワードが入る
+tfplan*
