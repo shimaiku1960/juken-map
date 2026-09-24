@@ -15,6 +15,9 @@ on:
           - morning
           - evening
 
+# API を呼ぶだけで、リポジトリも GITHUB_TOKEN も使わない。
+permissions: {}
+
 jobs:
   send:
     runs-on: ubuntu-latest

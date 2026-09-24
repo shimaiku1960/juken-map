@@ -25,13 +25,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       # 既定はモバイル想定（回線・CPU を絞る）。これまで手で測っていた条件と同じ。
       # 回ごとの揺れが大きいので、1つの URL を3回測って中央値と幅を見る。
       - name: Run Lighthouse
         id: lhci
-        uses: treosh/lighthouse-ci-action@v12
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12.6.2
         with:
           urls: |
             https://juken-map.com/
