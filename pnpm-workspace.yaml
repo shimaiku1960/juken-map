@@ -20,3 +20,8 @@ autoInstallPeers: false
 # npm版から引き継ぐ既存の固定バージョン。公開直後の待機期間だけ例外にする。
 minimumReleaseAgeExclude:
   - resend@6.27.0
+
+# better-auth の任意の peer（mysql2）が、mysql2 を使わないルートと web で古い版に解決される。
+# api と同じ修正版へそろえる（JUK-38、脆弱性の修正版）。
+overrides:
+  mysql2: ^3.24.4
