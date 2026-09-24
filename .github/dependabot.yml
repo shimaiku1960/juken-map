@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Action はコミットのハッシュで固定している（scripts/check-workflows.sh）。
+  # 固定したままだと更新が止まるので、新しい版が出たら Dependabot がハッシュと
+  # 版のコメントを書き換えた PR を出す。PR が増えすぎないよう月1回・1本にまとめる。
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci
