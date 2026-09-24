@@ -6,6 +6,7 @@ import {
   updateSimulationUser,
 } from "@/api/services/simulation-service";
 import { isSimEmail } from "@/shared/synthetic";
+import { hasBearerToken } from "../bearer-token.ts";
 
 // シミュレーション（sim/）専用の API。
 //
@@ -31,8 +32,7 @@ const updateBodySchema = z.object({
 });
 
 function isAuthorized(request: FastifyRequest) {
-  const secret = process.env.SIMULATION_SECRET;
-  return Boolean(secret) && request.headers.authorization === `Bearer ${secret}`;
+  return hasBearerToken(request, process.env.SIMULATION_SECRET);
 }
 
 export function registerSimRoutes(app: FastifyInstance) {

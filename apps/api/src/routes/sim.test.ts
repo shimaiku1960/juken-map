@@ -41,10 +41,20 @@ describe("/api/sim/*", () => {
     expect(service.getSimulationState).not.toHaveBeenCalled();
   });
 
+  it("Authorization が無ければ401", async () => {
+    const app = appWith({ enabled: "on", secret: "s" });
+    const res = await request(app, "GET", "/api/sim/state");
+    expect(res.statusCode).toBe(401);
+    expect(service.getSimulationState).not.toHaveBeenCalled();
+  });
+
   it("秘密値が未設定なら、何を送っても401", async () => {
     const app = appWith({ enabled: "on" });
-    const res = await request(app, "GET", "/api/sim/state", undefined, auth("undefined"));
-    expect(res.statusCode).toBe(401);
+    for (const secret of ["undefined", ""]) {
+      const res = await request(app, "GET", "/api/sim/state", undefined, auth(secret));
+      expect(res.statusCode).toBe(401);
+    }
+    expect(service.getSimulationState).not.toHaveBeenCalled();
   });
 
   it("状態を返す", async () => {

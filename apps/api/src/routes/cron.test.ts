@@ -26,6 +26,22 @@ beforeEach(() => {
 describe("POST /api/cron/daily-study-notifications", () => {
   it("秘密値が一致しなければ401を返す", async () => {
     expect((await post("wrong", { slot: "morning" })).statusCode).toBe(401);
+    expect(sendDailyNotifications).not.toHaveBeenCalled();
+  });
+
+  it("Authorization が無ければ401を返す", async () => {
+    const res = await request(app, "POST", "/api/cron/daily-study-notifications", {
+      slot: "morning",
+    });
+    expect(res.statusCode).toBe(401);
+    expect(sendDailyNotifications).not.toHaveBeenCalled();
+  });
+
+  it("秘密値が未設定なら、何を送っても401を返す", async () => {
+    delete process.env.DAILY_NOTIFICATION_SECRET;
+    expect((await post("undefined", { slot: "morning" })).statusCode).toBe(401);
+    expect((await post("", { slot: "morning" })).statusCode).toBe(401);
+    expect(sendDailyNotifications).not.toHaveBeenCalled();
   });
 
   it("朝夜以外は400を返す", async () => {
