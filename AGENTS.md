@@ -20,6 +20,27 @@ DBは MySQL 8.4 で、ORM は使わず `mysql2` で SQL を直接書く。ルー
 一緒にコミットする。通常の非破壊確認は `pnpm run lock:check` を使う。
 必要な依存のinstall scriptだけを `pnpm-workspace.yaml` の `allowBuilds` で許可する。
 
+## 作業は worktree で行う
+
+ファイルやブランチを変える作業は、本体のチェックアウト（`juken-map/`）で直接行わず、
+Issue ごとに `pnpm wt:new <ブランチ名>` で worktree を作り、その中で行う。本体は `main` の
+まま置いておき、worktree を作る起点にだけ使う。1つのチェックアウトには HEAD と index が
+1つしかないため、2つのセッションが同じ場所で作業すると、片方のコミットがもう片方の
+ブランチに乗る（2026-09-21 に実際に起きた）。並行するかどうかは始める時点で分からないので、
+常に分ける。調査・質問への回答・本番確認のように何も変えない作業は本体のままでよい。
+
+- worktree は `../juken-map-worktrees/<ブランチ名>` にでき、ポート（Vite・API・E2E）は
+  worktree ごとにずれる。エージェントはそのディレクトリで起動する。本体で起動済みの
+  セッションは、worktree のパスを明示して操作する。
+- `.env` は本体へのリンクなので、worktree で書き換えない。worktree だけの値は `.env.worktree` に書く。
+- DB は全 worktree で同じコンテナを共有する。マイグレーションを足すブランチでは、
+  ほかの worktree の DB も変わる。
+- `main` を取り込んで依存が変わったら、その worktree で `pnpm install` する。
+- マージ後は `pnpm wt:remove <ブランチ名>` で片付ける。未コミットの変更や main に入って
+  いないコミットがあれば止まるか、ブランチを残す。
+- Claude Code の組み込みの worktree（`.claude/worktrees/`）は、リンク・ポート・install を
+  用意しないので使わない。
+
 ## 言語
 
 ユーザーへの応答は、この指示や読んだドキュメントの言語にかかわらず、常に日本語

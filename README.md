@@ -191,6 +191,24 @@ pnpm dev
 [注意] `.env`を変更したら、APIプロセスを再起動してください。`--env-file`は起動時に一度しか
 読まれないため、`tsx watch`ではソース変更でしか再読み込みされません。
 
+### 作業ごとに worktree を分ける
+
+複数のターミナルやエージェントが同じチェックアウトで作業すると、ブランチやコミットが
+混ざります。作業ごとに git worktree を作り、その中で開発します。
+
+```bash
+pnpm wt:new fix/JUK-40-foo      # ../juken-map-worktrees/fix-JUK-40-foo に作る
+cd ../juken-map-worktrees/fix-JUK-40-foo
+pnpm dev
+pnpm wt:remove fix/JUK-40-foo   # マージ後に片付ける
+```
+
+`wt:new`は、`.env`などgitignore済みのファイルを本体へのリンクにし、空いているポート
+（N番目なら画面5173+N、API 4000+N、E2E 3010+N）を`.env.worktree`に書き、`pnpm install`まで
+行います。MySQLは`docker-compose.yml`のプロジェクト名を固定しているので、どのworktreeからも
+同じコンテナを使います。Google・GitHubログインはコールバックURLのポートが合わないため、
+worktreeではメールとパスワードでログインします。
+
 本番相当のDocker構成を確認する場合は、次のコマンドを使用します。
 
 ```bash
@@ -349,6 +367,8 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `pnpm run obs:stop` | Prometheus・Grafana・Loki・Alloy・Tempo・Mailpitを停止する |
 | `pnpm run capture:seed` | LP撮影用ユーザーをローカルDBへ投入する |
 | `pnpm run hooks:install` | リポジトリ管理のGitフックを有効にする |
+| `pnpm wt:new <ブランチ名>` | 作業用のgit worktreeを作り、リンク・ポート・依存のインストールまで済ませる |
+| `pnpm wt:remove <ブランチ名>` | worktreeを片付ける。マージ済みならブランチも消す |
 | `pnpm run lock:check` | 隔離ディレクトリでmanifestとlockfileの整合性を検証する |
 | `pnpm run lock:linux` | DockerのLinux/amd64環境でfrozen installとtsx・Viteの起動を検証する |
 | `pnpm run lock:fix` | lockfileを更新し、Linuxで検証する |

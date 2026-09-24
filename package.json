@@ -29,6 +29,8 @@
     "sim:plan": "tsx --env-file-if-exists=.env sim/plan.ts",
     "capture:seed": "tsx --env-file=.env db/seed-capture.ts",
     "hooks:install": "git config core.hooksPath .githooks",
+    "wt:new": "bash scripts/worktree-new.sh",
+    "wt:remove": "bash scripts/worktree-remove.sh",
     "lock:check": "bash scripts/check-lockfile.sh",
     "lock:linux": "bash scripts/check-lockfile.sh --linux",
     "lock:fix": "pnpm install --lockfile-only && pnpm run lock:linux"
