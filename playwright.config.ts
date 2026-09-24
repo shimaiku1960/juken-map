@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
 import { defineConfig, devices } from "@playwright/test";
 
 // E2E は「記録→可視化」の毎日ループとデモ閲覧専用を検証する。
@@ -11,6 +13,14 @@ import { defineConfig, devices } from "@playwright/test";
 //   例: E2E_BASE_URL=http://localhost:5173 pnpm run e2e
 const isCI = !!process.env.CI;
 const externalBaseURL = process.env.E2E_BASE_URL;
+// git worktree では scripts/worktree-new.sh が .env.worktree に別のポートを書く。
+// 3000 番のままだと reuseExistingServer により、別の worktree が立てたサーバー
+// （＝別のブランチのコード）に対してテストしてしまう。
+const worktreeEnv = existsSync(".env.worktree")
+  ? parseEnv(readFileSync(".env.worktree", "utf8"))
+  : {};
+const e2ePort = Number(process.env.E2E_PORT ?? worktreeEnv.E2E_PORT ?? 3000);
+const e2eURL = `http://localhost:${e2ePort}`;
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -21,17 +31,18 @@ export default defineConfig({
   retries: isCI ? 1 : 0, // CI の一時的なゆらぎに備えて1回だけ再試行
   reporter: isCI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: externalBaseURL ?? "http://localhost:3000",
+    baseURL: externalBaseURL ?? e2eURL,
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: externalBaseURL
     ? undefined
     : {
-        // 本番と同じ構成（Fastify が API と SPA の両方を配る）を 3000 番で起動する。
+        // 本番と同じ構成（Fastify が API と SPA の両方を配る）を e2ePort（既定 3000）で起動する。
         // apps/web のビルドを含むので、初回は少し時間がかかる。
         command: "bash scripts/e2e-server.sh",
-        url: "http://localhost:3000",
+        env: { API_PORT: String(e2ePort) },
+        url: e2eURL,
         reuseExistingServer: !isCI,
         timeout: 180_000,
       },

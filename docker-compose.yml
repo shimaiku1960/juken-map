@@ -1,3 +1,9 @@
+# プロジェクト名を固定する。未指定だとディレクトリ名から決まるため、git worktree
+# （../juken-map-worktrees/<名前>）から db:start すると別プロジェクトになり、
+# container_name の衝突や、空の別ボリュームでの起動が起きる。固定しておけば、
+# どの worktree からも同じ DB コンテナとボリュームを使う。
+name: juken-map
+
 services:
   db:
     image: mysql:8.4
