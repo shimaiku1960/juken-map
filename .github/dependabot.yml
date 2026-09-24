@@ -7,6 +7,13 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # 自動で出すのはマイナー版・パッチ版だけ。メジャー版は動きが変わることがあり、
+    # deploy・simulation のワークフローは PR の CI では動かないので、変更点を読んでから
+    # 1つずつ手で上げる。脆弱性の修正（security updates）はこの設定に関係なく出る。
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     groups:
       github-actions:
         patterns:
