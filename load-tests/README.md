@@ -62,4 +62,14 @@ RPSを段階的に上げ、最初に基準を割った段階を限界点とし�
 
 ⚠️ 手元のMacはアプリ・DB・k6が同じCPUを取り合うので、出てくるRPSの絶対値は本番（EC2＋RDS）の
 値ではない。ここで分かるのは「どのAPIが最初に遅くなるか」と「何が原因か」で、
-本番の実速度は Grafana Cloud 側で見る。
+本番の実力は、次の「本番相当の AWS 環境」で測る。
+
+`SCENARIO=spike` で、10人→100人のスパイク（1人が1秒おきに1リクエスト）を1回流す。
+
+## 本番相当の AWS 環境（terraform/loadtest）
+
+本番の AMI から複製した EC2 と、本番と同じ種類の RDS を一時的に建てて測る。手順は
+[`terraform/loadtest/README.md`](../terraform/loadtest/README.md)。
+`run-loadtest-limit.sh` と `limit.js` は `LOADTEST_ENV=aws` のとき、試験環境の VPC（`https://10.50.x.x`）
+だけを相手にする。本番の URL はどちらのモードでも受け付けない。
+

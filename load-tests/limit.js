@@ -7,7 +7,7 @@
 //
 // 実行は scripts/run-loadtest-limit.sh から。本番は対象にしない。
 import http from "k6/http";
-import { fail } from "k6";
+import { fail, sleep } from "k6";
 import { Counter, Trend } from "k6/metrics";
 
 const baseUrl = __ENV.BASE_URL;
@@ -21,14 +21,24 @@ if (!baseUrl || cookies.length === 0) {
   fail("BASE_URL / LOAD_TEST_COOKIES が要ります");
 }
 
+// local＝手元で起動したサーバー。aws＝本番の AMI から複製した試験環境（terraform/loadtest）。
+// 試験環境は外から届かない 10.50.0.0/16 の中にしか無いので、その IP 宛ての HTTPS だけを通す。
+// 本番の URL はどちらの場合も通らない。
+const loadtestEnv = __ENV.LOADTEST_ENV ?? "local";
 const allowedBaseUrls = new Set([
   "http://localhost:3000",
   "http://127.0.0.1:3000",
   "http://host.docker.internal:3000",
 ]);
-if (!allowedBaseUrls.has(baseUrl)) {
-  fail(`本番や外部は対象にしません: ${baseUrl}`);
+const awsTarget = /^https:\/\/10\.50\.\d{1,3}\.\d{1,3}$/;
+const allowed = loadtestEnv === "aws" ? awsTarget.test(baseUrl) : allowedBaseUrls.has(baseUrl);
+if (!allowed) {
+  fail(`本番や外部は対象にしません: ${baseUrl}（LOADTEST_ENV=${loadtestEnv}）`);
 }
+
+// spike＝10人から100人へ一気に増える動き。1人が1秒おきに1画面ぶん叩く（閉じたモデル）。
+// それ以外は、固定RPSで限界点を探す（開いたモデル）。
+const scenarioMode = __ENV.SCENARIO ?? "level";
 
 // 画面がどのAPIを何回呼ぶかの比率。ダッシュボードを開く動きが中心で、
 // 書き込み（記録の追加）は1割。実際の使われ方に寄せないと、
@@ -85,31 +95,52 @@ const statusShed = new Counter("status_shed");
 // 「受け付けた分がどれだけ速く返ったか」が実際より良く見える。
 const latencyOk = new Trend("lat_ok", true);
 
+const scenarios = {
+  level: {
+    executor: "constant-arrival-rate",
+    rate,
+    timeUnit: "1s",
+    duration,
+    // 応答が遅くなるとVUが足りなくなり、「サーバーではなくk6側が詰まった」数字になる。
+    // 余裕を持って確保しておく（足りなければ dropped_iterations に出る）。
+    preAllocatedVUs: Math.max(50, rate * 2),
+    maxVUs: Math.max(100, rate * 6),
+    gracefulStop: "30s",
+  },
+  spike: {
+    executor: "ramping-vus",
+    startVUs: 10,
+    stages: [
+      { duration: "1m", target: 10 },
+      { duration: "10s", target: 100 },
+      { duration: "3m", target: 100 },
+      { duration: "10s", target: 10 },
+      { duration: "1m", target: 10 },
+    ],
+    gracefulRampDown: "30s",
+  },
+};
+
+const thresholds = {
+  // 合格条件（dev-standards の暫定値）。割ったらその段階が限界点。
+  "http_req_failed": ["rate<0.01"],
+  "status_5xx": ["count==0"],
+  "http_req_duration{kind:read}": ["p(95)<1000"],
+  "http_req_duration{kind:write}": ["p(95)<1500"],
+};
+// 取りこぼしは到着率を決める level だけの指標。
+if (scenarioMode === "level") thresholds.dropped_iterations = ["count==0"];
+
 export const options = {
   discardResponseBodies: false,
-  scenarios: {
-    level: {
-      executor: "constant-arrival-rate",
-      rate,
-      timeUnit: "1s",
-      duration,
-      // 応答が遅くなるとVUが足りなくなり、「サーバーではなくk6側が詰まった」数字になる。
-      // 余裕を持って確保しておく（足りなければ dropped_iterations に出る）。
-      preAllocatedVUs: Math.max(50, rate * 2),
-      maxVUs: Math.max(100, rate * 6),
-      gracefulStop: "30s",
-    },
-  },
-  thresholds: {
-    // 合格条件（dev-standards の暫定値）。割ったらその段階が限界点。
-    "http_req_failed": ["rate<0.01"],
-    "status_5xx": ["count==0"],
-    "http_req_duration{kind:read}": ["p(95)<1000"],
-    "http_req_duration{kind:write}": ["p(95)<1500"],
-    "dropped_iterations": ["count==0"],
-  },
+  // 試験環境へは IP で繋ぐので、本番と同じ証明書（juken-map.com）とは名前が合わない。
+  // 暗号化とハンドシェイクの重さは本番と変わらない。
+  insecureSkipTLSVerify: loadtestEnv === "aws",
+  scenarios: { [scenarioMode]: scenarios[scenarioMode] },
+  thresholds,
   summaryTrendStats: ["avg", "p(50)", "p(95)", "p(99)", "max"],
 };
+if (!options.scenarios[scenarioMode]) fail(`SCENARIO は level か spike です: ${scenarioMode}`);
 
 // VUごとに1人の利用者を担当する。実際の利用者と同じく、最初からセッションを持っている。
 const myCookie = cookies[(__VU - 1) % cookies.length];
@@ -166,6 +197,9 @@ export default function () {
     status2xx.add(1);
     latencyOk.add(response.timings.duration);
   }
+
+  // spike は人数で負荷を決めるので、1人が息をつく間を入れる（無いと人数ではなく最大速度の試験になる）。
+  if (scenarioMode === "spike") sleep(1);
 }
 
 // 段階ごとの数字を1行のJSONで出す。段階を跨いで比べたいのはここに入れた項目だけで、
@@ -195,7 +229,8 @@ export function handleSummary(data) {
   }
 
   const summary = {
-    rate_target: rate,
+    scenario: scenarioMode,
+    rate_target: scenarioMode === "level" ? rate : null,
     duration,
     requests: count("http_reqs"),
     rps_actual: Math.round((data.metrics.http_reqs?.values?.rate ?? 0) * 10) / 10,
