@@ -81,6 +81,9 @@ Linear MCP で読み書きする。メモリは「なぜ」、Linear は「次�
   文脈を把握する。
 - **これからやるタスク**は Linear の Issue にする。完了したら Done、やめたら Canceled に
   する。作業の文脈（なぜ・注意点・実測値）は今までどおりトピックファイルに書く。
+- **Issue を作るときは、ラベルグループ「分野」から必ず1つ付ける**。分野は dev-standards の
+  8分野（フロントエンド・バックエンド・DB・インフラ・SRE・セキュリティ・DevOps・テスト）と
+  その他。迷ったら各ラベルの説明を見る。Bug / Feature / Improvement は種類の軸なので別に付けてよい。
 - **途中で作業を止めるとき**は、作業中の Issue に「次の一手」を1〜2行コメントする。
   Project・Cycle・Status Update は使わない。
 - **ブランチ名か PR 本文に `JUK-xx` を入れる**（Linear の GitHub 連携で状態が動く）。
