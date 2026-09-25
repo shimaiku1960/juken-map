@@ -199,3 +199,16 @@ describe("DELETE /api/study-logs/:id", () => {
     expect(await findStudyLog(logId)).toBeNull();
   });
 });
+
+describe("/api/study-logs/:id の ID の形", () => {
+  it.each(["PATCH", "DELETE"] as const)("%s で ID が数字でなければ 400 を返す", async (method) => {
+    const res = await request(
+      app,
+      method,
+      "/api/study-logs/abc",
+      method === "PATCH" ? validBody : undefined
+    );
+
+    expect(res.statusCode).toBe(400);
+  });
+});

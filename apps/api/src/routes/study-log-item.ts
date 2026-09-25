@@ -8,16 +8,16 @@ import {
 } from "@/api/services/study-log-service";
 import { findOwnedTextbook } from "@/api/services/textbook-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
-
-type IdParams = { id: string };
+import { readIdParam } from "./params.ts";
 
 export function registerStudyLogItemRoutes(app: FastifyInstance) {
-  app.patch<{ Params: IdParams }>("/api/study-logs/:id", async (request, reply) => {
+  app.patch("/api/study-logs/:id", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
 
-    const logId = Number(request.params.id);
+    const logId = readIdParam(request.params, reply);
+    if (logId === null) return;
     const log = await findOwnedStudyLog(logId, session.user.id);
     if (!log) {
       return reply.code(404).send({ error: "Not found" });
@@ -52,12 +52,13 @@ export function registerStudyLogItemRoutes(app: FastifyInstance) {
     return updateStudyLog(logId, log, parsed.data);
   });
 
-  app.delete<{ Params: IdParams }>("/api/study-logs/:id", async (request, reply) => {
+  app.delete("/api/study-logs/:id", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
 
-    const id = Number(request.params.id);
+    const id = readIdParam(request.params, reply);
+    if (id === null) return;
     const log = await findOwnedStudyLog(id, session.user.id);
     if (!log) {
       return reply.code(404).send({ error: "Not found" });

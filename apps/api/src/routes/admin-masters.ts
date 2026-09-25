@@ -22,6 +22,7 @@ import {
   universityInputSchema,
 } from "@/shared/validations/master";
 import { requireAdmin } from "../context.ts";
+import { idParamsSchema } from "./params.ts";
 
 // 管理者ページのマスター編集（/admin/masters、大学・学部・参考書）の API。どれも requireAdmin を通す。
 // 変更はすべて構造化ログ `admin master change` に「誰が・何を・前→後」で残す（Grafana の Loki で追える）。
@@ -31,7 +32,6 @@ const listQuerySchema = z.object({
   page: z.coerce.number().int().positive().max(1_000).default(1),
 });
 const searchQuerySchema = z.object({ q: z.string().trim().max(100).optional() });
-const idParamsSchema = z.object({ id: z.coerce.number().int().positive() });
 
 type Failure = { result: "not_found" } | { result: "duplicate" } | { result: "in_use"; count: number } | { result: "invalid_tags" };
 

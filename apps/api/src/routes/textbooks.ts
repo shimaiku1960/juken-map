@@ -11,8 +11,7 @@ import {
   updateTextbookProgress,
 } from "@/api/services/textbook-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
-
-type IdParams = { id: string };
+import { readIdParam } from "./params.ts";
 
 export function registerTextbookRoutes(app: FastifyInstance) {
   app.get("/api/textbooks", async (request, reply) => {
@@ -54,15 +53,13 @@ export function registerTextbookRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch<{ Params: IdParams }>("/api/textbooks/:id", async (request, reply) => {
+  app.patch("/api/textbooks/:id", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
 
-    const textbookId = Number(request.params.id);
-    if (!Number.isInteger(textbookId)) {
-      return reply.code(400).send({ error: "Invalid textbook id" });
-    }
+    const textbookId = readIdParam(request.params, reply);
+    if (textbookId === null) return;
 
     const parsed = updateTextbookProgressSchema.safeParse(request.body);
     if (!parsed.success) {
