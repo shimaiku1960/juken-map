@@ -73,9 +73,9 @@ describe("GET /api/study-logs", () => {
     const body = res.json();
     expect(body.map((log: { id: number }) => log.id)).toEqual([sameDayFirst, sameDaySecond, older]);
     // 日付は ISO 文字列で返る（クライアントはこの形を期待する）
+    // userId・作成日時・更新日時は画面が使わないので返さない（toEqual なので余分があれば落ちる）
     expect(body[0]).toEqual({
       id: sameDayFirst,
-      userId: owner.id,
       date: "2026-02-20T00:00:00.000Z",
       minutes: 60,
       subject: "english",
@@ -94,8 +94,6 @@ describe("GET /api/study-logs", () => {
       rangeUnit: null,
       memo: null,
       studyPlanId: null,
-      createdAt: expect.stringMatching(/Z$/),
-      updatedAt: expect.stringMatching(/Z$/),
     });
     expect(body[2].textbook).toBeNull();
   });

@@ -1,4 +1,12 @@
-import { execute, isDuplicateEntry, select, transaction, type Db } from "@/api/infra/db";
+import {
+  execute,
+  isDuplicateEntry,
+  select,
+  selectDateStrings,
+  toIsoString,
+  transaction,
+  type Db,
+} from "@/api/infra/db";
 import { textbookRangeError } from "@/api/domain/textbookRange";
 import type { StudyLogRow, StudyPlanRow, TextbookRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
@@ -41,7 +49,7 @@ export function listStudyPlans(
 ): Promise<StudyPlan[]> {
   return measured("studyPlan.list", async () => {
     const { where, params } = userDateConditions("p", userId, range);
-    const rows = await select<
+    const rows = await selectDateStrings<
       StudyPlanRow & TextbookColumns & { log_id: number | null }
     >(
       `SELECT ${PLAN_COLUMNS}, ${TEXTBOOK_COLUMNS}, l.id AS log_id
@@ -56,8 +64,7 @@ export function listStudyPlans(
 
     return rows.map((row) => ({
       id: row.id,
-      userId: row.userId,
-      date: row.date.toISOString(),
+      date: toIsoString(row.date),
       content: row.content,
       subject: row.subject,
       done: row.done,
@@ -67,8 +74,6 @@ export function listStudyPlans(
       rangeStart: row.rangeStart,
       rangeEnd: row.rangeEnd,
       rangeUnit: row.rangeUnit,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
     }));
   });
 }

@@ -90,12 +90,17 @@ export function setQueryLogger(fn: ((entry: QueryLogEntry) => void) | undefined)
   onQuery = fn;
 }
 
-async function run(db: Db, sql: string, params: unknown[]) {
+async function run(
+  db: Db,
+  sql: string,
+  params: unknown[],
+  options: { dateStrings?: boolean } = {}
+) {
   const startedAt = performance.now();
   // 値は必ず params で渡す。SQL 文字列に埋め込むと SQL インジェクションになる。
   // execute（プリペアドステートメント）ではなく query を使うのは、
   // `IN (?)` に配列を渡して展開させたいから。エスケープはドライバが行う。
-  const [result] = await db.query(sql, params);
+  const [result] = await db.query({ sql, ...options }, params);
   if (onQuery && shouldLogQueries()) {
     onQuery({
       sql: sql.replace(/\s+/g, " ").trim(),
@@ -113,6 +118,44 @@ export async function select<T>(
   db: Db = pool
 ): Promise<T[]> {
   return (await run(db, sql, params)) as T[];
+}
+
+/** Date の列を、DB が返す "YYYY-MM-DD HH:MM:SS.mmm" の文字列に置き換えた行の型。 */
+export type DateStrings<T> = {
+  [K in keyof T]: T[K] extends Date
+    ? string
+    : T[K] extends Date | null
+      ? string | null
+      : T[K];
+};
+
+/**
+ * select と同じだが、DATETIME の列を Date にせず、DB が返した文字列のまま受け取る。
+ * 画面へ返す一覧のように、Date にしてすぐ ISO 文字列へ戻すだけの場面で使い、
+ * 文字列は toIsoString で ISO の形へ直す。
+ *
+ * mysql2 が文字列を Date にし、それを toISOString で文字列へ戻す往復は1値あたり約750ns、
+ * 文字列の組み替えなら約20ns。ダッシュボードでは1リクエストの CPU の約4分の1が
+ * この往復だった（2026-09-25 のプロファイル、JUK-49）。
+ *
+ * プール全体の設定（dateStrings）にしないのは、Better Auth が同じプールで
+ * セッションの有効期限などを Date として受け取る前提だから。
+ */
+export async function selectDateStrings<T>(
+  sql: string,
+  params: unknown[] = [],
+  db: Db = pool
+): Promise<DateStrings<T>[]> {
+  return (await run(db, sql, params, { dateStrings: true })) as DateStrings<T>[];
+}
+
+/**
+ * selectDateStrings で受け取った DATETIME(3) の文字列を、Date#toISOString と同じ形にする。
+ * DB の値は UTC として保存している（上の timezone: "Z"）ので、末尾に Z を付けるだけでよい。
+ * 小数3桁が付く前提なので、DATETIME(3) 以外の列には使わない。
+ */
+export function toIsoString(value: string): string {
+  return `${value.slice(0, 10)}T${value.slice(11)}Z`;
 }
 
 /**

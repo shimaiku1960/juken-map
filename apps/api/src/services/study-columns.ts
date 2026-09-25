@@ -1,3 +1,4 @@
+import { toIsoString, type DateStrings } from "@/api/infra/db";
 import type {
   StudyLogRow,
   StudyPlanRow,
@@ -60,8 +61,11 @@ export function pickTextbook(row: TextbookColumns): TextbookRow | null {
 /**
  * tb_ 列から、画面へ返す参考書の形（src/shared/dto/study.ts の Textbook）を作る。
  * 画面が使わない列（userId・作成日時）は落とし、日時は ISO 文字列にする。
+ * 行は selectDateStrings で取ったもの（日時が文字列のまま）を受け取る。
  */
-export function pickTextbookDTO(row: TextbookColumns): Textbook | null {
+export function pickTextbookDTO(
+  row: DateStrings<TextbookColumns>
+): Textbook | null {
   if (row.tb_id === null) return null;
   return {
     id: row.tb_id,
@@ -69,7 +73,7 @@ export function pickTextbookDTO(row: TextbookColumns): Textbook | null {
     name: row.tb_name!,
     totalAmount: row.tb_totalAmount,
     rangeUnit: row.tb_rangeUnit,
-    targetDate: row.tb_targetDate?.toISOString() ?? null,
+    targetDate: row.tb_targetDate === null ? null : toIsoString(row.tb_targetDate),
     subject: row.tb_subject,
   };
 }
