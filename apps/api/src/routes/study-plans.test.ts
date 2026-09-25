@@ -390,3 +390,15 @@ describe("POST /api/study-plans/:id/complete", () => {
     expect(await findStudyLogs(owner.id)).toHaveLength(0);
   });
 });
+
+describe("/api/study-plans/:id の ID の形", () => {
+  it.each([
+    ["PATCH", "/api/study-plans/abc", { done: false }],
+    ["DELETE", "/api/study-plans/abc", undefined],
+    ["POST", "/api/study-plans/abc/complete", { minutes: 30 }],
+  ] as const)("%s %s は 400 を返す", async (method, url, body) => {
+    const res = await request(app, method, url, body);
+
+    expect(res.statusCode).toBe(400);
+  });
+});

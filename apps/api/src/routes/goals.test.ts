@@ -311,3 +311,16 @@ describe("DELETE /api/goals/:id", () => {
     expect(await findFinalGoals(owner.id)).toHaveLength(0);
   });
 });
+
+describe("/api/goals/:id の ID の形", () => {
+  // Number("abc") の NaN をそのまま SQL に渡すと、MySQL が「NaN という列は無い」と返して 500 になっていた。
+  it.each([
+    ["PUT", (): unknown => ({ facultyId: faculties[1] })],
+    ["PATCH", (): unknown => ({ note: "メモ" })],
+    ["DELETE", (): unknown => undefined],
+  ] as const)("%s で ID が数字でなければ 400 を返す", async (method, body) => {
+    const res = await request(app, method, "/api/goals/abc", body());
+
+    expect(res.statusCode).toBe(400);
+  });
+});

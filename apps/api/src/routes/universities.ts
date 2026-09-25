@@ -5,6 +5,7 @@ import {
 } from "@/api/services/university-service";
 import { listGoalFacultyIds } from "@/api/services/goal-service";
 import { requireSession } from "../context.ts";
+import { readIdParam } from "./params.ts";
 
 // If-None-Match は複数の値をカンマで並べられる。途中で nginx などが圧縮し直すと
 // ETag は弱い形（W/"..."）に書き換わって戻ってくるので、W/ を外して比べる。
@@ -64,16 +65,14 @@ export function registerUniversityRoutes(app: FastifyInstance) {
     return reply.send(snapshot.json);
   });
 
-  app.get<{ Params: { id: string } }>(
+  app.get(
     "/api/universities/:id",
     async (request, reply) => {
       const session = await requireSession(request, reply);
       if (!session) return;
 
-      const id = Number(request.params.id);
-      if (!Number.isInteger(id)) {
-        return reply.code(400).send({ error: "Invalid university id" });
-      }
+      const id = readIdParam(request.params, reply);
+      if (id === null) return;
 
       const university = await findUniversityDetail(id);
       if (!university) {

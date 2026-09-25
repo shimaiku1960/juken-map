@@ -16,8 +16,7 @@ import {
 } from "@/api/services/study-plan-service";
 import { countOwnedTextbooks } from "@/api/services/textbook-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
-
-type IdParams = { id: string };
+import { readIdParam } from "./params.ts";
 
 // 期間を省いて呼ばれたときの幅。予定は未来にもあるので前後に取る。画面はどれも
 // 明示して呼ぶので、これは古いクライアントや手で叩いたときのための既定値。
@@ -86,17 +85,19 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     return reply.code(201).send({ count: result.count });
   });
 
-  app.patch<{ Params: IdParams }>("/api/study-plans/:id", async (request, reply) => {
+  app.patch("/api/study-plans/:id", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
+
+    const id = readIdParam(request.params, reply);
+    if (id === null) return;
 
     const parsed = updateStudyPlanSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues });
     }
 
-    const id = Number(request.params.id);
     const plan = await findOwnedStudyPlan(id, session.user.id);
     if (!plan) {
       return reply.code(404).send({ error: "Not found" });
@@ -122,12 +123,13 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     return outcome.value;
   });
 
-  app.delete<{ Params: IdParams }>("/api/study-plans/:id", async (request, reply) => {
+  app.delete("/api/study-plans/:id", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
 
-    const id = Number(request.params.id);
+    const id = readIdParam(request.params, reply);
+    if (id === null) return;
     const plan = await findOwnedStudyPlan(id, session.user.id);
     if (!plan) {
       return reply.code(404).send({ error: "Not found" });
@@ -137,17 +139,15 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     return { message: "Deleted" };
   });
 
-  app.post<{ Params: IdParams }>(
+  app.post(
     "/api/study-plans/:id/complete",
     async (request, reply) => {
       const session = await requireSession(request, reply);
       if (!session) return;
       if (denyDemoWrite(session, reply)) return;
 
-      const planId = Number(request.params.id);
-      if (!Number.isInteger(planId) || planId <= 0) {
-        return reply.code(404).send({ error: "Not found" });
-      }
+      const planId = readIdParam(request.params, reply);
+      if (planId === null) return;
 
       const parsed = completeStudyPlanSchema.safeParse(request.body);
       if (!parsed.success) {

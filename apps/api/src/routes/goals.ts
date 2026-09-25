@@ -9,8 +9,7 @@ import {
   updateGoal,
 } from "@/api/services/goal-service";
 import { denyDemoWrite, requireSession } from "../context.ts";
-
-type IdParams = { id: string };
+import { readIdParam } from "./params.ts";
 
 export function registerGoalRoutes(app: FastifyInstance) {
   app.get("/api/goals", async (request, reply) => {
@@ -41,17 +40,19 @@ export function registerGoalRoutes(app: FastifyInstance) {
     return reply.code(201).send(outcome.value);
   });
 
-  app.put<{ Params: IdParams }>("/api/goals/:id", async (request, reply) => {
+  app.put("/api/goals/:id", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
+
+    const id = readIdParam(request.params, reply);
+    if (id === null) return;
 
     const parsed = updateGoalSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues });
     }
 
-    const id = Number(request.params.id);
     const goal = await findOwnedGoal(id, session.user.id);
     if (!goal) {
       return reply.code(404).send({ error: "Not found" });
@@ -60,17 +61,19 @@ export function registerGoalRoutes(app: FastifyInstance) {
     return updateGoal(id, parsed.data);
   });
 
-  app.patch<{ Params: IdParams }>("/api/goals/:id", async (request, reply) => {
+  app.patch("/api/goals/:id", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
+
+    const id = readIdParam(request.params, reply);
+    if (id === null) return;
 
     const parsed = patchGoalSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues });
     }
 
-    const id = Number(request.params.id);
     const goal = await findOwnedGoal(id, session.user.id);
     if (!goal) {
       return reply.code(404).send({ error: "Not found" });
@@ -80,12 +83,13 @@ export function registerGoalRoutes(app: FastifyInstance) {
     return { message: "OK" };
   });
 
-  app.delete<{ Params: IdParams }>("/api/goals/:id", async (request, reply) => {
+  app.delete("/api/goals/:id", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (denyDemoWrite(session, reply)) return;
 
-    const id = Number(request.params.id);
+    const id = readIdParam(request.params, reply);
+    if (id === null) return;
     const goal = await findOwnedGoal(id, session.user.id);
     if (!goal) {
       return reply.code(404).send({ error: "Not found" });
