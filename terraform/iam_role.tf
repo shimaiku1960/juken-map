@@ -11,11 +11,11 @@ resource "aws_iam_role" "github_actions_ecr" {
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
+          # 引き受けられるのは main のワークフローだけ（deploy.yml の push と手動実行）。
+          # repo:...:* のままだと、どのブランチに置いたワークフローからでも本番へ届く。
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          }
-          StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:shimaiku1960/juken-map:*"
+            "token.actions.githubusercontent.com:sub" = "repo:shimaiku1960/juken-map:ref:refs/heads/main"
           }
         }
       }
@@ -23,9 +23,37 @@ resource "aws_iam_role" "github_actions_ecr" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "github_actions_ecr" {
-  role       = aws_iam_role.github_actions_ecr.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+# CI が ECR でやるのは、ログインと juken-map リポジトリへのイメージの push だけ
+# （BatchGetImage は push のときにマニフェストの有無を確かめるために使う）。
+# 以前は AWS 管理ポリシー AmazonEC2ContainerRegistryPowerUser（全リポジトリの読み書き）だった。
+# 本番の EC2 が pull するのは EC2 のロール（iam_ec2.tf）なので、ここに pull は要らない。
+resource "aws_iam_role_policy" "github_actions_ecr_push" {
+  name = "juken-map-ecr-push"
+  role = aws_iam_role.github_actions_ecr.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # ログイン用のトークンはリポジトリ単位に絞れない。
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken"
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage",
+        ]
+        Resource = aws_ecr_repository.juken_map.arn
+      }
+    ]
+  })
 }
 
 # GitHub Actionsから本番EC2へ、SSM Run Commandでデプロイを実行するための権限。
