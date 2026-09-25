@@ -1,4 +1,11 @@
-import { execute, select, transaction, type Db } from "@/api/infra/db";
+import {
+  execute,
+  select,
+  selectDateStrings,
+  toIsoString,
+  transaction,
+  type Db,
+} from "@/api/infra/db";
 import type { StudyLogRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 import type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
@@ -31,7 +38,7 @@ export function listStudyLogs(
     // 実績の日付は日単位なので、同じ日付の実績はよくある。ORDER BY date だけでは
     // その中の順番は決まらず、Prisma 版は DB が返した順（大半は記録した順、ときどき逆順）
     // だった。ヒートマップはその日の実績をこの順のまま並べるので、記録した順（id 昇順）に固定する。
-    const rows = await select<StudyLogRow & TextbookColumns>(
+    const rows = await selectDateStrings<StudyLogRow & TextbookColumns>(
       `SELECT ${LOG_COLUMNS}, ${TEXTBOOK_COLUMNS}
        FROM StudyLog AS l
        LEFT JOIN Textbook AS t ON t.id = l.textbookId
@@ -43,7 +50,7 @@ export function listStudyLogs(
     return rows.map((row) => ({
       id: row.id,
       userId: row.userId,
-      date: row.date.toISOString(),
+      date: toIsoString(row.date),
       minutes: row.minutes,
       subject: row.subject,
       textbookId: row.textbookId,
@@ -53,8 +60,8 @@ export function listStudyLogs(
       rangeUnit: row.rangeUnit,
       memo: row.memo,
       studyPlanId: row.studyPlanId,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
+      createdAt: toIsoString(row.createdAt),
+      updatedAt: toIsoString(row.updatedAt),
     }));
   });
 }
@@ -73,7 +80,7 @@ export function listDailyStudyMinutes(
 ): Promise<DailyStudyMinutes[]> {
   return measured("studyLog.daily", async () => {
     const { where, params } = userDateConditions("l", userId, range);
-    const rows = await select<{ date: Date; minutes: string }>(
+    const rows = await selectDateStrings<{ date: Date; minutes: string }>(
       `SELECT l.date, SUM(l.minutes) AS minutes
        FROM StudyLog AS l
        WHERE ${where}
@@ -83,7 +90,7 @@ export function listDailyStudyMinutes(
       [...params, MAX_LOGS]
     );
     return rows.map((row) => ({
-      date: row.date.toISOString(),
+      date: toIsoString(row.date),
       // SUM() は INT でも DECIMAL になり、mysql2 は文字列で返す。
       minutes: Number(row.minutes),
     }));
