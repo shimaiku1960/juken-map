@@ -145,6 +145,12 @@ if (!options.scenarios[scenarioMode]) fail(`SCENARIO は level か spike です:
 // VUごとに1人の利用者を担当する。実際の利用者と同じく、最初からセッションを持っている。
 const myCookie = cookies[(__VU - 1) % cookies.length];
 
+// ブラウザと同じく圧縮を求める。k6 は既定では Accept-Encoding を送らないので、
+// 付けないとサーバーは圧縮せず、本番で毎回かかる圧縮の CPU が試験に入らない
+// （2026-09-25 に気づいた。それ以前の結果は圧縮なしの数字、JUK-52）。
+// ACCEPT_ENCODING=identity で圧縮なしにでき、以前の結果と比べるときに使う。
+const acceptEncoding = __ENV.ACCEPT_ENCODING || "gzip, deflate, br, zstd";
+
 function pickEndpoint() {
   let r = Math.random() * totalWeight;
   for (const entry of MIX) {
@@ -165,7 +171,7 @@ export default function () {
   const entry = pickEndpoint();
   const params = {
     tags: { name: entry.name, kind: entry.kind },
-    headers: { Cookie: myCookie },
+    headers: { Cookie: myCookie, "Accept-Encoding": acceptEncoding },
   };
 
   let response;

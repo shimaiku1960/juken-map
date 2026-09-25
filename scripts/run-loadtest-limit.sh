@@ -135,12 +135,14 @@ for rate in $RATES; do
       -e LOAD_TEST_COOKIES="$cookies" \
       -e RATE="$rate" \
       -e MIX_WEIGHTS="${MIX_WEIGHTS:-}" \
+      -e ACCEPT_ENCODING="${ACCEPT_ENCODING:-}" \
       -e DURATION="$DURATION" \
       -e SCENARIO="$SCENARIO" \
       grafana/k6:latest run --quiet - < load-tests/limit.js > "$OUT_DIR/raw-$rate.txt" 2>&1
   else
     # k6 はこの EC2 に直接入れたものを使う（環境変数はそのまま __ENV に入る）。
     BASE_URL="$BASE_URL" LOAD_TEST_COOKIES="$cookies" RATE="$rate" MIX_WEIGHTS="${MIX_WEIGHTS:-}" \
+      ACCEPT_ENCODING="${ACCEPT_ENCODING:-}" \
       DURATION="$DURATION" SCENARIO="$SCENARIO" LOADTEST_ENV=aws \
       k6 run --quiet - < load-tests/limit.js > "$OUT_DIR/raw-$rate.txt" 2>&1
   fi

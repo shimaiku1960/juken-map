@@ -1,3 +1,5 @@
+import zlib from "node:zlib";
+import fastifyCompress from "@fastify/compress";
 import { afterAll, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 vi.mock("../auth.ts", () => ({
@@ -5,7 +7,7 @@ vi.mock("../auth.ts", () => ({
 }));
 
 const { auth } = await import("../auth.ts");
-const { registerUniversityRoutes } = await import("./universities.ts");
+const { pickEncoding, registerUniversityRoutes } = await import("./universities.ts");
 const { buildTestApp, request } = await import("../test-support.ts");
 const { cleanup, createFinalGoal, createTag, createUniversity, createUser, trackUniversity } =
   await import("../test-db/fixtures.ts");
@@ -120,6 +122,65 @@ describe("GET /api/universities", () => {
       .json()
       .find((u: { id: number }) => u.id === created.value.id);
     expect(university.faculties).toEqual([{ tags: [] }]);
+  });
+});
+
+describe("GET /api/universities の圧縮", () => {
+  // 本番（server.ts）と同じ設定の @fastify/compress を載せたアプリ。
+  // ルートを後から読み込む plugin にして、圧縮のフックが確実にかかった状態で試す。
+  const compressedApp = buildTestApp((app) => {
+    app.register(fastifyCompress, { global: true, encodings: ["br", "gzip", "deflate"] });
+    app.register(async (instance) => registerUniversityRoutes(instance));
+  });
+
+  it("br を受け付けるなら、キャッシュした Brotli 版を返し、展開すると圧縮なしの本文と一致する", async () => {
+    const plain = await request(compressedApp, "GET", "/api/universities");
+    const res = await request(compressedApp, "GET", "/api/universities", undefined, {
+      "accept-encoding": "gzip, deflate, br, zstd",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-encoding"]).toBe("br");
+    expect(res.headers.vary).toMatch(/accept-encoding/i);
+    // 二重に圧縮されていれば、1回展開しただけでは JSON に戻らない
+    expect(zlib.brotliDecompressSync(res.rawPayload).toString()).toBe(plain.body);
+    expect(plain.headers["content-encoding"]).toBeUndefined();
+  });
+
+  it("br を受け付けず gzip なら gzip 版を返す", async () => {
+    const plain = await request(compressedApp, "GET", "/api/universities");
+    for (const acceptEncoding of ["gzip", "br;q=0, gzip"]) {
+      const res = await request(compressedApp, "GET", "/api/universities", undefined, {
+        "accept-encoding": acceptEncoding,
+      });
+
+      expect(res.headers["content-encoding"]).toBe("gzip");
+      expect(zlib.gunzipSync(res.rawPayload).toString()).toBe(plain.body);
+    }
+  });
+
+  it("圧縮しても ETag は同じで、304 も返る", async () => {
+    const plain = await request(compressedApp, "GET", "/api/universities");
+    const res = await request(compressedApp, "GET", "/api/universities", undefined, {
+      "accept-encoding": "br",
+      "if-none-match": plain.headers.etag as string,
+    });
+
+    expect(res.statusCode).toBe(304);
+  });
+});
+
+describe("pickEncoding", () => {
+  it("br を優先し、q=0 は受け付けないものとして扱う", () => {
+    expect(pickEncoding("gzip, deflate, br, zstd")).toBe("br");
+    expect(pickEncoding("gzip;q=1.0, br;q=0.5")).toBe("br");
+    expect(pickEncoding("br;q=0, gzip")).toBe("gzip");
+    expect(pickEncoding("BR")).toBe("br");
+    expect(pickEncoding("*")).toBe("br");
+    expect(pickEncoding("deflate")).toBeNull();
+    expect(pickEncoding("identity")).toBeNull();
+    expect(pickEncoding("")).toBeNull();
+    expect(pickEncoding(undefined)).toBeNull();
   });
 });
 
