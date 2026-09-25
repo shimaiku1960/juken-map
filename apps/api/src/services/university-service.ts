@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { promisify } from "node:util";
+import zlib from "node:zlib";
 import { select } from "@/api/infra/db";
 import type { FacultyRow, TagRow, UniversityRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
@@ -62,15 +64,30 @@ export function listUniversitiesForExplore() {
 // 無停止デプロイで新旧のプロセスが並ぶ間の編集はそれでは届かないので、期限でも捨てる。
 const EXPLORE_CACHE_TTL_MS = 10 * 60 * 1000;
 
-type ExploreSnapshot = { json: string; etag: string; expiresAt: number };
+// 圧縮した形も一緒に持つ。@fastify/compress に任せると、同じ 80KB 超の JSON を
+// リクエストのたびに圧縮し直し、1回あたり約260µs を使っていた（2026-09-25、JUK-52）。
+// 作るのは読み込みのときの1回だけなので、圧縮率を最大にしてよい。zlib の非同期版は
+// libuv のスレッドで動くので、最大の圧縮率でもイベントループを止めない。
+const brotliCompress = promisify(zlib.brotliCompress);
+const gzip = promisify(zlib.gzip);
+
+export type ExploreSnapshot = {
+  json: string;
+  /** json を Brotli で圧縮したもの。Accept-Encoding が br を含むときに返す。 */
+  br: Buffer;
+  /** json を gzip で圧縮したもの。br を受け付けないクライアント向け。 */
+  gzip: Buffer;
+  etag: string;
+  expiresAt: number;
+};
 
 let exploreSnapshot: ExploreSnapshot | null = null;
 let exploreLoading: Promise<ExploreSnapshot> | null = null;
 // 読み込み中に invalidate されたら、その読み込み結果は古いかもしれないので置かない。
 let exploreGeneration = 0;
 
-/** 大学一覧を JSON 文字列と ETag で返す。キャッシュが生きていれば DB を引かない。 */
-export async function getUniversitiesForExplore(): Promise<{ json: string; etag: string }> {
+/** 大学一覧を JSON 文字列・その圧縮版・ETag で返す。キャッシュが生きていれば DB を引かない。 */
+export async function getUniversitiesForExplore(): Promise<ExploreSnapshot> {
   if (exploreSnapshot && exploreSnapshot.expiresAt > Date.now()) return exploreSnapshot;
 
   // 期限切れの直後に同時に来たリクエストは、1回の読み込みを待ち合わせる。
@@ -79,8 +96,16 @@ export async function getUniversitiesForExplore(): Promise<{ json: string; etag:
   const generation = exploreGeneration;
   const loading = (async () => {
     const json = JSON.stringify(await listUniversitiesForExplore());
+    const [br, gzipped] = await Promise.all([
+      brotliCompress(json, {
+        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY },
+      }),
+      gzip(json, { level: zlib.constants.Z_BEST_COMPRESSION }),
+    ]);
     const snapshot = {
       json,
+      br,
+      gzip: gzipped,
       etag: `"${createHash("sha1").update(json).digest("base64url")}"`,
       expiresAt: Date.now() + EXPLORE_CACHE_TTL_MS,
     };
