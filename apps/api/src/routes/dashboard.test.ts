@@ -53,6 +53,20 @@ describe("GET /api/dashboard", () => {
     expect(body.dailyMinutes.some((d: { minutes: number }) => d.minutes === 45)).toBe(true);
   });
 
+  it("実績・予定に userId・作成日時・更新日時を含めない", async () => {
+    // 画面が使わず、実績の一覧の約3割のバイト数を占めていた（JUK-49）
+    await createStudyLog(owner.id, { date: new Date() });
+    await createStudyPlan(owner.id, { date: new Date() });
+
+    const body = (await get()).json();
+
+    for (const row of [body.logs[0], body.plans[0]]) {
+      expect(row).not.toHaveProperty("userId");
+      expect(row).not.toHaveProperty("createdAt");
+      expect(row).not.toHaveProperty("updatedAt");
+    }
+  });
+
   it("実績は過去だけ、予定は今週ぶん先まで覆う", async () => {
     // 予定は未来にもあるので、今週ぶんは実績より先まで取る必要がある
     const upcoming = await createStudyPlan(owner.id, { date: daysFromToday(5) });

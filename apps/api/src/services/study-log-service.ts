@@ -49,7 +49,6 @@ export function listStudyLogs(
     );
     return rows.map((row) => ({
       id: row.id,
-      userId: row.userId,
       date: toIsoString(row.date),
       minutes: row.minutes,
       subject: row.subject,
@@ -60,8 +59,6 @@ export function listStudyLogs(
       rangeUnit: row.rangeUnit,
       memo: row.memo,
       studyPlanId: row.studyPlanId,
-      createdAt: toIsoString(row.createdAt),
-      updatedAt: toIsoString(row.updatedAt),
     }));
   });
 }

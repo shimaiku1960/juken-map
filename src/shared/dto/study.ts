@@ -7,6 +7,10 @@
 //
 // 画面側の hooks（useStudyPlans / useStudyLogs）はこの型を re-export している。
 // 画面と API の両方がこのファイルだけを見ればよい状態にしてある。
+//
+// 予定と実績の一覧には userId・createdAt・updatedAt を入れない。画面はどれも使わず、
+// 自分のデータしか返らないので userId は全行同じ値になる。この3つで実績の一覧の
+// 約3割のバイト数を占めていた（2026-09-25、JUK-49）。
 
 export type Textbook = {
   id: number;
@@ -20,7 +24,6 @@ export type Textbook = {
 
 export type StudyPlan = {
   id: number;
-  userId: string;
   date: string; // ISO 文字列（JSON 経由で来るため）
   content: string | null;
   subject: string | null;
@@ -31,8 +34,6 @@ export type StudyPlan = {
   rangeStart: number | null;
   rangeEnd: number | null;
   rangeUnit: string | null;
-  createdAt: string;
-  updatedAt: string;
 };
 
 // 両端を含む期間（"YYYY-MM-DD"）。サーバーが何を返したかを画面へ伝えるのに使う。
@@ -60,7 +61,6 @@ export type DailyStudyMinutes = {
 
 export type StudyLog = {
   id: number;
-  userId: string;
   date: string; // ISO 文字列（JSON 経由で来るため）
   minutes: number;
   subject: string | null;
@@ -71,6 +71,4 @@ export type StudyLog = {
   rangeUnit: string | null;
   memo: string | null;
   studyPlanId: number | null;
-  createdAt: string;
-  updatedAt: string;
 };

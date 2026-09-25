@@ -64,7 +64,6 @@ export function listStudyPlans(
 
     return rows.map((row) => ({
       id: row.id,
-      userId: row.userId,
       date: toIsoString(row.date),
       content: row.content,
       subject: row.subject,
@@ -75,8 +74,6 @@ export function listStudyPlans(
       rangeStart: row.rangeStart,
       rangeEnd: row.rangeEnd,
       rangeUnit: row.rangeUnit,
-      createdAt: toIsoString(row.createdAt),
-      updatedAt: toIsoString(row.updatedAt),
     }));
   });
 }
