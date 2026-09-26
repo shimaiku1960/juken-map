@@ -2,6 +2,7 @@ import Fastify, {
   type FastifyInstance,
   type LightMyRequestResponse,
 } from "fastify";
+import { registerAccessControl } from "./access-control.ts";
 import { BODY_LIMIT, registerErrorHandling } from "./error-handling.ts";
 import { fastifyLoggingOptions, testLogLines } from "./observability/logger.ts";
 import { runWithRequestContext } from "./observability/requestContext.ts";
@@ -39,6 +40,9 @@ export function buildTestApp(register: (app: FastifyInstance) => void) {
       }
     }
   );
+
+  // 認証・管理者・デモの拒否も本番と同じフックを通す（ルートのハンドラはもう自分で断らない）。
+  registerAccessControl(app);
 
   register(app);
 
@@ -78,3 +82,6 @@ export function request(
 export function takeLogLines() {
   return testLogLines.splice(0);
 }
+
+/** テストの中で仮に作るルート用。入口の種類が無いと ready で失敗する（access-control.ts）。 */
+export const publicRoute = { config: { access: "public" } } as const;

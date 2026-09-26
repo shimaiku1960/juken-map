@@ -7,14 +7,12 @@ import {
   updateStudyLog,
 } from "@/api/services/study-log-service";
 import { findOwnedTextbook } from "@/api/services/textbook-service";
-import { denyDemoWrite, requireSession } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
 
 export function registerStudyLogItemRoutes(app: FastifyInstance) {
-  app.patch("/api/study-logs/:id", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.patch("/api/study-logs/:id", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const logId = readIdParam(request.params, reply);
     if (logId === null) return;
@@ -52,10 +50,8 @@ export function registerStudyLogItemRoutes(app: FastifyInstance) {
     return updateStudyLog(logId, log, parsed.data);
   });
 
-  app.delete("/api/study-logs/:id", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.delete("/api/study-logs/:id", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const id = readIdParam(request.params, reply);
     if (id === null) return;

@@ -79,7 +79,7 @@ export function registerCspReportRoutes(app: FastifyInstance) {
     }
   );
 
-  app.post(CSP_REPORT_PATH, { bodyLimit: BODY_LIMIT }, async (request, reply) => {
+  app.post(CSP_REPORT_PATH, { bodyLimit: BODY_LIMIT, config: { access: "anonymous-write" } }, async (request, reply) => {
     for (const violation of parseCspReports(request.body)) {
       request.log.warn({ csp: violation }, "csp violation");
     }

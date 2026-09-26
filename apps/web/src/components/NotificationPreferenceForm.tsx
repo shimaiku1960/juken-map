@@ -145,9 +145,16 @@ export default function NotificationPreferenceForm(props: Props) {
         ) : (
           <div className="mt-3 space-y-3">
             <p className="text-sm text-muted-foreground">LINEで本人確認と公式アカウントの友だち追加を行います。トークでメッセージを送る必要はありません。</p>
-            <Button asChild size="lg" className="h-11">
-              <a href="/api/line/oauth/start">LINEと連携する</a>
-            </Button>
+            {/* デモは連携できない（サーバーも 403 で断る）。リンクのままだと押せてしまうのでボタンを無効にする。 */}
+            {readOnly ? (
+              <Button type="button" size="lg" className="h-11" disabled>
+                LINEと連携する
+              </Button>
+            ) : (
+              <Button asChild size="lg" className="h-11">
+                <a href="/api/line/oauth/start">LINEと連携する</a>
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">
               直接連携できない場合は、<a href={lineOfficialAccountUrl} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">公式アカウントのトーク</a>で「連携」と送る方法も利用できます。
             </p>

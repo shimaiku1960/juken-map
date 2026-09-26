@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { BODY_LIMIT } from "@/api/error-handling";
-import { buildTestApp, request } from "@/api/test-support";
+import { buildTestApp, publicRoute, request } from "@/api/test-support";
 
 // 想定外の例外・大きすぎるボディ・reqId の3点を、本番と同じ組み立て（buildTestApp）で確かめる。
 function app() {
   return buildTestApp((app) => {
-    app.get("/api/boom", async () => {
+    app.get("/api/boom", publicRoute, async () => {
       // 5xx の本文へ漏れてはいけない文字列。実際に漏れていたのは err.message だった。
       throw new Error("SELECT * FROM user WHERE email = 'secret@example.com'");
     });
-    app.post("/api/echo", async (request) => ({ received: request.body !== undefined }));
+    app.post("/api/echo", publicRoute, async (request) => ({ received: request.body !== undefined }));
   });
 }
 

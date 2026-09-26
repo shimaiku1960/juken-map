@@ -3,6 +3,7 @@ import path from "node:path";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyCompress from "@fastify/compress";
 import { toNodeHandler } from "better-auth/node";
+import { registerAccessControl } from "./access-control.ts";
 import { auth } from "./auth.ts";
 import { BODY_LIMIT, registerErrorHandling } from "./error-handling.ts";
 import { select, setQueryLogger } from "./infra/db.ts";
@@ -97,7 +98,11 @@ export async function buildServer() {
     }
   );
 
-  app.get("/api/health", async () => {
+  // 全ルートの入口の種類（config.access）を見て、未ログイン・権限なし・デモの書き込みを
+  // ハンドラより前にまとめて断る。種類の無いルートがあれば起動に失敗する。
+  registerAccessControl(app);
+
+  app.get("/api/health", { config: { access: "public" } }, async () => {
     // デプロイ後のスモークテストが叩く。DB に繋がらなければ 500 になり、
     // 前のイメージへ自動で戻る（.github/scripts/deploy-ec2.sh）。
     await select("SELECT 1");

@@ -45,9 +45,9 @@ export function registerSimRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get("/api/sim/state", async () => getSimulationState());
+  app.get("/api/sim/state", { config: { access: "job" } }, async () => getSimulationState());
 
-  app.post("/api/sim/users", async (request, reply) => {
+  app.post("/api/sim/users", { config: { access: "job" } }, async (request, reply) => {
     const parsed = markBodySchema.safeParse(request.body);
     if (!parsed.success || !isSimEmail(parsed.data.email)) {
       return reply.code(400).send({ error: "入力が不正です" });
@@ -59,7 +59,7 @@ export function registerSimRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.patch<{ Params: { seq: string } }>("/api/sim/users/:seq", async (request, reply) => {
+  app.patch<{ Params: { seq: string } }>("/api/sim/users/:seq", { config: { access: "job" } }, async (request, reply) => {
     const seq = Number(request.params.seq);
     const parsed = updateBodySchema.safeParse(request.body);
     if (!Number.isInteger(seq) || seq <= 0 || !parsed.success) {

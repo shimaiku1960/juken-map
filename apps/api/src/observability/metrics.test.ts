@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { registerMetrics, registry } from "@/api/observability/metrics";
-import { buildTestApp } from "@/api/test-support";
+import { buildTestApp, publicRoute } from "@/api/test-support";
 
 async function requestCount(labels: string) {
   const text = await registry.metrics();
@@ -18,7 +18,7 @@ describe("リクエストのメトリクス", () => {
   it("実際の URL ではなくルートの型ごとに数える（ID でラベルが増えない）", async () => {
     const app = buildTestApp((app) => {
       registerMetrics(app);
-      app.get("/api/items/:id", async () => ({ ok: true }));
+      app.get("/api/items/:id", publicRoute, async () => ({ ok: true }));
     });
 
     await app.inject({ method: "GET", url: "/api/items/1" });
@@ -35,7 +35,7 @@ describe("リクエストのメトリクス", () => {
   it("想定外の例外（500）もステータスコード付きで数える", async () => {
     const app = buildTestApp((app) => {
       registerMetrics(app);
-      app.get("/api/broken", async () => {
+      app.get("/api/broken", publicRoute, async () => {
         throw new Error("boom");
       });
     });
