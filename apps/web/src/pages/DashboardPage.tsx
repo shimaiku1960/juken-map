@@ -23,7 +23,8 @@ export default function DashboardPage() {
 
   return (
     <PageShell>
-      <RegistrationCompletionTracker />
+      {/* デモは登録しないうえ、計測の記録も書き込みなのでサーバーが 403 で断る。 */}
+      {session && session.user.email !== DEMO_EMAIL && <RegistrationCompletionTracker />}
       <PageHeader
         title="記録・予定"
         description="学習予定と実績をまとめて確認できます。"

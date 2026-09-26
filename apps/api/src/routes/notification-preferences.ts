@@ -5,7 +5,7 @@ import {
   saveNotificationPreference,
 } from "@/api/services/notification-service";
 import { notificationPreferenceSchema } from "@/shared/validations/notification";
-import { denyDemoWrite, requireSession } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 
 const DEFAULT_PREFERENCE = {
   emailMorningEnabled: false,
@@ -15,9 +15,8 @@ const DEFAULT_PREFERENCE = {
 };
 
 export function registerNotificationPreferenceRoutes(app: FastifyInstance) {
-  app.get("/api/notification-preferences", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
+  app.get("/api/notification-preferences", { config: { access: "user" } }, async (request) => {
+    const session = currentSession(request);
 
     const preference = await findNotificationPreference(session.user.id);
     return preference
@@ -30,10 +29,8 @@ export function registerNotificationPreferenceRoutes(app: FastifyInstance) {
       : DEFAULT_PREFERENCE;
   });
 
-  app.put("/api/notification-preferences", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.put("/api/notification-preferences", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const result = notificationPreferenceSchema.safeParse(request.body);
     if (!result.success) {

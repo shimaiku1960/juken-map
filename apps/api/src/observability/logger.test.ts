@@ -1,7 +1,7 @@
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { developmentTargets, fastifyLoggingOptions } from "@/api/observability/logger";
-import { buildTestApp, takeLogLines } from "@/api/test-support";
+import { buildTestApp, publicRoute, takeLogLines } from "@/api/test-support";
 
 describe("developmentTargets", () => {
   it("LOG_FILE が無ければ画面（pino-pretty）にだけ出す", () => {
@@ -45,7 +45,7 @@ describe("リクエストのログ", () => {
 
   it("完了時に1行、メソッド・パス・ステータス・所要時間・reqId を書き出す", async () => {
     const app = buildTestApp((app) => {
-      app.get("/api/example", async () => ({ ok: true }));
+      app.get("/api/example", publicRoute, async () => ({ ok: true }));
     });
 
     await app.inject({ method: "GET", url: "/api/example?token=secret" });
@@ -67,7 +67,7 @@ describe("リクエストのログ", () => {
 
   it("ハンドラの想定外の例外（500）を、エラーの中身ごと書き出す", async () => {
     const app = buildTestApp((app) => {
-      app.get("/api/broken", async () => {
+      app.get("/api/broken", publicRoute, async () => {
         throw new Error("boom");
       });
     });

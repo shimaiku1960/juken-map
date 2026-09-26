@@ -4,7 +4,7 @@ import {
   getUniversitiesForExplore,
 } from "@/api/services/university-service";
 import { listGoalFacultyIds } from "@/api/services/goal-service";
-import { requireSession } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
 
 // If-None-Match は複数の値をカンマで並べられる。途中で nginx などが圧縮し直すと
@@ -41,10 +41,7 @@ export function pickEncoding(acceptEncoding: string | undefined): "br" | "gzip" 
 // これらに HTTP の入口が無かった。SPA からは HTTP でしか取れないので新設する。
 // 分離して初めて「どこまでが本当に API だったか」が可視化された部分。
 export function registerUniversityRoutes(app: FastifyInstance) {
-  app.get("/api/universities", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-
+  app.get("/api/universities", { config: { access: "user" } }, async (request, reply) => {
     // 中身は全員共通で、変わるのは管理画面の編集だけ。ブラウザには毎回確かめさせ（no-cache）、
     // 変わっていなければ 304 で本文を省く。ログインが要る応答なので共有キャッシュには置かせない。
     const snapshot = await getUniversitiesForExplore();
@@ -67,9 +64,9 @@ export function registerUniversityRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/universities/:id",
+    { config: { access: "user" } },
     async (request, reply) => {
-      const session = await requireSession(request, reply);
-      if (!session) return;
+      const session = currentSession(request);
 
       const id = readIdParam(request.params, reply);
       if (id === null) return;

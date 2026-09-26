@@ -11,7 +11,7 @@ function isAuthorized(request: FastifyRequest) {
 }
 
 export function registerCronRoutes(app: FastifyInstance) {
-  app.post("/api/cron/daily-study-notifications", async (request, reply) => {
+  app.post("/api/cron/daily-study-notifications", { config: { access: "job" } }, async (request, reply) => {
     if (!isAuthorized(request)) {
       return reply.code(401).send({ error: "Unauthorized" });
     }

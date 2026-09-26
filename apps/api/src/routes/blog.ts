@@ -6,7 +6,7 @@ import { getBlog, isBlogNotFound, listBlogs } from "@/api/infra/microcms";
 // ここで中継し、キーはサーバーに閉じたままにする。
 // 認証は不要（公開コンテンツ）。
 export function registerBlogRoutes(app: FastifyInstance) {
-  app.get("/api/blog", async (request, reply) => {
+  app.get("/api/blog", { config: { access: "public" } }, async (request, reply) => {
     try {
       return await listBlogs();
     } catch (error) {
@@ -14,7 +14,7 @@ export function registerBlogRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get<{ Params: { id: string } }>("/api/blog/:id", async (request, reply) => {
+  app.get<{ Params: { id: string } }>("/api/blog/:id", { config: { access: "public" } }, async (request, reply) => {
     try {
       return await getBlog(request.params.id);
     } catch (error) {

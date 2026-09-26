@@ -8,21 +8,18 @@ import {
   listGoals,
   updateGoal,
 } from "@/api/services/goal-service";
-import { denyDemoWrite, requireSession } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
 
 export function registerGoalRoutes(app: FastifyInstance) {
-  app.get("/api/goals", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
+  app.get("/api/goals", { config: { access: "user" } }, async (request) => {
+    const session = currentSession(request);
 
     return listGoals(session.user.id);
   });
 
-  app.post("/api/goals", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.post("/api/goals", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const parsed = goalSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -40,10 +37,8 @@ export function registerGoalRoutes(app: FastifyInstance) {
     return reply.code(201).send(outcome.value);
   });
 
-  app.put("/api/goals/:id", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.put("/api/goals/:id", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const id = readIdParam(request.params, reply);
     if (id === null) return;
@@ -61,10 +56,8 @@ export function registerGoalRoutes(app: FastifyInstance) {
     return updateGoal(id, parsed.data);
   });
 
-  app.patch("/api/goals/:id", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.patch("/api/goals/:id", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const id = readIdParam(request.params, reply);
     if (id === null) return;
@@ -83,10 +76,8 @@ export function registerGoalRoutes(app: FastifyInstance) {
     return { message: "OK" };
   });
 
-  app.delete("/api/goals/:id", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.delete("/api/goals/:id", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const id = readIdParam(request.params, reply);
     if (id === null) return;

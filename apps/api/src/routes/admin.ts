@@ -10,10 +10,10 @@ import {
   type UserActionOutcome,
 } from "@/api/services/admin-service";
 import { USER_KINDS } from "@/shared/dto/admin";
-import { requireAdmin } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 
-// 管理者ページ（/admin）の API。どれも requireAdmin を通す（role = 'admin' だけ）。
-// 画面側でもメニューを出し分けているが、守るのはここ。
+// 管理者ページ（/admin）の API。どれも access: "admin"（role = 'admin' だけ）。
+// 画面側でもメニューを出し分けているが、守るのはサーバー側（access-control.ts）。
 
 const listUsersQuerySchema = z.object({
   kind: z.enum(USER_KINDS).default("real"),
@@ -63,17 +63,11 @@ function logUserAction(
 }
 
 export function registerAdminRoutes(app: FastifyInstance) {
-  app.get("/api/admin/overview", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
-
+  app.get("/api/admin/overview", { config: { access: "admin" } }, async () => {
     return getAdminOverview();
   });
 
-  app.get("/api/admin/users", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
-
+  app.get("/api/admin/users", { config: { access: "admin" } }, async (request, reply) => {
     const parsed = listUsersQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues });
@@ -82,9 +76,8 @@ export function registerAdminRoutes(app: FastifyInstance) {
     return listAdminUsers(parsed.data);
   });
 
-  app.post("/api/admin/users/:id/ban", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.post("/api/admin/users/:id/ban", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const params = userIdParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
@@ -98,9 +91,8 @@ export function registerAdminRoutes(app: FastifyInstance) {
     return outcome.value;
   });
 
-  app.post("/api/admin/users/:id/unban", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.post("/api/admin/users/:id/unban", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const params = userIdParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
@@ -112,9 +104,8 @@ export function registerAdminRoutes(app: FastifyInstance) {
     return outcome.value;
   });
 
-  app.delete("/api/admin/users/:id", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.delete("/api/admin/users/:id", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const params = userIdParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });

@@ -11,26 +11,33 @@ import { isKnownSpaRoute } from "@/shared/routes";
 // 既存のイメージ単位の自動ロールバックがそのまま効く）。
 // 開発では Vite(:5173) が配って /api だけこちらへプロキシするため、ここは通らない。
 export function registerSpa(app: FastifyInstance, root: string) {
-  app.register(fastifyStatic, {
-    root,
-    // ワイルドカードを切り、実ファイルが無いものは下の notFound ハンドラへ落とす。
-    // 有効なままだと /dashboard のようなクライアント側ルートが 404 になる。
-    wildcard: false,
-    // "/" に index.html を直接返させない。そのまま返すと meta を差し込めず、
-    // 一番 SEO が要るトップページが既定の head のままになる。
-    index: false,
-    // ssg/ の HTML は下の notFound ハンドラが meta を差し込んで返す。ファイルのまま
-    // /ssg/terms.html でも読めると、meta の無い同じページが別 URL にできてしまう。
-    allowedPath: (pathName) => !pathName.startsWith("/ssg/"),
-    setHeaders(res, filePath) {
-      // Vite が出す assets/* はファイル名にハッシュが入るので永久キャッシュしてよい。
-      // index.html はデプロイのたびに中身が変わるため、必ず再検証させる。
-      if (path.basename(filePath) === "index.html") {
-        res.header("Cache-Control", "no-cache");
-      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-        res.header("Cache-Control", "public, max-age=31536000, immutable");
-      }
-    },
+  // 静的ファイルは誰でも読める（入口 E1）。@fastify/static はファイルごとにルートを作り、
+  // config を渡す口が無いので、子のスコープの onRoute で access を付ける（access-control.ts）。
+  app.register(async (scope) => {
+    scope.addHook("onRoute", (route) => {
+      route.config = { ...route.config, access: "public" };
+    });
+    await scope.register(fastifyStatic, {
+      root,
+      // ワイルドカードを切り、実ファイルが無いものは下の notFound ハンドラへ落とす。
+      // 有効なままだと /dashboard のようなクライアント側ルートが 404 になる。
+      wildcard: false,
+      // "/" に index.html を直接返させない。そのまま返すと meta を差し込めず、
+      // 一番 SEO が要るトップページが既定の head のままになる。
+      index: false,
+      // ssg/ の HTML は下の notFound ハンドラが meta を差し込んで返す。ファイルのまま
+      // /ssg/terms.html でも読めると、meta の無い同じページが別 URL にできてしまう。
+      allowedPath: (pathName) => !pathName.startsWith("/ssg/"),
+      setHeaders(res, filePath) {
+        // Vite が出す assets/* はファイル名にハッシュが入るので永久キャッシュしてよい。
+        // index.html はデプロイのたびに中身が変わるため、必ず再検証させる。
+        if (path.basename(filePath) === "index.html") {
+          res.header("Cache-Control", "no-cache");
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.header("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    });
   });
 
   // index.html は毎リクエスト読まずに一度だけ読む。meta だけ差し替えて返す。
@@ -39,7 +46,7 @@ export function registerSpa(app: FastifyInstance, root: string) {
 
   // sitemap.xml は記事一覧から作るので静的ファイルにできない。
   // robots.txt と OGP 画像は apps/web/public に置いた実ファイルが配られる。
-  app.get("/sitemap.xml", async (_request, reply) => {
+  app.get("/sitemap.xml", { config: { access: "public" } }, async (_request, reply) => {
     reply.type("application/xml; charset=utf-8");
     return buildSitemap();
   });

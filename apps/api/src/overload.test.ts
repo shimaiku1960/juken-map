@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { registerOverloadProtection } from "@/api/overload";
-import { buildTestApp, request } from "@/api/test-support";
+import { buildTestApp, publicRoute, request } from "@/api/test-support";
 
 // 上限2で、ハンドラを止めておける app を作る。release() を呼ぶまで /api/slow は返らない。
 function app() {
@@ -10,13 +10,13 @@ function app() {
   });
   const instance = buildTestApp((app) => {
     registerOverloadProtection(app, 2);
-    app.get("/api/slow", async () => {
+    app.get("/api/slow", publicRoute, async () => {
       await blocked;
       return { ok: true };
     });
-    app.get("/api/fast", async () => ({ ok: true }));
-    app.get("/api/health", async () => ({ ok: true }));
-    app.get("/page", async () => "html");
+    app.get("/api/fast", publicRoute, async () => ({ ok: true }));
+    app.get("/api/health", publicRoute, async () => ({ ok: true }));
+    app.get("/page", publicRoute, async () => "html");
   });
   return { app: instance, release: () => releaseAll() };
 }
