@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   daysUntil,
+  formatDateTokyo,
   formatExamDate,
   ymdLocal,
   todayYmd,
@@ -102,5 +103,12 @@ describe("todayYmdTokyo", () => {
     vi.setSystemTime(new Date("2027-01-01T15:30:00.000Z"));
 
     expect(todayYmdTokyo()).toBe("2027-01-02");
+  });
+});
+
+describe("formatDateTokyo", () => {
+  it("実行環境の時間帯に関係なく、日本時間の日付で返す", () => {
+    // UTC では 8/2 だが、日本時間では 8/3 の 0 時半。
+    expect(formatDateTokyo("2026-08-02T15:30:00Z")).toBe("2026/8/3");
   });
 });

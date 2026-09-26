@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { formatDateTokyo } from "@/shared/date";
 import { Card, CardContent } from "@/web/components/ui/card";
 import PageShell from "@/web/components/layout/PageShell";
 import PageHeader from "@/web/components/layout/PageHeader";
@@ -25,7 +26,7 @@ export default function BlogPage() {
                   <CardContent>
                     <h2 className="text-xl font-semibold">{blog.title}</h2>
                     <time className="text-sm text-muted-foreground">
-                      {new Date(blog.createdAt).toLocaleDateString("ja-JP")}
+                      {formatDateTokyo(blog.createdAt)}
                     </time>
                   </CardContent>
                 </Card>

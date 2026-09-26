@@ -14,7 +14,7 @@ const client = createClient({
 // client をそのまま公開せず下の2つだけを出すのは、呼び出し側が上限を付け忘れないようにするため。
 //
 // 既定（5秒）より短くしているのは、記事の取得が HTML を返す途中で走るため
-// （apps/api/src/seo.ts の metaForPath）。ここで長く待つと、利用者は真っ白な画面を
+// （apps/api/src/spa.ts の記事の SSR）。ここで長く待つと、利用者は真っ白な画面を
 // その間ずっと見ることになる。記事が取れなくても画面は SPA が描けるので、早く諦めてよい。
 const MICROCMS_TIMEOUT_MS = 3_000;
 

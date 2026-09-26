@@ -1,4 +1,5 @@
 import { useParams } from "react-router";
+import { formatDateTokyo } from "@/shared/date";
 import { Card, CardContent } from "@/web/components/ui/card";
 import { useBlogDetail } from "@/web/hooks/useBlog";
 import NotFoundPage from "@/web/pages/NotFoundPage";
@@ -22,7 +23,7 @@ export default function ArticlePage() {
         <CardContent className="space-y-4">
           <h1 className="text-3xl font-bold">{blog.title}</h1>
           <time className="text-sm text-muted-foreground">
-            {new Date(blog.createdAt).toLocaleDateString("ja-JP")}
+            {formatDateTokyo(blog.createdAt)}
           </time>
           {blog.eyecatch && (
             // next/image の最適化は無くなるので、素の img に幅高さを渡す。
