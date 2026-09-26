@@ -13,7 +13,8 @@ const loadLandingPage = () => import("@/web/components/LandingPage");
 const LandingPage = lazy(loadLandingPage);
 // トップを直接開いたときは、ログイン判定の完了を待たずに LP の取得を始める。
 // 待つと「判定 → LP の取得」が直列になり、初めて来た人ほど表示が遅れる。
-if (window.location.pathname === "/") void loadLandingPage();
+// ビルド時の HTML 生成（entry-server.tsx）は Node で読み込むので window が無い。
+if (typeof window !== "undefined" && window.location.pathname === "/") void loadLandingPage();
 const StudySessionManager = lazy(
   () => import("@/web/components/StudySessionManager")
 );
