@@ -10,7 +10,7 @@ import {
 import type { DateRange } from "@/api/services/date-range";
 import { findOwnedTextbook } from "@/api/services/textbook-service";
 import { textbookRangeError } from "@/api/domain/textbookRange";
-import { denyDemoWrite, requireSession } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 
 // 期間を省いて呼ばれたときに遡る日数。画面はどれも明示して呼ぶので、これは
 // 古いクライアントや手で叩いたときのための既定値。全期間を返す状態には戻さない。
@@ -42,9 +42,8 @@ function toRange(
 }
 
 export function registerStudyLogRoutes(app: FastifyInstance) {
-  app.get("/api/study-logs", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
+  app.get("/api/study-logs", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const parsed = rangeQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -55,9 +54,8 @@ export function registerStudyLogRoutes(app: FastifyInstance) {
   });
 
   // 日ごとの合計だけを返す軽い方。ヒートマップの連続記録日数が使う。
-  app.get("/api/study-logs/daily", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
+  app.get("/api/study-logs/daily", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const parsed = rangeQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -70,10 +68,8 @@ export function registerStudyLogRoutes(app: FastifyInstance) {
     );
   });
 
-  app.post("/api/study-logs", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.post("/api/study-logs", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const parsed = createStudyLogSchema.safeParse(request.body);
     if (!parsed.success) {

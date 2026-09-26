@@ -15,7 +15,7 @@ import {
   updateStudyPlan,
 } from "@/api/services/study-plan-service";
 import { countOwnedTextbooks } from "@/api/services/textbook-service";
-import { denyDemoWrite, requireSession } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
 
 // 期間を省いて呼ばれたときの幅。予定は未来にもあるので前後に取る。画面はどれも
@@ -33,9 +33,8 @@ const rangeQuerySchema = z.object({
 });
 
 export function registerStudyPlanRoutes(app: FastifyInstance) {
-  app.get("/api/study-plans", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
+  app.get("/api/study-plans", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const parsed = rangeQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -50,10 +49,8 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/api/study-plans", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.post("/api/study-plans", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const parsed = createStudyPlansSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -85,10 +82,8 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     return reply.code(201).send({ count: result.count });
   });
 
-  app.patch("/api/study-plans/:id", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.patch("/api/study-plans/:id", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const id = readIdParam(request.params, reply);
     if (id === null) return;
@@ -123,10 +118,8 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
     return outcome.value;
   });
 
-  app.delete("/api/study-plans/:id", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.delete("/api/study-plans/:id", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const id = readIdParam(request.params, reply);
     if (id === null) return;
@@ -141,10 +134,9 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/study-plans/:id/complete",
+    { config: { access: "user" } },
     async (request, reply) => {
-      const session = await requireSession(request, reply);
-      if (!session) return;
-      if (denyDemoWrite(session, reply)) return;
+      const session = currentSession(request);
 
       const planId = readIdParam(request.params, reply);
       if (planId === null) return;

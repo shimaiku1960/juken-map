@@ -27,7 +27,8 @@ import {
   linkVerifiedLineUser,
   startOAuthAttempt,
 } from "@/api/services/line-connection-service";
-import { denyDemoWrite, getSession, requireSession } from "../context.ts";
+import { currentSession } from "../access-control.ts";
+import { getSession } from "../context.ts";
 
 // 分離前は「リダイレクト先の画面」と「API」が同じオリジンだったので
 // new URL(request.url).origin で足りていた。分離後は画面が別プロセスになるため、
@@ -108,7 +109,7 @@ export function registerLineRoutes(app: FastifyInstance) {
   // LINE のメッセージ本文が案内する導線。画面を持たず、ログイン状態で行き先を変えるだけ。
   // Next.js では app/line/settings/route.ts が同じことをしていた。SPA 側のルートに
   // しないのは、描画が要らずクライアント判定だと一瞬ちらつくため。
-  app.get("/line/settings", async (request, reply) => {
+  app.get("/line/settings", { config: { access: "public" } }, async (request, reply) => {
     const session = await getSession(request);
     const origin = webOrigin();
 
@@ -121,9 +122,8 @@ export function registerLineRoutes(app: FastifyInstance) {
     return reply.redirect(loginUrl.toString());
   });
 
-  app.post("/api/line/account-link", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
+  app.post("/api/line/account-link", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const result = accountLinkSchema.safeParse(request.body);
     if (!result.success) {
@@ -141,25 +141,22 @@ export function registerLineRoutes(app: FastifyInstance) {
 
   // Next.js では Server Component が findLineConnection を直接呼んでいたため
   // GET が無かった。SPA のプロフィール画面が連携状態を知る必要があるので新設する。
-  app.get("/api/line/connection", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
+  app.get("/api/line/connection", { config: { access: "user" } }, async (request) => {
+    const session = currentSession(request);
 
     const connection = await findLineConnection(session.user.id);
     return { connected: Boolean(connection) };
   });
 
-  app.delete("/api/line/connection", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.delete("/api/line/connection", { config: { access: "user" } }, async (request) => {
+    const session = currentSession(request);
 
     await disconnectLine(session.user.id);
     return { connected: false };
   });
 
-  app.get("/api/line/oauth/start", async (request, reply) => {
-    const session = await getSession(request);
+  app.get("/api/line/oauth/start", { config: { access: "oauth" } }, async (request, reply) => {
+    const session = request.session;
     if (!session) {
       return reply.redirect(
         `${webOrigin()}/login?callbackURL=%2Fprofile%23line-connection`
@@ -187,6 +184,7 @@ export function registerLineRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { state?: string; code?: string; error?: string } }>(
     "/api/line/oauth/callback",
+    { config: { access: "oauth" } },
     async (request, reply) => {
       const profileRedirect = (result: string) =>
         reply.redirect(`${webOrigin()}/profile?line=${result}#line-connection`);
@@ -195,7 +193,7 @@ export function registerLineRoutes(app: FastifyInstance) {
       if (oauthError !== undefined) return profileRedirect("cancelled");
       if (!state || !code) return profileRedirect("invalid");
 
-      const session = await getSession(request);
+      const session = request.session;
       if (!session) {
         const callbackURL = `${CALLBACK_PATH}?${new URLSearchParams({ state, code })}`;
         return reply.redirect(
@@ -273,7 +271,7 @@ export function registerLineRoutes(app: FastifyInstance) {
       (_req, body, done) => done(null, body)
     );
 
-    scope.post("/api/line/webhook", async (request, reply) => {
+    scope.post("/api/line/webhook", { config: { access: "webhook" } }, async (request, reply) => {
       const body = request.body as string;
       const signature = request.headers["x-line-signature"];
       if (

@@ -21,10 +21,10 @@ import {
   textbookMasterInputSchema,
   universityInputSchema,
 } from "@/shared/validations/master";
-import { requireAdmin } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 import { idParamsSchema } from "./params.ts";
 
-// 管理者ページのマスター編集（/admin/masters、大学・学部・参考書）の API。どれも requireAdmin を通す。
+// 管理者ページのマスター編集（/admin/masters、大学・学部・参考書）の API。どれも access: "admin"（access-control.ts が断る）。
 // 変更はすべて構造化ログ `admin master change` に「誰が・何を・前→後」で残す（Grafana の Loki で追える）。
 
 const listQuerySchema = z.object({
@@ -82,15 +82,13 @@ function logChange(
 }
 
 export function registerAdminMasterRoutes(app: FastifyInstance) {
-  app.get("/api/admin/universities", async (request, reply) => {
-    if (!(await requireAdmin(request, reply))) return;
+  app.get("/api/admin/universities", { config: { access: "admin" } }, async (request, reply) => {
     const parsed = listQuerySchema.safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
     return listAdminUniversities({ q: parsed.data.q || undefined, page: parsed.data.page });
   });
 
-  app.get("/api/admin/universities/:id", async (request, reply) => {
-    if (!(await requireAdmin(request, reply))) return;
+  app.get("/api/admin/universities/:id", { config: { access: "admin" } }, async (request, reply) => {
     const params = idParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
     const detail = await getAdminUniversityDetail(params.data.id);
@@ -98,14 +96,12 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return detail;
   });
 
-  app.get("/api/admin/tags", async (request, reply) => {
-    if (!(await requireAdmin(request, reply))) return;
+  app.get("/api/admin/tags", { config: { access: "admin" } }, async () => {
     return listAdminTags();
   });
 
-  app.post("/api/admin/universities", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.post("/api/admin/universities", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const parsed = universityInputSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
 
@@ -115,9 +111,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return reply.code(201).send(outcome.value);
   });
 
-  app.patch("/api/admin/universities/:id", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.patch("/api/admin/universities/:id", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     const parsed = universityInputSchema.safeParse(request.body);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
@@ -129,9 +124,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return outcome.value.after;
   });
 
-  app.delete("/api/admin/universities/:id", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.delete("/api/admin/universities/:id", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
 
@@ -141,9 +135,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.post("/api/admin/faculties", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.post("/api/admin/faculties", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const parsed = createFacultySchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
 
@@ -153,9 +146,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return reply.code(201).send(outcome.value);
   });
 
-  app.patch("/api/admin/faculties/:id", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.patch("/api/admin/faculties/:id", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     const parsed = facultyInputSchema.safeParse(request.body);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
@@ -167,9 +159,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return outcome.value.after;
   });
 
-  app.delete("/api/admin/faculties/:id", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.delete("/api/admin/faculties/:id", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
 
@@ -179,16 +170,14 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.get("/api/admin/textbook-masters", async (request, reply) => {
-    if (!(await requireAdmin(request, reply))) return;
+  app.get("/api/admin/textbook-masters", { config: { access: "admin" } }, async (request, reply) => {
     const parsed = searchQuerySchema.safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
     return listAdminTextbookMasters(parsed.data.q || undefined);
   });
 
-  app.post("/api/admin/textbook-masters", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.post("/api/admin/textbook-masters", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const parsed = textbookMasterInputSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
 
@@ -198,9 +187,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return reply.code(201).send(outcome.value);
   });
 
-  app.patch("/api/admin/textbook-masters/:id", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.patch("/api/admin/textbook-masters/:id", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     const parsed = textbookMasterInputSchema.safeParse(request.body);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
@@ -212,9 +200,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     return outcome.value.after;
   });
 
-  app.delete("/api/admin/textbook-masters/:id", async (request, reply) => {
-    const session = await requireAdmin(request, reply);
-    if (!session) return;
+  app.delete("/api/admin/textbook-masters/:id", { config: { access: "admin" } }, async (request, reply) => {
+    const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: params.error.issues });
 

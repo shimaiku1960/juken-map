@@ -15,7 +15,7 @@ export const idParamsSchema = z.object({
 
 /**
  * `:id` を読む。形が不正なら 400 を送って null を返す。
- * 呼び出し側は requireSession と同じく `if (id === null) return;` で抜ける。
+ * 呼び出し側は `if (id === null) return;` で抜ける。
  */
 export function readIdParam(params: unknown, reply: FastifyReply): number | null {
   const parsed = idParamsSchema.safeParse(params);

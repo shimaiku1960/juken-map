@@ -16,8 +16,8 @@ export function getSession(request: FastifyRequest) {
 }
 
 /**
- * 認証必須のハンドラで使う。未認証なら 401 を送って null を返す。
- * 呼び出し側は `if (!session) return;` で抜ける。
+ * 未認証なら 401 を送って null を返す。access-control.ts のフックが使う。
+ * ハンドラからは呼ばず、フックが通したセッションを currentSession で受け取る。
  */
 export async function requireSession(
   request: FastifyRequest,
@@ -55,7 +55,7 @@ export function denyDemoWrite(
 }
 
 /**
- * 管理者専用のハンドラで使う。未認証なら 401、管理者でなければ 403 を送って null を返す。
+ * 未認証なら 401、管理者でなければ 403 を送って null を返す。access-control.ts のフックが使う。
  * role は user テーブルの列で、Better Auth がセッションに載せてくる（auth.ts の additionalFields）。
  * 画面側でもメニューの出し分けに使うが、守るのはここ。
  */

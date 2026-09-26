@@ -10,21 +10,18 @@ import {
   listTextbooks,
   updateTextbookProgress,
 } from "@/api/services/textbook-service";
-import { denyDemoWrite, requireSession } from "../context.ts";
+import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
 
 export function registerTextbookRoutes(app: FastifyInstance) {
-  app.get("/api/textbooks", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
+  app.get("/api/textbooks", { config: { access: "user" } }, async (request) => {
+    const session = currentSession(request);
 
     return listTextbooks(session.user.id);
   });
 
-  app.post("/api/textbooks", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.post("/api/textbooks", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const parsed = createTextbookSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -53,10 +50,8 @@ export function registerTextbookRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch("/api/textbooks/:id", async (request, reply) => {
-    const session = await requireSession(request, reply);
-    if (!session) return;
-    if (denyDemoWrite(session, reply)) return;
+  app.patch("/api/textbooks/:id", { config: { access: "user" } }, async (request, reply) => {
+    const session = currentSession(request);
 
     const textbookId = readIdParam(request.params, reply);
     if (textbookId === null) return;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { measured } from "@/api/observability/measured";
 import { currentReqId } from "@/api/observability/requestContext";
-import { buildTestApp, request, takeLogLines } from "@/api/test-support";
+import { buildTestApp, publicRoute, request, takeLogLines } from "@/api/test-support";
 
 /**
  * 狙いは「measured() が reqId を書く」ことではなく、
@@ -14,7 +14,7 @@ import { buildTestApp, request, takeLogLines } from "@/api/test-support";
 describe("リクエストごとの文脈", () => {
   it("ハンドラの奥で呼んだ measured() に、そのリクエストの reqId が付く", async () => {
     const app = buildTestApp((app) => {
-      app.get("/probe", async () => {
+      app.get("/probe", publicRoute, async () => {
         // ルート → サービス → さらに奥、を模して非同期を数段はさむ。
         await new Promise((resolve) => setTimeout(resolve, 1));
         await measured("probe.deep", async () => {
@@ -39,7 +39,7 @@ describe("リクエストごとの文脈", () => {
 
   it("別々のリクエストの行が、違う reqId で区別できる", async () => {
     const app = buildTestApp((app) => {
-      app.get("/probe/:name", async (request) => {
+      app.get("/probe/:name", publicRoute, async (request) => {
         const { name } = request.params as { name: string };
         // 2本を同時に走らせ、待ち時間をずらして処理を交錯させる。
         await new Promise((resolve) => setTimeout(resolve, name === "slow" ? 20 : 1));
