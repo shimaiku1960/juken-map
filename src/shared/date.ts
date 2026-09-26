@@ -65,3 +65,12 @@ export function formatExamDate(date: Date | string): string {
     day: "numeric",
   });
 }
+
+const tokyoDateFormat = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo" });
+
+// 記事の公開日などを「2026/8/3」形式で、日本時間の日付として返す。
+// 記事の HTML はサーバー（UTC）でも作る（SSR・SSG）ので、実行環境の時間帯に任せると
+// 日本時間 0〜9 時の記事はサーバーとブラウザで日付が1日ずれ、ハイドレーションで食い違う。
+export function formatDateTokyo(date: Date | string): string {
+  return tokyoDateFormat.format(new Date(date));
+}

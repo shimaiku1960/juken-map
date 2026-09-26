@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { getBlog, listBlogs, type Blog } from "@/api/infra/microcms";
+import { listBlogs, type Blog } from "@/api/infra/microcms";
 import { SITE_URL } from "@/shared/site";
 
 // Next.js では generateMetadata と app/sitemap.ts がこれを担っていた。SPA は誰が来ても
@@ -81,7 +81,8 @@ function createDescription(blog: Blog) {
     .slice(0, 120);
 }
 
-function defaultMeta(pathname: string): PageMeta {
+/** 記事以外のページの head の中身。 */
+export function defaultMeta(pathname: string): PageMeta {
   const preset = STATIC_META[pathname];
   const title = preset?.title ?? SITE_NAME;
 
@@ -98,30 +99,24 @@ function defaultMeta(pathname: string): PageMeta {
   };
 }
 
-export async function metaForPath(pathname: string): Promise<PageMeta> {
-  const article = /^\/articles\/([^/]+)$/.exec(pathname);
-  if (!article) return defaultMeta(pathname);
+/** 記事のページ（/articles/:id）なら記事の ID を返す。 */
+export function articleIdFromPath(pathname: string) {
+  return /^\/articles\/([^/]+)$/.exec(pathname)?.[1];
+}
 
-  try {
-    const blog = await getBlog(article[1]!);
-    const description = createDescription(blog);
-
-    return {
-      title: `${blog.title}｜${SITE_NAME}`,
-      description,
-      canonical: `${SITE_URL}${pathname}`,
-      ogTitle: blog.title,
-      ogType: "article",
-      ogImage: blog.eyecatch?.url ?? OG_IMAGE,
-      noindex: false,
-      publishedTime: blog.createdAt,
-      modifiedTime: blog.updatedAt,
-    };
-  } catch {
-    // 記事が無い・microCMS が落ちている場合でも画面自体は SPA が描く。
-    // ここで失敗させるとページごと開けなくなるので、既定の head で返す。
-    return defaultMeta(pathname);
-  }
+/** 記事のページの head の中身。記事は spa.ts が SSR で描くときに取ってくる。 */
+export function articleMeta(blog: Blog, pathname: string): PageMeta {
+  return {
+    title: `${blog.title}｜${SITE_NAME}`,
+    description: createDescription(blog),
+    canonical: `${SITE_URL}${pathname}`,
+    ogTitle: blog.title,
+    ogType: "article",
+    ogImage: blog.eyecatch?.url ?? OG_IMAGE,
+    noindex: false,
+    publishedTime: blog.createdAt,
+    modifiedTime: blog.updatedAt,
+  };
 }
 
 // Google Analytics のタグ。Next.js では layout.tsx が GA_MEASUREMENT_ID を読んで
