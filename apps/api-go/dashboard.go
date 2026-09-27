@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -83,11 +83,10 @@ type dashboardHandler struct {
 	db *sql.DB
 }
 
-func (h *dashboardHandler) serve(w http.ResponseWriter, r *http.Request, userID string) {
-	dashboard, err := h.get(r.Context(), userID, time.Now())
+func (h *dashboardHandler) serve(w http.ResponseWriter, r *http.Request, s *session) {
+	dashboard, err := h.get(r.Context(), s.UserID, time.Now())
 	if err != nil {
-		slog.Error("dashboard", "err", err, "userId", userID)
-		writeError(w, http.StatusInternalServerError, "Internal Server Error")
+		internalError(w, r, fmt.Errorf("dashboard: %w", err))
 		return
 	}
 	writeJSON(w, http.StatusOK, dashboard)

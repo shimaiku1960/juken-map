@@ -1,8 +1,10 @@
 # api-go
 
-`GET /api/dashboard` と同じ応答を Go で返す、**比較実験用**のサーバー（JUK-69）。
-Node（`apps/api`）と同じ DB・同じ負荷で、1リクエストあたりの CPU 時間を比べるためにある。
-本番には出さず、Node を置き換えるものでもない。
+Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
+今は `GET /api/dashboard` だけを持ち（JUK-69）、本番にはまだ出していない。
+
+ログインの発行・管理画面・外部連携は Node に残す。Go は Node（Better Auth）が発行した
+セッション Cookie を、同じ DB と同じ `BETTER_AUTH_SECRET` で確かめるだけ。
 
 ## 動かし方
 
@@ -13,13 +15,53 @@ go run .                             # PORT を指定しなければ 8080
 go test ./...
 ```
 
-ログインは Node 側（Better Auth）で行い、そのセッション Cookie をそのまま使う。
+ログは本番と同じ1行1つの JSON。人が読みたいときは、Node と同じ pino-pretty に通す。
+
+```sh
+go run . | pnpm exec pino-pretty
+```
+
+ログインは Node 側で行い、そのセッション Cookie をそのまま使う。
 
 ```sh
 curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 ```
 
-## Node と比べる
+| 環境変数 | 既定 | 意味 |
+| --- | --- | --- |
+| `PORT` | 8080 | 待ち受けるポート |
+| `METRICS_PORT` | なし | 指定したときだけ、このポートで `/metrics` を出す |
+| `OVERLOAD_MAX_IN_FLIGHT` | 160 | 同時に処理する件数の上限。超えたら 503 |
+| `LOG_LEVEL` | info | pino と同じ名前（debug・info・warn・error） |
+| `NODE_ENV` | なし | `production` のとき reqId を UUID のまま出す（開発は8文字） |
+
+## ルートを足す
+
+入口の種類ごとに登録の関数が分かれている（`router.go`）。種類を選ばずに登録する方法は無い。
+
+```go
+rt.public("GET /api/health", healthHandler(db))          // 誰でも
+rt.user("GET /api/dashboard", dashboard.serve)           // ログイン必須。デモの書き込みは 403
+rt.admin("GET /api/admin/users", adminUsers.serve)       // 管理者だけ
+```
+
+`user` と `admin` のハンドラは `func(w, r, s *session)` で、ログイン中の利用者を引数で受け取る。
+path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。想定外の失敗は
+`internalError(w, r, err)` に渡す（500 を返し、原因はログにだけ残す）。
+
+移したら、`parity_test.go` の `parityCases` に1行足し、Node と応答が同じかを確かめる。
+
+## Node と応答を比べる
+
+```sh
+bash apps/api-go/parity.sh                 # worktree のルートから。合成ユーザー50人ぶん
+```
+
+Node と Go を立ち上げ、同じリクエストを送って、ステータス・本文・ヘッダーを比べる。
+食い違うと、どこが違うかを `$.logs[3].textbook.name: … → …` の形で出す。
+両方のサーバーと合成データ（`pnpm db:seed:synthetic`）が要るので CI では動かさない。
+
+## Node と CPU を比べる
 
 ```sh
 bash apps/api-go/compare-cpu.sh            # worktree のルートから。N=500 件 × 交互3回
@@ -34,27 +76,38 @@ bash apps/api-go/compare-cpu.sh            # worktree のルートから。N=500
 
 | ファイル | 役割 | Node 側で近いもの |
 | --- | --- | --- |
-| `main.go` | 設定の読み込み、ルートの登録、起動と停止 | `server.ts` |
-| `http.go` | JSON の書き出し、アクセスログ、ヘルスチェック | Fastify 本体、`observability/logger.ts` |
+| `main.go` | 設定の読み込み、ルートの登録、ミドルウェアの順番、起動と停止 | `server.ts` |
+| `router.go` | 入口の種類ごとの拒否（未ログイン・停止中・管理者・デモ） | `access-control.ts`・`context.ts` |
+| `auth.go` | セッション Cookie の署名確認と、session テーブルの照会 | Better Auth の `getSession` |
+| `middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 | `observability/logger.ts`・`requestContext.ts`・`security-headers.ts` |
+| `overload.go` | 同時処理数の上限を超えたら 503 | `overload.ts` |
+| `errors.go` | エラー応答の形、404、path の ID | `error-handling.ts`・`routes/params.ts` |
+| `logger.go` | pino と同じ形の JSON ログ | `observability/logger.ts` |
+| `metrics.go` | Prometheus のメトリクス（名前・ラベルは Node と同じ） | `observability/metrics.ts` |
+| `http.go` | JSON の書き出し、ヘルスチェック | Fastify 本体 |
 | `db.go` | 接続プール、DATETIME の文字列を ISO にする | `infra/db.ts` |
-| `auth.go` | セッション Cookie の署名確認と、session テーブルの照会 | `context.ts` の `requireSession`（Better Auth） |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし | `src/shared/date.ts` |
 | `dashboard.go` | 応答の型、3本の SQL を同時に流して組み立てる | `services/dashboard-service.ts` ほか |
+| `parity_test.go`・`parity.sh` | Node と応答を比べる | — |
+| `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
 
 Go ではフォルダ1つが1つのパッケージで、ファイルの分け方はコンパイル結果に関係しない。
 上の分け方は、読む人が探しやすいようにしているだけ。
 
 ## Node と揃えていること
 
-比べたいのは言語・ランタイムの差なので、それ以外の条件を揃えている。
+- 応答の形。エラーは `{"error"}`（ルートが断ったとき）と `{"error","code","reqId"}`（想定外・混雑・404）の2つ
+- 拒否の判定と文言。401 Unauthorized、停止中・管理者でない・デモの書き込みは 403
+- ログの形（pino：`level` は数字、`time` は UNIX ミリ秒、`req.url` はパスだけ）。Alloy と Grafana がこの形を読む
+- メトリクスの名前・ラベル・区切り。`route` は `/api/study-logs/:id` の形
+- `X-Request-Id` ヘッダー、セキュリティヘッダー（CSP だけ API 向けに `default-src 'none'`）
+- 同時処理数の上限 160、断るときは 503 と `Retry-After: 1`
+- SQL（同じ列・同じ条件・同じ並び）、接続プールの上限 15、`?` への埋め込みはドライバ側（1クエリ1往復）
 
-- SQL は同じ列・同じ条件・同じ並び。応答に使わない列（`userId`・`createdAt` など）も同じく読む
-- 接続プールの上限は 15（`connectionLimit` と同じ）
-- 値の `?` への埋め込みはドライバ側で行う（`InterpolateParams`）。1クエリ1往復
-- DATETIME は文字列のまま受け取り、組み替えて ISO にする（Node の `selectDateStrings`）
-- 1リクエストにつき JSON のアクセスログを1行出す
-- セッションは session と user を JOIN して1回で引く（Better Auth と同じ）
+## まだ揃えていないこと
 
-揃えていないこと：応答の圧縮（Go 側は持たない。比べるときは `ACCEPT_ENCODING=identity`）、
-セッションの有効期限の延長（Better Auth は古くなったセッションを更新するが、Go 側は読むだけ）、
-OpenTelemetry（手元の Node でも無効）。
+- 応答の圧縮（Node は br・gzip。Go は持たない。比べるときは `Accept-Encoding: identity`）
+- セッションの有効期限の延長（Better Auth は古くなったセッションを更新するが、Go は読むだけ）
+- RDS への TLS 接続、OpenTelemetry のトレース、リクエスト本文の読み取り（上限・JSON の検証）
+  — 本番に出すとき・書き込みの API を移すときに足す
+- Node に無いもの：1リクエスト10秒の上限（DB の照会と接続待ちもここで止まる）

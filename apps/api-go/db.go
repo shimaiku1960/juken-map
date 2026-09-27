@@ -47,6 +47,10 @@ func openDB(databaseURL string) (*sql.DB, error) {
 	// Node 側の connectionLimit（既定 15）に揃える。比べるときに条件を同じにするため。
 	db.SetMaxOpenConns(15)
 	db.SetMaxIdleConns(15)
+	// 使い回す接続を一定時間で張り直す。MySQL（wait_timeout）やネットワークの途中の機器が
+	// 黙って切った接続を掴むと、次の照会が「invalid connection」で失敗する。
+	// ドライバの README が勧める「5分より短く」に従う。
+	db.SetConnMaxLifetime(3 * time.Minute)
 
 	// sql.OpenDB はまだ繋がない。起動時に一度繋いで、設定の誤りをここで落とす。
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

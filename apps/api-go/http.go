@@ -25,48 +25,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
+// healthHandler は死活監視とデプロイ後の確認が叩く。DB まで繋がるかを見る。
+// Node と同じく、繋がらなければ 500 を返す（Node は SELECT 1 が throw して 500 になる）。
 func healthHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// r.Context() はクライアントが切断すると取り消される。そこに上限時間を足す。
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		if err := db.PingContext(ctx); err != nil {
-			slog.Error("health", "err", err)
-			writeJSON(w, http.StatusServiceUnavailable, map[string]bool{"ok": false})
+			internalError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
-}
-
-// statusRecorder は、ハンドラが書いたステータスを後から読めるようにする。
-// ResponseWriter は書いたステータスを教えてくれないので、包んで横取りする。
-type statusRecorder struct {
-	http.ResponseWriter
-	status int
-}
-
-func (r *statusRecorder) WriteHeader(status int) {
-	r.status = status
-	r.ResponseWriter.WriteHeader(status)
-}
-
-// accessLog はリクエストごとに完了時のログを1行出す。Node 側の「request completed」
-// （apps/api/src/observability/logger.ts）と同じく1リクエスト1行にして、比べる条件を揃える。
-func accessLog(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(rec, r)
-		slog.Info("request completed",
-			"method", r.Method,
-			"url", r.URL.Path,
-			"status", rec.status,
-			"responseTime", float64(time.Since(start).Microseconds())/1000,
-		)
-	})
 }
