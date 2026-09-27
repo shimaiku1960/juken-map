@@ -38,6 +38,9 @@ COPY --chown=app:nodejs db/migrations ./db/migrations
 COPY --chown=app:nodejs apps/api ./apps/api
 COPY --chown=app:nodejs src/shared ./src/shared
 COPY --from=web-builder --chown=app:nodejs /app/apps/web/dist ./web
+# 記事の SSR で、リクエストのたびに読み込んで描く部品（apps/web の entry-server.tsx）。
+# apps/api/src/spa.ts は配信元（./web）の隣の dist-server から読む。
+COPY --from=web-builder --chown=app:nodejs /app/apps/web/dist-server ./dist-server
 COPY --chown=app:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 USER app

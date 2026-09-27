@@ -53,7 +53,7 @@ fi
 unexpected=""
 while IFS= read -r path; do
   case "$path" in
-    node_modules/ | apps/*/node_modules/ | apps/web/dist/ | test-results/ | playwright-report/ | \
+    node_modules/ | apps/*/node_modules/ | apps/web/dist/ | apps/web/dist-server/ | test-results/ | playwright-report/ | \
       blob-report/ | e2e/.auth/ | sim/.state/ | logs/ | *.tsbuildinfo | .env.worktree | .DS_Store | */.DS_Store)
       continue ;;
     .env | .agent-memory | .standards | .codex | .claude/settings.local.json)

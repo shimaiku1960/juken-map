@@ -2,6 +2,7 @@
 # 先頭階層だけを指す "node_modules" では apps/*/node_modules が漏れる。
 **/node_modules
 **/dist
+**/dist-server
 .next
 .env
 .env.*
