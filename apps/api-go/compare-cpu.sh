@@ -22,54 +22,23 @@ NODE_PORT=${NODE_PORT:-18000}
 GO_PORT=${GO_PORT:-18080}
 WORK=$(mktemp -d)
 
-pids=()
-cleanup() {
-  # 止めたジョブの「Terminated」表示は bash 自身が stderr に出すので、終了処理の間は捨てる。
-  exec 2>/dev/null
-  for pid in "${pids[@]}"; do kill "$pid" || true; done
-  wait || true
-  rm -rf "$WORK"
-}
-trap cleanup EXIT
+source "$ROOT/apps/api-go/servers.sh"
+# 止めたジョブの「Terminated」表示は bash 自身が stderr に出すので、終了処理の間は捨てる。
+trap 'exec 2>/dev/null; stop_servers; rm -rf "$WORK"' EXIT
 
-for port in "$NODE_PORT" "$GO_PORT"; do
-  if lsof -ti tcp:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "ポート $port が使用中です。NODE_PORT / GO_PORT で変えてください。" >&2
-    exit 1
-  fi
-done
+ensure_free "$NODE_PORT" "$GO_PORT"
 
 # ps -o time は "分:秒.xx"（長いと "時:分:秒"）。秒に直す。
 cpu_secs() { ps -o time= -p "$1" | awk -F: '{s=0; for (i=1;i<=NF;i++) s=s*60+$i; printf "%.3f", s}'; }
-listener() { lsof -ti tcp:"$1" -sTCP:LISTEN | head -1; }
 
-# ログインは HTTP で通さず、合成ユーザーのセッションを DB に直接発行する（load-tests と同じ）。
 cookies=()
-while IFS= read -r c; do cookies+=("$c"); done < <(
-  cd "$ROOT" && COUNT=20 pnpm exec tsx --env-file=.env db/issue-loadtest-sessions.ts 2>/dev/null | tail -1 | jq -r '.cookies[]'
-)
+while IFS= read -r c; do cookies+=("$c"); done < <(issue_cookies 20)
 if [ ${#cookies[@]} -eq 0 ]; then
   echo "セッションを発行できませんでした。合成データが入っているか確かめてください。" >&2
   exit 1
 fi
 
-echo "Go をビルドしています…"
-(cd "$ROOT/apps/api-go" && go build -o "$WORK/api-go" .)
-
-# pnpm や tsx を挟むと PID がラッパーのものになるので、実際に待ち受けている PID を後で引く。
-(cd "$ROOT" && NODE_ENV=production API_PORT=$NODE_PORT BETTER_AUTH_URL=http://localhost:$NODE_PORT \
-  pnpm --filter @juken-map/api start >"$WORK/node.log" 2>&1) &
-pids+=($!)
-(set -a; source "$ROOT/.env"; set +a; PORT=$GO_PORT "$WORK/api-go" >"$WORK/go.log" 2>&1) &
-pids+=($!)
-
-for _ in $(seq 1 120); do
-  curl -sf -o /dev/null "localhost:$NODE_PORT/api/health" && curl -sf -o /dev/null "localhost:$GO_PORT/api/health" && break
-  sleep 0.5
-done
-node_pid=$(listener "$NODE_PORT")
-go_pid=$(listener "$GO_PORT")
-pids+=("$node_pid" "$go_pid")
+start_servers "$NODE_PORT" "$GO_PORT"
 
 # hit ポート 件数 → 1件ごとの応答時間（秒）を1行ずつ出す。
 # 圧縮は Go 側に無いので、条件を揃えるため identity にする。

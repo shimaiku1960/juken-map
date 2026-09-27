@@ -1,8 +1,8 @@
-// api-go は、Node（apps/api）の GET /api/dashboard と同じ応答を Go で返す、比較実験用のサーバー。
-// 本番には出さず、手元で Node と同じ負荷をかけて 1リクエストあたりの CPU 時間を比べるためだけにある（JUK-69）。
+// api-go は、Node（apps/api）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
+// 最初の1本として GET /api/dashboard を持つ（JUK-69）。まだ本番には出していない。
 //
-// 置き換えが目的ではないので、ログインの発行や書き込みは持たない。セッションは Node 側
-// （Better Auth）が発行したものを、同じ DB と同じ BETTER_AUTH_SECRET で確かめるだけ。
+// ログインの発行・管理画面・外部連携は Node に残す。セッションは Node 側（Better Auth）が
+// 発行したものを、同じ DB と同じ BETTER_AUTH_SECRET で確かめるだけ。
 package main
 
 import (
@@ -12,15 +12,19 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 )
 
+// requestTimeout は1リクエストにかけてよい時間（middleware.go の withDeadline）。
+// 下の WriteTimeout（応答を書き終えるまでの上限）より短くして、打ち切る前に 500 を返せるようにする。
+const requestTimeout = 10 * time.Second
+
 func main() {
-	// Node 側（pino）と同じく、1行1つの JSON で標準出力へ書く。
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	slog.SetDefault(newLogger(os.Stdout, parseLevel(os.Getenv("LOG_LEVEL"))))
 	if err := run(); err != nil {
-		slog.Error("api-go stopped", "err", err)
+		slog.Error("api-go stopped", "err", err.Error())
 		os.Exit(1)
 	}
 }
@@ -32,6 +36,10 @@ func run() error {
 	if secret == "" {
 		return errors.New("BETTER_AUTH_SECRET が空です")
 	}
+	maxInFlight, err := envInt("OVERLOAD_MAX_IN_FLIGHT", defaultMaxInFlight)
+	if err != nil {
+		return err
+	}
 	db, err := openDB(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
@@ -39,19 +47,30 @@ func run() error {
 	defer db.Close()
 
 	auth := &sessionAuth{db: db, secret: []byte(secret)}
-	dashboard := &dashboardHandler{db: db}
+	rt := newRouter(auth.load)
+	rt.public("GET /api/health", healthHandler(db))
+	rt.user("GET /api/dashboard", (&dashboardHandler{db: db}).serve)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", healthHandler(db))
-	mux.Handle("GET /api/dashboard", auth.requireUser(dashboard.serve))
-
+	m := newMetrics()
 	srv := &http.Server{
-		Addr:    ":" + envOr("PORT", "8080"),
-		Handler: accessLog(mux),
+		Addr: ":" + envOr("PORT", "8080"),
+		Handler: newServerHandler(rt, m, serverOptions{
+			maxInFlight: maxInFlight,
+			// 本番は reqId を UUID のまま、開発は短くする（Node と同じ）。
+			shortRequestIDs: os.Getenv("NODE_ENV") != "production",
+		}),
 		// 既定はどれも無制限。遅いクライアントに接続を握られ続けないよう上限を付ける。
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
+	}
+	servers := []*http.Server{srv}
+
+	// /metrics はアプリと別のポートで出す（metrics.go）。指定したときだけ起動する。
+	if port := os.Getenv("METRICS_PORT"); port != "" {
+		mux := http.NewServeMux()
+		mux.Handle("GET /metrics", m.handler())
+		servers = append(servers, &http.Server{Addr: ":" + port, Handler: mux, ReadHeaderTimeout: 5 * time.Second})
 	}
 
 	// Ctrl+C（SIGINT）や SIGTERM で ctx が取り消される。
@@ -60,11 +79,13 @@ func run() error {
 
 	// ListenAndServe は止まるまで戻らないので、別の goroutine で動かし、
 	// 「サーバーが落ちた」と「止めるよう言われた」のどちらか早いほうを待つ。
-	serveErr := make(chan error, 1)
-	go func() {
-		slog.Info("api-go listening", "addr", srv.Addr)
-		serveErr <- srv.ListenAndServe()
-	}()
+	serveErr := make(chan error, len(servers))
+	for _, s := range servers {
+		go func() {
+			slog.Info("api-go listening", "addr", s.Addr)
+			serveErr <- s.ListenAndServe()
+		}()
+	}
 
 	select {
 	case err := <-serveErr:
@@ -76,7 +97,35 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	slog.Info("api-go shutting down")
-	return srv.Shutdown(shutdownCtx)
+	var errs []error
+	for _, s := range servers {
+		errs = append(errs, s.Shutdown(shutdownCtx))
+	}
+	return errors.Join(errs...)
+}
+
+type serverOptions struct {
+	maxInFlight     int
+	shortRequestIDs bool
+}
+
+// newServerHandler はルーターの外側にミドルウェアを重ねる。外側から順に走る。
+//
+//  1. observe       reqId を振り、返し終えたらログ1行とメトリクス（断った応答も数える）
+//  2. securityHeaders  どの応答にも付ける
+//  3. recoverPanic  ハンドラの panic を 500 にする
+//  4. limitInFlight 同時処理数の上限を超えたら 503
+//  5. withDeadline  1リクエストの時間の上限
+//  6. ルーター       入口の種類ごとの拒否（router.go）→ ハンドラ
+//
+// 順番は Node の server.ts と同じ考え方（メトリクス → エラー処理 → 過負荷 → 認証）。
+func newServerHandler(rt *router, m *metrics, opts serverOptions) http.Handler {
+	var h http.Handler = rt
+	h = withDeadline(requestTimeout, h)
+	h = limitInFlight(opts.maxInFlight, h)
+	h = recoverPanic(h)
+	h = securityHeaders(h)
+	return observe(m, opts.shortRequestIDs, h)
 }
 
 func envOr(key, fallback string) string {
@@ -84,4 +133,16 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func envInt(key string, fallback int) (int, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return 0, errors.New(key + " は正の整数で指定してください")
+	}
+	return n, nil
 }

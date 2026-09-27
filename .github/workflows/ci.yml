@@ -106,6 +106,40 @@ jobs:
       - name: Build SPA
         run: pnpm --filter @juken-map/web build
 
+  # Go の API（apps/api-go、JUK-70）。pnpm workspace の外にあるので、ここで別に確かめる。
+  # テストは DB を使わない。Node と応答を比べるテスト（parity.sh）は両方のサーバーと
+  # 合成データが要るので手元で動かし、ここでは -tags parity でコンパイルが通ることだけ見る。
+  go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api-go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/api-go/go.mod
+          cache-dependency-path: apps/api-go/go.sum
+
+      - name: Format
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt -w . で整形してください"; exit 1; }
+
+      - name: Vet
+        run: |
+          go vet ./...
+          go vet -tags parity ./...
+
+      # -race は、複数の goroutine が同じ値を同時に書き換えていないかを実行しながら見る。
+      - name: Test
+        run: go test -race ./...
+
+      # pnpm audit の Go 版。実際に呼んでいる関数に既知の脆弱性があれば落とす（dev-standards 06 F3）。
+      - name: Vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
   # E2E（Playwright）。使い捨ての MySQL 8.4 を立て、マイグレーション→seed→
   # SPA のビルド→Fastify 起動で本番相当の構成を立ち上げ、実ブラウザで主要導線を検証する。
   e2e:
