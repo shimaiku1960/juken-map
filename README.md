@@ -372,7 +372,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `pnpm run db:logs` | MySQLコンテナのログを表示する |
 | `pnpm run db:migrate` | まだ当てていないマイグレーション（`db/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
-| `pnpm run admin:grant <メール>` | そのユーザーを管理者（`/admin`を開ける）にする。メール確認済みのユーザーだけ。`--revoke`で戻す |
+| `pnpm run admin:grant <メール>` | そのユーザーを管理者（`/admin`を開ける）にする。メール確認済みのユーザーだけ。`--revoke`で戻す。`--list`で管理者の一覧（2段階認証・パスワードの有無つき） |
 | `pnpm run db:shell` | ローカルDB（`juken_map`）のMySQL対話画面を開く（`exit`で終了）。`-e "SQL"`を付けると1本だけ実行する |
 | `pnpm run obs:start` | Prometheus（9090番）・Grafana（3001番）・Loki（3100番）・Alloy（12345番）・Tempo（3200番）・Mailpit（8025番）を起動する |
 | `pnpm run obs:stop` | Prometheus・Grafana・Loki・Alloy・Tempo・Mailpitを停止する |
@@ -433,7 +433,19 @@ sudo docker exec -w /app/apps/api juken-map \
 ```
 
 付け替えは、そのユーザーが次にログインし直したときに画面へ反映されます
-（APIの判定はセッションを読むたびなので、すぐ効きます）。
+（APIの判定はセッションを読むたびなので、すぐ効きます）。今の管理者は `--list` で確かめます。
+
+### 管理者の2段階認証
+
+管理APIは、2段階認証（認証アプリのコードか予備コード）を通して作られたセッションでだけ開けます。
+2段階認証はメールとパスワードのログインにかかり、Google・GitHubでのログインでは管理画面は開けません。
+
+1. パスワードが無い（Google・GitHubだけで登録した）ときは、ログアウトしてログイン画面の「パスワードを忘れた方」から設定する
+2. メールとパスワードでログインし、`/admin`で2段階認証を設定する（QRを認証アプリで読み取り、予備コードを保存し、6桁のコードを確かめる）
+3. 次からは、パスワードのあとに認証アプリのコードを入力してログインする
+
+認証アプリも予備コードも無くしたときは、本番のDBで `user.twoFactorEnabled` を戻して `twoFactor` の行を消し、
+設定し直します（利用者本人の確認ができたときだけ行う）。
 
 ## 主なディレクトリ
 

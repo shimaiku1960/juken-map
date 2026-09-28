@@ -10,6 +10,7 @@ import PageShell from "@/web/components/layout/PageShell";
 import PageHeader from "@/web/components/layout/PageHeader";
 import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/web/hooks/useBrowserNavigation";
 import { isLineInAppBrowser } from "@/web/lib/browser";
+import TwoFactorCodeForm from "@/web/components/auth/TwoFactorCodeForm";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -19,6 +20,8 @@ export default function LoginPage() {
   const [socialLoading, setSocialLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
+  // 2段階認証を有効にしている人は、パスワードのあとに認証コードを求める（セッションはまだ無い）。
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isLineBrowser = useIsLineInAppBrowser();
   const callbackURL = useSafeCallbackURL("/");
@@ -42,7 +45,7 @@ export default function LoginPage() {
     setSignInLoading(true);
     setErrorMessage(null);
     setNeedsVerification(false);
-    const { error } = await authClient.signIn.email({
+    const { data, error } = await authClient.signIn.email({
       email,
       password,
     });
@@ -55,6 +58,11 @@ export default function LoginPage() {
       } else {
         setErrorMessage(error.message ?? "ログインに失敗しました");
       }
+      setSignInLoading(false);
+      return;
+    }
+    if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+      setNeedsTwoFactor(true);
       setSignInLoading(false);
       return;
     }
@@ -96,6 +104,18 @@ export default function LoginPage() {
     }
     window.location.href = "/";
   };
+
+  if (needsTwoFactor) {
+    return (
+      <PageShell className="max-w-md">
+        <PageHeader title="2段階認証" description="認証アプリに表示されている6桁のコードを入力してください。" />
+        <TwoFactorCodeForm
+          onVerified={() => { window.location.href = callbackURL; }}
+          onCancel={() => { setNeedsTwoFactor(false); setPassword(""); }}
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell className="max-w-md">

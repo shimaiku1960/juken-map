@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
+import { twoFactor } from "better-auth/plugins";
 import { pool, select } from "@/api/infra/db";
 import {
   notifyAdminOfNewUser,
@@ -20,6 +21,19 @@ import {
 // Prisma 時代に保存したセッションの期限とも同じ時刻として比べられる。
 export const auth = betterAuth({
   database: pool,
+  session: {
+    additionalFields: {
+      // 2段階認証を通して作られたセッションか（下の session.create.before で付ける）。
+      // twoFactor はメール＋パスワードのログインにしかかからず、Google / GitHub は素通りする。
+      // 利用者の設定（twoFactorEnabled）ではなくセッションで見るのはそのため。
+      twoFactorVerified: {
+        type: "boolean",
+        required: false,
+        defaultValue: false,
+        input: false,
+      },
+    },
+  },
   user: {
     additionalFields: {
       nickname: {
@@ -53,7 +67,7 @@ export const auth = betterAuth({
       // 停止のときに既存の session は消しているが（admin-service.ts）、それだけでは
       // ログインし直せてしまう。新しいセッションを作らせないのがこの関数の役目。
       create: {
-        before: async (session) => {
+        before: async (session, context) => {
           const [user] = await select<{ bannedAt: Date | null }>(
             "SELECT bannedAt FROM `user` WHERE id = ?",
             [session.userId]
@@ -65,6 +79,12 @@ export const auth = betterAuth({
               message: "このアカウントは利用を停止されています。",
             });
           }
+          // 認証コード・予備コードを確かめた直後に作るセッションにだけ印を付ける。
+          // セッションを作り直すとき（有効化の確認など）は前のセッションの値が引き継がれて
+          // くるので、ここで毎回上書きする。管理 API はこの印を見る（context.ts の requireAdmin）。
+          return {
+            data: { ...session, twoFactorVerified: isTwoFactorVerification(context?.path) },
+          };
         },
       },
     },
@@ -105,6 +125,12 @@ export const auth = betterAuth({
       clientSecret: process.env.AUTH_GITHUB_SECRET as string,
     },
   },
+  plugins: [
+    // 管理者の2段階認証（認証アプリの TOTP＋予備コード）。有効にできるのは誰でもだが、
+    // 求めるのは管理 API だけ。信頼済みの端末（trustDevice）で省いたログインは
+    // /sign-in/email のままセッションができるので印が付かず、管理 API は通らない。
+    twoFactor({ issuer: "受験マップ" }),
+  ],
   trustedOrigins: [
     "https://juken-map.com",
     "https://www.juken-map.com",
@@ -112,3 +138,8 @@ export const auth = betterAuth({
     "http://localhost:4000",
   ],
 });
+
+/** 認証コード（/two-factor/verify-totp）・予備コード（/two-factor/verify-backup-code）の確認か。 */
+export function isTwoFactorVerification(path: string | undefined) {
+  return path?.startsWith("/two-factor/verify-") ?? false;
+}

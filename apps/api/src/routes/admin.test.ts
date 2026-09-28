@@ -7,7 +7,7 @@ vi.mock("../auth.ts", () => ({
 
 const { auth } = await import("../auth.ts");
 const { registerAdminRoutes } = await import("./admin.ts");
-const { buildTestApp, request, loggedInSession, takeLogLines } = await import("../test-support.ts");
+const { buildTestApp, request, loggedInSession, takeLogLines, adminSessionOf } = await import("../test-support.ts");
 const { execute } = await import("@/api/infra/db");
 const { setUserRoleByEmail } = await import("@/api/services/user-service");
 const { cleanup, createAccount, createSession, createStudyLog, createStudyPlan, createUser } =
@@ -18,7 +18,7 @@ const { DEMO_EMAIL } = await import("@/shared/demo");
 const getSession = auth.api.getSession as unknown as Mock;
 const app = buildTestApp(registerAdminRoutes);
 
-const adminSession = { user: { id: "admin-1", email: "admin@example.com", role: "admin" } };
+const adminSession = adminSessionOf({ id: "admin-1", email: "admin@example.com" });
 
 type ListBody = {
   users: { id: string; kind: string; studyLogCount: number; providers: string[] }[];
@@ -160,7 +160,7 @@ describe("setUserRoleByEmail（pnpm admin:grant）", () => {
 
 describe("停止・解除・削除", () => {
   // 管理者本人として振る舞うため、操作する側の id を都度入れ替える。
-  const actAs = (id: string) => getSession.mockResolvedValue({ user: { id, email: "a@example.com", role: "admin" } });
+  const actAs = (id: string) => getSession.mockResolvedValue(adminSessionOf({ id, email: "a@example.com" }));
 
   const bannedAt = async (id: string) => {
     const [row] = await select<{ bannedAt: Date | null }>(

@@ -54,6 +54,14 @@ export const loggedInSession = {
   user: { id: "user-1", email: "user@example.com" },
 };
 
+/**
+ * 管理者のセッション。管理 API は、2段階認証を通して作られたセッション
+ * （session.twoFactorVerified）だけを通す（context.ts の requireAdmin）。
+ */
+export function adminSessionOf(user: { id: string; email: string }, { twoFactorVerified = true } = {}) {
+  return { user: { ...user, role: "admin" }, session: { twoFactorVerified } };
+}
+
 /** デモアカウントのセッション（編集系は 403 で止まる）。 */
 export const demoSession = {
   user: { id: "demo-1", email: "demo@juken-map.com" },

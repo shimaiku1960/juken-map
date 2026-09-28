@@ -2,18 +2,35 @@
 //
 //   pnpm admin:grant you@example.com            # 管理者にする（メール確認済みのユーザーだけ）
 //   pnpm admin:grant you@example.com --revoke   # 一般ユーザーに戻す
+//   pnpm admin:grant --list                     # 管理者の一覧（2段階認証・パスワードの有無つき）
 //
 // 本番は RDS に外から繋げないので、EC2 で動いている API のコンテナの中で実行する（README 参照）。
 // 付け替えは次にセッションを読み直したときに効く（ログインし直すか、セッションの取り直し）。
 import { pool } from "./infra/db.ts";
-import { setUserRoleByEmail } from "./services/user-service.ts";
+import { listAdmins, setUserRoleByEmail } from "./services/user-service.ts";
 
 const args = process.argv.slice(2);
 const revoke = args.includes("--revoke");
 const email = args.find((arg) => !arg.startsWith("--"));
 
+// 管理画面に入るには、パスワードでログインして2段階認証を通す必要がある（context.ts の requireAdmin）。
+if (args.includes("--list")) {
+  try {
+    const admins = await listAdmins();
+    if (admins.length === 0) console.log("管理者はいません");
+    for (const admin of admins) {
+      const twoFactor = admin.twoFactorEnabled ? "2段階認証: 有効" : "2段階認証: 未設定";
+      const passwordState = admin.hasPassword ? "パスワード: あり" : "パスワード: なし";
+      console.log(`${admin.email}\t${twoFactor}\t${passwordState}`);
+    }
+  } finally {
+    await pool.end();
+  }
+  process.exit(0);
+}
+
 if (!email) {
-  console.error("使い方: pnpm admin:grant <メールアドレス> [--revoke]");
+  console.error("使い方: pnpm admin:grant <メールアドレス> [--revoke] / pnpm admin:grant --list");
   process.exit(1);
 }
 

@@ -18,7 +18,7 @@ vi.mock("@/api/infra/microcms", () => ({
 
 const { auth } = await import("../auth.ts");
 const { registerRoutes } = await import("./index.ts");
-const { buildTestApp, request } = await import("../test-support.ts");
+const { buildTestApp, request, adminSessionOf } = await import("../test-support.ts");
 const { cleanup, createUser } = await import("../test-db/fixtures.ts");
 
 const getSession = auth.api.getSession as unknown as Mock;
@@ -44,7 +44,7 @@ beforeAll(async () => {
   await app.ready();
   // 管理者として送る。認証や権限で先に止まると、検証まで届かず何も確かめられない。
   const user = await createUser();
-  getSession.mockResolvedValue({ user: { ...user.session.user, role: "admin" } });
+  getSession.mockResolvedValue(adminSessionOf(user.session.user));
 });
 
 afterAll(cleanup);
