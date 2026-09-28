@@ -59,6 +59,23 @@ export function findSignUpMethod(userId: string) {
 }
 
 /**
+ * 管理者の一覧（pnpm admin:grant --list が使う）。2段階認証を有効にしたか、パスワードで
+ * ログインできるか（無ければ管理画面に入れない）も並べ、誰が管理者なのかを把握できるようにする。
+ */
+export function listAdmins() {
+  return measured("user.listAdmins", () =>
+    select<{ email: string | null; twoFactorEnabled: boolean; hasPassword: boolean }>(
+      `SELECT u.email, u.twoFactorEnabled,
+              EXISTS (SELECT 1 FROM account AS a
+                      WHERE a.userId = u.id AND a.providerId = 'credential' AND a.password IS NOT NULL) AS hasPassword
+       FROM \`user\` AS u
+       WHERE u.role = 'admin'
+       ORDER BY u.email ASC`
+    )
+  );
+}
+
+/**
  * メールアドレスでユーザーを探して role を付け替える（pnpm admin:grant が使う）。
  * メール確認前のユーザーには admin を付けない。他人のアドレスで登録されただけの
  * アカウントを、確認前に管理者にしてしまわないため。

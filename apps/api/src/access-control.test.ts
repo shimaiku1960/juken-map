@@ -21,9 +21,10 @@ vi.mock("@/api/infra/microcms", () => ({
 
 const { auth } = await import("./auth.ts");
 const { ACCESS_ENTRY } = await import("./access-control.ts");
+const { TWO_FACTOR_REQUIRED } = await import("@/shared/admin");
 const { registerRoutes } = await import("./routes/index.ts");
 const { registerSpa } = await import("./spa.ts");
-const { buildTestApp, request, loggedInSession, demoSession } = await import("./test-support.ts");
+const { buildTestApp, request, loggedInSession, demoSession, adminSessionOf } = await import("./test-support.ts");
 
 const getSession = auth.api.getSession as unknown as Mock;
 
@@ -45,7 +46,7 @@ const app = buildTestApp((app) => {
   registerRoutes(app);
 });
 
-const adminSession = { user: { ...loggedInSession.user, role: "admin" } };
+const adminSession = adminSessionOf(loggedInSession.user);
 const bannedSession = { user: { ...loggedInSession.user, bannedAt: new Date() } };
 
 /** `:id` などの path パラメータを埋める。断る判定はハンドラより前なので、値は何でもよい。 */
@@ -149,6 +150,29 @@ describe("A5 管理機能", () => {
   it("デモの利用者は管理者の API で全件 403", async () => {
     getSession.mockResolvedValue(demoSession);
     expect(await mismatches(byAccess("admin"), (status) => status === 403)).toEqual([]);
+  });
+});
+
+describe("B7 管理者の2段階認証", () => {
+  it("2段階認証を通していないセッションの管理者は、管理者の API で全件 403 と印を返す", async () => {
+    getSession.mockResolvedValue(adminSessionOf(loggedInSession.user, { twoFactorVerified: false }));
+    const failed: string[] = [];
+    for (const route of byAccess("admin")) {
+      const res = await request(app, route.method, urlOf(route));
+      const code = (res.json() as { code?: string }).code;
+      if (res.statusCode !== 403 || code !== TWO_FACTOR_REQUIRED) {
+        failed.push(`${label(route)} → ${res.statusCode} ${code}`);
+      }
+    }
+    expect(byAccess("admin").length).toBeGreaterThan(10);
+    expect(failed).toEqual([]);
+  });
+
+  it("2段階認証を通したセッションの管理者は、入口では断られない", async () => {
+    getSession.mockResolvedValue(adminSession);
+    expect(
+      await mismatches(byAccess("admin"), (status) => status !== 401 && status !== 403)
+    ).toEqual([]);
   });
 });
 

@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 import { auth } from "./auth.ts";
 import { DEMO_EMAIL } from "@/shared/demo";
+import { TWO_FACTOR_REQUIRED } from "@/shared/admin";
 
 // Next.js の Route Handler が毎回書いていた
 //   const session = await auth.api.getSession({ headers: await headers() });
@@ -55,7 +56,7 @@ export function denyDemoWrite(
 }
 
 /**
- * 未認証なら 401、管理者でなければ 403 を送って null を返す。access-control.ts のフックが使う。
+ * 未認証なら 401、管理者でないか2段階認証を通していなければ 403 を送って null を返す。access-control.ts のフックが使う。
  * role は user テーブルの列で、Better Auth がセッションに載せてくる（auth.ts の additionalFields）。
  * 画面側でもメニューの出し分けに使うが、守るのはここ。
  */
@@ -67,6 +68,15 @@ export async function requireAdmin(
   if (!session) return null;
   if (session.user.role !== "admin") {
     reply.code(403).send({ error: "Forbidden" });
+    return null;
+  }
+  // 管理者は2段階認証を通したセッションでだけ通す（auth.ts の twoFactorVerified）。
+  // 画面は code を見て、設定の手順かログインし直しの案内を出す。
+  if (!session.session.twoFactorVerified) {
+    reply.code(403).send({
+      error: "管理画面を開くには、2段階認証を通してログインしてください。",
+      code: TWO_FACTOR_REQUIRED,
+    });
     return null;
   }
   return session;

@@ -25,12 +25,17 @@ const TermsPage = lazy(() => import("@/web/pages/TermsPage"));
 const PrivacyPage = lazy(() => import("@/web/pages/PrivacyPage"));
 const AdminPage = lazy(() => import("@/web/pages/AdminPage"));
 const AdminMastersPage = lazy(() => import("@/web/pages/AdminMastersPage"));
+// 管理者の2段階認証の案内（QR の描画を含む）。管理画面でしか使わないので分けて読む。
+const AdminTwoFactorGate = lazy(() => import("@/web/components/admin/AdminTwoFactorGate"));
 const LineLinkPage = lazy(() => import("@/web/pages/LineLinkPage"));
 const NotFoundPage = lazy(() => import("@/web/pages/NotFoundPage"));
 
 const protectedRoute = (element: React.ReactNode) => (
   <RequireAuth>{element}</RequireAuth>
 );
+
+const adminRoute = (element: React.ReactNode) =>
+  protectedRoute(<AdminTwoFactorGate>{element}</AdminTwoFactorGate>);
 
 export default function App() {
   return (
@@ -71,8 +76,8 @@ export default function App() {
           />
 
           {/* 管理者だけ（権限は API が判定し、それ以外には「権限がありません」を出す） */}
-          <Route path="/admin" element={protectedRoute(<AdminPage />)} />
-          <Route path="/admin/masters" element={protectedRoute(<AdminMastersPage />)} />
+          <Route path="/admin" element={adminRoute(<AdminPage />)} />
+          <Route path="/admin/masters" element={adminRoute(<AdminMastersPage />)} />
 
           {/* LINE のトークから開く。ログインは画面内で判定するので protectedRoute にしない。 */}
           <Route path="/line/link" element={<LineLinkPage />} />

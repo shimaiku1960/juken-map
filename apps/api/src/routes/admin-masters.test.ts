@@ -7,7 +7,7 @@ vi.mock("../auth.ts", () => ({
 
 const { auth } = await import("../auth.ts");
 const { registerAdminMasterRoutes } = await import("./admin-masters.ts");
-const { buildTestApp, request, loggedInSession, takeLogLines } = await import("../test-support.ts");
+const { buildTestApp, request, loggedInSession, takeLogLines, adminSessionOf } = await import("../test-support.ts");
 const { execute, select } = await import("@/api/infra/db");
 const {
   cleanup,
@@ -23,7 +23,7 @@ const {
 
 const getSession = auth.api.getSession as unknown as Mock;
 const app = buildTestApp(registerAdminMasterRoutes);
-const adminSession = { user: { id: "admin-1", email: "admin@example.com", role: "admin" } };
+const adminSession = adminSessionOf({ id: "admin-1", email: "admin@example.com" });
 
 const universityBody = (name = `大学-${randomUUID()}`) => ({ name, prefecture: "東京都", type: "私立" });
 
