@@ -287,6 +287,10 @@ export async function findStudyPlan(id: number) {
   return row ?? null;
 }
 
+export function findStudyPlans(userId: string) {
+  return select<StudyPlanRow>("SELECT * FROM StudyPlan WHERE userId = ? ORDER BY id", [userId]);
+}
+
 export function findLineConnections(userId: string) {
   return select<LineConnectionRow>("SELECT * FROM LineConnection WHERE userId = ?", [userId]);
 }
