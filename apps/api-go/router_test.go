@@ -22,10 +22,12 @@ func fakeSessions(sessions map[string]*session) sessionLoader {
 }
 
 var testSessions = map[string]*session{
-	"alice":  {UserID: "u1", Email: "alice@example.com", Role: "user"},
-	"admin":  {UserID: "u2", Email: "admin@example.com", Role: "admin"},
-	"demo":   {UserID: "u3", Email: demoEmail, Role: "user"},
-	"banned": {UserID: "u4", Email: "banned@example.com", Role: "user", Banned: true},
+	"alice": {UserID: "u1", Email: "alice@example.com", Role: "user"},
+	"admin": {UserID: "u2", Email: "admin@example.com", Role: "admin", TwoFactorVerified: true},
+	// 管理者だが、2段階認証を通していないセッション（Google / GitHub でのログインなど）
+	"admin-no-2fa": {UserID: "u5", Email: "admin@example.com", Role: "admin"},
+	"demo":         {UserID: "u3", Email: demoEmail, Role: "user"},
+	"banned":       {UserID: "u4", Email: "banned@example.com", Role: "user", Banned: true},
 }
 
 // newTestRouter は入口の種類ごとに1本ずつルートを持つルーター。ハンドラまで来たら 200 と利用者 ID を返す。
@@ -71,6 +73,8 @@ func TestRouterAccess(t *testing.T) {
 		{"admin: 一般の利用者は 403", "GET", "/api/admin/thing", "alice", 403, `{"error":"Forbidden"}`},
 		{"admin: デモも 403", "POST", "/api/admin/thing", "demo", 403, `{"error":"Forbidden"}`},
 		{"admin: 管理者は通る", "POST", "/api/admin/thing", "admin", 200, `{"userId":"u2"}`},
+		{"admin: 2段階認証を通していない管理者は 403", "GET", "/api/admin/thing", "admin-no-2fa", 403,
+			`{"code":"TWO_FACTOR_REQUIRED","error":"管理画面を開くには、2段階認証を通してログインしてください。"}`},
 
 		// Fastify はメソッド違いも 404 にする。ServeMux の既定の 405 にならないこと。
 		{"メソッド違いは 404", "PUT", "/api/mine", "alice", 404, ""},

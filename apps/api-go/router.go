@@ -28,12 +28,18 @@ const (
 // デモアカウント（面接官向け・閲覧専用）。Node の src/shared/demo.ts と同じ値。
 const demoEmail = "demo@juken-map.com"
 
+// 管理者だが2段階認証を通していないときの 403 の印。Node の src/shared/admin.ts と同じ値。
+const twoFactorRequired = "TWO_FACTOR_REQUIRED"
+
 // session はログイン中の利用者。Better Auth が Node 側で発行したものを、auth.go が DB から読む。
 type session struct {
 	UserID string
 	Email  string
 	Role   string
 	Banned bool
+	// TwoFactorVerified は、そのセッションが2段階認証を通して作られたか。
+	// Node の auth.ts が session.twoFactorVerified に付ける。管理者のルートはこれを求める。
+	TwoFactorVerified bool
 }
 
 // sessionHandler はログイン済みのルートのハンドラ。Node の currentSession(request) にあたる値を引数で受け取る。
@@ -102,6 +108,14 @@ func (rt *router) admin(pattern string, h sessionHandler) {
 		// 画面もメニューの出し分けに role を使うが、守るのはここ。
 		if s.Role != "admin" {
 			writeError(w, http.StatusForbidden, "Forbidden")
+			return
+		}
+		// Node の requireAdmin と同じく、2段階認証を通したセッションだけを通す。
+		if !s.TwoFactorVerified {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error": "管理画面を開くには、2段階認証を通してログインしてください。",
+				"code":  twoFactorRequired,
+			})
 			return
 		}
 		h(w, r, s)

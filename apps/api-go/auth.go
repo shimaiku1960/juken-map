@@ -36,11 +36,11 @@ func (a *sessionAuth) load(r *http.Request) (*session, error) {
 	var s session
 	var role sql.NullString
 	err := a.db.QueryRowContext(r.Context(),
-		"SELECT s.userId, u.email, u.role, u.bannedAt IS NOT NULL"+
+		"SELECT s.userId, u.email, u.role, u.bannedAt IS NOT NULL, s.twoFactorVerified"+
 			" FROM session AS s JOIN `user` AS u ON u.id = s.userId"+
 			" WHERE s.token = ? AND s.expiresAt > UTC_TIMESTAMP(3)",
 		token,
-	).Scan(&s.UserID, &s.Email, &role, &s.Banned)
+	).Scan(&s.UserID, &s.Email, &role, &s.Banned, &s.TwoFactorVerified)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
