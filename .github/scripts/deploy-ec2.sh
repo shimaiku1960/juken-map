@@ -7,7 +7,7 @@ IMAGE_TAG="${1:?IMAGE_TAG is required}"
 # 空のときは可観測性の送信を丸ごと省く。
 ALLOY_CONFIG_B64="${2:-}"
 REPO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map"
-ENV_FILE="/home/ubuntu/juken-map/.env"
+ENV_FILE="${ENV_FILE:-/home/ubuntu/juken-map/.env}"
 RUNTIME_SECRET_ID="juken-map/production/runtime"
 # アプリと Alloy を同じネットワークに置き、コンテナ名で呼び合えるようにする
 # （Alloy → juken-map:9464 のスクレイプ、アプリ → juken-map-alloy:4318 のトレース送信）。
@@ -45,16 +45,44 @@ fi
 # 既存.envから移行対象キーを除外し、同じ環境変数が重複しない状態でDockerへ渡す。
 RUNTIME_ENV_FILE="$(mktemp)"
 ALLOY_ENV_FILE="$(mktemp)"
-trap 'rm -f "$RUNTIME_ENV_FILE" "$ALLOY_ENV_FILE"' EXIT
-chmod 600 "$RUNTIME_ENV_FILE" "$ALLOY_ENV_FILE"
-# 可観測性の2つは、下で Grafana Cloud の接続情報が揃ったときだけ付け直す。
-grep -Ev '^(LINE_CHANNEL_SECRET|LINE_CHANNEL_ACCESS_TOKEN|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET|METRICS_PORT|OTEL_EXPORTER_OTLP_ENDPOINT)=' "$ENV_FILE" > "$RUNTIME_ENV_FILE"
+MIGRATE_ENV_FILE="$(mktemp)"
+trap 'rm -f "$RUNTIME_ENV_FILE" "$ALLOY_ENV_FILE" "$MIGRATE_ENV_FILE"' EXIT
+chmod 600 "$RUNTIME_ENV_FILE" "$ALLOY_ENV_FILE" "$MIGRATE_ENV_FILE"
 
 secret_json="$(aws secretsmanager get-secret-value \
   --secret-id "$RUNTIME_SECRET_ID" \
   --region ap-northeast-1 \
   --query SecretString \
   --output text)"
+
+# DB の接続先。アプリ用（DML だけ）とマイグレーション用（テーブル定義も変えられる）の2つを
+# シークレットに置く（権限は apps/api/src/infra/dbUsers.ts）。マイグレーション用はアプリの
+# コンテナに渡さず、起動前に1回きりのコンテナで使うだけにする。
+# 2つともまだ無い間は、これまで通り .env の DATABASE_URL で繋ぎ、起動時にマイグレーションを当てる。
+APP_DATABASE_URL="$(jq -r '.DATABASE_URL // empty' <<<"$secret_json")"
+MIGRATION_DATABASE_URL="$(jq -r '.MIGRATION_DATABASE_URL // empty' <<<"$secret_json")"
+if [ -n "$APP_DATABASE_URL" ] && [ -n "$MIGRATION_DATABASE_URL" ]; then
+  SEPARATE_DB_USERS=true
+elif [ -z "$APP_DATABASE_URL" ] && [ -z "$MIGRATION_DATABASE_URL" ]; then
+  SEPARATE_DB_USERS=false
+else
+  # 片方だけだと、アプリがマイグレーション用の権限で動くか、マイグレーションが当たらないかになる。
+  echo "シークレットの DATABASE_URL と MIGRATION_DATABASE_URL は2つそろえて置く必要がある" >&2
+  exit 1
+fi
+
+# 可観測性の2つは、下で Grafana Cloud の接続情報が揃ったときだけ付け直す。
+# DATABASE_URL はシークレットにあればそちらを使うので、.env の値は渡さない。
+EXCLUDED_KEYS='LINE_CHANNEL_SECRET|LINE_CHANNEL_ACCESS_TOKEN|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET|METRICS_PORT|OTEL_EXPORTER_OTLP_ENDPOINT|SKIP_MIGRATIONS|MIGRATION_DATABASE_URL'
+[ "$SEPARATE_DB_USERS" = true ] && EXCLUDED_KEYS="$EXCLUDED_KEYS|DATABASE_URL"
+grep -Ev "^($EXCLUDED_KEYS)=" "$ENV_FILE" > "$RUNTIME_ENV_FILE"
+
+if [ "$SEPARATE_DB_USERS" = true ]; then
+  printf 'DATABASE_URL=%s\n' "$APP_DATABASE_URL" >> "$RUNTIME_ENV_FILE"
+  # アプリのユーザーはテーブルを作れないので、起動時のマイグレーションを飛ばす（docker-entrypoint.sh）。
+  printf 'SKIP_MIGRATIONS=1\n' >> "$RUNTIME_ENV_FILE"
+  printf 'MIGRATION_DATABASE_URL=%s\n' "$MIGRATION_DATABASE_URL" >> "$MIGRATE_ENV_FILE"
+fi
 
 LINE_CHANNEL_SECRET="$(jq -er '.LINE_CHANNEL_SECRET | strings | select(length > 0)' <<<"$secret_json")"
 LINE_CHANNEL_ACCESS_TOKEN="$(jq -er '.LINE_CHANNEL_ACCESS_TOKEN | strings | select(length > 0)' <<<"$secret_json")"
@@ -90,7 +118,8 @@ if [ -n "$GRAFANA_CLOUD_TOKEN" ] && [ -n "$ALLOY_CONFIG_B64" ]; then
   printf 'OTEL_EXPORTER_OTLP_ENDPOINT=http://juken-map-alloy:4318\n' >> "$RUNTIME_ENV_FILE"
 fi
 
-unset secret_json LINE_CHANNEL_SECRET LINE_CHANNEL_ACCESS_TOKEN LINE_LOGIN_CHANNEL_ID LINE_LOGIN_CHANNEL_SECRET
+unset secret_json LINE_CHANNEL_SECRET LINE_CHANNEL_ACCESS_TOKEN LINE_LOGIN_CHANNEL_ID LINE_LOGIN_CHANNEL_SECRET \
+  APP_DATABASE_URL MIGRATION_DATABASE_URL
 
 aws ecr get-login-password --region ap-northeast-1 \
   | docker login --username AWS --password-stdin 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com
@@ -153,6 +182,17 @@ if docker inspect juken-map-next >/dev/null 2>&1; then
   else
     docker rm -f juken-map-next >/dev/null 2>&1 || true
   fi
+fi
+
+# マイグレーションを、新しいイメージの1回きりのコンテナで先に当てる。失敗したら set -e でここで
+# 止まり、新しいコンテナは起動しない（nginx は古いコンテナを向いたままなので、本番は無傷）。
+if [ "$SEPARATE_DB_USERS" = true ]; then
+  echo "deploy: マイグレーションを当てる"
+  docker run --rm \
+    --network "$NETWORK" \
+    --env-file "$MIGRATE_ENV_FILE" \
+    "$REPO:$IMAGE_TAG" \
+    migrate
 fi
 
 echo "deploy: nginx は $CURRENT_PORT を向いている -> 新しいコンテナを $NEW_PORT で起こす"

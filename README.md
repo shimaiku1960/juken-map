@@ -93,6 +93,8 @@ flowchart LR
 
 本番のLINE API秘密情報はAWS Secrets Managerの`juken-map/production/runtime`で管理します。デプロイスクリプトがEC2のIAMインスタンスロールで取得し、コンテナ起動時だけ一時的な環境変数ファイルとして渡します。秘密値はTerraform stateやGitHub Actionsへ保存しません。
 
+本番のDBユーザーは役割ごとに分けています。アプリはSELECT・INSERT・UPDATE・DELETEだけを許したユーザーで接続し、テーブル定義を変えられるユーザーはデプロイ時のマイグレーションにだけ使います（権限の定義は[apps/api/src/infra/dbUsers.ts](apps/api/src/infra/dbUsers.ts)）。
+
 ## テックスタック
 
 | カテゴリ | 技術 |

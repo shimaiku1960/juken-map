@@ -221,8 +221,13 @@ seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使�
 ### マイグレーション（テーブル定義の変更）
 
 `prisma migrate deploy` の代わりに `apps/api/src/infra/migrations.ts` が当てる。
-本番はコンテナの起動時（`docker-entrypoint.sh`）、ローカルは `pnpm dev` / `pnpm run db:migrate`、
-CI は E2E の前、テストは globalSetup で流す。
+本番はデプロイがアプリを起動する前に、同じイメージの1回きりのコンテナ（`docker-entrypoint.sh migrate`）で流す。
+ローカルは `pnpm dev` / `pnpm run db:migrate`、CI は E2E の前、テストは globalSetup で流す。
+
+- 本番の DB ユーザーは役割ごとに分けてある（`apps/api/src/infra/dbUsers.ts`）。アプリは DML だけの
+  `juken_app` で繋ぎ、テーブル定義を変えられる `juken_migrate` はマイグレーションのコンテナにだけ渡す
+  （`MIGRATION_DATABASE_URL`）。調査用の `juken_readonly` は SELECT だけ。テストも同じ権限のユーザーで
+  動かすので、アプリが DML 以外の SQL を使い始めるとテストが落ちる。
 
 - `db/migrations/<名前>/migration.sql` を名前順に見て、まだ当てていないものだけを流す。
   既存の22本はそのまま使う（ディレクトリ名に prisma が残るのはそのため）。
