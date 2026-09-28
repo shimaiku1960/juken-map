@@ -5,19 +5,25 @@ import { join } from "node:path";
 import mysql from "mysql2/promise";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { testDatabaseAdminUrl, testDatabaseUrl } from "../test-db/config.ts";
+import { ensureTestDbUser } from "../test-db/users.ts";
 import { MIGRATIONS_DIR, applyMigrations } from "./migrations.ts";
 
 // マイグレーションの適用そのものを、本物の MySQL に作る使い捨ての DB で確かめる。
 // テスト用 DB（juken_map_test）は他のテストが使っているので、別の DB を毎回作り直す。
+// 当てるのは本番と同じ migrate の権限（infra/dbUsers.ts）のユーザー。その権限で
+// db/migrations を全部当てられることも、ここで確かめる。
 const DB_NAME = "juken_map_migrate_test";
 const databaseUrl = (() => {
   const url = new URL(testDatabaseUrl);
+  url.username = "juken_migrations_test";
+  url.password = "juken_migrations_test";
   url.pathname = `/${DB_NAME}`;
   return url.toString();
 })();
 
 const admin = await mysql.createConnection(testDatabaseAdminUrl);
-const appUser = decodeURIComponent(new URL(testDatabaseUrl).username);
+// DB ごとの権限は DROP DATABASE しても残るので、付けるのは最初の1回でよい。
+await ensureTestDbUser(admin, "migrate", databaseUrl);
 
 async function query<T = mysql.RowDataPacket>(sql: string, params: unknown[] = []) {
   const [rows] = await admin.query(sql, params);
@@ -53,7 +59,6 @@ const apply = (migrationsDir?: string, log: (message: string) => void = () => {}
 beforeEach(async () => {
   await admin.query(`DROP DATABASE IF EXISTS \`${DB_NAME}\``);
   await admin.query(`CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-  await admin.query(`GRANT ALL ON \`${DB_NAME}\`.* TO ?@'%'`, [appUser]);
 });
 
 afterAll(async () => {
