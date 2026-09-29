@@ -121,6 +121,10 @@ func registerRoutes(rt *router, db *sql.DB) {
 	goals := &goalHandlers{store: &goalStore{db: db}}
 	rt.user("GET /api/goals", goals.list)
 	rt.user("GET /api/goals/first-choice", goals.firstChoice)
+
+	textbooks := &textbookHandlers{store: &textbookStore{db: db}}
+	rt.user("GET /api/textbooks", textbooks.list)
+	rt.user("GET /api/textbook-masters", textbooks.listMasters)
 }
 
 type serverOptions struct {
