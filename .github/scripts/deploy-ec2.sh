@@ -137,9 +137,12 @@ if [ -n "$GRAFANA_CLOUD_TOKEN" ] && [ -n "$ALLOY_CONFIG_B64" ]; then
   printf 'OTEL_EXPORTER_OTLP_ENDPOINT=http://juken-map-alloy:4318\n' >> "$RUNTIME_ENV_FILE"
 fi
 
-# Go に渡すのは Go が読む値だけ（apps/api-go/README.md の環境変数の表）。LINE などの秘密は渡さない。
+# Go に渡すのは Go が読む値だけ（apps/api-go/README.md の環境変数の表）。
 # DATABASE_URL は Node と同じ接続先（シークレットがあればアプリ用＝DML だけのユーザー）。
-grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT)=' "$RUNTIME_ENV_FILE" > "$GO_ENV_FILE" || true
+# 毎日の通知（JUK-74）を Go が送るので、送信に使う3つ（Resend のキー・LINE の送信用トークン・cron の共有トークン）も渡す。
+# LINE の Webhook の署名用（LINE_CHANNEL_SECRET）や LINE ログインの秘密は、Go がまだ使わないので渡さない。
+grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|DAILY_NOTIFICATION_SECRET)=' \
+  "$RUNTIME_ENV_FILE" > "$GO_ENV_FILE" || true
 for key in DATABASE_URL BETTER_AUTH_SECRET; do
   grep -q "^$key=" "$GO_ENV_FILE" || { echo "Go に渡す $key が見つからない" >&2; exit 1; }
 done

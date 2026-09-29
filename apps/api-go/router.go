@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -16,13 +18,14 @@ import (
 // ルートなのにセッションが無い」という取り違えはコンパイルの時点で起きない。
 
 // access は入口の種類。値は Node の ACCESS_ENTRY と同じ名前にする。
-// Go に移すのは業務 API だけなので（JUK-70）、Webhook・OAuth などは持たない。
+// Webhook・OAuth などは、その API を Go へ移すときに足す（JUK-79）。
 type access string
 
 const (
 	accessPublic access = "public" // E1 誰でも呼べる読み取り
 	accessUser   access = "user"   // E3 ログイン必須。デモは書き込み不可。持ち主の確認はハンドラが行う
 	accessAdmin  access = "admin"  // E4 ログイン＋role=admin
+	accessJob    access = "job"    // E6 自分のジョブ（cron）。セッションではなく共有トークンで守る
 )
 
 // デモアカウント（面接官向け・閲覧専用）。Node の src/shared/demo.ts と同じ値。
@@ -120,6 +123,32 @@ func (rt *router) admin(pattern string, h sessionHandler) {
 		}
 		h(w, r, s)
 	})
+}
+
+// job は GitHub Actions などが共有トークンで呼ぶルートを登録する。
+// `Authorization: Bearer <secret>` が合わなければ 401 で、ハンドラまで来ない。
+// secret が空なら何が送られても 401（設定し忘れで誰でも呼べる状態にしない）。
+// Node はトークンをハンドラの中で確かめていたが、Go では登録の時点で必ず付くようにした。
+func (rt *router) job(pattern, secret string, h http.HandlerFunc) {
+	rt.handle(pattern, accessJob, func(w http.ResponseWriter, r *http.Request) {
+		if !hasBearerToken(r, secret) {
+			writeError(w, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		h(w, r)
+	})
+}
+
+// hasBearerToken は Node の bearer-token.ts と同じ比べ方。文字列を == で比べると、先頭から
+// 何文字一致したかで返るまでの時間が変わり、外から1文字ずつ当てられる余地が残る。両方を SHA-256 に
+// そろえてから一定時間で比べる（ハッシュにするのは、長さの違いで先に返して秘密値の長さを漏らさないため）。
+func hasBearerToken(r *http.Request, secret string) bool {
+	if secret == "" {
+		return false
+	}
+	got := sha256.Sum256([]byte(r.Header.Get("Authorization")))
+	want := sha256.Sum256([]byte("Bearer " + secret))
+	return subtle.ConstantTimeCompare(got[:], want[:]) == 1
 }
 
 // requireSession は Node の requireSession（context.ts）と同じ判定・同じ文言。

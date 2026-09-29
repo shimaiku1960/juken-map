@@ -19,11 +19,12 @@ func TestRegisteredRoutes(t *testing.T) {
 		{"GET /api/notification-preferences", accessUser},
 		{"GET /api/universities", accessUser},
 		{"GET /api/universities/{id}", accessUser},
+		{"POST /api/cron/daily-study-notifications", accessJob},
 	}
 
 	// ハンドラは呼ばないので、DB は nil のままでよい。
 	rt := newRouter(fakeSessions(nil))
-	registerRoutes(rt, nil)
+	registerRoutes(rt, nil, jobConfig{})
 
 	if len(rt.routes) != len(want) {
 		t.Fatalf("routes = %v\nwant %v", rt.routes, want)
