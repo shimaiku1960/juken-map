@@ -72,6 +72,9 @@ var parityCases = []struct {
 	{"GET", "/api/textbooks", []who{anonymous, forged, unknownUser, eachUser}},
 	{"GET", "/api/textbook-masters", []who{anonymous, eachUser}},
 
+	// 通知設定（JUK-73）。保存していない人は全部 false
+	{"GET", "/api/notification-preferences", []who{anonymous, forged, unknownUser, eachUser}},
+
 	// どのルートにも当たらないもの。Go に無いものは Node にも無い（Node にあるものは移していないだけ）。
 	{"GET", "/api/no-such-route", []who{anonymous}},
 	{"POST", "/api/dashboard", []who{eachUser}},
