@@ -125,6 +125,9 @@ func registerRoutes(rt *router, db *sql.DB) {
 	textbooks := &textbookHandlers{store: &textbookStore{db: db}}
 	rt.user("GET /api/textbooks", textbooks.list)
 	rt.user("GET /api/textbook-masters", textbooks.listMasters)
+
+	prefs := &notificationPreferenceHandlers{store: &notificationPreferenceStore{db: db}}
+	rt.user("GET /api/notification-preferences", prefs.get)
 }
 
 type serverOptions struct {
