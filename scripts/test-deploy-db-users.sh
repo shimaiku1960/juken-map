@@ -7,7 +7,8 @@
 #   アプリのコンテナには .env の接続先ではなくアプリ用の DATABASE_URL が渡る
 # - 2つとも無ければ、これまで通り .env の DATABASE_URL で起動する
 # - 片方だけなら、何も起動せずに止まる
-# あわせて、Go のコンテナ（JUK-72）には Go が読む値だけが渡り、LINE などの秘密が渡らないことも見る。
+# あわせて、Go のコンテナ（JUK-72）には Go が読む値だけが渡ることも見る。毎日の通知（JUK-74）に使う
+# Resend のキー・LINE の送信用トークン・cron の共有トークンは渡り、LINE の Webhook の署名用の秘密は渡らない。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -41,7 +42,7 @@ EOF
 for c in nginx systemctl sleep; do printf '#!/usr/bin/env bash\n' > "$WORK/bin/$c"; done
 chmod +x "$WORK/bin/"*
 
-printf 'DATABASE_URL=mysql://admin:ADMIN@rds/juken_map\nBETTER_AUTH_SECRET=s\n' > "$WORK/env"
+printf 'DATABASE_URL=mysql://admin:ADMIN@rds/juken_map\nBETTER_AUTH_SECRET=s\nRESEND_API_KEY=r\nDAILY_NOTIFICATION_SECRET=d\n' > "$WORK/env"
 printf 'upstream juken_map_app {\n    server 127.0.0.1:3000;\n}\n' > "$WORK/upstream.conf"
 printf 'location / {\n    proxy_pass http://juken_map_app;\n}\n' > "$WORK/site"
 
@@ -77,27 +78,37 @@ check "2つそろえば、マイグレーションを先に流し、アプリに
 MIGRATION_DATABASE_URL=mysql://juken_migrate:MIG@rds/juken_map
 run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:dummy-tag
 BETTER_AUTH_SECRET=s
+DAILY_NOTIFICATION_SECRET=d
 DATABASE_URL=mysql://juken_app:APP@rds/juken_map
 LINE_CHANNEL_ACCESS_TOKEN=t
 LINE_CHANNEL_SECRET=l
+RESEND_API_KEY=r
 SKIP_MIGRATIONS=1
 run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:dummy-tag
 BETTER_AUTH_SECRET=s
+DAILY_NOTIFICATION_SECRET=d
 DATABASE_URL=mysql://juken_app:APP@rds/juken_map
 GOMEMLIMIT=96MiB
+LINE_CHANNEL_ACCESS_TOKEN=t
 NODE_ENV=production
+RESEND_API_KEY=r
 exit=0"
 
 check "2つとも無ければ、これまで通り .env の接続先で起動時に当てる" "{$LINE}" "run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:dummy-tag
 BETTER_AUTH_SECRET=s
+DAILY_NOTIFICATION_SECRET=d
 DATABASE_URL=mysql://admin:ADMIN@rds/juken_map
 LINE_CHANNEL_ACCESS_TOKEN=t
 LINE_CHANNEL_SECRET=l
+RESEND_API_KEY=r
 run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:dummy-tag
 BETTER_AUTH_SECRET=s
+DAILY_NOTIFICATION_SECRET=d
 DATABASE_URL=mysql://admin:ADMIN@rds/juken_map
 GOMEMLIMIT=96MiB
+LINE_CHANNEL_ACCESS_TOKEN=t
 NODE_ENV=production
+RESEND_API_KEY=r
 exit=0"
 
 check "アプリ用だけなら、何も起動せずに止まる" "{$LINE,$APP}" "exit=1"

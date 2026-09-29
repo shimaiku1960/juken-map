@@ -44,7 +44,9 @@ start_servers() {
     WEB_DIST_DIR="$WORK/web" pnpm --filter @juken-map/api start >"$WORK/node.log" 2>&1) &
   server_pids+=($!)
   # NODE_ENV=production は Node と同じく reqId を UUID にするため。
-  (set -a; source "$ROOT/.env"; set +a; NODE_ENV=production PORT=$go_port "$WORK/api-go" >"$WORK/go.log" 2>&1) &
+  # Go は .env を読み込むので、先に export した値も上書きされる。差し替えたいときは GO_ENV_FILE で
+  # 別の env ファイルを渡す（compare-notifications.sh が送信先を偽のサーバーへ向けるのに使う）。
+  (set -a; source "${GO_ENV_FILE:-$ROOT/.env}"; set +a; NODE_ENV=production PORT=$go_port "$WORK/api-go" >"$WORK/go.log" 2>&1) &
   server_pids+=($!)
 
   local _

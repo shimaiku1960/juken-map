@@ -40,6 +40,11 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 | `NODE_ENV` | なし | `production` のとき reqId を UUID のまま出す（開発は8文字） |
 | `DATABASE_URL` | なし | 必須。Node と同じ形（`mysql://…`） |
 | `BETTER_AUTH_SECRET` | なし | 必須。Node と同じ値（Cookie の署名を確かめる） |
+| `DAILY_NOTIFICATION_SECRET` | なし | 毎日の通知の入口の共有トークン。空なら、その入口は必ず 401 |
+| `RESEND_API_KEY` | なし | 毎日の通知のメールを送る Resend のキー |
+| `RESEND_BASE_URL` | `https://api.resend.com` | Resend の送り先。手元の比較で偽のサーバーへ向けるときだけ変える（Node の SDK と同じ名前） |
+| `LINE_CHANNEL_ACCESS_TOKEN` | なし | 毎日の通知を LINE で送るトークン |
+| `LINE_API_BASE` | `https://api.line.me/v2/bot` | LINE の送り先。テスト用 |
 
 ## 本番
 
@@ -76,6 +81,7 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
 rt.public("GET /api/health", healthHandler(db))          // 誰でも
 rt.user("GET /api/dashboard", dashboard.serve)           // ログイン必須。デモの書き込みは 403
 rt.admin("GET /api/admin/users", adminUsers.serve)       // 管理者だけ
+rt.job("POST /api/cron/…", secret, cron.handle)           // GitHub Actions などが共有トークンで呼ぶ
 ```
 
 `user` と `admin` のハンドラは `func(w, r, s *session)` で、ログイン中の利用者を引数で受け取る。
@@ -102,6 +108,21 @@ bash apps/api-go/parity.sh                 # worktree のルートから。合�
 Node と Go を立ち上げ、同じリクエストを送って、ステータス・本文・ヘッダーを比べる。
 食い違うと、どこが違うかを `$.logs[3].textbook.name: … → …` の形で出す。
 両方のサーバーと合成データ（`pnpm db:seed:synthetic`）が要るので CI では動かさない。
+
+## 毎日の通知を Node と比べる
+
+```sh
+bash apps/api-go/compare-notifications.sh    # worktree のルートから。合成ユーザー100人
+N=30 LATENCY_MS=400 bash apps/api-go/compare-notifications.sh
+```
+
+偽の Resend（1通ごとに LATENCY_MS 待って 200 を返す）を立て、Node と Go に朝の通知を1回ずつ送らせる。
+宛先・件名・本文が同じかと、送り終わるまでの秒数を比べる。本物のメールは送らない。
+⚠️ 流している間、手元の DB の通知設定を書き換える（終わったら戻す）。DB は全 worktree で共有なので注意。
+
+Go は5本同時に送るが、メールは Resend の上限（チーム全体で毎秒10リクエスト。登録確認のメールなどと分け合う）を
+超えないよう毎秒5通に抑える。そのため、メールだけなら Go の速さは毎秒5通で頭打ちになる
+（100人・1通300ms で Node 31.2秒、Go 20.2秒）。
 
 ## Node と CPU を比べる
 
@@ -138,8 +159,11 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `textbooks.go` | 参考書の一覧と参考書マスター（応答の型と SQL） | `services/textbook-service.ts`・`routes/textbooks.ts`・`textbook-masters.ts` の GET |
 | `notification_preferences.go` | 通知設定（保存していなければ全部 false） | `routes/notification-preferences.ts` の GET |
 | `universities.go` | 大学の一覧（メモリに1分持ち、ETag と 304、gzip 済みを返す）と大学詳細 | `services/university-service.ts`・`routes/universities.ts` |
+| `notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる | `routes/cron.ts`・`services/sendDailyNotifications.ts` |
+| `daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 | `domain/dailyNotification.ts` |
 | `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
 | `parity_test.go`・`parity.sh` | Node と応答を比べる | — |
+| `compare-notifications.sh` | 毎日の通知を Node と Go で送り比べる（偽の Resend へ） | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
 
 Go ではフォルダ1つが1つのパッケージで、ファイルの分け方はコンパイル結果に関係しない。

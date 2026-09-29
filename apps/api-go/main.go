@@ -50,7 +50,16 @@ func run() error {
 
 	auth := &sessionAuth{db: db, secret: []byte(secret)}
 	rt := newRouter(auth.load)
-	registerRoutes(rt, db)
+	registerRoutes(rt, db, jobConfig{
+		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
+		messenger: &httpMessenger{
+			client:     &http.Client{},
+			resendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
+			resendKey:  os.Getenv("RESEND_API_KEY"),
+			lineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
+			lineToken:  os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
+		},
+	})
 
 	m := newMetrics()
 	srv := &http.Server{
@@ -108,7 +117,7 @@ func run() error {
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
-func registerRoutes(rt *router, db *sql.DB) {
+func registerRoutes(rt *router, db *sql.DB, jobs jobConfig) {
 	study := &studyStore{db: db}
 	studyHandlers := &studyHandlers{store: study}
 
@@ -132,6 +141,15 @@ func registerRoutes(rt *router, db *sql.DB) {
 	universities := &universityHandlers{store: newUniversityStore(db)}
 	rt.user("GET /api/universities", universities.list)
 	rt.user("GET /api/universities/{id}", universities.detail)
+
+	cron := &cronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, jobs.messenger), now: time.Now}
+	rt.job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)
+}
+
+// jobConfig はジョブ（cron）の入口が使う設定。秘密の値と外部サービスへの送り方。
+type jobConfig struct {
+	dailyNotificationSecret string
+	messenger               messenger
 }
 
 type serverOptions struct {

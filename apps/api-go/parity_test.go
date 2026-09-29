@@ -86,6 +86,10 @@ var parityCases = []struct {
 	{"GET", "/api/universities/0", []who{eachUser}},
 	{"POST", "/api/universities/1", []who{eachUser}},
 
+	// 毎日の通知（JUK-74）。トークンが無ければ 401（手元の .env は DAILY_NOTIFICATION_SECRET が空なので、
+	// どちらも必ず 401 になり、実際には送らない）
+	{"POST", "/api/cron/daily-study-notifications", []who{anonymous, eachUser}},
+
 	// どのルートにも当たらないもの。Go に無いものは Node にも無い（Node にあるものは移していないだけ）。
 	{"GET", "/api/no-such-route", []who{anonymous}},
 	{"POST", "/api/dashboard", []who{eachUser}},

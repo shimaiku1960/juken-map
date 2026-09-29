@@ -129,6 +129,8 @@ server {
                                 → upstream juken_map_app → 127.0.0.1:3000 か 3001（juken-map、Node）
 ```
 
+- 毎日の通知の入口（`POST /api/cron/daily-study-notifications`、JUK-74）も Go が受ける。送り終えるまで時間がかかるので、
+  `proxy_read_timeout` を60秒と明示している（Go は50秒で打ち切る）
 - Go の upstream は `conf.d/juken-map-go-upstream.conf`。Node と同じく、デプロイのたびに空いている方へ入れ替わる
 - 初回のデプロイで、サイト設定の `location / {` の直前に `include /etc/nginx/juken-map/go-routes.conf;` を
   1行だけ差し込む（差し込む前の設定は `sites-available/default.bak-日時` に残る）。
