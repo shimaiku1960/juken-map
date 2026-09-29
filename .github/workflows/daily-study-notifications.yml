@@ -1,10 +1,10 @@
 name: Daily study notifications
 
+# 定期の送信は、本番 EC2 の systemd timer（infra/systemd/）が朝7時・夜21時に行う（JUK-85）。
+# ここの schedule は毎回2〜4時間遅れ、夜の分が翌日の未明に「翌日の夜」として届いていたのでやめた。
+# このワークフローは、手で1回送り直すとき（送り損ねた・確かめたい）だけに使う。
+# 同じ日・同じ時間帯を2回呼んでも、配信記録で2回目は送らない。
 on:
-  schedule:
-    # GitHub cron is UTC. 22:00 UTC = 07:00 JST, 12:00 UTC = 21:00 JST.
-    - cron: "0 22 * * *"
-    - cron: "0 12 * * *"
   workflow_dispatch:
     inputs:
       slot:
@@ -25,17 +25,8 @@ jobs:
       - name: Select notification slot
         id: slot
         env:
-          EVENT_NAME: ${{ github.event_name }}
           MANUAL_SLOT: ${{ inputs.slot }}
-          SCHEDULE: ${{ github.event.schedule }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "value=$MANUAL_SLOT" >> "$GITHUB_OUTPUT"
-          elif [ "$SCHEDULE" = "0 22 * * *" ]; then
-            echo "value=morning" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=evening" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "value=$MANUAL_SLOT" >> "$GITHUB_OUTPUT"
 
       - name: Send notifications
         env:

@@ -9,6 +9,9 @@ ALLOY_CONFIG_B64="${2:-}"
 # infra/nginx/juken-map-go-routes.conf（Go へ振り分けるパス）を base64 にしたもの（deploy.yml が渡す）。
 # 空のときは Go へ振り分けない＝全部 Node が返す。
 GO_ROUTES_B64="${3:-}"
+# infra/systemd/（毎日の通知のタイマー、JUK-85）を tar.gz にして base64 にしたもの（deploy.yml が渡す）。
+# 空のときはタイマーに触らない。
+SYSTEMD_UNITS_B64="${4:-}"
 REPO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map"
 # Go の API（apps/api-go、JUK-72）。Node と同じコミットから作ったイメージを並べて動かす。
 REPO_GO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go"
@@ -29,6 +32,10 @@ GO_UPSTREAM_CONF="${GO_UPSTREAM_CONF:-/etc/nginx/conf.d/juken-map-go-upstream.co
 # Go へ振り分けるパスの置き場。サイト設定（443 の server）がこれを include する。
 GO_ROUTES_CONF="${GO_ROUTES_CONF:-/etc/nginx/juken-map/go-routes.conf}"
 SITE_CONF="${SITE_CONF:-/etc/nginx/sites-available/default}"
+# 毎日の通知のタイマーの置き場と、タイマーが読む共有トークンのファイル（root だけが読める）。
+SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
+NOTIFY_ENV_FILE="${NOTIFY_ENV_FILE:-/etc/juken-map/daily-notification.env}"
+NOTIFY_TIMERS="juken-map-daily-notification-morning.timer juken-map-daily-notification-evening.timer"
 PORT_A=3000
 PORT_B=3001
 GO_PORT_A=8080
@@ -381,3 +388,34 @@ fi
 
 # 入れ替えで未使用になった旧イメージを回収する。
 docker image prune -a -f
+
+# ---- 毎日の通知のタイマー（JUK-85）----
+# 朝7時・夜21時（日本時間）に、EC2 の systemd timer が通知の入口（Go）を呼ぶ。GitHub Actions の schedule は
+# 毎回2〜4時間遅れ、夜の分が翌日の未明に届いていたので移した。定義は infra/systemd/ が正。
+# アプリの切り替えが済んでから入れる。ここで失敗してもアプリは動き続け、デプロイだけが失敗になる。
+if [ -n "$SYSTEMD_UNITS_B64" ]; then
+  notify_secret="$(sed -n 's/^DAILY_NOTIFICATION_SECRET=//p' "$RUNTIME_ENV_FILE" | tail -1)"
+  if [ -z "$notify_secret" ]; then
+    # 共有トークンが無いと、呼んでも 401 になるだけなので止めておく。
+    echo "timers: DAILY_NOTIFICATION_SECRET が無いので、毎日の通知のタイマーを止める" >&2
+    # shellcheck disable=SC2086
+    systemctl disable --now $NOTIFY_TIMERS >/dev/null 2>&1 || true
+  else
+    units_dir="$(mktemp -d)"
+    printf '%s' "$SYSTEMD_UNITS_B64" | base64 -d | tar -xz -C "$units_dir"
+    install -d -m 755 "$SYSTEMD_DIR"
+    install -m 644 "$units_dir"/juken-map-daily-notification* "$SYSTEMD_DIR"/
+    rm -rf "$units_dir"
+
+    # 書き込み途中のファイルを読まれないよう、同じ場所に作ってから差し替える。最初から root だけが読める。
+    install -d -m 700 "$(dirname "$NOTIFY_ENV_FILE")"
+    (umask 077; printf 'DAILY_NOTIFICATION_SECRET=%s\n' "$notify_secret" > "$NOTIFY_ENV_FILE.tmp")
+    mv "$NOTIFY_ENV_FILE.tmp" "$NOTIFY_ENV_FILE"
+
+    systemctl daemon-reload
+    # shellcheck disable=SC2086
+    systemctl enable --now $NOTIFY_TIMERS
+    echo "timers: 毎日の通知のタイマーを入れた（朝7時・夜21時）"
+  fi
+  unset notify_secret
+fi

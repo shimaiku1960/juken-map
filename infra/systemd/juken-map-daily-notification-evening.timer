@@ -1,0 +1,10 @@
+# 夜の学習通知（日本時間 21:00）。朝のタイマーと同じ考え方（Persistent を付けない理由もそちら）。
+[Unit]
+Description=juken-map daily study notification (evening, 21:00 JST)
+
+[Timer]
+OnCalendar=*-*-* 21:00:00 Asia/Tokyo
+Unit=juken-map-daily-notification@evening.service
+
+[Install]
+WantedBy=timers.target
