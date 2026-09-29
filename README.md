@@ -296,7 +296,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 
 トレースは、ダッシュボードの一番下の表でTrace IDを押すと、Fastifyのフック・ハンドラ・SQL 1本ずつに何msかかったかが開きます（Better Authの認証とSQLも含む）。ログの行には`trace_id`が入るので、ログからトレースへ、トレースの画面から「そのトレースのログ」へ移れます。URLの`?`以降とパスワード再設定のトークンは、ログと同じくトレースにも残しません（`apps/api/src/observability/redact.ts`）。
 
-5xxの割合が5%を超えた状態が1分続くとアラートのメールが送られ、`http://localhost:8025`（Mailpit）で受け取れます。設定は[observability/](observability/)にあります。
+5xxの割合が1%を超えた状態が1分続くとアラートのメールが送られ、`http://localhost:8025`（Mailpit）で受け取れます。設定は[observability/](observability/)にあります。
 
 ### 本番の可観測性（Grafana Cloud）
 
