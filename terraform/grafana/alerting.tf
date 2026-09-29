@@ -29,17 +29,20 @@ resource "grafana_rule_group" "api_production" {
   interval_seconds = 60
 
   rule {
-    name      = "受験マップ API：5xx率が5%超過"
+    name      = "受験マップ API：5xx率が1%超過"
     condition = "C"
     for       = "1m"
 
+    # 閾値は品質基準 05 B2 の 1%（JUK-16、2026-09-29 に 5% から下げた）。本番のリクエストは5分に10件前後
+    # しかないので、5xx が1件出るだけで 1% も 5% も超える（直近7日で 5xx は1件）。「件数が少ないときは
+    # 鳴らさない」条件は、めったに出ない本物の 5xx を見逃すので付けない。
     # リクエストが無い時間帯は分母が消えて No data になる。それは異常ではないので通知しない。
     no_data_state  = "OK"
     exec_err_state = "Error"
 
     annotations = {
       description = "本番APIの総リクエストに占める5xx応答の割合を監視します。リクエストが無い時間帯は通知しません。"
-      summary     = "直近5分のAPI 5xx率が5%を超えた状態が1分続いています"
+      summary     = "直近5分のAPI 5xx率が1%を超えた状態が1分続いています"
     }
 
     notification_settings {
@@ -79,7 +82,7 @@ resource "grafana_rule_group" "api_production" {
 
       model = jsonencode({
         conditions = [{
-          evaluator = { params = [0.05], type = "gt" }
+          evaluator = { params = [0.01], type = "gt" }
           operator  = { type = "and" }
           query     = { params = ["C"] }
           reducer   = { params = [], type = "last" }

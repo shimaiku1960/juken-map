@@ -1,5 +1,5 @@
 # 「グラフを見に行かないと気づけない」を避けるためのアラート。
-# 5xx の割合が 5% を超えた状態が1分続いたらメールを送る。
+# 5xx の割合が 1% を超えた状態が1分続いたらメールを送る（本番の terraform/grafana/alerting.tf と同じ閾値）。
 # 手元では Mailpit（http://localhost:8025）が受け取るので、実際には外へ送られない。
 apiVersion: 1
 
@@ -27,7 +27,7 @@ groups:
     interval: 10s
     rules:
       - uid: api-error-rate
-        title: APIのエラー率が5%を超えた
+        title: APIのエラー率が1%を超えた
         condition: C
         data:
           - refId: A
@@ -48,11 +48,11 @@ groups:
               type: threshold
               expression: A
               conditions:
-                - evaluator: { type: gt, params: [0.05] }
+                - evaluator: { type: gt, params: [0.01] }
         for: 1m
         noDataState: OK
         execErrState: Error
         labels:
           severity: warning
         annotations:
-          summary: 直近5分の5xxの割合が5%を超えています
+          summary: 直近5分の5xxの割合が1%を超えています
