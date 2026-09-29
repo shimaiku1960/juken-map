@@ -39,6 +39,29 @@ var parityCases = []struct {
 }{
 	{"GET", "/api/health", []who{anonymous}},
 	{"GET", "/api/dashboard", []who{anonymous, forged, unknownUser, eachUser}},
+
+	// 学習記録・予定の一覧（JUK-73）。期間を省いたとき（既定の期間）・両端を指定・上限なし
+	{"GET", "/api/study-logs", []who{anonymous, forged, unknownUser, eachUser}},
+	{"GET", "/api/study-logs?from=2026-01-01&to=2026-12-31", []who{eachUser}},
+	{"GET", "/api/study-logs?from=2026-09-01", []who{eachUser}},
+	{"GET", "/api/study-logs/daily", []who{anonymous, eachUser}},
+	{"GET", "/api/study-logs/daily?from=2025-01-01&to=2026-09-15", []who{eachUser}},
+	{"GET", "/api/study-plans", []who{anonymous, eachUser}},
+	{"GET", "/api/study-plans?from=2026-09-01&to=2026-10-31", []who{eachUser}},
+	// 不正な期間。400 の本文（Zod の issues）と、暦に無い日付で空の一覧になるところ
+	{"GET", "/api/study-logs?from=abc&to=x", []who{eachUser}},
+	{"GET", "/api/study-logs?from=2026-09-01&from=2026-09-02", []who{eachUser}},
+	{"GET", "/api/study-logs?from=2026-09-28;to=x", []who{eachUser}},
+	{"GET", "/api/study-logs?fr%6Fm=abc", []who{eachUser}},
+	{"GET", "/api/study-logs?from", []who{eachUser}},
+	{"GET", "/api/study-logs?from=%ZZ", []who{eachUser}},
+	{"GET", "/api/study-logs?from=2026-13-45", []who{eachUser}},
+	// 2月30日は3月2日に繰り越される（JavaScript の new Date と同じ）
+	{"GET", "/api/study-logs?from=2026-02-30&to=2026-09-30", []who{eachUser}},
+	{"GET", "/api/study-logs/daily?to=bad", []who{eachUser}},
+	{"GET", "/api/study-plans?from=2026-09-01&to=2026-04-31", []who{eachUser}},
+	{"GET", "/api/study-plans?to=2026-09-01&to=2026-09-02", []who{eachUser}},
+
 	// どのルートにも当たらないもの。Go に無いものは Node にも無い（Node にあるものは移していないだけ）。
 	{"GET", "/api/no-such-route", []who{anonymous}},
 	{"POST", "/api/dashboard", []who{eachUser}},

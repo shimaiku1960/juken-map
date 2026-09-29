@@ -123,7 +123,7 @@ server {
 `juken-map-go-routes.conf` が正**で、デプロイのたびに本番の `/etc/nginx/juken-map/go-routes.conf` へ置かれる。
 
 ```
-                         ┌─ go-routes.conf のパス（/api/dashboard・/api/health/go）
+                         ┌─ go-routes.conf のパス（/api/dashboard・/api/health/go・学習記録と予定の GET）
 [nginx] 443 の server ───┤      → upstream juken_map_go  → 127.0.0.1:8080 か 8081（juken-map-go）
                          └─ location /（それ以外）
                                 → upstream juken_map_app → 127.0.0.1:3000 か 3001（juken-map、Node）
@@ -134,6 +134,10 @@ server {
   1行だけ差し込む（差し込む前の設定は `sites-available/default.bak-日時` に残る）。
   `location /` が1つでなければ、どこに入れるか決められないので何もせずに止まる
 - `location = /api/dashboard` の完全一致は `location /` より優先されるので、include の位置で結果は変わらない
+- 読み取りだけを移したパス（`/api/study-logs`・`/api/study-logs/daily`・`/api/study-plans`、JUK-73）は、
+  GET・HEAD だけを Go へ送り、それ以外は `return 418` → `error_page 418 = @node` で Node へ回す。
+  同じパスの書き込み（POST）がまだ Node にあるため。名前付きの location へ渡すので、method と本文はそのまま届く
+  （nginx 1.28 のリハーサルで、POST の本文が Node の検証まで届くことを確かめた）
 - デプロイは Node と Go の新しいコンテナを両方起こし、両方のスモークテストが通ったときだけ、
   2つの upstream と振り分けをまとめて書き換えて1回だけ reload する。
   `nginx -t` が通らなければ3つとも元に戻す（`scripts/test-deploy-go-routes.sh` で確かめている）
