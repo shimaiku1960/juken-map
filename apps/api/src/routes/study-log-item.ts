@@ -9,6 +9,7 @@ import {
 import { findOwnedTextbook } from "@/api/services/textbook-service";
 import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 export function registerStudyLogItemRoutes(app: FastifyInstance) {
   app.patch("/api/study-logs/:id", { config: { access: "user" } }, async (request, reply) => {
@@ -23,7 +24,7 @@ export function registerStudyLogItemRoutes(app: FastifyInstance) {
 
     const parsed = createStudyLogSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     const rangeChanged =

@@ -127,7 +127,15 @@ describe("GET /api/study-logs", () => {
   });
 
   it("日付の形が違えば 400 を返す", async () => {
-    expect((await get("?from=2026-2-1")).statusCode).toBe(400);
+    const res = await get("?from=2026-2-1");
+
+    expect(res.statusCode).toBe(400);
+    // 400 は「文言・コード・項目」の形（JUK-76）。組み込みのチェックは Zod の code をそのまま使う
+    expect(res.json()).toEqual({
+      error: "日付は YYYY-MM-DD で指定してください",
+      code: "invalid_format",
+      field: "from",
+    });
   });
 });
 
@@ -173,6 +181,11 @@ describe("POST /api/study-logs", () => {
     const res = await post({ date: "2026-02-20" });
 
     expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: "学習時間を入力してください",
+      code: "invalid_type",
+      field: "minutes",
+    });
     expect(await findStudyLogs(owner.id)).toHaveLength(0);
   });
 
@@ -180,7 +193,24 @@ describe("POST /api/study-logs", () => {
     const res = await post({ ...validBody, date: "2999-01-01" });
 
     expect(res.statusCode).toBe(400);
+    // 自分で書いた規則（refine）は、params で付けた名前が code になる
+    expect(res.json()).toEqual({
+      error: "未来日は実績として記録できません",
+      code: "future_date",
+      field: "date",
+    });
     expect(await findStudyLogs(owner.id)).toHaveLength(0);
+  });
+
+  it("範囲の終了が開始より前なら 400 を返す（項目をまたいだ規則）", async () => {
+    const res = await post({ ...validBody, rangeStart: 10, rangeEnd: 5, rangeUnit: "page" });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: "終了は開始以上にしてください",
+      code: "range_end_before_start",
+      field: "rangeEnd",
+    });
   });
 
   it("他人の参考書IDなら 400 を返す（所有チェック）", async () => {

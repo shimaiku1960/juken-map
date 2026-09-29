@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { profileSchema } from "@/shared/validations/profile";
 import { updateProfile } from "@/api/services/user-service";
 import { currentSession } from "../access-control.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 export function registerProfileRoutes(app: FastifyInstance) {
   app.put("/api/profile", { config: { access: "user" } }, async (request, reply) => {
@@ -9,7 +10,7 @@ export function registerProfileRoutes(app: FastifyInstance) {
 
     const result = profileSchema.safeParse(request.body);
     if (!result.success) {
-      return reply.code(400).send({ error: result.error.issues[0].message });
+      return sendValidationError(reply, result.error);
     }
 
     return updateProfile(session.user.id, { nickname: result.data.nickname });

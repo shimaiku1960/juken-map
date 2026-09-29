@@ -105,9 +105,9 @@ describe("saveStudySession の失敗", () => {
     );
   });
 
-  it("入力エラー（Zod の issue 配列）も1行にして投げる", async () => {
+  it("入力エラー（文言・コード・項目）はサーバーの文言で投げる", async () => {
     stubFetch(
-      json({ error: [{ path: ["minutes"], message: "1分以上を入力してください" }] }, 400)
+      json({ error: "1分以上を入力してください", code: "too_small", field: "minutes" }, 400)
     );
 
     await expect(saveStudySession(timerInput)).rejects.toThrow(

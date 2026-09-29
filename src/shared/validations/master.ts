@@ -18,7 +18,7 @@ export const universityInputSchema = z.object({
   name: name("大学名"),
   prefecture: z
     .string()
-    .refine((value) => PREFECTURES.includes(value), "都道府県を選んでください"),
+    .refine((value) => PREFECTURES.includes(value), { message: "都道府県を選んでください", params: { code: "invalid_prefecture" } }),
   type: z.enum(UNIVERSITY_TYPES, { error: "種別を選んでください" }),
 });
 export type UniversityInput = z.infer<typeof universityInputSchema>;
@@ -27,13 +27,14 @@ export type UniversityInput = z.infer<typeof universityInputSchema>;
 // 既存の表示（受験日カウントダウンなど）の日付がずれないようにする。
 const examDate = z
   .string()
+  // 組み込みのチェック（regex）は params を持てないので、code は Zod の invalid_format になる。
   .regex(/^\d{4}-\d{2}-\d{2}$/, "受験日を選んでください")
-  .refine((value) => !Number.isNaN(new Date(value).getTime()), "受験日を選んでください");
+  .refine((value) => !Number.isNaN(new Date(value).getTime()), { message: "受験日を選んでください", params: { code: "invalid_exam_date" } });
 
 const tagIds = z
   .array(z.number().int().positive())
   .max(20, "タグは20個までです")
-  .refine((ids) => new Set(ids).size === ids.length, "同じタグが重なっています");
+  .refine((ids) => new Set(ids).size === ids.length, { message: "同じタグが重なっています", params: { code: "duplicate_tags" } });
 
 export const facultyInputSchema = z.object({
   name: name("学部名"),
@@ -63,10 +64,10 @@ const optionalText = (max: number) =>
 const isbn = z
   .string()
   .transform((value) => value.replace(/[-\s]/g, "").toUpperCase())
-  .refine((value) => /^\d{13}$/.test(value) || /^\d{9}[\dX]$/.test(value), "ISBN は10桁か13桁で入力してください");
+  .refine((value) => /^\d{13}$/.test(value) || /^\d{9}[\dX]$/.test(value), { message: "ISBN は10桁か13桁で入力してください", params: { code: "invalid_isbn" } });
 
 const metric = z.object({
-  unit: z.string().refine((value) => RANGE_UNIT_VALUES.includes(value), "単位を選んでください"),
+  unit: z.string().refine((value) => RANGE_UNIT_VALUES.includes(value), { message: "単位を選んでください", params: { code: "invalid_range_unit" } }),
   totalAmount: z
     .number({ error: "総量を入力してください" })
     .int("総量は整数で入力してください")
@@ -85,7 +86,7 @@ export const textbookMasterInputSchema = z.object({
     .array(metric)
     .min(1, "総量を1つ以上入力してください")
     .max(RANGE_UNIT_VALUES.length)
-    .refine((items) => new Set(items.map((item) => item.unit)).size === items.length, "同じ単位が重なっています")
-    .refine((items) => items.filter((item) => item.isDefault).length === 1, "既定の単位を1つ選んでください"),
+    .refine((items) => new Set(items.map((item) => item.unit)).size === items.length, { message: "同じ単位が重なっています", params: { code: "duplicate_units" } })
+    .refine((items) => items.filter((item) => item.isDefault).length === 1, { message: "既定の単位を1つ選んでください", params: { code: "default_unit_required" } }),
 });
 export type TextbookMasterInput = z.infer<typeof textbookMasterInputSchema>;

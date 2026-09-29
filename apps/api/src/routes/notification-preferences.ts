@@ -6,6 +6,7 @@ import {
 } from "@/api/services/notification-service";
 import { notificationPreferenceSchema } from "@/shared/validations/notification";
 import { currentSession } from "../access-control.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 const DEFAULT_PREFERENCE = {
   emailMorningEnabled: false,
@@ -34,7 +35,7 @@ export function registerNotificationPreferenceRoutes(app: FastifyInstance) {
 
     const result = notificationPreferenceSchema.safeParse(request.body);
     if (!result.success) {
-      return reply.code(400).send({ error: result.error.issues[0].message });
+      return sendValidationError(reply, result.error);
     }
 
     if (result.data.lineMorningEnabled || result.data.lineEveningEnabled) {

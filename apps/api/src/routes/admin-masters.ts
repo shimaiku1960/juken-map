@@ -23,6 +23,7 @@ import {
 } from "@/shared/validations/master";
 import { currentSession } from "../access-control.ts";
 import { idParamsSchema } from "./params.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 // 管理者ページのマスター編集（/admin/masters、大学・学部・参考書）の API。どれも access: "admin"（access-control.ts が断る）。
 // 変更はすべて構造化ログ `admin master change` に「誰が・何を・前→後」で残す（Grafana の Loki で追える）。
@@ -84,13 +85,13 @@ function logChange(
 export function registerAdminMasterRoutes(app: FastifyInstance) {
   app.get("/api/admin/universities", { config: { access: "admin" } }, async (request, reply) => {
     const parsed = listQuerySchema.safeParse(request.query);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    if (!parsed.success) return sendValidationError(reply, parsed.error);
     return listAdminUniversities({ q: parsed.data.q || undefined, page: parsed.data.page });
   });
 
   app.get("/api/admin/universities/:id", { config: { access: "admin" } }, async (request, reply) => {
     const params = idParamsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
     const detail = await getAdminUniversityDetail(params.data.id);
     if (!detail) return reply.code(404).send({ error: MESSAGES.university.not_found });
     return detail;
@@ -103,7 +104,7 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
   app.post("/api/admin/universities", { config: { access: "admin" } }, async (request, reply) => {
     const session = currentSession(request);
     const parsed = universityInputSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    if (!parsed.success) return sendValidationError(reply, parsed.error);
 
     const outcome = await createUniversity(parsed.data);
     if (outcome.result !== "ok") return sendFailure(reply, "university", outcome);
@@ -115,8 +116,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     const parsed = universityInputSchema.safeParse(request.body);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
+    if (!parsed.success) return sendValidationError(reply, parsed.error);
 
     const outcome = await updateUniversity(params.data.id, parsed.data);
     if (outcome.result !== "ok") return sendFailure(reply, "university", outcome);
@@ -127,7 +128,7 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
   app.delete("/api/admin/universities/:id", { config: { access: "admin" } }, async (request, reply) => {
     const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
 
     const outcome = await deleteUniversity(params.data.id);
     if (outcome.result !== "ok") return sendFailure(reply, "university", outcome);
@@ -138,7 +139,7 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
   app.post("/api/admin/faculties", { config: { access: "admin" } }, async (request, reply) => {
     const session = currentSession(request);
     const parsed = createFacultySchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    if (!parsed.success) return sendValidationError(reply, parsed.error);
 
     const outcome = await createFaculty(parsed.data);
     if (outcome.result !== "ok") return sendFailure(reply, "faculty", outcome);
@@ -150,8 +151,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     const parsed = facultyInputSchema.safeParse(request.body);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
+    if (!parsed.success) return sendValidationError(reply, parsed.error);
 
     const outcome = await updateFaculty(params.data.id, parsed.data);
     if (outcome.result !== "ok") return sendFailure(reply, "faculty", outcome);
@@ -162,7 +163,7 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
   app.delete("/api/admin/faculties/:id", { config: { access: "admin" } }, async (request, reply) => {
     const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
 
     const outcome = await deleteFaculty(params.data.id);
     if (outcome.result !== "ok") return sendFailure(reply, "faculty", outcome);
@@ -172,14 +173,14 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
 
   app.get("/api/admin/textbook-masters", { config: { access: "admin" } }, async (request, reply) => {
     const parsed = searchQuerySchema.safeParse(request.query);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    if (!parsed.success) return sendValidationError(reply, parsed.error);
     return listAdminTextbookMasters(parsed.data.q || undefined);
   });
 
   app.post("/api/admin/textbook-masters", { config: { access: "admin" } }, async (request, reply) => {
     const session = currentSession(request);
     const parsed = textbookMasterInputSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    if (!parsed.success) return sendValidationError(reply, parsed.error);
 
     const outcome = await createTextbookMaster(parsed.data);
     if (outcome.result !== "ok") return sendFailure(reply, "textbookMaster", outcome);
@@ -191,8 +192,8 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
     const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
     const parsed = textbookMasterInputSchema.safeParse(request.body);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
+    if (!parsed.success) return sendValidationError(reply, parsed.error);
 
     const outcome = await updateTextbookMaster(params.data.id, parsed.data);
     if (outcome.result !== "ok") return sendFailure(reply, "textbookMaster", outcome);
@@ -203,7 +204,7 @@ export function registerAdminMasterRoutes(app: FastifyInstance) {
   app.delete("/api/admin/textbook-masters/:id", { config: { access: "admin" } }, async (request, reply) => {
     const session = currentSession(request);
     const params = idParamsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
 
     const outcome = await deleteTextbookMaster(params.data.id);
     if (outcome.result !== "ok") return sendFailure(reply, "textbookMaster", outcome);
