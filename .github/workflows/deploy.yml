@@ -76,7 +76,9 @@ jobs:
           alloy_config_b64="$(base64 < observability/alloy/production.alloy | tr -d '\n')"
           # nginx で Go へ振り分けるパス。これも本番に手で置かず、リポジトリの中身をそのまま使う。
           go_routes_b64="$(base64 < infra/nginx/juken-map-go-routes.conf | tr -d '\n')"
-          remote_command="echo '$deploy_script_b64' | base64 -d | bash -s -- '$IMAGE_TAG' '$alloy_config_b64' '$go_routes_b64'"
+          # 毎日の通知のタイマー（JUK-85）。複数のファイルなので tar にまとめて運ぶ。
+          systemd_units_b64="$(tar -C infra/systemd -cz . | base64 | tr -d '\n')"
+          remote_command="echo '$deploy_script_b64' | base64 -d | bash -s -- '$IMAGE_TAG' '$alloy_config_b64' '$go_routes_b64' '$systemd_units_b64'"
           parameters="$(jq -cn --arg command "$remote_command" '{commands: [$command]}')"
 
           command_id="$(aws ssm send-command \

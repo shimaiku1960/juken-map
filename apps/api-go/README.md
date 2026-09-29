@@ -81,7 +81,7 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
 rt.public("GET /api/health", healthHandler(db))          // 誰でも
 rt.user("GET /api/dashboard", dashboard.serve)           // ログイン必須。デモの書き込みは 403
 rt.admin("GET /api/admin/users", adminUsers.serve)       // 管理者だけ
-rt.job("POST /api/cron/…", secret, cron.handle)           // GitHub Actions などが共有トークンで呼ぶ
+rt.job("POST /api/cron/…", secret, cron.handle)           // タイマー（infra/systemd/）などが共有トークンで呼ぶ
 ```
 
 `user` と `admin` のハンドラは `func(w, r, s *session)` で、ログイン中の利用者を引数で受け取る。

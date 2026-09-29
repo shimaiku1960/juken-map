@@ -1,0 +1,14 @@
+# 朝の学習通知（日本時間 7:00）。JUK-85 で GitHub Actions の schedule から移した
+# （schedule は毎回2〜4時間遅れ、夜の分が翌日の未明に届いていた）。
+[Unit]
+Description=juken-map daily study notification (morning, 07:00 JST)
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 Asia/Tokyo
+Unit=juken-map-daily-notification@morning.service
+# 既定の1分の揺らぎのままでよい（同じ時刻に起きるほかのタイマーとまとめて起こせる）。
+# Persistent は付けない。EC2 が止まっていて時刻を過ぎたとき、起動した直後に遅れて送ると、
+# 夜の分が翌日に「翌日の夜」として送られる、という今回と同じずれが起きるため。送らない方がよい。
+
+[Install]
+WantedBy=timers.target

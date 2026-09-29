@@ -1,0 +1,36 @@
+# 毎日の学習通知を送る（JUK-85）。%i は時間帯（morning / evening）。
+# タイマー（juken-map-daily-notification-*.timer）から起動され、通知の入口（Go、JUK-74）を1回呼んで終わる。
+#
+# このファイルはリポジトリの infra/systemd/ が正で、デプロイのたびに .github/scripts/deploy-ec2.sh が
+# /etc/systemd/system/ へ置く。本番で手で編集しない。
+[Unit]
+Description=juken-map daily study notification (%i)
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 決まったユーザーを作らず、実行のたびに権限の無い一時ユーザーで動かす。
+DynamicUser=yes
+# 共有トークンは root だけが読めるファイル（DAILY_NOTIFICATION_SECRET=… の1行）に置く。
+# EnvironmentFile は systemd（root）が読んでからこのサービスに渡すので、一時ユーザーでも使える。
+# LoadCredential の方が向いているが、手元のリハーサル（Docker の中の systemd）で資格情報の置き場が
+# 作られず確かめられなかったので、確かめられるこちらにした。
+EnvironmentFile=/etc/juken-map/daily-notification.env
+# ヘッダーはシェルの組み込みの printf で作り、curl へは標準入力（--header @-）で渡す。
+# コマンドの引数に秘密を載せないので、ps でも見えない。
+# systemd は $ と % を自分で展開し、\ も1段処理してから sh に渡す。$$・%%・\\" はそれを避けるための書き方
+# （\" と書くと sh に届く前に " になり、JSON の引用符が消える。手元のリハーサルで確かめた）。
+# nginx へは EC2 の中から届ける（--resolve で juken-map.com を 127.0.0.1 に向ける。証明書の名前は合う）。
+# 送り終えるまで時間がかかることがあるので、1回に70秒まで待つ（Go は50秒で打ち切る）。
+# Go が時間切れで 500 を返したら、curl が2回まで再試行する（送り済みは配信記録で飛ばす）。
+ExecStart=/bin/sh -c 'printf "Authorization: Bearer %%s\n" "$$DAILY_NOTIFICATION_SECRET" | exec /usr/bin/curl \
+  --fail-with-body --silent --show-error --retry 2 --max-time 70 \
+  --resolve juken-map.com:443:127.0.0.1 \
+  --request POST --header @- --header "Content-Type: application/json" \
+  --data "{\\"slot\\":\\"%i\\"}" \
+  https://juken-map.com/api/cron/daily-study-notifications'
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
