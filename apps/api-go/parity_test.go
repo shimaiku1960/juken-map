@@ -8,6 +8,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -75,6 +77,15 @@ var parityCases = []struct {
 	// 通知設定（JUK-73）。保存していない人は全部 false
 	{"GET", "/api/notification-preferences", []who{anonymous, forged, unknownUser, eachUser}},
 
+	// 大学（JUK-73）。一覧は全員に同じもの。詳細は登録済みの学部が人によって違う（1 は学部なし、258 は13学部）
+	{"GET", "/api/universities", []who{anonymous, forged, unknownUser, eachUser}},
+	{"GET", "/api/universities/1", []who{anonymous, eachUser}},
+	{"GET", "/api/universities/258", []who{eachUser}},
+	{"GET", "/api/universities/999999", []who{eachUser}},
+	{"GET", "/api/universities/abc", []who{eachUser}},
+	{"GET", "/api/universities/0", []who{eachUser}},
+	{"POST", "/api/universities/1", []who{eachUser}},
+
 	// どのルートにも当たらないもの。Go に無いものは Node にも無い（Node にあるものは移していないだけ）。
 	{"GET", "/api/no-such-route", []who{anonymous}},
 	{"POST", "/api/dashboard", []who{eachUser}},
@@ -88,6 +99,11 @@ var parityHeaders = []string{
 	"X-Frame-Options",
 	"Referrer-Policy",
 	"Retry-After",
+	// 大学の一覧だけが付ける（キャッシュと 304 のため）。ほかのルートはどちらも付けない
+	"ETag",
+	"Cache-Control",
+	"Vary",
+	"Content-Encoding",
 }
 
 func TestParity(t *testing.T) {
@@ -255,4 +271,61 @@ func diffJSON(path string, a, b any) []string {
 	}
 	walk(path, a, b)
 	return out
+}
+
+// TestParityUniversitiesConditional は、大学の一覧の 304 と圧縮を比べる。
+// parityCases は Accept-Encoding: identity で本文を比べるので、ここだけ別に見る。
+func TestParityUniversitiesConditional(t *testing.T) {
+	nodeURL, goURL := os.Getenv("PARITY_NODE_URL"), os.Getenv("PARITY_GO_URL")
+	users := strings.Fields(os.Getenv("PARITY_COOKIES"))
+	if nodeURL == "" || goURL == "" || len(users) == 0 {
+		t.Fatal("parity.sh から動かしてください")
+	}
+	get := func(base string, header map[string]string) *http.Response {
+		t.Helper()
+		req, _ := http.NewRequest("GET", base+"/api/universities", nil)
+		req.Header.Set("Cookie", users[0])
+		for k, v := range header {
+			req.Header.Set(k, v)
+		}
+		res, err := http.DefaultTransport.RoundTrip(req) // 自動の解凍をさせない
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { res.Body.Close() })
+		return res
+	}
+
+	// JSON のバイト列が同じなので、ETag も同じになる（振り分けを行き来しても 304 が効く）
+	etag := get(nodeURL, map[string]string{"Accept-Encoding": "identity"}).Header.Get("ETag")
+	if goETag := get(goURL, map[string]string{"Accept-Encoding": "identity"}).Header.Get("ETag"); goETag != etag {
+		t.Fatalf("ETag: Node %q, Go %q", etag, goETag)
+	}
+
+	for _, inm := range []string{etag, "W/" + etag, `"other", W/` + etag} {
+		for name, base := range map[string]string{"Node": nodeURL, "Go": goURL} {
+			res := get(base, map[string]string{"If-None-Match": inm})
+			body, _ := io.ReadAll(res.Body)
+			if res.StatusCode != http.StatusNotModified || len(body) != 0 {
+				t.Errorf("%s If-None-Match %s: status %d, 本文 %d バイト", name, inm, res.StatusCode, len(body))
+			}
+		}
+	}
+
+	// gzip を受け付けるなら、どちらも圧縮済みを返し、解凍すると同じ JSON
+	var plain [2][]byte
+	for i, base := range []string{nodeURL, goURL} {
+		res := get(base, map[string]string{"Accept-Encoding": "gzip"})
+		if res.Header.Get("Content-Encoding") != "gzip" {
+			t.Fatalf("%s: Content-Encoding = %q", base, res.Header.Get("Content-Encoding"))
+		}
+		zr, err := gzip.NewReader(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plain[i], _ = io.ReadAll(zr)
+	}
+	if !bytes.Equal(plain[0], plain[1]) {
+		t.Errorf("解凍した本文が違う（Node %d バイト、Go %d バイト）", len(plain[0]), len(plain[1]))
+	}
 }
