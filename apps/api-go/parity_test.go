@@ -68,6 +68,10 @@ var parityCases = []struct {
 	// クエリは読まない（Node も読まない）
 	{"GET", "/api/goals?status=decided", []who{eachUser}},
 
+	// 参考書（JUK-73）。マスターは全員に同じもの
+	{"GET", "/api/textbooks", []who{anonymous, forged, unknownUser, eachUser}},
+	{"GET", "/api/textbook-masters", []who{anonymous, eachUser}},
+
 	// どのルートにも当たらないもの。Go に無いものは Node にも無い（Node にあるものは移していないだけ）。
 	{"GET", "/api/no-such-route", []who{anonymous}},
 	{"POST", "/api/dashboard", []who{eachUser}},

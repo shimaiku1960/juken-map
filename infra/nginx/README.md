@@ -135,7 +135,7 @@ server {
   `location /` が1つでなければ、どこに入れるか決められないので何もせずに止まる
 - `location = /api/dashboard` の完全一致は `location /` より優先されるので、include の位置で結果は変わらない
 - 読み取りだけを移したパス（`/api/study-logs`・`/api/study-logs/daily`・`/api/study-plans`・`/api/goals`・
-  `/api/goals/first-choice`、JUK-73）は、
+  `/api/goals/first-choice`・`/api/textbooks`・`/api/textbook-masters`、JUK-73）は、
   GET・HEAD だけを Go へ送り、それ以外は `return 418` → `error_page 418 = @node` で Node へ回す。
   同じパスの書き込み（POST）がまだ Node にあるため。名前付きの location へ渡すので、method と本文はそのまま届く
   （nginx 1.28 のリハーサルで、POST の本文が Node の検証まで届くことを確かめた）

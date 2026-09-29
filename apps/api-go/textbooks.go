@@ -1,0 +1,170 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net/http"
+)
+
+// 参考書の読み取り（JUK-73）。Node の routes/textbooks.ts・textbook-masters.ts の GET と、
+// services/textbook-service.ts の listTextbooks・listTextbookMasters にあたる。
+// 書き込み（POST /api/textbooks・PATCH /api/textbooks/:id）は Node に残っていて、
+// nginx が GET と HEAD だけを Go へ送る。
+
+// ここから下の型が応答の形。Node は DB の行をそのまま返している（src/shared/dto には無い）ので、
+// 列の名前と並びも Node の TEXTBOOK_COLUMNS・groupMasters に揃える。
+// 日時は Date を JSON にしたときと同じ ISO 文字列。
+
+type textbookRowDTO struct {
+	ID          int64   `json:"id"`
+	UserID      string  `json:"userId"`
+	MasterID    *int64  `json:"masterId"`
+	Name        string  `json:"name"`
+	TotalAmount *int64  `json:"totalAmount"`
+	RangeUnit   *string `json:"rangeUnit"`
+	TargetDate  *string `json:"targetDate"`
+	Subject     *string `json:"subject"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+}
+
+type textbookMasterMetricDTO struct {
+	ID          int64  `json:"id"`
+	MasterID    int64  `json:"masterId"`
+	Unit        string `json:"unit"`
+	TotalAmount int64  `json:"totalAmount"`
+	IsDefault   bool   `json:"isDefault"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+type textbookMasterDTO struct {
+	ID        int64   `json:"id"`
+	Name      string  `json:"name"`
+	Publisher *string `json:"publisher"`
+	Edition   *string `json:"edition"`
+	ISBN      string  `json:"isbn"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
+	// 総量の候補が1つも無いマスターでも [] を返す（Node と同じ）。
+	Metrics []textbookMasterMetricDTO `json:"metrics"`
+}
+
+type textbookStore struct {
+	db *sql.DB
+}
+
+// listTextbooks は自分の参考書の一覧。名前は (userId, name) で UNIQUE なので、名前順だけで並びが決まる。
+func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]textbookRowDTO, error) {
+	rows, err := st.db.QueryContext(ctx,
+		`SELECT id, userId, masterId, name, totalAmount, rangeUnit, targetDate, subject, createdAt, updatedAt
+		 FROM Textbook WHERE userId = ? ORDER BY name ASC`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	textbooks := make([]textbookRowDTO, 0)
+	for rows.Next() {
+		var t textbookRowDTO
+		if err := rows.Scan(
+			&t.ID, &t.UserID, &t.MasterID, &t.Name, &t.TotalAmount, &t.RangeUnit,
+			&t.TargetDate, &t.Subject, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if t.TargetDate != nil {
+			iso := isoFromDatetime(*t.TargetDate)
+			t.TargetDate = &iso
+		}
+		t.CreatedAt = isoFromDatetime(t.CreatedAt)
+		t.UpdatedAt = isoFromDatetime(t.UpdatedAt)
+		textbooks = append(textbooks, t)
+	}
+	return textbooks, rows.Err()
+}
+
+// listTextbookMasters は参考書マスターの一覧を、総量の候補（metrics）と一緒に返す。全員に同じもの。
+// マスター → 総量の候補は1対多なので、LEFT JOIN 1本で取り、マスターごとに束ねる。
+// 候補は id 順（登録時に「isDefault の候補、無ければ先頭」を使うので、先頭を決めておく）。
+func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]textbookMasterDTO, error) {
+	rows, err := st.db.QueryContext(ctx,
+		`SELECT tm.id, tm.name, tm.publisher, tm.edition, tm.isbn, tm.createdAt, tm.updatedAt,
+		        m.id AS m_id, m.unit AS m_unit, m.totalAmount AS m_totalAmount,
+		        m.isDefault AS m_isDefault, m.createdAt AS m_createdAt, m.updatedAt AS m_updatedAt
+		 FROM TextbookMaster AS tm
+		 LEFT JOIN TextbookMasterMetric AS m ON m.masterId = tm.id
+		 ORDER BY tm.id ASC, m.id ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	masters := make([]textbookMasterDTO, 0)
+	for rows.Next() {
+		var (
+			tm textbookMasterDTO
+			// LEFT JOIN の相手が居なければ全部 NULL になる
+			mID          *int64
+			mUnit        *string
+			mTotalAmount *int64
+			mIsDefault   *bool
+			mCreatedAt   *string
+			mUpdatedAt   *string
+		)
+		if err := rows.Scan(
+			&tm.ID, &tm.Name, &tm.Publisher, &tm.Edition, &tm.ISBN, &tm.CreatedAt, &tm.UpdatedAt,
+			&mID, &mUnit, &mTotalAmount, &mIsDefault, &mCreatedAt, &mUpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		// ORDER BY で同じマスターの行が隣り合うので、直前の要素と比べるだけで束ねられる。
+		if len(masters) == 0 || masters[len(masters)-1].ID != tm.ID {
+			tm.CreatedAt = isoFromDatetime(tm.CreatedAt)
+			tm.UpdatedAt = isoFromDatetime(tm.UpdatedAt)
+			tm.Metrics = make([]textbookMasterMetricDTO, 0)
+			masters = append(masters, tm)
+		}
+		if mID != nil {
+			last := &masters[len(masters)-1]
+			last.Metrics = append(last.Metrics, textbookMasterMetricDTO{
+				ID:          *mID,
+				MasterID:    last.ID,
+				Unit:        *mUnit,
+				TotalAmount: *mTotalAmount,
+				IsDefault:   *mIsDefault,
+				CreatedAt:   isoFromDatetime(*mCreatedAt),
+				UpdatedAt:   isoFromDatetime(*mUpdatedAt),
+			})
+		}
+	}
+	return masters, rows.Err()
+}
+
+type textbookHandlers struct {
+	store *textbookStore
+}
+
+// list は GET /api/textbooks。
+func (h *textbookHandlers) list(w http.ResponseWriter, r *http.Request, s *session) {
+	textbooks, err := h.store.listTextbooks(r.Context(), s.UserID)
+	if err != nil {
+		internalError(w, r, fmt.Errorf("textbooks: %w", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, textbooks)
+}
+
+// listMasters は GET /api/textbook-masters。ログイン必須だが、中身は利用者によらない。
+func (h *textbookHandlers) listMasters(w http.ResponseWriter, r *http.Request, _ *session) {
+	masters, err := h.store.listTextbookMasters(r.Context())
+	if err != nil {
+		internalError(w, r, fmt.Errorf("textbook-masters: %w", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, masters)
+}
