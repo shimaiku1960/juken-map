@@ -11,6 +11,7 @@ import type { DateRange } from "@/api/services/date-range";
 import { findOwnedTextbook } from "@/api/services/textbook-service";
 import { textbookRangeError } from "@/api/domain/textbookRange";
 import { currentSession } from "../access-control.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 // 期間を省いて呼ばれたときに遡る日数。画面はどれも明示して呼ぶので、これは
 // 古いクライアントや手で叩いたときのための既定値。全期間を返す状態には戻さない。
@@ -47,7 +48,7 @@ export function registerStudyLogRoutes(app: FastifyInstance) {
 
     const parsed = rangeQuerySchema.safeParse(request.query);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     return listStudyLogs(session.user.id, toRange(parsed.data, DEFAULT_LOG_DAYS));
@@ -59,7 +60,7 @@ export function registerStudyLogRoutes(app: FastifyInstance) {
 
     const parsed = rangeQuerySchema.safeParse(request.query);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     return listDailyStudyMinutes(
@@ -73,7 +74,7 @@ export function registerStudyLogRoutes(app: FastifyInstance) {
 
     const parsed = createStudyLogSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     // 参考書を指定する場合は、所有権と逆算設定との整合性を検証する。

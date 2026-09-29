@@ -12,6 +12,7 @@ import {
 } from "@/api/services/textbook-service";
 import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 export function registerTextbookRoutes(app: FastifyInstance) {
   app.get("/api/textbooks", { config: { access: "user" } }, async (request) => {
@@ -25,7 +26,7 @@ export function registerTextbookRoutes(app: FastifyInstance) {
 
     const parsed = createTextbookSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     const outcome =
@@ -58,7 +59,7 @@ export function registerTextbookRoutes(app: FastifyInstance) {
 
     const parsed = updateTextbookProgressSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     const textbook = await findOwnedTextbook(textbookId, session.user.id);

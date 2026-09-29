@@ -90,13 +90,12 @@ func TestStudyListQueryErrors(t *testing.T) {
 	rt.user("GET /api/study-logs/daily", h.listDaily)
 	rt.user("GET /api/study-plans", h.listPlans)
 
-	regexIssue := func(key string) string {
-		return `{"origin":"string","code":"invalid_format","format":"regex","pattern":"/^\\d{4}-\\d{2}-\\d{2}$/","path":["` +
-			key + `"],"message":"日付は YYYY-MM-DD で指定してください"}`
+	// 本文は Node（routes/validation-error.ts）が返すものと同じ「文言・コード・項目」
+	formatError := func(key string) string {
+		return `{"error":"日付は YYYY-MM-DD で指定してください","code":"invalid_format","field":"` + key + `"}`
 	}
-	arrayIssue := func(key string) string {
-		return `{"expected":"string","code":"invalid_type","path":["` + key +
-			`"],"message":"Invalid input: expected string, received array"}`
+	arrayError := func(key string) string {
+		return `{"error":"Invalid input: expected string, received array","code":"invalid_type","field":"` + key + `"}`
 	}
 
 	tests := []struct {
@@ -104,13 +103,12 @@ func TestStudyListQueryErrors(t *testing.T) {
 		wantStatus int
 		wantBody   string
 	}{
-		// 本文は Node（Zod 4 の error.issues）が返したものと同じ
-		{"/api/study-logs?from=abc", 400, `{"error":[` + regexIssue("from") + `]}`},
-		{"/api/study-logs?from=abc&to=x", 400, `{"error":[` + regexIssue("from") + `,` + regexIssue("to") + `]}`},
-		{"/api/study-logs?from", 400, `{"error":[` + regexIssue("from") + `]}`},
-		{"/api/study-logs?from=2026-09-28;to=x", 400, `{"error":[` + regexIssue("from") + `]}`},
-		{"/api/study-logs/daily?to=bad", 400, `{"error":[` + regexIssue("to") + `]}`},
-		{"/api/study-plans?to=2026-09-01&to=2026-09-02", 400, `{"error":[` + arrayIssue("to") + `]}`},
+		{"/api/study-logs?from=abc", 400, formatError("from")},
+		{"/api/study-logs?from=abc&to=x", 400, formatError("from")},
+		{"/api/study-logs?from", 400, formatError("from")},
+		{"/api/study-logs?from=2026-09-28;to=x", 400, formatError("from")},
+		{"/api/study-logs/daily?to=bad", 400, formatError("to")},
+		{"/api/study-plans?to=2026-09-01&to=2026-09-02", 400, arrayError("to")},
 		// 形は正しいが暦に無い日付は、Node と同じく 200 の空の一覧
 		{"/api/study-logs?from=2026-13-45", 200, `[]`},
 		{"/api/study-logs/daily?from=2026-01-01&to=2026-00-10", 200, `[]`},

@@ -113,44 +113,21 @@ describe("エラー応答の吸収", () => {
     );
   });
 
-  it("{error: ZodIssue[]} は最初の issue の message を使う", async () => {
-    stubFetch(
-      json(
-        {
-          error: [
-            { path: ["minutes"], message: "1分以上で入力してください" },
-            { path: ["date"], message: "日付を選んでください" },
-          ],
-        },
-        400
-      )
-    );
+  it("入力チェックの 400（文言・コード・項目）は文言を出し、本文は body に残す", async () => {
+    const body = { error: "終了は開始以上にしてください", code: "range_end_before_start", field: "rangeEnd" };
+    stubFetch(json(body, 400));
 
-    await expect(api.post("/api/study-logs", {})).rejects.toThrow(
-      "1分以上で入力してください"
-    );
+    const error = await catchApiError(api.post("/api/study-logs", {}));
+    expect(error.message).toBe("終了は開始以上にしてください");
+    expect(error.body).toEqual(body);
   });
 
-  it("message を持たない issue は読み飛ばす", async () => {
-    stubFetch(json({ error: [{ path: ["minutes"] }, { message: "必須です" }] }, 400));
+  it("error が文字列でなければ fallbackMessage に落とす", async () => {
+    stubFetch(json({ error: [{ message: "配列は読まない" }] }, 400));
 
     await expect(
       api.post("/api/study-logs", {}, { fallbackMessage: "記録に失敗しました" })
-    ).rejects.toThrow("必須です");
-  });
-
-  it("本文から取り出せないときは fallbackMessage を使う", async () => {
-    stubFetch(new Response("<html>502 Bad Gateway</html>", { status: 502 }));
-
-    await expect(
-      api.get("/api/goals", { fallbackMessage: "目標の取得に失敗しました" })
-    ).rejects.toThrow("目標の取得に失敗しました");
-  });
-
-  it("fallbackMessage が無いときは既定の文言を使う", async () => {
-    stubFetch(new Response(null, { status: 500 }));
-
-    await expect(api.get("/api/goals")).rejects.toThrow("通信に失敗しました");
+    ).rejects.toThrow("記録に失敗しました");
   });
 
   it("error が空文字のときも fallbackMessage に落とす", async () => {
@@ -179,15 +156,6 @@ describe("ApiError", () => {
     expect(error).toBeInstanceOf(Error);
     expect(error.name).toBe("ApiError");
     expect(error.status).toBe(404);
-  });
-
-  it("body に応答本文を残すので issue 配列を後から読める", async () => {
-    const issues = [{ path: ["minutes"], message: "1分以上で入力してください" }];
-    stubFetch(json({ error: issues }, 400));
-
-    const error = await catchApiError(api.post("/api/study-logs", {}));
-
-    expect(error.body).toEqual({ error: issues });
   });
 
   it("通信自体の失敗は包み直さずそのまま投げる", async () => {

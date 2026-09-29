@@ -11,6 +11,7 @@ import {
 } from "@/api/services/admin-service";
 import { USER_KINDS } from "@/shared/dto/admin";
 import { currentSession } from "../access-control.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 // 管理者ページ（/admin）の API。どれも access: "admin"（role = 'admin' だけ）。
 // 画面側でもメニューを出し分けているが、守るのはサーバー側（access-control.ts）。
@@ -70,7 +71,7 @@ export function registerAdminRoutes(app: FastifyInstance) {
   app.get("/api/admin/users", { config: { access: "admin" } }, async (request, reply) => {
     const parsed = listUsersQuerySchema.safeParse(request.query);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     return listAdminUsers(parsed.data);
@@ -80,7 +81,7 @@ export function registerAdminRoutes(app: FastifyInstance) {
     const session = currentSession(request);
 
     const params = userIdParamsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
 
     const outcome = await banUser(params.data.id, session.user.id);
     if (outcome.result !== "ok") return sendUserActionFailure(reply, outcome);
@@ -95,7 +96,7 @@ export function registerAdminRoutes(app: FastifyInstance) {
     const session = currentSession(request);
 
     const params = userIdParamsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
 
     const outcome = await unbanUser(params.data.id);
     if (outcome.result !== "ok") return sendUserActionFailure(reply, outcome);
@@ -108,9 +109,9 @@ export function registerAdminRoutes(app: FastifyInstance) {
     const session = currentSession(request);
 
     const params = userIdParamsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: params.error.issues });
+    if (!params.success) return sendValidationError(reply, params.error);
     const body = deleteUserBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: body.error.issues });
+    if (!body.success) return sendValidationError(reply, body.error);
 
     const outcome = await deleteUser(params.data.id, session.user.id, body.data.email);
     if (outcome.result !== "ok") return sendUserActionFailure(reply, outcome);

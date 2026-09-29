@@ -40,22 +40,20 @@ func unescapeQuery(s string) string {
 	return s
 }
 
-// validationIssue は Zod 4 の issue（error.issues の1件）と同じ形。
-// 画面は 400 の本文の error をそのまま扱わないが、Node と応答を揃えておくと
-// 振り分けを行き来しても利用者から見た動きが変わらない。
-type validationIssue struct {
-	Origin   string   `json:"origin,omitempty"`
-	Expected string   `json:"expected,omitempty"`
-	Code     string   `json:"code"`
-	Format   string   `json:"format,omitempty"`
-	Pattern  string   `json:"pattern,omitempty"`
-	Path     []string `json:"path"`
-	Message  string   `json:"message"`
+// validationError は入力チェックで弾いたときの 400 の本文（JUK-76）。Node の routes/validation-error.ts と同じ形。
+//   - Error：画面にそのまま出す文言
+//   - Code ：機械が読む種類。自分で書いた規則は名前（range_end_before_start など）、
+//     組み込みのチェックは Zod の code（invalid_format・invalid_type など）と同じ値
+//   - Field：どの項目か。項目に結びつかなければ null
+type validationError struct {
+	Error string  `json:"error"`
+	Code  string  `json:"code"`
+	Field *string `json:"field"`
 }
 
-// writeValidationError は Node の reply.code(400).send({ error: parsed.error.issues }) にあたる。
-func writeValidationError(w http.ResponseWriter, issues []validationIssue) {
-	writeJSON(w, http.StatusBadRequest, map[string][]validationIssue{"error": issues})
+// writeValidationError は 400 を返す。Node と同じく、弾いた理由の最初の1件だけを返す。
+func writeValidationError(w http.ResponseWriter, code, field, message string) {
+	writeJSON(w, http.StatusBadRequest, validationError{Error: message, Code: code, Field: &field})
 }
 
 // ymdPattern は Node の ymdField（z.string().regex(/^\d{4}-\d{2}-\d{2}$/)）と同じ形。
@@ -71,13 +69,10 @@ type dateRangeQuery struct {
 
 // readDateRangeQuery は ?from=&to= を読む。形が不正なら 400 を送って false を返す。
 // Node の rangeQuerySchema（routes/study-logs.ts・study-plans.ts）と同じ判定で、
-// 不正な項目が複数あれば from → to の順に全部返す（Zod と同じ）。
+// 不正な項目が複数あれば from → to の順に見て、最初の1件を返す（Node と同じ）。
 func readDateRangeQuery(w http.ResponseWriter, r *http.Request) (dateRangeQuery, bool) {
 	q := parseQuery(r.URL.RawQuery)
-	var (
-		out    dateRangeQuery
-		issues []validationIssue
-	)
+	var out dateRangeQuery
 	for _, f := range []struct {
 		key string
 		dst **string
@@ -86,28 +81,15 @@ func readDateRangeQuery(w http.ResponseWriter, r *http.Request) (dateRangeQuery,
 		switch {
 		case !ok:
 		case len(values) > 1:
-			issues = append(issues, validationIssue{
-				Expected: "string",
-				Code:     "invalid_type",
-				Path:     []string{f.key},
-				Message:  "Invalid input: expected string, received array",
-			})
+			// 同じキーが2回以上あると Fastify では配列になり、Zod の z.string() が invalid_type で弾く。
+			writeValidationError(w, "invalid_type", f.key, "Invalid input: expected string, received array")
+			return dateRangeQuery{}, false
 		case !ymdPattern.MatchString(values[0]):
-			issues = append(issues, validationIssue{
-				Origin:  "string",
-				Code:    "invalid_format",
-				Format:  "regex",
-				Pattern: `/^\d{4}-\d{2}-\d{2}$/`,
-				Path:    []string{f.key},
-				Message: ymdMessage,
-			})
+			writeValidationError(w, "invalid_format", f.key, ymdMessage)
+			return dateRangeQuery{}, false
 		default:
 			*f.dst = &values[0]
 		}
-	}
-	if len(issues) > 0 {
-		writeValidationError(w, issues)
-		return dateRangeQuery{}, false
 	}
 	return out, true
 }

@@ -2,13 +2,15 @@
 //
 // これを作る前は、res.ok の確認とエラーメッセージの取り出しが呼び出し側に
 // 4通り散っていた（固定文言で throw / err.error ?? 既定値 / typeof ガード /
-// responseError() の重複定義）。API は 400 のとき {error: string} を返す場合と
-// {error: ZodIssue[]} を返す場合があり、その差をどこで吸収するかが決まって
-// いなかったのが原因。吸収はこのファイルの中だけでやる。
+// responseError() の重複定義）。吸収はこのファイルの中だけでやる。
+//
+// API のエラーの本文は {error: 文言} で、入力チェックの 400 はさらに code（種類）と
+// field（項目）を持つ（JUK-76。Node の routes/validation-error.ts、Go も同じ形）。
+// 画面に出すのは error の文言。以前は 400 で Zod の issue の配列を返していた。
 
 // サーバーが返したエラー。status を持たせているのは、呼び出し側が 409 などを
 // 特別扱いできるようにするため（例: 志望校の重複登録はエラーにせず「登録済み」
-// として扱う）。body は Zod の issue 配列をそのまま見たいときのために残す。
+// として扱う）。body は code や field を見たいときのために残す。
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
@@ -45,21 +47,11 @@ async function readBody(response: Response): Promise<unknown> {
   }
 }
 
-type IssueLike = { message?: unknown };
-
-// {error: string} と {error: ZodIssue[]} の両方から、画面に出す1行を取り出す。
-// どちらでもなければ呼び出し側の既定文言に落とす。
+// 本文の error（文言）を画面に出す1行にする。無ければ呼び出し側の既定文言に落とす。
 function errorMessage(body: unknown, fallback: string): string {
   const error = (body as { error?: unknown } | undefined)?.error;
 
   if (typeof error === "string" && error !== "") return error;
-
-  if (Array.isArray(error)) {
-    const issue = (error as IssueLike[]).find(
-      (candidate) => typeof candidate?.message === "string" && candidate.message !== ""
-    );
-    if (issue) return issue.message as string;
-  }
 
   return fallback;
 }

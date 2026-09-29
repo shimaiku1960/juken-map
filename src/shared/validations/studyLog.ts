@@ -6,7 +6,7 @@ import { todayYmdTokyo } from "@/shared/date";
 // 科目：固定リストの値 or null（未設定）
 const subjectField = z
   .string()
-  .refine((v) => SUBJECT_VALUES.includes(v), "科目の値が不正です")
+  .refine((v) => SUBJECT_VALUES.includes(v), { message: "科目の値が不正です", params: { code: "invalid_subject" } })
   .nullable()
   .optional();
 
@@ -18,7 +18,7 @@ export const createStudyLogSchema = z
       .min(1, "日付を選択してください")
       .refine(
         (date) => date <= todayYmdTokyo(),
-        "未来日は実績として記録できません"
+        { message: "未来日は実績として記録できません", params: { code: "future_date" } }
       ), // "YYYY-MM-DD"
     minutes: z
       .number({ message: "学習時間を入力してください" })
@@ -31,7 +31,7 @@ export const createStudyLogSchema = z
     rangeEnd: z.number().int().positive().nullable().optional(),
     rangeUnit: z
       .string()
-      .refine((v) => RANGE_UNIT_VALUES.includes(v), "単位の値が不正です")
+      .refine((v) => RANGE_UNIT_VALUES.includes(v), { message: "単位の値が不正です", params: { code: "invalid_range_unit" } })
       .nullable()
       .optional(),
     memo: z
@@ -49,6 +49,7 @@ export const createStudyLogSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "範囲は開始と終了の両方を入力してください",
+        params: { code: "range_incomplete" },
         path: [hasStart ? "rangeEnd" : "rangeStart"],
       });
     }
@@ -58,6 +59,7 @@ export const createStudyLogSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "終了は開始以上にしてください",
+        params: { code: "range_end_before_start" },
         path: ["rangeEnd"],
       });
     }
@@ -67,6 +69,7 @@ export const createStudyLogSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "単位を選択してください",
+        params: { code: "range_unit_required" },
         path: ["rangeUnit"],
       });
     }
@@ -86,7 +89,7 @@ export const completeStudyPlanSchema = z
     rangeEnd: z.number().int().positive().nullable().optional(),
     rangeUnit: z
       .string()
-      .refine((v) => RANGE_UNIT_VALUES.includes(v), "単位の値が不正です")
+      .refine((v) => RANGE_UNIT_VALUES.includes(v), { message: "単位の値が不正です", params: { code: "invalid_range_unit" } })
       .nullable()
       .optional(),
     memo: z.string().max(500, "500文字以内で入力してください").trim().optional(),
@@ -98,6 +101,7 @@ export const completeStudyPlanSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "範囲は開始と終了の両方を入力してください",
+        params: { code: "range_incomplete" },
         path: [hasStart ? "rangeEnd" : "rangeStart"],
       });
     }
@@ -105,6 +109,7 @@ export const completeStudyPlanSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "終了は開始以上にしてください",
+        params: { code: "range_end_before_start" },
         path: ["rangeEnd"],
       });
     }
@@ -112,6 +117,7 @@ export const completeStudyPlanSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "単位を選択してください",
+        params: { code: "range_unit_required" },
         path: ["rangeUnit"],
       });
     }

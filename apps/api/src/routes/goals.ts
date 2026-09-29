@@ -10,6 +10,7 @@ import {
 } from "@/api/services/goal-service";
 import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 export function registerGoalRoutes(app: FastifyInstance) {
   app.get("/api/goals", { config: { access: "user" } }, async (request) => {
@@ -23,7 +24,7 @@ export function registerGoalRoutes(app: FastifyInstance) {
 
     const parsed = goalSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     const outcome = await createGoal({
@@ -45,7 +46,7 @@ export function registerGoalRoutes(app: FastifyInstance) {
 
     const parsed = updateGoalSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     const goal = await findOwnedGoal(id, session.user.id);
@@ -64,7 +65,7 @@ export function registerGoalRoutes(app: FastifyInstance) {
 
     const parsed = patchGoalSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     const goal = await findOwnedGoal(id, session.user.id);

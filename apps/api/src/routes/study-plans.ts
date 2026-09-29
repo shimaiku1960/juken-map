@@ -17,6 +17,7 @@ import {
 import { countOwnedTextbooks } from "@/api/services/textbook-service";
 import { currentSession } from "../access-control.ts";
 import { readIdParam } from "./params.ts";
+import { sendValidationError } from "./validation-error.ts";
 
 // 期間を省いて呼ばれたときの幅。予定は未来にもあるので前後に取る。画面はどれも
 // 明示して呼ぶので、これは古いクライアントや手で叩いたときのための既定値。
@@ -38,7 +39,7 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
 
     const parsed = rangeQuerySchema.safeParse(request.query);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     // 今日は日本時間で決める（利用者も通知も日本時間で動いている）。
@@ -54,7 +55,7 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
 
     const parsed = createStudyPlansSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     // 参考書は他人のIDを混ぜられないよう、自分の所有分だけを許可する
@@ -90,7 +91,7 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
 
     const parsed = updateStudyPlanSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues });
+      return sendValidationError(reply, parsed.error);
     }
 
     const plan = await findOwnedStudyPlan(id, session.user.id);
@@ -143,7 +144,7 @@ export function registerStudyPlanRoutes(app: FastifyInstance) {
 
       const parsed = completeStudyPlanSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: parsed.error.issues });
+        return sendValidationError(reply, parsed.error);
       }
 
       const outcome = await completeOwnedStudyPlan({
