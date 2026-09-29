@@ -128,6 +128,10 @@ func registerRoutes(rt *router, db *sql.DB) {
 
 	prefs := &notificationPreferenceHandlers{store: &notificationPreferenceStore{db: db}}
 	rt.user("GET /api/notification-preferences", prefs.get)
+
+	universities := &universityHandlers{store: newUniversityStore(db)}
+	rt.user("GET /api/universities", universities.list)
+	rt.user("GET /api/universities/{id}", universities.detail)
 }
 
 type serverOptions struct {

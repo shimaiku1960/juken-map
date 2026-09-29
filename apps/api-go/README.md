@@ -3,7 +3,8 @@
 Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
 今は `GET /api/dashboard`（JUK-69）と、学習記録・予定の一覧（`GET /api/study-logs`・`/api/study-logs/daily`・
 `/api/study-plans`）、志望校（`GET /api/goals`・`/api/goals/first-choice`）、参考書（`GET /api/textbooks`・`/api/textbook-masters`）、
-通知設定（`GET /api/notification-preferences`）を持つ（JUK-73）。本番では nginx がこれらのパスだけを Go へ振り分け、
+通知設定（`GET /api/notification-preferences`）、大学（`GET /api/universities`・`/api/universities/{id}`）を
+持つ（JUK-73）。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
 ログインの発行・管理画面・外部連携は Node に残す。Go は Node（Better Auth）が発行した
@@ -45,7 +46,8 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
        ├─ /api/study-logs・/daily・/api/study-plans・/api/goals・/first-choice・
-       │  /api/textbooks・/api/textbook-masters・/api/notification-preferences
+       │  /api/textbooks・/api/textbook-masters・/api/notification-preferences・
+       │  /api/universities・/api/universities/{id}
        │    GET・HEAD                                 ─▶ juken-map-go
        │    それ以外（POST など）                      ─▶ juken-map（Node）
        └─ それ以外                                     ─▶ juken-map（3000 か 3001、Node）
@@ -56,7 +58,10 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
   Node と Go の両方のスモークテストが通ったときだけ、nginx を1回の reload で両方とも切り替える
 - 振り分けるパスは `infra/nginx/juken-map-go-routes.conf`。ルートを移したらここに足す。
   Node に戻す手順は `infra/nginx/README.md` の「Go の振り分け」
-- 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない
+- 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない。
+  例外は大学の一覧で、全員に同じ 80KB なので、Go が1回だけ gzip にした形を持って返す
+- 大学の一覧は Go のメモリに1分持つ。管理画面（Node）で大学・学部・タグを編集しても Go のキャッシュは
+  捨てられないので、大学を探す画面に出るまで最大1分かかる。管理 API を Go へ移したら（JUK-78）、編集のときに捨てる
 - RDS へは TLS で繋ぐ（`db.go`。ホスト名が `.rds.amazonaws.com` のときだけ）。証明書は
   `rds-ca-ap-northeast-1.pem` を実行ファイルに埋め込む
 - ログとメトリクスは Node と同じ `job="juken-map-api"` で Grafana Cloud に入り、
@@ -132,6 +137,7 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `goals.go` | 志望校の一覧と第一志望（応答の型と SQL） | `services/goal-service.ts`・`routes/goals.ts`・`home.ts` の GET |
 | `textbooks.go` | 参考書の一覧と参考書マスター（応答の型と SQL） | `services/textbook-service.ts`・`routes/textbooks.ts`・`textbook-masters.ts` の GET |
 | `notification_preferences.go` | 通知設定（保存していなければ全部 false） | `routes/notification-preferences.ts` の GET |
+| `universities.go` | 大学の一覧（メモリに1分持ち、ETag と 304、gzip 済みを返す）と大学詳細 | `services/university-service.ts`・`routes/universities.ts` |
 | `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
 | `parity_test.go`・`parity.sh` | Node と応答を比べる | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
