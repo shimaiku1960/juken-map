@@ -1,7 +1,8 @@
 # api-go
 
 Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
-今は `GET /api/dashboard` だけを持つ（JUK-69）。本番では nginx がこのパスだけを Go へ振り分け、
+今は `GET /api/dashboard`（JUK-69）と、学習記録・予定の一覧（`GET /api/study-logs`・`/api/study-logs/daily`・
+`/api/study-plans`、JUK-73）を持つ。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
 ログインの発行・管理画面・外部連携は Node に残す。Go は Node（Better Auth）が発行した
@@ -41,8 +42,11 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 ## 本番
 
 ```
-nginx ─┬─ /api/dashboard・/api/health/go ─▶ juken-map-go（127.0.0.1:8080 か 8081）
-       └─ それ以外                         ─▶ juken-map（3000 か 3001、Node）
+nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
+       ├─ /api/study-logs・/daily・/api/study-plans
+       │    GET・HEAD                                 ─▶ juken-map-go
+       │    それ以外（POST など）                      ─▶ juken-map（Node）
+       └─ それ以外                                     ─▶ juken-map（3000 か 3001、Node）
 ```
 
 - イメージはこのディレクトリの `Dockerfile` で作り、ECR の `juken-map-go` に置く（`deploy.yml`）。
@@ -71,8 +75,16 @@ rt.admin("GET /api/admin/users", adminUsers.serve)       // 管理者だけ
 path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。想定外の失敗は
 `internalError(w, r, err)` に渡す（500 を返し、原因はログにだけ残す）。
 
-移したら、`parity_test.go` の `parityCases` に1行足し、Node と応答が同じかを確かめる。
-本番に出すときは `infra/nginx/juken-map-go-routes.conf` にパスを足す。
+移したら、次の3か所に足す。
+
+1. `main.go` の `registerRoutes` と、`main_test.go` の一覧（入口の種類を Node と揃える）
+2. `parity_test.go` の `parityCases`（Node と応答が同じかを確かめる。不正な入力のケースも）
+3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスに書き込みが残っているなら、
+   `/api/study-logs` と同じく GET・HEAD 以外を `@node` へ回す
+
+クエリ文字列は `r.URL.Query()` ではなく `parseQuery`（`query.go`）で読む。Go の標準は `;` を含む組や
+壊れた `%` を黙って捨てるが、Node（Fastify）は値として受け取るので、そのままでは応答がずれる。
+不正な入力の 400 は、Node の Zod と同じ形（`validationIssue`）で返す。
 
 ## Node と応答を比べる
 
@@ -88,6 +100,7 @@ Node と Go を立ち上げ、同じリクエストを送って、ステータ�
 
 ```sh
 bash apps/api-go/compare-cpu.sh            # worktree のルートから。N=500 件 × 交互3回
+API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compare-cpu.sh
 ```
 
 負荷試験（k6）は使わない。手元で 300 RPS をかけると Mac 全体が詰まり、ほかの作業が
@@ -111,7 +124,10 @@ bash apps/api-go/compare-cpu.sh            # worktree のルートから。N=500
 | `db.go` | 接続プール、RDS への TLS、DATETIME の文字列を ISO にする | `infra/db.ts` |
 | `Dockerfile` | 本番のイメージ（distroless の static に実行ファイル1つ） | ルートの `Dockerfile` |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし | `src/shared/date.ts` |
-| `dashboard.go` | 応答の型、3本の SQL を同時に流して組み立てる | `services/dashboard-service.ts` ほか |
+| `dashboard.go` | ダッシュボードの応答の型、3本の SQL を同時に流して組み立てる | `services/dashboard-service.ts` |
+| `study.go` | 学習記録・予定の応答の型と SQL（ダッシュボードと一覧で共有） | `study-log-service.ts`・`study-plan-service.ts` の list 系 |
+| `study_handlers.go` | 学習記録・予定の一覧の API | `routes/study-logs.ts`・`study-plans.ts` の GET |
+| `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
 | `parity_test.go`・`parity.sh` | Node と応答を比べる | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
 

@@ -1,6 +1,6 @@
 // api-go は、Node（apps/api）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
-// 最初の1本として GET /api/dashboard を持つ（JUK-69）。本番では nginx がこのパスだけを
-// Go へ振り分ける（infra/nginx/juken-map-go-routes.conf、JUK-72）。
+// 最初の1本の GET /api/dashboard（JUK-69）に続けて、読み取りの API を移している（JUK-73）。
+// 本番では nginx が移したパスだけを Go へ振り分ける（infra/nginx/juken-map-go-routes.conf、JUK-72）。
 //
 // ログインの発行・管理画面・外部連携は Node に残す。セッションは Node 側（Better Auth）が
 // 発行したものを、同じ DB と同じ BETTER_AUTH_SECRET で確かめるだけ。
@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -49,8 +50,7 @@ func run() error {
 
 	auth := &sessionAuth{db: db, secret: []byte(secret)}
 	rt := newRouter(auth.load)
-	rt.public("GET /api/health", healthHandler(db))
-	rt.user("GET /api/dashboard", (&dashboardHandler{db: db}).serve)
+	registerRoutes(rt, db)
 
 	m := newMetrics()
 	srv := &http.Server{
@@ -103,6 +103,20 @@ func run() error {
 		errs = append(errs, s.Shutdown(shutdownCtx))
 	}
 	return errors.Join(errs...)
+}
+
+// registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
+// infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
+// 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
+func registerRoutes(rt *router, db *sql.DB) {
+	study := &studyStore{db: db}
+	studyHandlers := &studyHandlers{store: study}
+
+	rt.public("GET /api/health", healthHandler(db))
+	rt.user("GET /api/dashboard", (&dashboardHandler{store: study}).serve)
+	rt.user("GET /api/study-logs", studyHandlers.listLogs)
+	rt.user("GET /api/study-logs/daily", studyHandlers.listDaily)
+	rt.user("GET /api/study-plans", studyHandlers.listPlans)
 }
 
 type serverOptions struct {

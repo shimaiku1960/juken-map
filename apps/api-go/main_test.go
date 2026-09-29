@@ -1,0 +1,29 @@
+package main
+
+import "testing"
+
+func TestRegisteredRoutes(t *testing.T) {
+	// Go が受け持つルートと入口の種類。Node の同じルートの config.access と同じであること。
+	// ルートを移したらここに1行足す（parity_test.go の parityCases と nginx の振り分けも）。
+	// 一覧が変わるとこのテストが落ちるので、入口の種類を取り違えたまま足すことはできない。
+	want := []routeEntry{
+		{"GET /api/health", accessPublic},
+		{"GET /api/dashboard", accessUser},
+		{"GET /api/study-logs", accessUser},
+		{"GET /api/study-logs/daily", accessUser},
+		{"GET /api/study-plans", accessUser},
+	}
+
+	// ハンドラは呼ばないので、DB は nil のままでよい。
+	rt := newRouter(fakeSessions(nil))
+	registerRoutes(rt, nil)
+
+	if len(rt.routes) != len(want) {
+		t.Fatalf("routes = %v\nwant %v", rt.routes, want)
+	}
+	for i := range want {
+		if rt.routes[i] != want[i] {
+			t.Errorf("routes[%d] = %v, want %v", i, rt.routes[i], want[i])
+		}
+	}
+}
