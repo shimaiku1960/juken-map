@@ -36,6 +36,16 @@ jobs:
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
+      # Go の API（apps/api-go、JUK-72）。Node と同じタグにして、同じコミットの組で並べて動かす。
+      - name: Build and push (Go)
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: juken-map-go
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG apps/api-go
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -64,7 +74,9 @@ jobs:
           # Alloy（可観測性の収集役）の設定も一緒に運ぶ。EC2 に置き去りの設定ファイルを作らず、
           # リポジトリの中身がそのまま本番の設定になるようにする。
           alloy_config_b64="$(base64 < observability/alloy/production.alloy | tr -d '\n')"
-          remote_command="echo '$deploy_script_b64' | base64 -d | bash -s -- '$IMAGE_TAG' '$alloy_config_b64'"
+          # nginx で Go へ振り分けるパス。これも本番に手で置かず、リポジトリの中身をそのまま使う。
+          go_routes_b64="$(base64 < infra/nginx/juken-map-go-routes.conf | tr -d '\n')"
+          remote_command="echo '$deploy_script_b64' | base64 -d | bash -s -- '$IMAGE_TAG' '$alloy_config_b64' '$go_routes_b64'"
           parameters="$(jq -cn --arg command "$remote_command" '{commands: [$command]}')"
 
           command_id="$(aws ssm send-command \

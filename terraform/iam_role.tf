@@ -23,7 +23,7 @@ resource "aws_iam_role" "github_actions_ecr" {
   })
 }
 
-# CI が ECR でやるのは、ログインと juken-map リポジトリへのイメージの push だけ
+# CI が ECR でやるのは、ログインと juken-map・juken-map-go リポジトリへのイメージの push だけ
 # （BatchGetImage は push のときにマニフェストの有無を確かめるために使う）。
 # 以前は AWS 管理ポリシー AmazonEC2ContainerRegistryPowerUser（全リポジトリの読み書き）だった。
 # 本番の EC2 が pull するのは EC2 のロール（iam_ec2.tf）なので、ここに pull は要らない。
@@ -50,7 +50,7 @@ resource "aws_iam_role_policy" "github_actions_ecr_push" {
           "ecr:CompleteLayerUpload",
           "ecr:PutImage",
         ]
-        Resource = aws_ecr_repository.juken_map.arn
+        Resource = [aws_ecr_repository.juken_map.arn, aws_ecr_repository.juken_map_go.arn]
       }
     ]
   })

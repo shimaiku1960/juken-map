@@ -117,6 +117,43 @@ server {
 | 旧（同じポートで stop → run） | 53件中 **44件が502** |
 | 新（別ポート → 向け替え） | 100件中 **0件** ✅ |
 
+## Go の振り分け（2026-09-29 追加、JUK-72）
+
+一部のパスだけを Go（`apps/api-go`）が返す。どのパスかは **このリポジトリの
+`juken-map-go-routes.conf` が正**で、デプロイのたびに本番の `/etc/nginx/juken-map/go-routes.conf` へ置かれる。
+
+```
+                         ┌─ go-routes.conf のパス（/api/dashboard・/api/health/go）
+[nginx] 443 の server ───┤      → upstream juken_map_go  → 127.0.0.1:8080 か 8081（juken-map-go）
+                         └─ location /（それ以外）
+                                → upstream juken_map_app → 127.0.0.1:3000 か 3001（juken-map、Node）
+```
+
+- Go の upstream は `conf.d/juken-map-go-upstream.conf`。Node と同じく、デプロイのたびに空いている方へ入れ替わる
+- 初回のデプロイで、サイト設定の `location / {` の直前に `include /etc/nginx/juken-map/go-routes.conf;` を
+  1行だけ差し込む（差し込む前の設定は `sites-available/default.bak-日時` に残る）。
+  `location /` が1つでなければ、どこに入れるか決められないので何もせずに止まる
+- `location = /api/dashboard` の完全一致は `location /` より優先されるので、include の位置で結果は変わらない
+- デプロイは Node と Go の新しいコンテナを両方起こし、両方のスモークテストが通ったときだけ、
+  2つの upstream と振り分けをまとめて書き換えて1回だけ reload する。
+  `nginx -t` が通らなければ3つとも元に戻す（`scripts/test-deploy-go-routes.sh` で確かめている）
+
+### Node に戻す
+
+Node の `/api/dashboard` は消していないので、振り分けを外すだけで Node が返すようになる。
+
+- **急ぐとき（本番だけ、次のデプロイまで）**：SSM で次を流す。次のデプロイでリポジトリの中身に戻る
+
+  ```sh
+  sudo cp /etc/nginx/juken-map/go-routes.conf /tmp/go-routes.conf.bak
+  : | sudo tee /etc/nginx/juken-map/go-routes.conf
+  sudo nginx -t && sudo systemctl reload nginx
+  ```
+
+  戻すのをやめるときは、`/tmp/go-routes.conf.bak` を書き戻して reload する
+- **ずっと戻すとき**：`juken-map-go-routes.conf` から location を消して main に入れる。
+  Go のコンテナは動き続けるが、誰からも呼ばれなくなる
+
 ## Step 3 で必要になる変更
 
 現在は `location /` が全部 3000 番へ流している。分離後はパスで振り分ける。
