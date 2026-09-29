@@ -85,6 +85,11 @@ jobs:
       - name: Deploy script DB credentials
         run: bash scripts/test-deploy-db-users.sh
 
+      # デプロイスクリプトが nginx の Go への振り分けをどう扱うか（JUK-72）。本番のサイト設定は
+      # 手で置かれたものなので、差し込みを誤ると全部の応答が止まる。触る前に止まる条件も見る。
+      - name: Deploy script Go routes
+        run: bash scripts/test-deploy-go-routes.sh
+
       # 本体のチェックアウトを main 以外へ動かすコマンドを止める Claude Code のフック（JUK-42）。
       - name: Main checkout guard hook
         run: bash scripts/test-guard-main-checkout.sh
@@ -144,6 +149,10 @@ jobs:
       # pnpm audit の Go 版。実際に呼んでいる関数に既知の脆弱性があれば落とす（dev-standards 06 F3）。
       - name: Vulnerability check
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      # 本番のイメージ（deploy.yml が main で作る）が作れることを、マージの前に確かめる。
+      - name: Docker build
+        run: docker build -t juken-map-go:ci .
 
   # E2E（Playwright）。使い捨ての MySQL 8.4 を立て、マイグレーション→seed→
   # SPA のビルド→Fastify 起動で本番相当の構成を立ち上げ、実ブラウザで主要導線を検証する。

@@ -7,6 +7,7 @@
 #   アプリのコンテナには .env の接続先ではなくアプリ用の DATABASE_URL が渡る
 # - 2つとも無ければ、これまで通り .env の DATABASE_URL で起動する
 # - 片方だけなら、何も起動せずに止まる
+# あわせて、Go のコンテナ（JUK-72）には Go が読む値だけが渡り、LINE などの秘密が渡らないことも見る。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -32,13 +33,17 @@ for arg in "$@"; do
 done
 { echo "run:$prev"; sort "$env_file"; } >> "$LOG"
 EOF
-printf '#!/usr/bin/env bash\necho 200\n' > "$WORK/bin/curl"
+# Go のダッシュボードは Cookie 無しなので 401、それ以外は 200 を返す（スモークテストが通る形）。
+cat > "$WORK/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+case "${*: -1}" in */api/dashboard) echo 401 ;; *) echo 200 ;; esac
+EOF
 for c in nginx systemctl sleep; do printf '#!/usr/bin/env bash\n' > "$WORK/bin/$c"; done
 chmod +x "$WORK/bin/"*
 
 printf 'DATABASE_URL=mysql://admin:ADMIN@rds/juken_map\nBETTER_AUTH_SECRET=s\n' > "$WORK/env"
 printf 'upstream juken_map_app {\n    server 127.0.0.1:3000;\n}\n' > "$WORK/upstream.conf"
-printf 'proxy_pass http://juken_map_app;\n' > "$WORK/site"
+printf 'location / {\n    proxy_pass http://juken_map_app;\n}\n' > "$WORK/site"
 
 LINE='"LINE_CHANNEL_SECRET":"l","LINE_CHANNEL_ACCESS_TOKEN":"t"'
 APP='"DATABASE_URL":"mysql://juken_app:APP@rds/juken_map"'
@@ -53,6 +58,7 @@ check() {  # $1=見出し $2=シークレットの JSON $3=期待する記録
   base64 < "$DEPLOY" | tr -d '\n' | base64 -d \
     | PATH="$WORK/bin:$PATH" LOG="$WORK/log" SECRET_FILE="$WORK/secret" ENV_FILE="$WORK/env" \
       UPSTREAM_CONF="$WORK/upstream.conf" SITE_CONF="$WORK/site" \
+      GO_UPSTREAM_CONF="$WORK/go-upstream.conf" GO_ROUTES_CONF="$WORK/go-routes.conf" \
       bash -s -- dummy-tag "" > "$WORK/out" 2>&1 || status=$?
   local got
   got="$(cat "$WORK/log"; echo "exit=$status")"
@@ -75,6 +81,11 @@ DATABASE_URL=mysql://juken_app:APP@rds/juken_map
 LINE_CHANNEL_ACCESS_TOKEN=t
 LINE_CHANNEL_SECRET=l
 SKIP_MIGRATIONS=1
+run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:dummy-tag
+BETTER_AUTH_SECRET=s
+DATABASE_URL=mysql://juken_app:APP@rds/juken_map
+GOMEMLIMIT=96MiB
+NODE_ENV=production
 exit=0"
 
 check "2つとも無ければ、これまで通り .env の接続先で起動時に当てる" "{$LINE}" "run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:dummy-tag
@@ -82,6 +93,11 @@ BETTER_AUTH_SECRET=s
 DATABASE_URL=mysql://admin:ADMIN@rds/juken_map
 LINE_CHANNEL_ACCESS_TOKEN=t
 LINE_CHANNEL_SECRET=l
+run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:dummy-tag
+BETTER_AUTH_SECRET=s
+DATABASE_URL=mysql://admin:ADMIN@rds/juken_map
+GOMEMLIMIT=96MiB
+NODE_ENV=production
 exit=0"
 
 check "アプリ用だけなら、何も起動せずに止まる" "{$LINE,$APP}" "exit=1"

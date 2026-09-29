@@ -19,17 +19,32 @@ discovery.relabel "api" {
   targets = discovery.docker.containers.targets
 
   // 集めるのはアプリのコンテナだけ（Alloy 自身のログを送り返して増やさない）。
-  // 無停止デプロイの入れ替え中だけ、新しいコンテナが juken-map-next という名前で動く。
+  // Node は juken-map、Go（apps/api-go、JUK-72）は juken-map-go。
+  // 無停止デプロイの入れ替え中だけ、新しいコンテナが -next の付いた名前で動く。
   // ここを広げておかないと、切り替わるまでの起動ログが Loki に残らない。
   rule {
     source_labels = ["__meta_docker_container_name"]
-    regex         = "/juken-map(-next)?"
+    regex         = "/juken-map(-go)?(-next)?"
     action        = "keep"
   }
 
+  // job は Node と Go で同じにする。今までのダッシュボードとアラート（job で絞っている）が
+  // Go の分も含めて数えるようにするため。どちらが書いたかは runtime で分ける。
   rule {
     target_label = "job"
     replacement  = "juken-map-api"
+  }
+
+  rule {
+    target_label = "runtime"
+    replacement  = "node"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/juken-map-go(-next)?"
+    target_label  = "runtime"
+    replacement   = "go"
   }
 }
 
@@ -89,15 +104,27 @@ loki.write "cloud" {
 // アプリが METRICS_PORT で出す /metrics を、同じ Docker ネットワークの中から読む。
 // 外（nginx 経由）には出さないので、内部の数字が公開されることはない。
 
-// 入れ替え中の新コンテナ（juken-map-next）はここでは拾わない。切り替え後に
-// deploy-ec2.sh が juken-map へ名前を戻すので、数十秒ぶんだけ間が空く。
+// 入れ替え中の新コンテナ（-next）はここでは拾わない。切り替え後に
+// deploy-ec2.sh が juken-map・juken-map-go へ名前を戻すので、数十秒ぶんだけ間が空く。
 // 30秒間隔の粗い収集なので、1点欠けても率の監視には響かない。
+//
+// Go もメトリクスの名前とラベルを Node と揃えている（apps/api-go/metrics.go）。job を同じにして
+// 今までのパネルとアラートにそのまま載せ、runtime で Node と Go を分けて見られるようにする。
 prometheus.scrape "api" {
-  targets = [{
-    __address__ = "juken-map:9464",
-    job         = "juken-map-api",
-    env         = "production",
-  }]
+  targets = [
+    {
+      __address__ = "juken-map:9464",
+      job         = "juken-map-api",
+      env         = "production",
+      runtime     = "node",
+    },
+    {
+      __address__ = "juken-map-go:9464",
+      job         = "juken-map-api",
+      env         = "production",
+      runtime     = "go",
+    },
+  ]
 
   // 無料枠に収めるため、手元（5秒）より粗くする。エラー率の監視には十分。
   scrape_interval = "30s"

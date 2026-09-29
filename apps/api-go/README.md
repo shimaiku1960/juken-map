@@ -1,7 +1,8 @@
 # api-go
 
 Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
-今は `GET /api/dashboard` だけを持ち（JUK-69）、本番にはまだ出していない。
+今は `GET /api/dashboard` だけを持つ（JUK-69）。本番では nginx がこのパスだけを Go へ振り分け、
+それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
 ログインの発行・管理画面・外部連携は Node に残す。Go は Node（Better Auth）が発行した
 セッション Cookie を、同じ DB と同じ `BETTER_AUTH_SECRET` で確かめるだけ。
@@ -34,6 +35,27 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 | `OVERLOAD_MAX_IN_FLIGHT` | 160 | 同時に処理する件数の上限。超えたら 503 |
 | `LOG_LEVEL` | info | pino と同じ名前（debug・info・warn・error） |
 | `NODE_ENV` | なし | `production` のとき reqId を UUID のまま出す（開発は8文字） |
+| `DATABASE_URL` | なし | 必須。Node と同じ形（`mysql://…`） |
+| `BETTER_AUTH_SECRET` | なし | 必須。Node と同じ値（Cookie の署名を確かめる） |
+
+## 本番
+
+```
+nginx ─┬─ /api/dashboard・/api/health/go ─▶ juken-map-go（127.0.0.1:8080 か 8081）
+       └─ それ以外                         ─▶ juken-map（3000 か 3001、Node）
+```
+
+- イメージはこのディレクトリの `Dockerfile` で作り、ECR の `juken-map-go` に置く（`deploy.yml`）。
+  Node と同じコミットのタグで、同じデプロイ（`.github/scripts/deploy-ec2.sh`）の中で入れ替える。
+  Node と Go の両方のスモークテストが通ったときだけ、nginx を1回の reload で両方とも切り替える
+- 振り分けるパスは `infra/nginx/juken-map-go-routes.conf`。ルートを移したらここに足す。
+  Node に戻す手順は `infra/nginx/README.md` の「Go の振り分け」
+- 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない
+- RDS へは TLS で繋ぐ（`db.go`。ホスト名が `.rds.amazonaws.com` のときだけ）。証明書は
+  `rds-ca-ap-northeast-1.pem` を実行ファイルに埋め込む
+- ログとメトリクスは Node と同じ `job="juken-map-api"` で Grafana Cloud に入り、
+  `runtime="go"` で分けられる（`observability/alloy/production.alloy`）
+- 外形監視は `https://juken-map.com/api/health/go`（Go の `/api/health` を返す）
 
 ## ルートを足す
 
@@ -50,6 +72,7 @@ path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。
 `internalError(w, r, err)` に渡す（500 を返し、原因はログにだけ残す）。
 
 移したら、`parity_test.go` の `parityCases` に1行足し、Node と応答が同じかを確かめる。
+本番に出すときは `infra/nginx/juken-map-go-routes.conf` にパスを足す。
 
 ## Node と応答を比べる
 
@@ -85,7 +108,8 @@ bash apps/api-go/compare-cpu.sh            # worktree のルートから。N=500
 | `logger.go` | pino と同じ形の JSON ログ | `observability/logger.ts` |
 | `metrics.go` | Prometheus のメトリクス（名前・ラベルは Node と同じ） | `observability/metrics.ts` |
 | `http.go` | JSON の書き出し、ヘルスチェック | Fastify 本体 |
-| `db.go` | 接続プール、DATETIME の文字列を ISO にする | `infra/db.ts` |
+| `db.go` | 接続プール、RDS への TLS、DATETIME の文字列を ISO にする | `infra/db.ts` |
+| `Dockerfile` | 本番のイメージ（distroless の static に実行ファイル1つ） | ルートの `Dockerfile` |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし | `src/shared/date.ts` |
 | `dashboard.go` | 応答の型、3本の SQL を同時に流して組み立てる | `services/dashboard-service.ts` ほか |
 | `parity_test.go`・`parity.sh` | Node と応答を比べる | — |
@@ -106,8 +130,8 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 ## まだ揃えていないこと
 
-- 応答の圧縮（Node は br・gzip。Go は持たない。比べるときは `Accept-Encoding: identity`）
-- セッションの有効期限の延長（Better Auth は古くなったセッションを更新するが、Go は読むだけ）
-- RDS への TLS 接続、OpenTelemetry のトレース、リクエスト本文の読み取り（上限・JSON の検証）
-  — 本番に出すとき・書き込みの API を移すときに足す
+- 応答の圧縮（Node は br・gzip。Go は持たず、本番では nginx が gzip にする。比べるときは `Accept-Encoding: identity`）
+- セッションの有効期限の延長（Better Auth は古くなったセッションを更新するが、Go は読むだけ）。
+  画面はほかの API（Node）も呼ぶので、そちらで延長される
+- OpenTelemetry のトレース、リクエスト本文の読み取り（上限・JSON の検証）— 書き込みの API を移すときに足す
 - Node に無いもの：1リクエスト10秒の上限（DB の照会と接続待ちもここで止まる）

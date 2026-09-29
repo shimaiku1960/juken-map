@@ -1,5 +1,6 @@
 // api-go は、Node（apps/api）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
-// 最初の1本として GET /api/dashboard を持つ（JUK-69）。まだ本番には出していない。
+// 最初の1本として GET /api/dashboard を持つ（JUK-69）。本番では nginx がこのパスだけを
+// Go へ振り分ける（infra/nginx/juken-map-go-routes.conf、JUK-72）。
 //
 // ログインの発行・管理画面・外部連携は Node に残す。セッションは Node 側（Better Auth）が
 // 発行したものを、同じ DB と同じ BETTER_AUTH_SECRET で確かめるだけ。
