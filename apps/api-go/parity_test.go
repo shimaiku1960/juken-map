@@ -62,6 +62,12 @@ var parityCases = []struct {
 	{"GET", "/api/study-plans?from=2026-09-01&to=2026-04-31", []who{eachUser}},
 	{"GET", "/api/study-plans?to=2026-09-01&to=2026-09-02", []who{eachUser}},
 
+	// 志望校（JUK-73）。第一志望が無い人は null、タグの無い学部は tags: []
+	{"GET", "/api/goals", []who{anonymous, forged, unknownUser, eachUser}},
+	{"GET", "/api/goals/first-choice", []who{anonymous, eachUser}},
+	// クエリは読まない（Node も読まない）
+	{"GET", "/api/goals?status=decided", []who{eachUser}},
+
 	// どのルートにも当たらないもの。Go に無いものは Node にも無い（Node にあるものは移していないだけ）。
 	{"GET", "/api/no-such-route", []who{anonymous}},
 	{"POST", "/api/dashboard", []who{eachUser}},

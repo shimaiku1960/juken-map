@@ -12,6 +12,8 @@ func TestRegisteredRoutes(t *testing.T) {
 		{"GET /api/study-logs", accessUser},
 		{"GET /api/study-logs/daily", accessUser},
 		{"GET /api/study-plans", accessUser},
+		{"GET /api/goals", accessUser},
+		{"GET /api/goals/first-choice", accessUser},
 	}
 
 	// ハンドラは呼ばないので、DB は nil のままでよい。

@@ -2,7 +2,7 @@
 
 Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
 今は `GET /api/dashboard`（JUK-69）と、学習記録・予定の一覧（`GET /api/study-logs`・`/api/study-logs/daily`・
-`/api/study-plans`、JUK-73）を持つ。本番では nginx がこれらのパスだけを Go へ振り分け、
+`/api/study-plans`）、志望校（`GET /api/goals`・`/api/goals/first-choice`）を持つ（JUK-73）。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
 ログインの発行・管理画面・外部連携は Node に残す。Go は Node（Better Auth）が発行した
@@ -43,7 +43,7 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
-       ├─ /api/study-logs・/daily・/api/study-plans
+       ├─ /api/study-logs・/daily・/api/study-plans・/api/goals・/first-choice
        │    GET・HEAD                                 ─▶ juken-map-go
        │    それ以外（POST など）                      ─▶ juken-map（Node）
        └─ それ以外                                     ─▶ juken-map（3000 か 3001、Node）
@@ -127,6 +127,7 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `dashboard.go` | ダッシュボードの応答の型、3本の SQL を同時に流して組み立てる | `services/dashboard-service.ts` |
 | `study.go` | 学習記録・予定の応答の型と SQL（ダッシュボードと一覧で共有） | `study-log-service.ts`・`study-plan-service.ts` の list 系 |
 | `study_handlers.go` | 学習記録・予定の一覧の API | `routes/study-logs.ts`・`study-plans.ts` の GET |
+| `goals.go` | 志望校の一覧と第一志望（応答の型と SQL） | `services/goal-service.ts`・`routes/goals.ts`・`home.ts` の GET |
 | `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
 | `parity_test.go`・`parity.sh` | Node と応答を比べる | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
