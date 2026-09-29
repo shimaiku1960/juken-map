@@ -325,6 +325,9 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `GRAFANA_CLOUD_PROM_URL` / `GRAFANA_CLOUD_PROM_USER` | Prometheusのremote write先URLとユーザーID |
 | `GRAFANA_CLOUD_OTLP_URL` / `GRAFANA_CLOUD_OTLP_USER` | OTLPの送信先URLとインスタンスID |
 
+本番のアラート（5xxの割合、Goの停止）と通知先は、Grafanaの画面ではなく[terraform/grafana/](terraform/grafana/)で
+管理しています。変えるときはそこを直して`terraform plan`で差分を見てから当てます。
+
 ### 完了の確認
 
 次の状態になれば、ローカルセットアップは完了です。
@@ -473,7 +476,7 @@ db/                      # マイグレーション（SQL）と seed
 e2e/                     # Playwright E2Eテスト
 infra/nginx/             # 本番リバースプロキシ設定の記録
 scripts/                 # 補助スクリプト
-terraform/               # AWSインフラ定義
+terraform/               # AWSインフラ定義（grafana/ は Grafana Cloud のアラート）
 ```
 
 ## 主要なデータモデル
