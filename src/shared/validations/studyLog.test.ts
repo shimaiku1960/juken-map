@@ -162,3 +162,40 @@ describe("completeStudyPlanSchema", () => {
     ).toBe(false);
   });
 });
+
+describe("createStudyLogSchema の日付（JUK-75）", () => {
+  const firstIssue = (date: unknown) => {
+    const result = createStudyLogSchema.safeParse({ date, minutes: 30 });
+    if (result.success) return null;
+    const [issue] = result.error.issues;
+    return { message: issue.message, code: issue.code === "custom" ? issue.params?.code : issue.code };
+  };
+
+  it("YYYY-MM-DD の過去の日付は通す（うるう日も）", () => {
+    expect(firstIssue("2026-09-01")).toBeNull();
+    expect(firstIssue("2024-02-29")).toBeNull();
+    expect(firstIssue("2000-02-29")).toBeNull();
+  });
+
+  it.each(["1", "2026-09-3", "2026/09/01", "2026-09-01T10:00:00Z", " ", "２０２６-09-01"])(
+    "形が違う %j は弾く（以前は new Date() に渡して保存していた）",
+    (date) => {
+      expect(firstIssue(date)).toEqual({ message: "日付は YYYY-MM-DD で指定してください", code: "invalid_format" });
+    }
+  );
+
+  it.each(["2026-02-30", "2025-02-29", "1900-02-29", "2025-13-01", "2025-00-10", "2025-04-31", "2025-01-00"])(
+    "暦に無い %j は弾く",
+    (date) => {
+      expect(firstIssue(date)).toEqual({ message: "存在しない日付です", code: "invalid_date" });
+    }
+  );
+
+  it("空文字は「日付を選択してください」が先", () => {
+    expect(firstIssue("")).toEqual({ message: "日付を選択してください", code: "too_small" });
+  });
+
+  it("未来日は弾く", () => {
+    expect(firstIssue("2099-01-01")).toEqual({ message: "未来日は実績として記録できません", code: "future_date" });
+  });
+});

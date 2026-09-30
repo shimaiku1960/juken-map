@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -85,7 +87,7 @@ func (in *objectInput) boolean(key string) bool {
 	return b
 }
 
-// stringRule は z.string() に続けて書いたチェック。Zod と同じ順（型 → min → max → trim）に確かめる。
+// stringRule は z.string() に続けて書いたチェック。Zod と同じ順（型 → min → max → checks → trim）に確かめる。
 type stringRule struct {
 	// typeMessage は z.string({ message }) の文言。空なら Zod の既定の文言。
 	typeMessage string
@@ -93,37 +95,207 @@ type stringRule struct {
 	minMessage  string
 	max         int
 	maxMessage  string
+	// checks は min・max の後に書いた .regex()・.refine()。書いた順に確かめる。
+	checks []stringCheck
 	// trim は .trim()。max より後に書いているスキーマは、削る前の長さで max を確かめる（Zod と同じ）。
 	trim bool
 }
 
-// string は z.string() と stringRule のチェック。
+// stringCheck は .regex()・.refine() の1つ。ok が false なら code と message の issue になる。
+// code は .regex() なら "invalid_format"、.refine() なら params で付けた名前。
+type stringCheck struct {
+	ok            func(string) bool
+	code, message string
+}
+
+// string は必須の z.string() と stringRule のチェック。
 func (in *objectInput) string(key string, rule stringRule) string {
 	v, ok := in.value(key)
 	if !ok {
 		return ""
 	}
+	s, issue := checkString(key, v, rule)
+	in.issue = issue
+	return s
+}
+
+func checkString(key string, v any, rule stringRule) (string, *validationIssue) {
 	s, isString := v.(string)
 	if !isString {
-		in.issue = invalidType(key, "string", v)
+		issue := invalidType(key, "string", v)
 		if rule.typeMessage != "" {
-			in.issue.message = rule.typeMessage
+			issue.message = rule.typeMessage
 		}
-		return ""
+		return "", issue
 	}
 	n := codePointLength(s)
 	switch {
 	case rule.min > 0 && n < rule.min:
-		in.issue = &validationIssue{code: "too_small", field: key, message: rule.minMessage}
-		return ""
+		return "", &validationIssue{code: "too_small", field: key, message: rule.minMessage}
 	case rule.max > 0 && n > rule.max:
-		in.issue = &validationIssue{code: "too_big", field: key, message: rule.maxMessage}
-		return ""
+		return "", &validationIssue{code: "too_big", field: key, message: rule.maxMessage}
+	}
+	for _, c := range rule.checks {
+		if !c.ok(s) {
+			return "", &validationIssue{code: c.code, field: key, message: c.message}
+		}
 	}
 	if rule.trim {
 		s = jsTrim(s)
 	}
-	return s
+	return s, nil
+}
+
+// numberRule は z.number() に続けて書いたチェック。Zod と同じ順（型 → int → positive → max）に確かめる。
+// 文言が空のものは Zod の既定の文言になる。
+type numberRule struct {
+	typeMessage string // z.number({ message })
+	// int は .int()。小数は invalid_type、安全な整数の範囲（±2^53-1）の外は too_big・too_small。
+	int        bool
+	intMessage string
+	// positive は .positive()（0 より大きい）。
+	positive        bool
+	positiveMessage string
+	// max は .max(n)。0 なら無し。
+	max        float64
+	maxMessage string
+}
+
+// number は必須の z.number() と numberRule のチェック。
+func (in *objectInput) number(key string, rule numberRule) float64 {
+	v, ok := in.value(key)
+	if !ok {
+		return 0
+	}
+	f, issue := checkNumber(key, v, rule)
+	in.issue = issue
+	return f
+}
+
+func checkNumber(key string, v any, rule numberRule) (float64, *validationIssue) {
+	or := func(message, fallback string) string {
+		if message != "" {
+			return message
+		}
+		return fallback
+	}
+	n, isNumber := v.(json.Number)
+	if !isNumber {
+		issue := invalidType(key, "number", v)
+		issue.message = or(rule.typeMessage, issue.message)
+		return 0, issue
+	}
+	f := jsNumber(n)
+	// JSON.parse は範囲外の数を ±Infinity にする。Zod はそれを数として受け付けない。
+	if math.IsInf(f, 0) {
+		received := "Infinity"
+		if f < 0 {
+			received = "-Infinity"
+		}
+		return 0, &validationIssue{code: "invalid_type", field: key,
+			message: or(rule.typeMessage, "Invalid input: expected number, received "+received)}
+	}
+	if rule.int {
+		switch {
+		case f != math.Trunc(f):
+			return 0, &validationIssue{code: "invalid_type", field: key,
+				message: or(rule.intMessage, "Invalid input: expected int, received number")}
+		case f > maxSafeInteger:
+			return 0, &validationIssue{code: "too_big", field: key,
+				message: or(rule.intMessage, "Too big: expected int to be <=9007199254740991")}
+		case f < -maxSafeInteger:
+			return 0, &validationIssue{code: "too_small", field: key,
+				message: or(rule.intMessage, "Too small: expected int to be >=-9007199254740991")}
+		}
+	}
+	if rule.positive && !(f > 0) {
+		return 0, &validationIssue{code: "too_small", field: key,
+			message: or(rule.positiveMessage, "Too small: expected number to be >0")}
+	}
+	if rule.max != 0 && f > rule.max {
+		return 0, &validationIssue{code: "too_big", field: key,
+			message: or(rule.maxMessage, fmt.Sprintf("Too big: expected number to be <=%v", rule.max))}
+	}
+	return f, nil
+}
+
+// optional は .optional()（と .nullable()）の付いた項目の値。Zod と同じく、キーが無い（undefined）・null・値を区別する。
+// Node の `data.x ?? null` は ptr()、`data.x !== current` は differs() にあたる。
+type optional[T comparable] struct {
+	present bool // キーがある（null を含む）
+	value   *T   // null かキーが無いなら nil
+}
+
+// ptr は DB に書く値。キーが無いときも null として書く（Node の ?? null）。
+func (o optional[T]) ptr() *T {
+	return o.value
+}
+
+// isNull は Node の `x == null`（undefined と null のどちらも true）。
+func (o optional[T]) isNull() bool {
+	return o.value == nil
+}
+
+// differs は Node の `data.x !== current`（current は DB の値で、null か値）。
+// キーが無い（undefined）ときは、どんな値とも違う（undefined !== null も true）。
+func (o optional[T]) differs(current *T) bool {
+	switch {
+	case !o.present:
+		return true
+	case o.value == nil || current == nil:
+		return o.value != current
+	}
+	return *o.value != *current
+}
+
+// readOptional は .optional() の付いた項目を読む。nullable なら null も受け付ける（.nullable()）。
+// check は値があるときのチェック（checkString・checkNumber など）。
+func readOptional[T comparable](in *objectInput, key string, nullable bool, check func(key string, v any) (T, *validationIssue)) optional[T] {
+	v, ok := in.value(key)
+	if !ok {
+		return optional[T]{}
+	}
+	switch {
+	case v == jsUndefined{}:
+		return optional[T]{}
+	case v == nil && nullable:
+		return optional[T]{present: true}
+	}
+	value, issue := check(key, v)
+	if issue != nil {
+		in.issue = issue
+		return optional[T]{}
+	}
+	return optional[T]{present: true, value: &value}
+}
+
+// optionalString は z.string()….optional()（nullable なら .nullable().optional()）。
+func (in *objectInput) optionalString(key string, rule stringRule, nullable bool) optional[string] {
+	return readOptional(in, key, nullable, func(key string, v any) (string, *validationIssue) {
+		return checkString(key, v, rule)
+	})
+}
+
+// optionalInt は z.number().int()….nullable().optional() のような整数の項目。
+func (in *objectInput) optionalInt(key string, rule numberRule, nullable bool) optional[int64] {
+	rule.int = true
+	return readOptional(in, key, nullable, func(key string, v any) (int64, *validationIssue) {
+		f, issue := checkNumber(key, v, rule)
+		return int64(f), issue
+	})
+}
+
+// oneOf は .refine((v) => VALUES.includes(v)) のチェック。
+func oneOf(values []string, code, message string) stringCheck {
+	return stringCheck{ok: func(s string) bool { return slices.Contains(values, s) }, code: code, message: message}
+}
+
+// addIssue は項目の読み取りの後に、superRefine の ctx.addIssue にあたる issue を足す。
+// すでに issue があれば何もしない（最初の1件だけを返すので）。
+func (in *objectInput) addIssue(code, field, message string) {
+	if in.issue == nil {
+		in.issue = &validationIssue{code: code, field: field, message: message}
+	}
 }
 
 // invalidType は Zod の invalid_type の issue。文言は Zod（en）の既定と同じ。
