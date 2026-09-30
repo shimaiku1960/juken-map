@@ -14,11 +14,11 @@ import (
 //   - ルートが自分で断るとき（未ログイン・ID の形が不正など）：{"error": "文言"}
 //   - 想定外の失敗・混雑・存在しないパス：{"error": "文言", "code": "...", "reqId": "..."}
 
-// code の値。Node の setErrorHandler・overload.ts・spa.ts と同じ。
+// code の値。Node の setErrorHandler・overload.ts・spa.ts と同じ（openapi/openapi.yaml の ServerError）。
 const (
-	codeInternal   = "INTERNAL_ERROR"
-	codeOverloaded = "OVERLOADED"
-	codeNotFound   = "NOT_FOUND"
+	codeInternal   = ServerErrorCodeInternal
+	codeOverloaded = ServerErrorCodeOverloaded
+	codeNotFound   = ServerErrorCodeNotFound
 )
 
 // 利用者に見せる文言。5xx は原因を出さない（SQL やパスが画面に出ないように）。
@@ -28,14 +28,8 @@ const (
 	overloadedMessage     = "ただいま混み合っています。少し待ってからもう一度お試しください"
 )
 
-type errorBody struct {
-	Error string `json:"error"`
-	Code  string `json:"code"`
-	ReqID string `json:"reqId"`
-}
-
 // newErrorBody は Node の errorBody と同じ規則で文言を選ぶ。
-func newErrorBody(status int, code, reqID string) errorBody {
+func newErrorBody(status int, code ServerErrorCode, reqID string) ServerError {
 	message := fallbackClientMessage
 	switch {
 	case code == codeOverloaded:
@@ -43,18 +37,18 @@ func newErrorBody(status int, code, reqID string) errorBody {
 	case status >= 500:
 		message = serverMessage
 	}
-	return errorBody{Error: message, Code: code, ReqID: reqID}
+	return ServerError{Error: message, Code: code, ReqID: reqID}
 }
 
 // writeErrorBody は code と reqId の付いたエラーを返す。
-func writeErrorBody(w http.ResponseWriter, r *http.Request, status int, code string) {
+func writeErrorBody(w http.ResponseWriter, r *http.Request, status int, code ServerErrorCode) {
 	writeJSON(w, status, newErrorBody(status, code, requestIDFrom(r.Context())))
 }
 
 // writeError はルートが自分で断るときの {"error": "文言"} を返す。
 // Node の reply.code(400).send({ error: "..." }) にあたる。
 func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	writeJSON(w, status, Error{Error: message})
 }
 
 // internalError は想定外の失敗を 500 で返し、原因はログにだけ残す。

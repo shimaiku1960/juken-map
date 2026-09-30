@@ -12,13 +12,6 @@ import (
 // siteURL は通知の本文に載せるリンクの先。Node の src/shared/site.ts と同じ値。
 const siteURL = "https://juken-map.com"
 
-type notificationSlot string
-
-const (
-	slotMorning notificationSlot = "morning"
-	slotEvening notificationSlot = "evening"
-)
-
 type planSummary struct {
 	Done         bool
 	Content      *string
@@ -64,10 +57,10 @@ func planLabel(p planSummary) string {
 	return "学習予定"
 }
 
-func buildDailyNotification(slot notificationSlot, nickname string, plans []planSummary, logMinutes []int64) dailyMessage {
+func buildDailyNotification(slot NotificationSlot, nickname string, plans []planSummary, logMinutes []int64) dailyMessage {
 	safeName := escapeHTML(nickname)
 
-	if slot == slotMorning {
+	if slot == NotificationSlotMorning {
 		planText := fmt.Sprintf("今日の予定は%d件です。", len(plans))
 		if len(plans) == 0 {
 			planText = "今日はまだ予定がありません。まず1つだけ決めてみましょう。"

@@ -64,10 +64,10 @@ type recipient struct {
 
 // notificationStore は DB への読み書き。テストでは DB の代わりに偽物を渡す（Go の CI には DB が無い）。
 type notificationStore interface {
-	findRecipients(ctx context.Context, slot notificationSlot, start, end time.Time) ([]recipient, error)
+	findRecipients(ctx context.Context, slot NotificationSlot, start, end time.Time) ([]recipient, error)
 	// markDelivery は「この日・この時間帯・この経路は送った」印を先に入れる。
 	// 同じ組み合わせが既にあれば duplicate が true（UNIQUE 制約）。
-	markDelivery(ctx context.Context, userID string, date time.Time, slot notificationSlot, channel deliveryChannel) (id int64, duplicate bool, err error)
+	markDelivery(ctx context.Context, userID string, date time.Time, slot NotificationSlot, channel deliveryChannel) (id int64, duplicate bool, err error)
 	// unmarkDelivery は送れなかった印を消し、次の実行で再び送れるようにする。
 	unmarkDelivery(ctx context.Context, id int64) error
 }
@@ -76,15 +76,6 @@ type notificationStore interface {
 type messenger interface {
 	sendEmail(ctx context.Context, to string, m dailyMessage) error
 	pushLine(ctx context.Context, lineUserID, text string) error
-}
-
-type notificationSummary struct {
-	Date     string           `json:"date"`
-	Slot     notificationSlot `json:"slot"`
-	Eligible int64            `json:"eligible"`
-	Sent     int64            `json:"sent"`
-	Skipped  int64            `json:"skipped"`
-	Failed   int64            `json:"failed"`
 }
 
 type dailyNotifier struct {
@@ -106,9 +97,9 @@ type delivery struct {
 
 // send はその時間帯の通知を全員へ送り、件数をまとめて返す。
 // 印を入れる SQL が失敗したとき（重複以外）は、残りを止めてエラーを返す（Node も例外で 500 になる）。
-func (n *dailyNotifier) send(ctx context.Context, slot notificationSlot, now time.Time) (notificationSummary, error) {
+func (n *dailyNotifier) send(ctx context.Context, slot NotificationSlot, now time.Time) (NotificationSummary, error) {
 	day := tokyoDateRange(now)
-	summary := notificationSummary{Date: day.date, Slot: slot}
+	summary := NotificationSummary{Date: day.date, Slot: slot}
 	users, err := n.store.findRecipients(ctx, slot, day.start, day.end)
 	if err != nil {
 		return summary, err
@@ -124,7 +115,7 @@ func (n *dailyNotifier) send(ctx context.Context, slot notificationSlot, now tim
 		}
 		message := buildDailyNotification(slot, nickname, u.Plans, u.LogMinutes)
 		emailOn, lineOn := u.Morning, u.LineMorn
-		if slot == slotEvening {
+		if slot == NotificationSlotEvening {
 			emailOn, lineOn = u.Evening, u.LineEven
 		}
 		if emailOn && u.Email != nil {
@@ -234,14 +225,14 @@ type sqlNotificationStore struct {
 
 // slotColumns は時間帯ごとの設定の列名。列名は ? で渡せない（値ではなく識別子なので）。
 // 利用者の入力ではなく、この固定の名前だけを SQL に埋め込む。
-var slotColumns = map[notificationSlot][2]string{
-	slotMorning: {"morningEnabled", "lineMorningEnabled"},
-	slotEvening: {"eveningEnabled", "lineEveningEnabled"},
+var slotColumns = map[NotificationSlot][2]string{
+	NotificationSlotMorning: {"morningEnabled", "lineMorningEnabled"},
+	NotificationSlotEvening: {"eveningEnabled", "lineEveningEnabled"},
 }
 
 // findRecipients は Node と同じく SQL を3本に分ける。ユーザーから見て予定と実績はどちらも1対多なので、
 // 1本の JOIN にすると（予定の数 × 実績の数）の行に膨らみ、学習時間が重複して数えられる。
-func (st *sqlNotificationStore) findRecipients(ctx context.Context, slot notificationSlot, start, end time.Time) ([]recipient, error) {
+func (st *sqlNotificationStore) findRecipients(ctx context.Context, slot NotificationSlot, start, end time.Time) ([]recipient, error) {
 	cols, ok := slotColumns[slot]
 	if !ok {
 		return nil, fmt.Errorf("unknown slot %q", slot)
@@ -337,7 +328,7 @@ func (st *sqlNotificationStore) findRecipients(ctx context.Context, slot notific
 	return users, logRows.Err()
 }
 
-func (st *sqlNotificationStore) markDelivery(ctx context.Context, userID string, date time.Time, slot notificationSlot, channel deliveryChannel) (int64, bool, error) {
+func (st *sqlNotificationStore) markDelivery(ctx context.Context, userID string, date time.Time, slot NotificationSlot, channel deliveryChannel) (int64, bool, error) {
 	res, err := st.db.ExecContext(ctx,
 		`INSERT INTO NotificationDelivery (userId, date, slot, channel, createdAt) VALUES (?, ?, ?, ?, ?)`,
 		userID, date, slot, channel, time.Now().UTC())
@@ -420,10 +411,10 @@ type cronHandler struct {
 
 func (h *cronHandler) dailyNotifications(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Slot notificationSlot `json:"slot"`
+		Slot NotificationSlot `json:"slot"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil ||
-		(body.Slot != slotMorning && body.Slot != slotEvening) {
+		(body.Slot != NotificationSlotMorning && body.Slot != NotificationSlotEvening) {
 		writeError(w, http.StatusBadRequest, "Invalid slot")
 		return
 	}

@@ -26,7 +26,7 @@ func TestTokyoDateRange(t *testing.T) {
 
 func TestBuildDailyNotification(t *testing.T) {
 	t.Run("朝は今日の予定を具体的に伝える", func(t *testing.T) {
-		m := buildDailyNotification(slotMorning, "育朗",
+		m := buildDailyNotification(NotificationSlotMorning, "育朗",
 			[]planSummary{{Subject: strp("english"), TextbookName: strp("英単語帳")}}, nil)
 		for _, want := range []string{"今日の予定は1件", "英単語帳"} {
 			if !strings.Contains(m.HTML, want) {
@@ -38,7 +38,7 @@ func TestBuildDailyNotification(t *testing.T) {
 		}
 	})
 	t.Run("夜は学習時間と予定達成数を伝える", func(t *testing.T) {
-		m := buildDailyNotification(slotEvening, "育朗",
+		m := buildDailyNotification(NotificationSlotEvening, "育朗",
 			[]planSummary{{Done: true, Content: strp("過去問")}, {Content: strp("復習")}}, []int64{25, 35})
 		for _, want := range []string{"60分", "予定2件中1件"} {
 			if !strings.Contains(m.HTML, want) {
@@ -47,7 +47,7 @@ func TestBuildDailyNotification(t *testing.T) {
 		}
 	})
 	t.Run("実績0でも責めない文面にし、名前は HTML で無害にする", func(t *testing.T) {
-		m := buildDailyNotification(slotEvening, "<ユーザー>", nil, nil)
+		m := buildDailyNotification(NotificationSlotEvening, "<ユーザー>", nil, nil)
 		for _, want := range []string{"短い時間でも、記録から再開できます", "&lt;ユーザー&gt;"} {
 			if !strings.Contains(m.HTML, want) {
 				t.Errorf("HTML に %q が無い: %s", want, m.HTML)
@@ -63,7 +63,7 @@ func TestBuildDailyNotification(t *testing.T) {
 			{Content: strp("内容"), TextbookName: strp("参考書")}, {Content: strp("内容2"), Subject: strp("math")},
 			{Subject: strp("math")}, {}, {Content: strp("5件目")}, {Content: strp("6件目")},
 		}
-		m := buildDailyNotification(slotMorning, "a", plans, nil)
+		m := buildDailyNotification(NotificationSlotMorning, "a", plans, nil)
 		if !strings.Contains(m.Text, "\n・参考書\n・内容2\n・math\n・学習予定\n・5件目\n\n") || strings.Contains(m.Text, "6件目") {
 			t.Errorf("Text = %q", m.Text)
 		}
@@ -87,11 +87,11 @@ func newFakeStore(rs ...recipient) *fakeStore {
 	return &fakeStore{recipients: rs, marked: map[string]int64{}}
 }
 
-func (s *fakeStore) findRecipients(context.Context, notificationSlot, time.Time, time.Time) ([]recipient, error) {
+func (s *fakeStore) findRecipients(context.Context, NotificationSlot, time.Time, time.Time) ([]recipient, error) {
 	return s.recipients, nil
 }
 
-func (s *fakeStore) markDelivery(_ context.Context, userID string, _ time.Time, _ notificationSlot, ch deliveryChannel) (int64, bool, error) {
+func (s *fakeStore) markDelivery(_ context.Context, userID string, _ time.Time, _ NotificationSlot, ch deliveryChannel) (int64, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.markErr != nil {
@@ -178,11 +178,11 @@ func TestDailyNotifierSend(t *testing.T) {
 			recipient{ID: "line-unlinked", Email: strp("l@example.com"), LineMorn: true},
 		)
 		m := &fakeMessenger{}
-		got, err := testNotifier(store, m).send(context.Background(), slotMorning, testNow)
+		got, err := testNotifier(store, m).send(context.Background(), NotificationSlotMorning, testNow)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := notificationSummary{Date: "2026-08-30", Slot: slotMorning, Eligible: 2, Sent: 2}
+		want := NotificationSummary{Date: "2026-08-30", Slot: NotificationSlotMorning, Eligible: 2, Sent: 2}
 		if got != want {
 			t.Errorf("summary = %+v, want %+v", got, want)
 		}
@@ -195,8 +195,8 @@ func TestDailyNotifierSend(t *testing.T) {
 		store := newFakeStore(recipient{ID: "u", Email: strp("u@example.com"), Morning: true})
 		m := &fakeMessenger{}
 		n := testNotifier(store, m)
-		n.send(context.Background(), slotMorning, testNow)
-		second, _ := n.send(context.Background(), slotMorning, testNow)
+		n.send(context.Background(), NotificationSlotMorning, testNow)
+		second, _ := n.send(context.Background(), NotificationSlotMorning, testNow)
 		if second.Skipped != 1 || second.Sent != 0 || len(m.emails) != 1 {
 			t.Errorf("second = %+v, emails = %v", second, m.emails)
 		}
@@ -206,12 +206,12 @@ func TestDailyNotifierSend(t *testing.T) {
 		store := newFakeStore(recipient{ID: "u", Email: strp("u@example.com"), Morning: true})
 		m := &fakeMessenger{failTo: "u@example.com"}
 		n := testNotifier(store, m)
-		failed, err := n.send(context.Background(), slotMorning, testNow)
+		failed, err := n.send(context.Background(), NotificationSlotMorning, testNow)
 		if err != nil || failed.Failed != 1 || len(store.unmarked) != 1 || len(store.marked) != 0 {
 			t.Fatalf("failed = %+v, err = %v, unmarked = %v", failed, err, store.unmarked)
 		}
 		m.failTo = ""
-		again, _ := n.send(context.Background(), slotMorning, testNow)
+		again, _ := n.send(context.Background(), NotificationSlotMorning, testNow)
 		if again.Sent != 1 || len(m.emails) != 2 {
 			t.Errorf("again = %+v, emails = %v", again, m.emails)
 		}
@@ -221,7 +221,7 @@ func TestDailyNotifierSend(t *testing.T) {
 		store := newFakeStore(recipient{ID: "u", Email: strp("u@example.com"), Morning: true})
 		store.markErr = errors.New("db down")
 		m := &fakeMessenger{}
-		if _, err := testNotifier(store, m).send(context.Background(), slotMorning, testNow); err == nil {
+		if _, err := testNotifier(store, m).send(context.Background(), NotificationSlotMorning, testNow); err == nil {
 			t.Fatal("エラーにならなかった")
 		}
 		if len(m.emails) != 0 {
@@ -237,7 +237,7 @@ func TestDailyNotifierSend(t *testing.T) {
 		m := &fakeMessenger{delay: 20 * time.Millisecond}
 		n := testNotifier(newFakeStore(rs...), m)
 		started := time.Now()
-		got, err := n.send(context.Background(), slotEvening, testNow)
+		got, err := n.send(context.Background(), NotificationSlotEvening, testNow)
 		elapsed := time.Since(started)
 		if err != nil || got.Sent != 20 {
 			t.Fatalf("got = %+v, err = %v", got, err)
@@ -259,7 +259,7 @@ func TestDailyNotifierSend(t *testing.T) {
 		m := &fakeMessenger{}
 		n := testNotifier(newFakeStore(rs...), m)
 		n.emailPace = newPacer(30 * time.Millisecond)
-		if _, err := n.send(context.Background(), slotMorning, testNow); err != nil {
+		if _, err := n.send(context.Background(), NotificationSlotMorning, testNow); err != nil {
 			t.Fatal(err)
 		}
 		// 並べて送っても、送った時刻の差は間隔より大きい（タイマーの誤差ぶん少し甘く見る）

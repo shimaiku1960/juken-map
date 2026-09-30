@@ -16,47 +16,12 @@ import (
 // 列の名前と並びも Node の TEXTBOOK_COLUMNS・groupMasters に揃える。
 // 日時は Date を JSON にしたときと同じ ISO 文字列。
 
-type textbookRowDTO struct {
-	ID          int64   `json:"id"`
-	UserID      string  `json:"userId"`
-	MasterID    *int64  `json:"masterId"`
-	Name        string  `json:"name"`
-	TotalAmount *int64  `json:"totalAmount"`
-	RangeUnit   *string `json:"rangeUnit"`
-	TargetDate  *string `json:"targetDate"`
-	Subject     *string `json:"subject"`
-	CreatedAt   string  `json:"createdAt"`
-	UpdatedAt   string  `json:"updatedAt"`
-}
-
-type textbookMasterMetricDTO struct {
-	ID          int64  `json:"id"`
-	MasterID    int64  `json:"masterId"`
-	Unit        string `json:"unit"`
-	TotalAmount int64  `json:"totalAmount"`
-	IsDefault   bool   `json:"isDefault"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
-}
-
-type textbookMasterDTO struct {
-	ID        int64   `json:"id"`
-	Name      string  `json:"name"`
-	Publisher *string `json:"publisher"`
-	Edition   *string `json:"edition"`
-	ISBN      string  `json:"isbn"`
-	CreatedAt string  `json:"createdAt"`
-	UpdatedAt string  `json:"updatedAt"`
-	// 総量の候補が1つも無いマスターでも [] を返す（Node と同じ）。
-	Metrics []textbookMasterMetricDTO `json:"metrics"`
-}
-
 type textbookStore struct {
 	db *sql.DB
 }
 
 // listTextbooks は自分の参考書の一覧。名前は (userId, name) で UNIQUE なので、名前順だけで並びが決まる。
-func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]textbookRowDTO, error) {
+func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]TextbookRow, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT id, userId, masterId, name, totalAmount, rangeUnit, targetDate, subject, createdAt, updatedAt
 		 FROM Textbook WHERE userId = ? ORDER BY name ASC`,
@@ -67,9 +32,9 @@ func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]te
 	}
 	defer rows.Close()
 
-	textbooks := make([]textbookRowDTO, 0)
+	textbooks := make([]TextbookRow, 0)
 	for rows.Next() {
-		var t textbookRowDTO
+		var t TextbookRow
 		if err := rows.Scan(
 			&t.ID, &t.UserID, &t.MasterID, &t.Name, &t.TotalAmount, &t.RangeUnit,
 			&t.TargetDate, &t.Subject, &t.CreatedAt, &t.UpdatedAt,
@@ -90,7 +55,7 @@ func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]te
 // listTextbookMasters は参考書マスターの一覧を、総量の候補（metrics）と一緒に返す。全員に同じもの。
 // マスター → 総量の候補は1対多なので、LEFT JOIN 1本で取り、マスターごとに束ねる。
 // 候補は id 順（登録時に「isDefault の候補、無ければ先頭」を使うので、先頭を決めておく）。
-func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]textbookMasterDTO, error) {
+func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]TextbookMaster, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT tm.id, tm.name, tm.publisher, tm.edition, tm.isbn, tm.createdAt, tm.updatedAt,
 		        m.id AS m_id, m.unit AS m_unit, m.totalAmount AS m_totalAmount,
@@ -104,10 +69,10 @@ func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]textbookMas
 	}
 	defer rows.Close()
 
-	masters := make([]textbookMasterDTO, 0)
+	masters := make([]TextbookMaster, 0)
 	for rows.Next() {
 		var (
-			tm textbookMasterDTO
+			tm TextbookMaster
 			// LEFT JOIN の相手が居なければ全部 NULL になる
 			mID          *int64
 			mUnit        *string
@@ -126,12 +91,12 @@ func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]textbookMas
 		if len(masters) == 0 || masters[len(masters)-1].ID != tm.ID {
 			tm.CreatedAt = isoFromDatetime(tm.CreatedAt)
 			tm.UpdatedAt = isoFromDatetime(tm.UpdatedAt)
-			tm.Metrics = make([]textbookMasterMetricDTO, 0)
+			tm.Metrics = make([]TextbookMasterMetric, 0)
 			masters = append(masters, tm)
 		}
 		if mID != nil {
 			last := &masters[len(masters)-1]
-			last.Metrics = append(last.Metrics, textbookMasterMetricDTO{
+			last.Metrics = append(last.Metrics, TextbookMasterMetric{
 				ID:          *mID,
 				MasterID:    last.ID,
 				Unit:        *mUnit,

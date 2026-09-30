@@ -1,0 +1,679 @@
+# 受験マップの API の契約（JUK-76）。このファイルが正で、型はここから生成する。
+#   - Go（apps/api-go/openapi.gen.go）：oapi-codegen（apps/api-go/oapi-codegen.yaml）
+#   - TypeScript（src/shared/openapi.gen.ts）：openapi-typescript
+# 形を変えるときはこのファイルを直し、`pnpm openapi:generate` を流す。CI は生成し直して差分が出たら落とす。
+#
+# 今ここにあるのは、Go が受け持つ API（読み取りと毎日の通知）。書き込みの API は Go へ移すとき（JUK-75）に足す。
+#
+# 書き方の決まり：
+#   - Node と Go はキーを必ず出す（値が無ければ null）。そのため項目は基本すべて required にし、
+#     null になりうるものに nullable を付ける。required でない項目は「キーごと無いことがある」の意味
+#   - 日時は Date を JSON にしたときの ISO 文字列（"2026-09-24T00:00:00.000Z"）。IsoDateTime を使う
+openapi: 3.0.3
+info:
+  title: 受験マップ API
+  version: "1"
+servers:
+  - url: https://juken-map.com
+security:
+  - sessionCookie: []
+
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: 死活監視（DB まで見る）
+      security: []
+      responses:
+        "200":
+          description: 動いている
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/dashboard:
+    get:
+      operationId: getDashboard
+      summary: ダッシュボードの初回表示ぶん
+      responses:
+        "200":
+          description: 期間はサーバーが決める
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/study-logs:
+    get:
+      operationId: listStudyLogs
+      summary: 自分の実績の一覧（新しい日付から。同じ日は記録した順）
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: from を省くと直近90日、to を省くと上限なし。暦に無い日付（2026-13-45）は空の一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StudyLog" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/study-logs/daily:
+    get:
+      operationId: listDailyStudyMinutes
+      summary: 日ごとの合計学習時間（新しい日付から）
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: from を省くと直近365日
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DailyStudyMinutes" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/study-plans:
+    get:
+      operationId: listStudyPlans
+      summary: 自分の予定の一覧（古い日付から。同じ日は作った順）
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: 省くと今日の前後90日
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StudyPlan" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/goals:
+    get:
+      operationId: listGoals
+      summary: 志望校の一覧（学部・大学・学部のタグつき。作った順）
+      responses:
+        "200":
+          description: 志望校の一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Goal" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/goals/first-choice:
+    get:
+      operationId: getFirstChoiceGoal
+      summary: 第一志望（トップの表示用。タグは付けない）
+      responses:
+        "200":
+          description: 第一志望が無ければ null
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/FirstChoiceGoal" }]
+                nullable: true
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/textbooks:
+    get:
+      operationId: listTextbooks
+      summary: 自分の参考書の一覧（名前順）
+      responses:
+        "200":
+          description: 参考書の一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TextbookRow" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/textbook-masters:
+    get:
+      operationId: listTextbookMasters
+      summary: 参考書マスターの一覧（総量の候補つき。全員に同じもの）
+      responses:
+        "200":
+          description: 参考書マスターの一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TextbookMaster" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      summary: 自分の通知設定（保存していなければ全部 false）
+      responses:
+        "200":
+          description: 通知設定
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPreference" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/universities:
+    get:
+      operationId: listUniversities
+      summary: 大学を探す画面の一覧（全員に同じもの）
+      description: >-
+        サーバーは JSON をメモリに持ち、ETag を付ける。If-None-Match が合えば 304 で本文を省く。
+        Accept-Encoding が gzip を受け付けるなら、圧縮済みの形を返す。
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: 大学の一覧（名前順）
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ExploreUniversity" }
+        "304":
+          description: 変わっていない
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/universities/{id}:
+    get:
+      operationId: getUniversity
+      summary: 大学詳細（学部・タグと、自分が志望校に登録済みの学部 ID）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 数字だけの正の整数（15桁まで）。形が違えば 400
+          schema: { type: string, pattern: "^[1-9][0-9]{0,14}$" }
+      responses:
+        "200":
+          description: 大学詳細
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UniversityDetailResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/cron/daily-study-notifications:
+    post:
+      operationId: sendDailyStudyNotifications
+      summary: 毎日の学習通知を送る（EC2 の systemd timer が朝7時・夜21時に呼ぶ）
+      security:
+        - cronBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slot]
+              properties:
+                slot: { $ref: "#/components/schemas/NotificationSlot" }
+      responses:
+        "200":
+          description: 送った件数。同じ日・同じ時間帯の2回目は skipped
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: better-auth.session_token
+      description: Better Auth（Node）が発行するセッション Cookie。本番は __Secure- が前に付く
+    cronBearer:
+      type: http
+      scheme: bearer
+      description: DAILY_NOTIFICATION_SECRET
+
+  parameters:
+    From:
+      name: from
+      in: query
+      required: false
+      description: 期間の始まり（その日を含む）
+      schema: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+    To:
+      name: to
+      in: query
+      required: false
+      description: 期間の終わり（その日を含む）
+      schema: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+
+  headers:
+    ETag:
+      description: JSON の SHA-1 を base64url にしたもの（Node と Go で同じ値）
+      schema: { type: string }
+    CacheControl:
+      description: private, no-cache
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: 入力が不正（文言だけ）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: 入力チェックで弾いた（文言・コード・項目）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ValidationError" }
+    Unauthorized:
+      description: ログインしていない（またはトークンが違う）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: 利用を停止されている、デモアカウントの書き込み、など
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: 見つからない
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InternalError:
+      description: 想定外の失敗。原因はログにだけ残す
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerError" }
+
+  schemas:
+    IsoDateTime:
+      description: Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
+      type: string
+      format: date-time
+      x-go-type: string
+
+    IsoDate:
+      description: 日付だけ（"YYYY-MM-DD"、日本時間の日付）
+      type: string
+      format: date
+      x-go-type: string
+
+    Error:
+      description: ルートが自分で断るときのエラー。error は画面にそのまま出す文言
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+    ValidationError:
+      description: 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の query.go）
+      type: object
+      required: [error, code, field]
+      properties:
+        error:
+          type: string
+          description: 画面にそのまま出す文言
+        code:
+          type: string
+          description: >-
+            種類。自分で書いた規則は名前（range_end_before_start など）、
+            組み込みのチェックは Zod の code（too_small・invalid_type・invalid_format など）
+        field:
+          type: string
+          nullable: true
+          description: どの項目か（"rangeEnd"・"items.0.unit"）。項目に結びつかなければ null
+
+    ServerError:
+      description: 想定外の失敗・混雑・存在しないパス
+      type: object
+      required: [error, code, reqId]
+      properties:
+        error: { type: string }
+        code:
+          type: string
+          enum: [INTERNAL_ERROR, OVERLOADED, NOT_FOUND]
+          x-enum-varnames: [ServerErrorCodeInternal, ServerErrorCodeOverloaded, ServerErrorCodeNotFound]
+        reqId: { type: string }
+
+    Textbook:
+      description: 実績・予定に JOIN した参考書（表示用）
+      type: object
+      required: [id, masterId, name, totalAmount, rangeUnit, targetDate, subject]
+      properties:
+        id: { type: integer, format: int64 }
+        masterId: { type: integer, format: int64, nullable: true }
+        name: { type: string }
+        totalAmount: { type: integer, format: int64, nullable: true }
+        rangeUnit: { type: string, nullable: true }
+        targetDate:
+          allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
+          nullable: true
+        subject: { type: string, nullable: true }
+
+    StudyLog:
+      type: object
+      required: [id, date, minutes, subject, textbookId, textbook, rangeStart, rangeEnd, rangeUnit, memo, studyPlanId]
+      properties:
+        id: { type: integer, format: int64 }
+        date: { $ref: "#/components/schemas/IsoDateTime" }
+        minutes: { type: integer, format: int64 }
+        subject: { type: string, nullable: true }
+        textbookId: { type: integer, format: int64, nullable: true }
+        textbook:
+          allOf: [{ $ref: "#/components/schemas/Textbook" }]
+          nullable: true
+        rangeStart: { type: integer, format: int64, nullable: true }
+        rangeEnd: { type: integer, format: int64, nullable: true }
+        rangeUnit: { type: string, nullable: true }
+        memo: { type: string, nullable: true }
+        studyPlanId: { type: integer, format: int64, nullable: true }
+
+    StudyPlan:
+      type: object
+      required: [id, date, content, subject, done, studyLogId, textbookId, textbook, rangeStart, rangeEnd, rangeUnit]
+      properties:
+        id: { type: integer, format: int64 }
+        date: { $ref: "#/components/schemas/IsoDateTime" }
+        content: { type: string, nullable: true }
+        subject: { type: string, nullable: true }
+        done: { type: boolean }
+        studyLogId: { type: integer, format: int64, nullable: true }
+        textbookId: { type: integer, format: int64, nullable: true }
+        textbook:
+          allOf: [{ $ref: "#/components/schemas/Textbook" }]
+          nullable: true
+        rangeStart: { type: integer, format: int64, nullable: true }
+        rangeEnd: { type: integer, format: int64, nullable: true }
+        rangeUnit: { type: string, nullable: true }
+
+    DailyStudyMinutes:
+      type: object
+      required: [date, minutes]
+      properties:
+        date: { $ref: "#/components/schemas/IsoDateTime" }
+        minutes: { type: integer, format: int64 }
+
+    DateRange:
+      description: 両端を含む期間（"YYYY-MM-DD"）
+      type: object
+      required: [from, to]
+      properties:
+        from: { $ref: "#/components/schemas/IsoDate" }
+        to: { $ref: "#/components/schemas/IsoDate" }
+
+    Dashboard:
+      type: object
+      required: [month, logRange, logs, planRange, plans, dailyMinutes]
+      properties:
+        month:
+          type: string
+          description: 今日の月（"YYYY-MM"）
+        logRange: { $ref: "#/components/schemas/DateRange" }
+        logs:
+          type: array
+          items: { $ref: "#/components/schemas/StudyLog" }
+        planRange: { $ref: "#/components/schemas/DateRange" }
+        plans:
+          type: array
+          items: { $ref: "#/components/schemas/StudyPlan" }
+        dailyMinutes:
+          type: array
+          items: { $ref: "#/components/schemas/DailyStudyMinutes" }
+
+    Tag:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+
+    University:
+      type: object
+      required: [id, name, prefecture, type, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        prefecture: { type: string }
+        type: { type: string }
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+
+    Faculty:
+      description: 学部（大学を入れ子にしない）
+      type: object
+      required: [id, name, examDate, createdAt, universityId]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        examDate: { $ref: "#/components/schemas/IsoDateTime" }
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+        universityId: { type: integer, format: int64 }
+
+    FacultyWithTags:
+      allOf:
+        - $ref: "#/components/schemas/Faculty"
+        - type: object
+          required: [tags]
+          properties:
+            tags:
+              type: array
+              items: { $ref: "#/components/schemas/Tag" }
+
+    FacultyWithUniversity:
+      allOf:
+        - $ref: "#/components/schemas/Faculty"
+        - type: object
+          required: [university]
+          properties:
+            university: { $ref: "#/components/schemas/University" }
+
+    FacultyWithUniversityAndTags:
+      allOf:
+        - $ref: "#/components/schemas/FacultyWithUniversity"
+        - type: object
+          required: [tags]
+          properties:
+            tags:
+              type: array
+              items: { $ref: "#/components/schemas/Tag" }
+
+    GoalFields:
+      description: 志望校の列（学部は含まない）
+      type: object
+      required: [id, createdAt, userId, facultyId, isFirstChoice, note, status]
+      properties:
+        id: { type: integer, format: int64 }
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+        userId: { type: string }
+        facultyId: { type: integer, format: int64 }
+        isFirstChoice: { type: boolean }
+        note: { type: string, nullable: true }
+        status: { type: string }
+
+    Goal:
+      description: 志望校の一覧の1件。学部・大学・学部のタグつき
+      allOf:
+        - $ref: "#/components/schemas/GoalFields"
+        - type: object
+          required: [faculty]
+          properties:
+            faculty: { $ref: "#/components/schemas/FacultyWithUniversityAndTags" }
+
+    FirstChoiceGoal:
+      description: 第一志望。学部・大学つき（タグは付けない）
+      allOf:
+        - $ref: "#/components/schemas/GoalFields"
+        - type: object
+          required: [faculty]
+          properties:
+            faculty: { $ref: "#/components/schemas/FacultyWithUniversity" }
+
+    TextbookRow:
+      description: 自分の参考書（DB の行そのまま）
+      type: object
+      required: [id, userId, masterId, name, totalAmount, rangeUnit, targetDate, subject, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        userId: { type: string }
+        masterId: { type: integer, format: int64, nullable: true }
+        name: { type: string }
+        totalAmount: { type: integer, format: int64, nullable: true }
+        rangeUnit: { type: string, nullable: true }
+        targetDate:
+          allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
+          nullable: true
+        subject: { type: string, nullable: true }
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+        updatedAt: { $ref: "#/components/schemas/IsoDateTime" }
+
+    TextbookMasterMetric:
+      type: object
+      required: [id, masterId, unit, totalAmount, isDefault, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        masterId: { type: integer, format: int64 }
+        unit: { type: string }
+        totalAmount: { type: integer, format: int64 }
+        isDefault: { type: boolean }
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+        updatedAt: { $ref: "#/components/schemas/IsoDateTime" }
+
+    TextbookMaster:
+      type: object
+      required: [id, name, publisher, edition, isbn, createdAt, updatedAt, metrics]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        publisher: { type: string, nullable: true }
+        edition: { type: string, nullable: true }
+        isbn: { type: string, x-go-name: ISBN }
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+        updatedAt: { $ref: "#/components/schemas/IsoDateTime" }
+        metrics:
+          description: 総量の候補（id 順）。無くても []
+          type: array
+          items: { $ref: "#/components/schemas/TextbookMasterMetric" }
+
+    NotificationPreference:
+      type: object
+      required: [emailMorningEnabled, emailEveningEnabled, lineMorningEnabled, lineEveningEnabled]
+      properties:
+        emailMorningEnabled: { type: boolean }
+        emailEveningEnabled: { type: boolean }
+        lineMorningEnabled: { type: boolean }
+        lineEveningEnabled: { type: boolean }
+
+    ExploreUniversity:
+      description: >-
+        大学を探す画面の1件。画面が使うのは大学の列と学部ごとのタグ名だけ。
+        Go はこの形を手書きの型で返す（JSON のキーの順番を Node と同じにして ETag をそろえるため）
+      type: object
+      required: [id, name, prefecture, type, faculties]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        prefecture: { type: string }
+        type: { type: string }
+        faculties:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExploreFaculty"
+
+    ExploreFaculty:
+      type: object
+      required: [tags]
+      properties:
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExploreTag"
+
+    ExploreTag:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+
+    UniversityDetail:
+      allOf:
+        - $ref: "#/components/schemas/University"
+        - type: object
+          required: [faculties]
+          properties:
+            faculties:
+              type: array
+              items: { $ref: "#/components/schemas/FacultyWithTags" }
+
+    UniversityDetailResponse:
+      type: object
+      required: [university, registeredFacultyIds]
+      properties:
+        university: { $ref: "#/components/schemas/UniversityDetail" }
+        registeredFacultyIds:
+          description: 自分が志望校に登録済みの学部 ID（昇順）
+          type: array
+          items: { type: integer, format: int64 }
+
+    NotificationSlot:
+      type: string
+      enum: [morning, evening]
+      x-enum-varnames: [NotificationSlotMorning, NotificationSlotEvening]
+
+    NotificationSummary:
+      type: object
+      required: [date, slot, eligible, sent, skipped, failed]
+      properties:
+        date: { $ref: "#/components/schemas/IsoDate" }
+        slot: { $ref: "#/components/schemas/NotificationSlot" }
+        eligible: { type: integer, format: int64 }
+        sent: { type: integer, format: int64 }
+        skipped: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }

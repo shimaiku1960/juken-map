@@ -32,7 +32,7 @@ func (h *studyHandlers) listLogs(w http.ResponseWriter, r *http.Request, s *sess
 	today := dateOnTokyo(time.Now())
 	rng, ok := q.resolve(addDays(today, -(defaultLogDays-1)), nil)
 	if !ok {
-		writeJSON(w, http.StatusOK, []studyLogDTO{})
+		writeJSON(w, http.StatusOK, []StudyLog{})
 		return
 	}
 	logs, err := h.store.listStudyLogs(r.Context(), s.UserID, rng)
@@ -52,7 +52,7 @@ func (h *studyHandlers) listDaily(w http.ResponseWriter, r *http.Request, s *ses
 	today := dateOnTokyo(time.Now())
 	rng, ok := q.resolve(addDays(today, -(defaultDailyDays-1)), nil)
 	if !ok {
-		writeJSON(w, http.StatusOK, []dailyMinutesDTO{})
+		writeJSON(w, http.StatusOK, []DailyStudyMinutes{})
 		return
 	}
 	daily, err := h.store.listDailyStudyMinutes(r.Context(), s.UserID, rng)
@@ -73,7 +73,7 @@ func (h *studyHandlers) listPlans(w http.ResponseWriter, r *http.Request, s *ses
 	defaultTo := addDays(today, defaultPlanFutureDays)
 	rng, ok := q.resolve(addDays(today, -defaultPlanPastDays), &defaultTo)
 	if !ok {
-		writeJSON(w, http.StatusOK, []studyPlanDTO{})
+		writeJSON(w, http.StatusOK, []StudyPlan{})
 		return
 	}
 	plans, err := h.store.listStudyPlans(r.Context(), s.UserID, rng)

@@ -1,0 +1,11 @@
+# openapi/openapi.yaml から Go の型を作る設定（JUK-76）。`pnpm openapi:generate` が使う。
+# 作るのは型だけ（サーバーの枠やクライアントは作らない。ルーティングは router.go のまま）。
+package: main
+generate:
+  models: true
+output-options:
+  # どのパスからも参照されていない型も作る（ハンドラが使う型を、パスの応答と別に並べているため）
+  skip-prune: true
+  # Id・Url ではなく ID・URL にする（Go の書き方）
+  name-normalizer: ToCamelCaseWithInitialisms
+output: openapi.gen.go

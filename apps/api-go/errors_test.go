@@ -10,7 +10,7 @@ func TestNewErrorBody(t *testing.T) {
 	// 文言の選び方は Node の errorBody（error-handling.ts）と同じ。
 	tests := []struct {
 		status int
-		code   string
+		code   ServerErrorCode
 		want   string
 	}{
 		{500, codeInternal, serverMessage},
@@ -19,7 +19,7 @@ func TestNewErrorBody(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := newErrorBody(tt.status, tt.code, "req-1")
-		if got != (errorBody{Error: tt.want, Code: tt.code, ReqID: "req-1"}) {
+		if got != (ServerError{Error: tt.want, Code: tt.code, ReqID: "req-1"}) {
 			t.Errorf("newErrorBody(%d, %q) = %+v", tt.status, tt.code, got)
 		}
 	}

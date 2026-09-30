@@ -112,7 +112,7 @@ func TestRouterSessionError(t *testing.T) {
 		t.Fatalf("status = %d, want 500", res.Code)
 	}
 	body := decodeJSON(t, res.Body.String())
-	if body["code"] != codeInternal || body["error"] != serverMessage {
+	if body["code"] != string(codeInternal) || body["error"] != serverMessage {
 		t.Errorf("本文 = %v", body)
 	}
 }

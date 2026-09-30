@@ -12,29 +12,20 @@ import (
 // services/notification-service.ts の findNotificationPreference にあたる。
 // 書き込み（PUT /api/notification-preferences）は Node に残っていて、nginx が GET と HEAD だけを Go へ送る。
 
-// notificationPreferenceDTO が応答の形。DB の列名（morningEnabled など）と、画面へ返すキー
-// （emailMorningEnabled など）が違うので、Node と同じく付け替える。
-type notificationPreferenceDTO struct {
-	EmailMorningEnabled bool `json:"emailMorningEnabled"`
-	EmailEveningEnabled bool `json:"emailEveningEnabled"`
-	LineMorningEnabled  bool `json:"lineMorningEnabled"`
-	LineEveningEnabled  bool `json:"lineEveningEnabled"`
-}
-
 type notificationPreferenceStore struct {
 	db *sql.DB
 }
 
 // find は自分の通知設定を返す。まだ保存していなければ、全部 false（Node の DEFAULT_PREFERENCE と同じ）。
-func (st *notificationPreferenceStore) find(ctx context.Context, userID string) (notificationPreferenceDTO, error) {
-	var p notificationPreferenceDTO
+func (st *notificationPreferenceStore) find(ctx context.Context, userID string) (NotificationPreference, error) {
+	var p NotificationPreference
 	err := st.db.QueryRowContext(ctx,
 		`SELECT morningEnabled, eveningEnabled, lineMorningEnabled, lineEveningEnabled
 		 FROM NotificationPreference WHERE userId = ?`,
 		userID,
 	).Scan(&p.EmailMorningEnabled, &p.EmailEveningEnabled, &p.LineMorningEnabled, &p.LineEveningEnabled)
 	if errors.Is(err, sql.ErrNoRows) {
-		return notificationPreferenceDTO{}, nil
+		return NotificationPreference{}, nil
 	}
 	return p, err
 }
