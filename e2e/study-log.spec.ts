@@ -59,10 +59,14 @@ test("カレンダーは表示中の月だけを取り、前の月は先読み�
   await page.getByRole("link", { name: "記録・予定" }).click();
   await settledMinutes(page.getByText(/今日の学習時間：/));
 
-  const today = new Date();
-  const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const prevFrom = `from=${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}-01`;
-  const prevLabel = `${previous.getFullYear()}年${previous.getMonth() + 1}月`;
+  // 月はブラウザと同じ日本時間で数える（テストを動かす側は CI では UTC なので、new Date() の月は使わない）
+  const [year, month] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" })
+    .format(new Date())
+    .split("-")
+    .map(Number);
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+  const prevFrom = `from=${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  const prevLabel = `${previous.getUTCFullYear()}年${previous.getUTCMonth() + 1}月`;
 
   // 表示する前に、前の月を実績・予定とも裏で取り終えている
   await expect
@@ -84,8 +88,12 @@ test("カレンダーは表示中の月だけを取り、前の月は先読み�
   ).toBe(true);
 
   // 当月の実績と予定はダッシュボードの応答に同梱されるので、当月だけを取る通信は起きない
-  const currentFrom = `from=${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
-  expect(queries.filter((q) => q.search.includes(currentFrom))).toHaveLength(0);
+  // 月の取得は1日〜末日を指定する（monthRange）。1日だけを見ると、月の初日は「今日の予定」の取得
+  // （from=今日&to=今日）まで当月の取得に数えてしまう（JUK-87）。
+  const mm = String(month).padStart(2, "0");
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const currentMonth = `from=${year}-${mm}-01&to=${year}-${mm}-${lastDay}`;
+  expect(queries.filter((q) => q.search.includes(currentMonth))).toHaveLength(0);
 
   // 「今日」で当月へ戻れる
   await page.getByRole("button", { name: "今日", exact: true }).click();
