@@ -5,6 +5,7 @@ go 1.27.1
 require (
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/prometheus/client_golang v1.24.1
+	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sync v0.23.0
 )
 
