@@ -106,6 +106,52 @@ func TestRouterAccess(t *testing.T) {
 	}
 }
 
+func TestRouterCrossOrigin(t *testing.T) {
+	// Cookie で認証する書き込みは、別のサイトから送られたら断る（CSRF 対策）。
+	rt := newTestRouter()
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		header     map[string]string
+		wantStatus int
+	}{
+		{"同じサイトの画面からの POST は通る", "POST", "/api/mine", map[string]string{"Sec-Fetch-Site": "same-origin"}, 200},
+		{"別のサイトからの POST は 403", "POST", "/api/mine", map[string]string{"Sec-Fetch-Site": "cross-site"}, 403},
+		{"同じサイトの別オリジン（サブドメイン）も 403", "POST", "/api/mine", map[string]string{"Sec-Fetch-Site": "same-site"}, 403},
+		{"利用者が直接開いた（none）は通る", "POST", "/api/mine", map[string]string{"Sec-Fetch-Site": "none"}, 200},
+		{"Sec-Fetch-Site が無く、Origin が Host と同じなら通る", "POST", "/api/mine",
+			map[string]string{"Origin": "https://juken-map.com", "Host": "juken-map.com"}, 200},
+		{"Sec-Fetch-Site が無く、Origin が別なら 403", "DELETE", "/api/mine/1",
+			map[string]string{"Origin": "https://evil.example", "Host": "juken-map.com"}, 403},
+		{"どちらも無い（curl など）は通る", "POST", "/api/mine", nil, 200},
+		{"別のサイトからでも読み取りは通る", "GET", "/api/mine", map[string]string{"Sec-Fetch-Site": "cross-site"}, 200},
+		{"管理者の書き込みも同じ", "POST", "/api/admin/thing", map[string]string{"Sec-Fetch-Site": "cross-site"}, 403},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.AddCookie(&http.Cookie{Name: "test", Value: "admin"})
+			for k, v := range tt.header {
+				if k == "Host" {
+					req.Host = v
+					continue
+				}
+				req.Header.Set(k, v)
+			}
+			res := httptest.NewRecorder()
+			rt.ServeHTTP(res, req)
+
+			if res.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d（本文 %s）", res.Code, tt.wantStatus, res.Body)
+			}
+			if tt.wantStatus == 403 {
+				assertJSONEqual(t, res.Body.String(), `{"error":"別のサイトからの書き込みは受け付けません"}`)
+			}
+		})
+	}
+}
+
 func TestRouterSessionError(t *testing.T) {
 	// セッションが読めない（DB が落ちている）ときは、未ログイン扱いにせず 500 にする。
 	// 401 にすると、画面はログイン画面へ送ってしまい、原因がログにも残らない。

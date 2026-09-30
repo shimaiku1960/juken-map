@@ -1,5 +1,5 @@
 // api-go は、Node（apps/api）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
-// 最初の1本の GET /api/dashboard（JUK-69）に続けて、読み取りの API を移している（JUK-73）。
+// 最初の1本の GET /api/dashboard（JUK-69）に続けて、読み取りの API（JUK-73）と書き込みの API（JUK-75）を移している。
 // 本番では nginx が移したパスだけを Go へ振り分ける（infra/nginx/juken-map-go-routes.conf、JUK-72）。
 //
 // ログインの発行・管理画面・外部連携は Node に残す。セッションは Node 側（Better Auth）が
@@ -139,6 +139,10 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig) {
 
 	prefs := &notificationPreferenceHandlers{store: &notificationPreferenceStore{db: db}}
 	rt.user("GET /api/notification-preferences", prefs.get)
+	rt.user("PUT /api/notification-preferences", prefs.save)
+
+	profile := &profileHandlers{store: &userStore{db: db}}
+	rt.user("PUT /api/profile", profile.update)
 
 	universities := &universityHandlers{store: newUniversityStore(db)}
 	rt.user("GET /api/universities", universities.list)

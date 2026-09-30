@@ -65,10 +65,20 @@ type router struct {
 	mux         *http.ServeMux
 	loadSession sessionLoader
 	routes      []routeEntry
+	crossOrigin *http.CrossOriginProtection
 }
 
+// crossOriginMessage は、別のサイトから送られた書き込みを断るときの文言。
+const crossOriginMessage = "別のサイトからの書き込みは受け付けません"
+
 func newRouter(load sessionLoader) *router {
-	rt := &router{mux: http.NewServeMux(), loadSession: load}
+	// crossOrigin は Cookie で認証する書き込みの CSRF 対策（標準の net/http）。ブラウザが付ける
+	// Sec-Fetch-Site（無ければ Origin と Host の比較）で、別のサイトから送られた POST・PUT・PATCH・DELETE を断る。
+	// 本番の nginx は Host をそのまま渡すので、https://juken-map.com の画面からの書き込みは同じサイトとして通る。
+	// どちらのヘッダーも無いリクエスト（curl・応答一致テスト）はブラウザではないので通す。
+	//
+	// Node の自前 API はオリジンを確かめず、SameSite=Lax の Cookie だけで守っている。Go ではこれを足して一段強くする。
+	rt := &router{mux: http.NewServeMux(), loadSession: load, crossOrigin: http.NewCrossOriginProtection()}
 	// どのルートにも当たらないものは 404。ServeMux の既定はテキストの「404 page not found」で、
 	// JSON を読むつもりの画面が壊れるので、Node と同じ形のエラーにする。
 	// メソッド違い（POST /api/dashboard など）もここに来る。ServeMux は当たるルートが1本も
@@ -89,14 +99,18 @@ func (rt *router) public(pattern string, h http.HandlerFunc) {
 
 // anonymousWrite はログインせずに書き込めるルートを登録する。セッションは読まない。
 // 誰が送ってきても困らないことは、ハンドラの側で保つ（DB に書かない・読む大きさに上限を置く）。
+// Cookie で認証しないので、別のサイトからの書き込みも断らない（CSP の報告はブラウザが送る）。
 func (rt *router) anonymousWrite(pattern string, h http.HandlerFunc) {
 	rt.handle(pattern, accessAnonymousWrite, h)
 }
 
-// user はログイン必須のルートを登録する。未ログインは 401、停止中は 403、
+// user はログイン必須のルートを登録する。別のサイトからの書き込みは 403、未ログインは 401、停止中は 403、
 // デモアカウントの書き込み（GET・HEAD 以外）は 403 で、ハンドラまで来ない。
 func (rt *router) user(pattern string, h sessionHandler) {
 	rt.handle(pattern, accessUser, func(w http.ResponseWriter, r *http.Request) {
+		if !rt.sameOrigin(w, r) {
+			return
+		}
 		s, ok := rt.requireSession(w, r)
 		if !ok {
 			return
@@ -109,9 +123,12 @@ func (rt *router) user(pattern string, h sessionHandler) {
 	})
 }
 
-// admin は管理者だけのルートを登録する。管理者でなければ 403。
+// admin は管理者だけのルートを登録する。別のサイトからの書き込みと、管理者でなければ 403。
 func (rt *router) admin(pattern string, h sessionHandler) {
 	rt.handle(pattern, accessAdmin, func(w http.ResponseWriter, r *http.Request) {
+		if !rt.sameOrigin(w, r) {
+			return
+		}
 		s, ok := rt.requireSession(w, r)
 		if !ok {
 			return
@@ -157,6 +174,15 @@ func hasBearerToken(r *http.Request, secret string) bool {
 	got := sha256.Sum256([]byte(r.Header.Get("Authorization")))
 	want := sha256.Sum256([]byte("Bearer " + secret))
 	return subtle.ConstantTimeCompare(got[:], want[:]) == 1
+}
+
+// sameOrigin は、別のサイトから送られた書き込みなら 403 を送って false を返す。GET・HEAD・OPTIONS は常に通す。
+func (rt *router) sameOrigin(w http.ResponseWriter, r *http.Request) bool {
+	if err := rt.crossOrigin.Check(r); err != nil {
+		writeError(w, http.StatusForbidden, crossOriginMessage)
+		return false
+	}
+	return true
 }
 
 // requireSession は Node の requireSession（context.ts）と同じ判定・同じ文言。

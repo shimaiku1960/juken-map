@@ -44,11 +44,12 @@ func (e RegistrationTrackingMethod) Valid() bool {
 
 // Defines values for ServerErrorCode.
 const (
-	ServerErrorCodeBodyTooLarge     ServerErrorCode = "FST_ERR_CTP_BODY_TOO_LARGE"
-	ServerErrorCodeInternal         ServerErrorCode = "INTERNAL_ERROR"
-	ServerErrorCodeInvalidMediaType ServerErrorCode = "FST_ERR_CTP_INVALID_MEDIA_TYPE"
-	ServerErrorCodeNotFound         ServerErrorCode = "NOT_FOUND"
-	ServerErrorCodeOverloaded       ServerErrorCode = "OVERLOADED"
+	ServerErrorCodeBodyTooLarge         ServerErrorCode = "FST_ERR_CTP_BODY_TOO_LARGE"
+	ServerErrorCodeInternal             ServerErrorCode = "INTERNAL_ERROR"
+	ServerErrorCodeInvalidContentLength ServerErrorCode = "FST_ERR_CTP_INVALID_CONTENT_LENGTH"
+	ServerErrorCodeInvalidMediaType     ServerErrorCode = "FST_ERR_CTP_INVALID_MEDIA_TYPE"
+	ServerErrorCodeNotFound             ServerErrorCode = "NOT_FOUND"
+	ServerErrorCodeOverloaded           ServerErrorCode = "OVERLOADED"
 )
 
 // Valid indicates whether the value is a known member of the ServerErrorCode enum.
@@ -57,6 +58,8 @@ func (e ServerErrorCode) Valid() bool {
 	case ServerErrorCodeBodyTooLarge:
 		return true
 	case ServerErrorCodeInternal:
+		return true
+	case ServerErrorCodeInvalidContentLength:
 		return true
 	case ServerErrorCodeInvalidMediaType:
 		return true
@@ -282,6 +285,11 @@ type NotificationSummary struct {
 	Slot     NotificationSlot `json:"slot"`
 }
 
+// ProfileInput プロフィールの更新（Zod の profileSchema）。長さはコードポイントの数（絵文字も1）で数え、 前後の空白は長さを確かめた後に削る（空白だけでも通り、空文字で保存される）
+type ProfileInput struct {
+	Nickname string `json:"nickname"`
+}
+
 // RegistrationTracking defines model for RegistrationTracking.
 type RegistrationTracking struct {
 	// Method 登録に使った方法（最初に作られたアカウント）。shouldTrack が true のときだけ
@@ -469,6 +477,24 @@ type UniversityDetailResponse struct {
 	University           UniversityDetail `json:"university"`
 }
 
+// User 利用者の行（PUT /api/profile が返す）
+type User struct {
+	AnalyticsSignUpTrackedAt *IsoDateTime `json:"analyticsSignUpTrackedAt"`
+
+	// CreatedAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
+	CreatedAt       IsoDateTime  `json:"createdAt"`
+	Email           *string      `json:"email"`
+	EmailVerified   bool         `json:"emailVerified"`
+	FirstStudyLogAt *IsoDateTime `json:"firstStudyLogAt"`
+	ID              string       `json:"id"`
+	Image           *string      `json:"image"`
+	Name            *string      `json:"name"`
+	Nickname        *string      `json:"nickname"`
+
+	// UpdatedAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
+	UpdatedAt IsoDateTime `json:"updatedAt"`
+}
+
 // ValidationError 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の query.go）
 type ValidationError struct {
 	// Code 種類。自分で書いた規則は名前（range_end_before_start など）、 組み込みのチェックは Zod の code（too_small・invalid_type・invalid_format など）
@@ -556,6 +582,12 @@ type SendDailyStudyNotificationsJSONRequestBody SendDailyStudyNotificationsJSONB
 
 // ReportCspViolationApplicationReportsPlusJSONRequestBody defines body for ReportCspViolation for application/reports+json ContentType.
 type ReportCspViolationApplicationReportsPlusJSONRequestBody = ReportCspViolationApplicationReportsPlusJSONBody
+
+// SaveNotificationPreferencesJSONRequestBody defines body for SaveNotificationPreferences for application/json ContentType.
+type SaveNotificationPreferencesJSONRequestBody = NotificationPreference
+
+// UpdateProfileJSONRequestBody defines body for UpdateProfile for application/json ContentType.
+type UpdateProfileJSONRequestBody = ProfileInput
 
 // MarkSimulationUserJSONRequestBody defines body for MarkSimulationUser for application/json ContentType.
 type MarkSimulationUserJSONRequestBody = SimulationUserMark

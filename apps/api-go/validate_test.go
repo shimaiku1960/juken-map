@@ -1,0 +1,83 @@
+package main
+
+import (
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+// 期待値は、Node の Zod（profileSchema と validationErrorBody）に同じ入力を通した結果（2026-09-30、zod 4.5.4）。
+
+func TestNicknameRule(t *testing.T) {
+	const (
+		fullwidthSpace = "\u3000"
+		bom            = "\ufeff"
+		nel            = "\u0085"
+		nbsp           = "\u00a0"
+		zeroWidthSpace = "\u200b"
+		enQuad         = "\u2000"
+		emoji          = "\U0001F600"
+	)
+	typeError := `{"error":"ニックネームは文字列で入力してください","code":"invalid_type","field":"nickname"}`
+	tooBig := `{"error":"50文字以内で入力してください","code":"too_big","field":"nickname"}`
+
+	tests := []struct {
+		name  string
+		body  any
+		want  string // 通ったときの値
+		issue string // 弾いたときの 400 の本文
+	}{
+		{"無い", map[string]any{}, "", typeError},
+		{"数", map[string]any{"nickname": 1.0}, "", typeError},
+		{"null", map[string]any{"nickname": nil}, "", typeError},
+		{"空文字", map[string]any{"nickname": ""}, "", `{"error":"ニックネームは必須です","code":"too_small","field":"nickname"}`},
+		{"空白だけは通り、削って空文字になる", map[string]any{"nickname": "   "}, "", ""},
+		{"全角スペースを削る", map[string]any{"nickname": fullwidthSpace + "山田" + fullwidthSpace}, "山田", ""},
+		{"BOM を削る", map[string]any{"nickname": bom + "山田"}, "山田", ""},
+		{"NBSP を削る", map[string]any{"nickname": nbsp + "山田"}, "山田", ""},
+		{"U+2000 を削る", map[string]any{"nickname": enQuad + "山田"}, "山田", ""},
+		{"U+0085 は削らない", map[string]any{"nickname": nel + "山田"}, nel + "山田", ""},
+		{"ゼロ幅スペースは削らない", map[string]any{"nickname": zeroWidthSpace + "山田"}, zeroWidthSpace + "山田", ""},
+		{"50文字は通る", map[string]any{"nickname": strings.Repeat("あ", 50)}, strings.Repeat("あ", 50), ""},
+		{"51文字は弾く", map[string]any{"nickname": strings.Repeat("あ", 51)}, "", tooBig},
+		// 長さはコードポイントで数える。絵文字は UTF-16 では 2 だが 1 と数える
+		{"絵文字50個は通る", map[string]any{"nickname": strings.Repeat(emoji, 50)}, strings.Repeat(emoji, 50), ""},
+		{"絵文字51個は弾く", map[string]any{"nickname": strings.Repeat(emoji, 51)}, "", tooBig},
+		// 長さは削る前に確かめる
+		{"削ると50文字でも、前後の空白込みで53文字なら弾く", map[string]any{"nickname": " " + strings.Repeat("a", 49) + "  "}, "", tooBig},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := readObject(tt.body)
+			got := in.string("nickname", nicknameRule)
+			res := httptest.NewRecorder()
+			rejected := in.reject(res)
+
+			if tt.issue != "" {
+				if !rejected {
+					t.Fatalf("通ってしまった（%q）", got)
+				}
+				assertJSONEqual(t, res.Body.String(), tt.issue)
+				return
+			}
+			if rejected {
+				t.Fatalf("弾かれた: %s", res.Body)
+			}
+			if got != tt.want {
+				t.Errorf("nickname = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestObjectInputStopsAtFirstIssue(t *testing.T) {
+	// Zod と同じく、スキーマに書いた順で最初の1件だけを返す。後ろの項目は読まずにゼロ値を返す。
+	in := readObject(map[string]any{"a": "x", "b": "y"})
+	if in.boolean("a") || in.boolean("b") {
+		t.Fatal("弾いた項目や、その後ろの項目が true になった")
+	}
+	res := httptest.NewRecorder()
+	in.reject(res)
+	assertJSONEqual(t, res.Body.String(),
+		`{"error":"Invalid input: expected boolean, received string","code":"invalid_type","field":"a"}`)
+}

@@ -17,6 +17,8 @@ func TestRegisteredRoutes(t *testing.T) {
 		{"GET /api/textbooks", accessUser},
 		{"GET /api/textbook-masters", accessUser},
 		{"GET /api/notification-preferences", accessUser},
+		{"PUT /api/notification-preferences", accessUser},
+		{"PUT /api/profile", accessUser},
 		{"GET /api/universities", accessUser},
 		{"GET /api/universities/{id}", accessUser},
 		{"POST /api/analytics/registration", accessUser},
