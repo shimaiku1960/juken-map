@@ -8,7 +8,8 @@
 # - 2つとも無ければ、これまで通り .env の DATABASE_URL で起動する
 # - 片方だけなら、何も起動せずに止まる
 # あわせて、Go のコンテナ（JUK-72）には Go が読む値だけが渡ることも見る。毎日の通知（JUK-74）に使う
-# Resend のキー・LINE の送信用トークン・cron の共有トークンは渡り、LINE の Webhook の署名用の秘密は渡らない。
+# Resend のキー・LINE の送信用トークン・cron の共有トークンが渡る。LINE 連携（JUK-79）も Go が受けるので、
+# LINE の Webhook の署名用の秘密も渡る。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -92,6 +93,7 @@ DAILY_NOTIFICATION_SECRET=d
 DATABASE_URL=mysql://juken_app:APP@rds/juken_map
 GOMEMLIMIT=96MiB
 LINE_CHANNEL_ACCESS_TOKEN=t
+LINE_CHANNEL_SECRET=l
 NODE_ENV=production
 RESEND_API_KEY=r
 SIMULATION_ENABLED=on
@@ -113,6 +115,7 @@ DAILY_NOTIFICATION_SECRET=d
 DATABASE_URL=mysql://admin:ADMIN@rds/juken_map
 GOMEMLIMIT=96MiB
 LINE_CHANNEL_ACCESS_TOKEN=t
+LINE_CHANNEL_SECRET=l
 NODE_ENV=production
 RESEND_API_KEY=r
 SIMULATION_ENABLED=on
