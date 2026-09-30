@@ -18,16 +18,17 @@ import (
 // ルートなのにセッションが無い」という取り違えはコンパイルの時点で起きない。
 
 // access は入口の種類。値は Node の ACCESS_ENTRY と同じ名前にする。
-// Webhook・OAuth などは、その API を Go へ移すときに足す（JUK-79）。
 type access string
 
 const (
-	accessPublic access = "public" // E1 誰でも呼べる読み取り
-	accessUser   access = "user"   // E3 ログイン必須。デモは書き込み不可。持ち主の確認はハンドラが行う
-	accessAdmin  access = "admin"  // E4 ログイン＋role=admin
-	accessJob    access = "job"    // E6 自分のジョブ（cron・sim）。セッションではなく共有トークンで守る
+	accessPublic  access = "public"  // E1 誰でも呼べる読み取り
+	accessUser    access = "user"    // E3 ログイン必須。デモは書き込み不可。持ち主の確認はハンドラが行う
+	accessAdmin   access = "admin"   // E4 ログイン＋role=admin
+	accessWebhook access = "webhook" // E5 外のサービスが呼ぶ（LINE）。署名はハンドラが本文と一緒に確かめる
+	accessJob     access = "job"     // E6 自分のジョブ（cron・sim）。セッションではなく共有トークンで守る
 	// E7 ログイン不要の書き込み（CSP 違反の報告）。書き込めても害が無い設計にする（DB に書かない・大きさに上限）
 	accessAnonymousWrite access = "anonymous-write"
+	accessOAuth          access = "oauth" // E8 外部との連携（OAuth）。画面遷移なので、未ログインはハンドラがログインへ送る
 )
 
 // デモアカウント（面接官向け・閲覧専用）。Node の src/shared/demo.ts と同じ値。
@@ -49,6 +50,9 @@ type session struct {
 
 // sessionHandler はログイン済みのルートのハンドラ。Node の currentSession(request) にあたる値を引数で受け取る。
 type sessionHandler func(w http.ResponseWriter, r *http.Request, s *session)
+
+// oauthHandler は OAuth の入口のハンドラ。s は未ログインなら nil（ハンドラが戻り先つきでログインへ送る）。
+type oauthHandler func(w http.ResponseWriter, r *http.Request, s *session)
 
 // sessionLoader はリクエストからセッションを読む。ログインしていなければ (nil, nil) を返す。
 // 関数で受け取るのは、テストで DB の代わりに決まったセッションを返せるようにするため。
@@ -161,6 +165,39 @@ func (rt *router) job(pattern, secret string, h http.HandlerFunc) {
 			return
 		}
 		h(w, r)
+	})
+}
+
+// webhook は外のサービスが呼ぶルートを登録する（LINE の Webhook）。
+// 署名は受け取ったままの本文で確かめる必要があり、本文を読むのはハンドラなので、確認もハンドラが行う。
+// ルーターは何も断らない。種類を分けて登録するのは、一覧（TestRegisteredRoutes）で入口を取り違えないため。
+func (rt *router) webhook(pattern string, h http.HandlerFunc) {
+	rt.handle(pattern, accessWebhook, h)
+}
+
+// oauth は外部との連携の往復（LINE Login）のルートを登録する。ブラウザが画面遷移で開くので、
+// 未ログインでも 401 にはせず、s を nil にしてハンドラへ渡す（ハンドラがログインへ 302 で送る）。
+// ログイン済みなら、停止中とデモは 403（連携は書き込みなので、GET でもデモは断る。Node と同じ）。
+func (rt *router) oauth(pattern string, h oauthHandler) {
+	rt.handle(pattern, accessOAuth, func(w http.ResponseWriter, r *http.Request) {
+		s, err := rt.loadSession(r)
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		if s != nil {
+			// Node の oauth の入口は停止中を見ていない（停止のときに session を消すので、普通は来ない）。
+			// user・admin の入口と揃えて、残っていたセッションでも連携させない。
+			if s.Banned {
+				writeError(w, http.StatusForbidden, "このアカウントは利用を停止されています。")
+				return
+			}
+			if s.Email == demoEmail {
+				writeError(w, http.StatusForbidden, "デモアカウントは閲覧専用です")
+				return
+			}
+		}
+		h(w, r, s)
 	})
 }
 

@@ -98,13 +98,28 @@ func (e SimulationCohort) Valid() bool {
 
 // Defines values for GetHealth200JSONResponseBodyOk.
 const (
-	True GetHealth200JSONResponseBodyOk = true
+	GetHealth200JSONResponseBodyOkTrue GetHealth200JSONResponseBodyOk = true
 )
 
 // Valid indicates whether the value is a known member of the GetHealth200JSONResponseBodyOk enum.
 func (e GetHealth200JSONResponseBodyOk) Valid() bool {
 	switch e {
-	case True:
+	case GetHealth200JSONResponseBodyOkTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReceiveLineWebhook200JSONResponseBodyOk.
+const (
+	ReceiveLineWebhook200JSONResponseBodyOkTrue ReceiveLineWebhook200JSONResponseBodyOk = true
+)
+
+// Valid indicates whether the value is a known member of the ReceiveLineWebhook200JSONResponseBodyOk enum.
+func (e ReceiveLineWebhook200JSONResponseBodyOk) Valid() bool {
+	switch e {
+	case ReceiveLineWebhook200JSONResponseBodyOkTrue:
 		return true
 	default:
 		return false
@@ -262,6 +277,11 @@ type IsoDate = string
 
 // IsoDateTime Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
 type IsoDateTime = string
+
+// LineConnectionStatus defines model for LineConnectionStatus.
+type LineConnectionStatus struct {
+	Connected bool `json:"connected"`
+}
 
 // NotificationPreference defines model for NotificationPreference.
 type NotificationPreference struct {
@@ -545,6 +565,29 @@ type ReportCspViolationApplicationReportsPlusJSONBody = []map[string]interface{}
 // GetHealth200JSONResponseBodyOk defines parameters for GetHealth.
 type GetHealth200JSONResponseBodyOk bool
 
+// StartLineAccountLinkJSONBody defines parameters for StartLineAccountLink.
+type StartLineAccountLinkJSONBody struct {
+	LinkToken string `json:"linkToken"`
+}
+
+// CompleteLineLoginParams defines parameters for CompleteLineLogin.
+type CompleteLineLoginParams struct {
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+	Error *string `form:"error,omitempty" json:"error,omitempty"`
+}
+
+// ReceiveLineWebhookJSONBody defines parameters for ReceiveLineWebhook.
+type ReceiveLineWebhookJSONBody = map[string]interface{}
+
+// ReceiveLineWebhookParams defines parameters for ReceiveLineWebhook.
+type ReceiveLineWebhookParams struct {
+	XLineSignature string `json:"x-line-signature"`
+}
+
+// ReceiveLineWebhook200JSONResponseBodyOk defines parameters for ReceiveLineWebhook.
+type ReceiveLineWebhook200JSONResponseBodyOk bool
+
 // ListStudyLogsParams defines parameters for ListStudyLogs.
 type ListStudyLogsParams struct {
 	// From 期間の始まり（その日を含む）
@@ -582,6 +625,12 @@ type SendDailyStudyNotificationsJSONRequestBody SendDailyStudyNotificationsJSONB
 
 // ReportCspViolationApplicationReportsPlusJSONRequestBody defines body for ReportCspViolation for application/reports+json ContentType.
 type ReportCspViolationApplicationReportsPlusJSONRequestBody = ReportCspViolationApplicationReportsPlusJSONBody
+
+// StartLineAccountLinkJSONRequestBody defines body for StartLineAccountLink for application/json ContentType.
+type StartLineAccountLinkJSONRequestBody StartLineAccountLinkJSONBody
+
+// ReceiveLineWebhookJSONRequestBody defines body for ReceiveLineWebhook for application/json ContentType.
+type ReceiveLineWebhookJSONRequestBody = ReceiveLineWebhookJSONBody
 
 // SaveNotificationPreferencesJSONRequestBody defines body for SaveNotificationPreferences for application/json ContentType.
 type SaveNotificationPreferencesJSONRequestBody = NotificationPreference

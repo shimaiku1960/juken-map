@@ -91,6 +91,15 @@ var parityCases = []struct {
 	// どちらも必ず 401 になり、実際には送らない）
 	{"POST", "/api/cron/daily-study-notifications", []who{anonymous, eachUser}},
 
+	// LINE 連携（JUK-79）。JSON を返すものだけ（OAuth の2本は LINE やログインへの 302 なので、line_test.go で見る）。
+	// 解除とアカウント連携は、合成ユーザーの状態を変えないよう、断られるものだけを比べる。
+	// Webhook は本文も署名も無いので 401（どちらも署名を確かめる前に本文を JSON として読まない）
+	{"GET", "/api/line/connection", []who{anonymous, forged, unknownUser, eachUser}},
+	{"DELETE", "/api/line/connection", []who{anonymous, forged}},
+	{"POST", "/api/line/account-link", []who{anonymous, eachUser}},
+	{"POST", "/api/line/webhook", []who{anonymous, eachUser}},
+	{"PUT", "/api/line/connection", []who{eachUser}},
+
 	// どのルートにも当たらないもの。Go に無いものは Node にも無い（Node にあるものは移していないだけ）。
 	{"GET", "/api/no-such-route", []who{anonymous}},
 	{"POST", "/api/dashboard", []who{eachUser}},
