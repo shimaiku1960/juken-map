@@ -5,7 +5,8 @@ Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバ�
 `/api/study-plans`）、志望校（`GET /api/goals`・`/api/goals/first-choice`）、参考書（`GET /api/textbooks`・`/api/textbook-masters`）、
 通知設定（`GET /api/notification-preferences`）、大学（`GET /api/universities`・`/api/universities/{id}`）を
 持つ（JUK-73）。書き込みは、通知設定（`PUT /api/notification-preferences`）・プロフィール（`PUT /api/profile`）・
-学習記録（`POST /api/study-logs`・`PATCH`/`DELETE /api/study-logs/{id}`）を移している（JUK-75）。LINE 連携（`/api/line/*`：連携の確認・解除、トークからの連携、LINE Login、Webhook）は
+学習記録（`POST /api/study-logs`・`PATCH`/`DELETE /api/study-logs/{id}`）・学習予定（`POST /api/study-plans`・
+`PATCH`/`DELETE /api/study-plans/{id}`・`POST /api/study-plans/{id}/complete`）を移している（JUK-75）。LINE 連携（`/api/line/*`：連携の確認・解除、トークからの連携、LINE Login、Webhook）は
 書き込みも含めて Go が受ける（JUK-79）。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
@@ -60,12 +61,13 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
        ├─ /api/line/*（全メソッド）                   ─▶ juken-map-go
-       ├─ /api/study-plans・/api/goals・/first-choice・
+       ├─ /api/goals・/first-choice・
        │  /api/textbooks・/api/textbook-masters・
        │  /api/universities・/api/universities/{id}
        │    GET・HEAD                                 ─▶ juken-map-go
        │    それ以外（POST など）                      ─▶ juken-map（Node）
        ├─ /api/study-logs・/daily・/api/study-logs/{id}・
+       │  /api/study-plans・/api/study-plans/{id}・/{id}/complete・
        │  /api/notification-preferences・/api/profile（全メソッド） ─▶ juken-map-go
        ├─ POST /api/analytics/registration・POST /api/csp-report・
        │  POST /api/cron/daily-study-notifications     ─▶ juken-map-go
@@ -109,7 +111,7 @@ path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。
 1. `main.go` の `registerRoutes` と、`main_test.go` の一覧（入口の種類を Node と揃える）
 2. `parity_test.go` の `parityCases`（Node と応答が同じかを確かめる。不正な入力のケースも）
 3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスに書き込みが残っているなら、
-   `/api/study-plans` と同じく GET・HEAD 以外を `@node` へ回す
+   `/api/goals` と同じく GET・HEAD 以外を `@node` へ回す
 
 ## 書き込みのルート
 
@@ -142,7 +144,10 @@ if in.reject(w) {            // 最初の1件を {error, code, field} の 400 �
   Node は `data.x ?? null` で書き、`data.x !== current` で「変わったか」を見るので、`ptr()` と `differs()` で同じにする
 - 数は `json.Number` のまま受け、`checkNumber` で Zod の `number().int().positive().max()` と同じ順・同じ文言で確かめる
   （範囲外の数は ±Infinity、安全な整数の外は too_big・too_small）
-- 成功する書き込みの応答一致は、同じ手順を Node と Go で順に流して各段を比べる（`TestParityStudyLogScenario`）。
+- 入れ子のオブジェクトは `readObjectAt(element, "items.0")` で読み、`in.take(item)` で外側の issue にする。
+  field は Zod と同じ `items.0.content` の形になる。配列は `in.array`（`.min(1)` も確かめる）
+- 成功する書き込みの応答一致は、同じ手順を Node と Go で順に流して各段を比べる（`TestParityStudyLogScenario`・
+  `TestParityStudyPlanScenario`）。両方が同じように失敗しても一致になるので、各段が狙いどおりのステータスかも確かめる。
   手順は自分で作った行を自分で消し、書き換えた行は最後に戻す
 
 クエリ文字列は `r.URL.Query()` ではなく `parseQuery`（`query.go`）で読む。Go の標準は `;` を含む組や
@@ -214,6 +219,7 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
 | `body.go` | リクエスト本文の読み方（Content-Type・上限・壊れた JSON・不正な UTF-8）、415・413 の形 | Fastify の本文の解析・`server.ts` の JSON パーサー |
 | `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） | `src/shared/validations/`・`routes/validation-error.ts` |
+| `study_plan_writes.go` | 学習予定の作成（まとめて）・書き換え（送った項目だけ）・削除・完了（実績を作る） | `routes/study-plans.ts` の POST・PATCH・DELETE・complete、`study-plan-service.ts` |
 | `study_log_writes.go` | 学習記録の記録・書き換え・削除（参考書の範囲の確かめ、初回記録の印） | `routes/study-logs.ts` の POST・`study-log-item.ts`・`study-log-service.ts`・`domain/textbookRange.ts` |
 | `profile.go` | プロフィールの更新 | `routes/profile.ts`・`services/user-service.ts` の updateProfile |
 | `parity_test.go`・`parity_writes_test.go`・`parity.sh` | Node と応答を比べる（ログイン済みの書き込みは `parity_writes_test.go`。書き換えた行を最後に戻す） | — |

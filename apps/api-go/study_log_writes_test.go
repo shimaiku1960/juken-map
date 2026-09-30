@@ -165,7 +165,7 @@ func TestTextbookRangeError(t *testing.T) {
 		{"参考書に設定が無い", ownedTextbook{}, input(`{"date":"2026-09-01","minutes":1,"rangeStart":1,"rangeEnd":9999,"rangeUnit":"chapter"}`), ""},
 	}
 	for _, tt := range tests {
-		if got := textbookRangeError(tt.tb, tt.in); got != tt.want {
+		if got := textbookRangeError(tt.tb, tt.in.rangeEnd.ptr(), tt.in.rangeUnit.ptr()); got != tt.want {
 			t.Errorf("%s: %q, want %q", tt.name, got, tt.want)
 		}
 	}

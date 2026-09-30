@@ -43,15 +43,30 @@ func (v *validationIssue) write(w http.ResponseWriter) {
 type objectInput struct {
 	fields map[string]any
 	issue  *validationIssue
+	// path は入れ子のオブジェクトの場所（"items.0"）。issue の field はこれに項目名をつないだもの。
+	path string
 }
 
 // readObject は z.object({…}) の入口。本文がオブジェクトでなければ、それが最初の issue になる。
 func readObject(body any) *objectInput {
-	m, ok := body.(map[string]any)
+	return readObjectAt(body, "")
+}
+
+// readObjectAt は入れ子のオブジェクト（配列の要素など）を読む。path は "items.0" のような場所。
+func readObjectAt(v any, path string) *objectInput {
+	m, ok := v.(map[string]any)
 	if !ok {
-		return &objectInput{issue: invalidType("", "object", body)}
+		return &objectInput{issue: invalidType(path, "object", v), path: path}
 	}
-	return &objectInput{fields: m}
+	return &objectInput{fields: m, path: path}
+}
+
+// field は項目名を、Zod の issue の path と同じ "items.0.content" の形にする。
+func (in *objectInput) field(key string) string {
+	if in.path == "" {
+		return key
+	}
+	return in.path + "." + key
 }
 
 // reject は issue があれば 400 を送って true を返す。
@@ -82,9 +97,43 @@ func (in *objectInput) boolean(key string) bool {
 	}
 	b, isBool := v.(bool)
 	if !isBool {
-		in.issue = invalidType(key, "boolean", v)
+		in.issue = invalidType(in.field(key), "boolean", v)
 	}
 	return b
+}
+
+// optionalBool は z.boolean().optional()。
+func (in *objectInput) optionalBool(key string) optional[bool] {
+	return readOptional(in, key, false, func(field string, v any) (bool, *validationIssue) {
+		b, isBool := v.(bool)
+		if !isBool {
+			return false, invalidType(field, "boolean", v)
+		}
+		return b, nil
+	})
+}
+
+// array は z.array(…).min(1, minMessage)。要素は呼び出し側が readObjectAt(element, in.field(key)+".0") で読む。
+func (in *objectInput) array(key, minMessage string) []any {
+	v, ok := in.value(key)
+	if !ok {
+		return nil
+	}
+	a, isArray := v.([]any)
+	switch {
+	case !isArray:
+		in.issue = invalidType(in.field(key), "array", v)
+	case len(a) == 0:
+		in.issue = &validationIssue{code: "too_small", field: in.field(key), message: minMessage}
+	}
+	return a
+}
+
+// take は入れ子のオブジェクトで見つかった issue を、外側の最初の issue にする。
+func (in *objectInput) take(inner *objectInput) {
+	if in.issue == nil {
+		in.issue = inner.issue
+	}
 }
 
 // stringRule は z.string() に続けて書いたチェック。Zod と同じ順（型 → min → max → checks → trim）に確かめる。
@@ -114,7 +163,7 @@ func (in *objectInput) string(key string, rule stringRule) string {
 	if !ok {
 		return ""
 	}
-	s, issue := checkString(key, v, rule)
+	s, issue := checkString(in.field(key), v, rule)
 	in.issue = issue
 	return s
 }
@@ -167,7 +216,7 @@ func (in *objectInput) number(key string, rule numberRule) float64 {
 	if !ok {
 		return 0
 	}
-	f, issue := checkNumber(key, v, rule)
+	f, issue := checkNumber(in.field(key), v, rule)
 	in.issue = issue
 	return f
 }
@@ -261,7 +310,7 @@ func readOptional[T comparable](in *objectInput, key string, nullable bool, chec
 	case v == nil && nullable:
 		return optional[T]{present: true}
 	}
-	value, issue := check(key, v)
+	value, issue := check(in.field(key), v)
 	if issue != nil {
 		in.issue = issue
 		return optional[T]{}
@@ -294,7 +343,7 @@ func oneOf(values []string, code, message string) stringCheck {
 // すでに issue があれば何もしない（最初の1件だけを返すので）。
 func (in *objectInput) addIssue(code, field, message string) {
 	if in.issue == nil {
-		in.issue = &validationIssue{code: code, field: field, message: message}
+		in.issue = &validationIssue{code: code, field: in.field(field), message: message}
 	}
 }
 
@@ -348,4 +397,21 @@ func isJSWhitespace(r rune) bool {
 		return true
 	}
 	return r >= 0x2000 && r <= 0x200A
+}
+
+// ymdDateRule は Zod の ymdDate（src/shared/validations/studyPlan.ts）：min(1) の後に
+// 「YYYY-MM-DD の形」と「暦にある日付」を確かめる。minMessage が空なら Zod の既定の文言。
+// extra はその後ろに続けて書いた .refine()（実績の「未来日は不可」など）。
+func ymdDateRule(minMessage string, extra ...stringCheck) stringRule {
+	if minMessage == "" {
+		minMessage = "Too small: expected string to have >=1 characters"
+	}
+	return stringRule{
+		min:        1,
+		minMessage: minMessage,
+		checks: append([]stringCheck{
+			{ok: ymdPattern.MatchString, code: "invalid_format", message: ymdMessage},
+			{ok: func(s string) bool { return !ymdPattern.MatchString(s) || isCalendarYMD(s) }, code: "invalid_date", message: "存在しない日付です"},
+		}, extra...),
+	}
 }

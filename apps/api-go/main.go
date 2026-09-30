@@ -146,6 +146,12 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig) {
 	rt.user("PATCH /api/study-logs/{id}", studyLogWrites.update)
 	rt.user("DELETE /api/study-logs/{id}", studyLogWrites.delete)
 
+	studyPlanWrites := &studyPlanWriteHandlers{store: &studyPlanWriteStore{db: db}}
+	rt.user("POST /api/study-plans", studyPlanWrites.create)
+	rt.user("PATCH /api/study-plans/{id}", studyPlanWrites.update)
+	rt.user("DELETE /api/study-plans/{id}", studyPlanWrites.delete)
+	rt.user("POST /api/study-plans/{id}/complete", studyPlanWrites.complete)
+
 	goals := &goalHandlers{store: &goalStore{db: db}}
 	rt.user("GET /api/goals", goals.list)
 	rt.user("GET /api/goals/first-choice", goals.firstChoice)

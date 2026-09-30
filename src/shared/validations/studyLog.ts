@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { SUBJECT_VALUES } from "@/shared/subjects";
-import { RANGE_UNIT_VALUES } from "@/shared/validations/studyPlan";
-import { isCalendarYmd, todayYmdTokyo, YMD_PATTERN } from "@/shared/date";
+import { RANGE_UNIT_VALUES, ymdDate } from "@/shared/validations/studyPlan";
+import { todayYmdTokyo } from "@/shared/date";
 
 // 科目：固定リストの値 or null（未設定）
 const subjectField = z
@@ -13,16 +13,8 @@ const subjectField = z
 // 勉強「実績」1件分。時間（分）は必須、参考書＋範囲・メモ・科目は任意。
 export const createStudyLogSchema = z
   .object({
-    // "YYYY-MM-DD" で、暦にある日付だけ。以前は形を見ずに new Date() へ渡していたので、
-    // "1" が 2001 年、"2026-09-3" がサーバーの時間帯の日付になり、空白だけでは 500 になっていた（JUK-75）。
-    date: z
-      .string()
-      .min(1, "日付を選択してください")
-      .regex(YMD_PATTERN, "日付は YYYY-MM-DD で指定してください")
-      .refine(
-        (date) => !YMD_PATTERN.test(date) || isCalendarYmd(date),
-        { message: "存在しない日付です", params: { code: "invalid_date" } }
-      )
+    // "YYYY-MM-DD" で、暦にある日付だけ（ymdDate）。実績は未来の日付も不可。
+    date: ymdDate(z.string().min(1, "日付を選択してください"))
       .refine(
         (date) => date <= todayYmdTokyo(),
         { message: "未来日は実績として記録できません", params: { code: "future_date" } }

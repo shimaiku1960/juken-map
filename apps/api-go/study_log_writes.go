@@ -29,58 +29,36 @@ type studyLogInput struct {
 	memo       optional[string]
 }
 
-// positiveInt は z.number().int().positive()（文言は Zod の既定）。
+// positiveIntRule は z.number().int().positive()（文言は Zod の既定）。
 var positiveIntRule = numberRule{int: true, positive: true}
+
+// minutesRule は実績の時間（分）。実績の記録と予定の完了で同じ。
+var minutesRule = numberRule{
+	typeMessage:     "学習時間を入力してください",
+	int:             true,
+	intMessage:      "整数で入力してください",
+	positive:        true,
+	positiveMessage: "1分以上を入力してください",
+	max:             1440,
+	maxMessage:      "24時間（1440分）以内で入力してください",
+}
 
 // readStudyLogInput は createStudyLogSchema と同じ順に確かめる。today は日本時間の今日（YYYY-MM-DD）。
 func readStudyLogInput(body any, today string) (*objectInput, studyLogInput) {
 	in := readObject(body)
 	var v studyLogInput
-	v.date = in.string("date", stringRule{
-		min:        1,
-		minMessage: "日付を選択してください",
-		checks: []stringCheck{
-			{ok: ymdPattern.MatchString, code: "invalid_format", message: ymdMessage},
-			{ok: func(s string) bool { return !ymdPattern.MatchString(s) || isCalendarYMD(s) }, code: "invalid_date", message: "存在しない日付です"},
-			// Node と同じく文字列のまま比べる（形は上で確かめてある）。
-			{ok: func(s string) bool { return s <= today }, code: "future_date", message: "未来日は実績として記録できません"},
-		},
-	})
-	v.minutes = int64(in.number("minutes", numberRule{
-		typeMessage:     "学習時間を入力してください",
-		int:             true,
-		intMessage:      "整数で入力してください",
-		positive:        true,
-		positiveMessage: "1分以上を入力してください",
-		max:             1440,
-		maxMessage:      "24時間（1440分）以内で入力してください",
-	}))
-	v.subject = in.optionalString("subject", stringRule{checks: []stringCheck{
-		{ok: func(s string) bool { return StudyLogInputSubject(s).Valid() }, code: "invalid_subject", message: "科目の値が不正です"},
-	}}, true)
+	v.date = in.string("date", ymdDateRule("日付を選択してください",
+		// Node と同じく文字列のまま比べる（形は ymdDateRule で確かめてある）。
+		stringCheck{ok: func(s string) bool { return s <= today }, code: "future_date", message: "未来日は実績として記録できません"}))
+	v.minutes = int64(in.number("minutes", minutesRule))
+	v.subject = in.optionalString("subject", stringRule{checks: []stringCheck{subjectCheck}}, true)
 	v.textbookID = in.optionalInt("textbookId", positiveIntRule, true)
 	v.rangeStart = in.optionalInt("rangeStart", positiveIntRule, true)
 	v.rangeEnd = in.optionalInt("rangeEnd", positiveIntRule, true)
-	v.rangeUnit = in.optionalString("rangeUnit", stringRule{checks: []stringCheck{
-		{ok: func(s string) bool { return StudyLogInputRangeUnit(s).Valid() }, code: "invalid_range_unit", message: "単位の値が不正です"},
-	}}, true)
-	v.memo = in.optionalString("memo", stringRule{max: 500, maxMessage: "500文字以内で入力してください", trim: true}, false)
+	v.rangeUnit = in.optionalString("rangeUnit", stringRule{checks: []stringCheck{rangeUnitCheck}}, true)
+	v.memo = in.optionalString("memo", memoRule, false)
 
-	// superRefine の3つの規則。Zod と同じ順に足す（最初の1件だけが返る）。
-	hasStart, hasEnd := !v.rangeStart.isNull(), !v.rangeEnd.isNull()
-	if hasStart != hasEnd {
-		field := "rangeStart"
-		if hasStart {
-			field = "rangeEnd"
-		}
-		in.addIssue("range_incomplete", field, "範囲は開始と終了の両方を入力してください")
-	}
-	if hasStart && hasEnd && *v.rangeStart.value > *v.rangeEnd.value {
-		in.addIssue("range_end_before_start", "rangeEnd", "終了は開始以上にしてください")
-	}
-	if (hasStart || hasEnd) && v.rangeUnit.isNull() {
-		in.addIssue("range_unit_required", "rangeUnit", "単位を選択してください")
-	}
+	in.rangeRules(v.rangeStart, v.rangeEnd, v.rangeUnit)
 	return in, v
 }
 
@@ -90,15 +68,35 @@ type ownedTextbook struct {
 	totalAmount *int64
 }
 
-// textbookRangeError は Node の textbookRangeError と同じ。問題なければ ""。
-func textbookRangeError(tb ownedTextbook, in studyLogInput) string {
-	if in.rangeEnd.isNull() {
+// rangeRules は superRefine の範囲の3つの規則（実績・予定・予定の完了で同じ）。Zod と同じ順に足す。
+func (in *objectInput) rangeRules(start, end optional[int64], unit optional[string]) {
+	hasStart, hasEnd := !start.isNull(), !end.isNull()
+	if hasStart != hasEnd {
+		field := "rangeStart"
+		if hasStart {
+			field = "rangeEnd"
+		}
+		in.addIssue("range_incomplete", field, "範囲は開始と終了の両方を入力してください")
+	}
+	if hasStart && hasEnd && *start.value > *end.value {
+		in.addIssue("range_end_before_start", "rangeEnd", "終了は開始以上にしてください")
+	}
+	if (hasStart || hasEnd) && unit.isNull() {
+		in.addIssue("range_unit_required", "rangeUnit", "単位を選択してください")
+	}
+}
+
+// textbookRangeError は Node の textbookRangeError（domain/textbookRange.ts）と同じ。問題なければ ""。
+// rangeEnd・rangeUnit は送られた値（無い・null なら nil）。Node の `data.rangeUnit !== textbook.rangeUnit` は、
+// undefined でも null でも「違う」になるので、nil はどちらも同じに扱える。
+func textbookRangeError(tb ownedTextbook, rangeEnd *int64, rangeUnit *string) string {
+	if rangeEnd == nil {
 		return ""
 	}
-	if tb.rangeUnit != nil && in.rangeUnit.differs(tb.rangeUnit) {
+	if tb.rangeUnit != nil && (rangeUnit == nil || *rangeUnit != *tb.rangeUnit) {
 		return "範囲の単位を参考書の逆算設定に合わせてください"
 	}
-	if tb.totalAmount != nil && *in.rangeEnd.value > *tb.totalAmount {
+	if tb.totalAmount != nil && *rangeEnd > *tb.totalAmount {
 		return fmt.Sprintf("終了位置は参考書の総量（%d）以下にしてください", *tb.totalAmount)
 	}
 	return ""
@@ -281,7 +279,7 @@ func (h *studyLogWriteHandlers) checkTextbook(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "不正な参考書です")
 		return false
 	}
-	if message := textbookRangeError(*tb, in); message != "" {
+	if message := textbookRangeError(*tb, in.rangeEnd.ptr(), in.rangeUnit.ptr()); message != "" {
 		writeError(w, http.StatusBadRequest, message)
 		return false
 	}
