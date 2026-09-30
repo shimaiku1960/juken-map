@@ -41,6 +41,19 @@ export function todayYmdTokyo(): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+// "YYYY-MM-DD" の形。入力チェックが日付の文字列に使う。
+export const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// "YYYY-MM-DD"（形は YMD_PATTERN で確かめ済み）が暦にある日付か。2026-02-30・2026-13-01 は false。
+// Date は使わない（Date.UTC は 0〜99 年を 1900 年代に読み替える）。Go 側（apps/api-go）も同じ算数で判定する。
+export function isCalendarYmd(ymd: string): boolean {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (m < 1 || m > 12 || d < 1) return false;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return d <= days[m - 1];
+}
+
 // "YYYY-MM-DD" を n 日ずらした "YYYY-MM-DD"（負の数で過去へ）。
 // 月またぎ・うるう年は Date に任せる。時刻を持たないので時間帯の影響を受けない。
 export function shiftYmd(ymd: string, days: number): string {

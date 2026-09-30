@@ -66,6 +66,48 @@ var userWriteCases = []struct {
 	{"PUT", "/api/profile", jsonType, `{"nickname":1}`, []who{eachUser}, nil},
 	{"PUT", "/api/profile", jsonType, `{}`, []who{eachUser}, nil},
 	{"PUT", "/api/profile", jsonType, `"x"`, []who{eachUser}, nil},
+
+	// 学習記録（JUK-75）。弾かれるものだけ（成功する書き込みは TestParityStudyLogScenario）
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30}`, []who{anonymous, forged, unknownUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"minutes":30}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"","minutes":"x","subject":"bad"}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"1","minutes":30}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":" ","minutes":30}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01T10:00:00Z","minutes":30}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-02-30","minutes":30}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2099-01-01","minutes":30}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":1.5}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":1e20}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":1e400}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":0}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":1441}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"subject":"xx"}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"textbookId":1.5}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"textbookId":-1e400}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"textbookId":9007199254740993}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"textbookId":999999999}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"rangeStart":1}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"rangeEnd":3}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"rangeStart":5,"rangeEnd":2}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"rangeStart":1,"rangeEnd":2}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"rangeStart":2,"rangeEnd":1,"rangeUnit":"x"}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"memo":null}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{"date":"2026-09-01","minutes":30,"memo":"` + strings.Repeat("a", 501) + `"}`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", "text/html", `x`, []who{eachUser}, nil},
+	{"POST", "/api/study-logs", jsonType, `{a`, []who{eachUser}, nil},
+	// ID の形が違う・無い ID（本文より先に ID を見る。415 は ID より先）
+	{"PATCH", "/api/study-logs/abc", jsonType, `{}`, []who{anonymous, eachUser}, nil},
+	{"PATCH", "/api/study-logs/0", jsonType, `{}`, []who{eachUser}, nil},
+	{"PATCH", "/api/study-logs/daily", jsonType, `{}`, []who{eachUser}, nil},
+	{"PATCH", "/api/study-logs/999999999", jsonType, `{"date":"2026-09-01","minutes":30}`, []who{eachUser}, nil},
+	{"PATCH", "/api/study-logs/999999999", "text/html", `x`, []who{eachUser}, nil},
+	{"DELETE", "/api/study-logs/abc", "", ``, []who{anonymous, eachUser}, nil},
+	{"DELETE", "/api/study-logs/999999999", "", ``, []who{eachUser}, nil},
+	{"DELETE", "/api/study-logs/999999999", "text/html", `x`, []who{eachUser}, nil},
+	// 無いメソッドは 404
+	{"POST", "/api/study-logs/1", jsonType, `{}`, []who{eachUser}, nil},
+	{"GET", "/api/study-logs/1", "", ``, []who{eachUser}, nil},
+	{"POST", "/api/study-logs/daily", jsonType, `{}`, []who{eachUser}, nil},
 }
 
 func TestParityUserWrites(t *testing.T) {
@@ -158,4 +200,158 @@ func snapshotUser(t *testing.T, db *sql.DB, cookie string) func() {
 		}
 		t.Logf("1人目（%s）のニックネームと通知設定を元に戻した（ニックネーム %s）", s.UserID, strconv.Quote(nickname.String))
 	}
+}
+
+// TestParityStudyLogScenario は学習記録の成功する書き込みを比べる（JUK-75）。
+//
+// 同じ手順（記録 → 書き換え → 参考書の確かめ → 予定にひも付けて書き換え → 削除）を Node と Go で1回ずつ流し、
+// 各段の応答を比べる。手順は自分で作った行を自分で消すので、2回とも同じ DB の状態から始まる。
+// 予定とのひも付け（studyPlanId）は一意なので、2つの実績を同時にひも付けられない。そのため並べて送らず、順に流す。
+func TestParityStudyLogScenario(t *testing.T) {
+	env := parityEnv(t)
+	db, err := openDB(os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	cookie := env.cookiesFor(firstUser)[0]
+	userID := sessionUserID(t, db, cookie)
+
+	// 初回記録の印（firstStudyLogAt）は手順の中で消すので、控えて最後に戻す。
+	var firstAt sql.NullString
+	var updatedAt string
+	if err := db.QueryRow("SELECT firstStudyLogAt, updatedAt FROM `user` WHERE id = ?", userID).Scan(&firstAt, &updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	var created []int64
+	defer func() {
+		for _, id := range created {
+			db.Exec("DELETE FROM StudyLog WHERE id = ? AND userId = ?", id, userID)
+		}
+		if _, err := db.Exec("UPDATE `user` SET firstStudyLogAt = ?, updatedAt = ? WHERE id = ?", firstAt, updatedAt, userID); err != nil {
+			t.Errorf("初回記録の印を戻せません: %v", err)
+		}
+	}()
+
+	// 手順が使う、その人の参考書（逆算の設定があるもの）・ひも付いていない予定・ほかの人の参考書と実績。
+	// 逆算の設定がある参考書は、手順の間だけ作る（合成データの参考書は単位が「ページ」で、入力チェックの値と違う）。
+	tbUnit, tbTotal := "chapter", int64(12)
+	inserted, err := db.Exec(`INSERT INTO Textbook (userId, name, totalAmount, rangeUnit, createdAt, updatedAt)
+		VALUES (?, '応答一致テストの参考書', ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`, userID, tbTotal, tbUnit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tbID, _ := inserted.LastInsertId()
+	defer db.Exec("DELETE FROM Textbook WHERE id = ?", tbID)
+	var planID int64
+	err = db.QueryRow(`SELECT p.id FROM StudyPlan AS p LEFT JOIN StudyLog AS l ON l.studyPlanId = p.id
+		WHERE p.userId = ? AND l.id IS NULL ORDER BY p.id LIMIT 1`, userID).Scan(&planID)
+	if err != nil {
+		t.Fatalf("1人目に、実績とひも付いていない予定がありません: %v", err)
+	}
+	var otherTextbook, otherLog int64
+	if err := db.QueryRow("SELECT id FROM Textbook WHERE userId <> ? ORDER BY id LIMIT 1", userID).Scan(&otherTextbook); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT id FROM StudyLog WHERE userId <> ? ORDER BY id LIMIT 1", userID).Scan(&otherLog); err != nil {
+		t.Fatal(err)
+	}
+	otherUnit := "page"
+
+	run := func(base string) []response {
+		var out []response
+		call := func(method, path, body string) response {
+			t.Helper()
+			pr := parityRequest{method: method, path: path, cookie: cookie, body: body, header: map[string]string{}}
+			if body != "" {
+				pr.header["Content-Type"] = jsonType
+			}
+			res := send(t, base, pr)
+			if m, ok := res.body.(map[string]any); ok && res.status == http.StatusCreated {
+				id, _ := m["id"].(float64)
+				created = append(created, int64(id))
+			}
+			for _, key := range []string{"id", "createdAt", "updatedAt"} {
+				maskKey(res.body, key)
+			}
+			out = append(out, res)
+			return res
+		}
+		idOf := func(res response) int64 {
+			// maskKey の前の id は created の最後に入っている。
+			if res.status != http.StatusCreated {
+				t.Fatalf("記録できなかった: %d %v", res.status, res.body)
+			}
+			return created[len(created)-1]
+		}
+		logPath := func(id int64) string { return fmt.Sprintf("/api/study-logs/%d", id) }
+
+		// 初めての記録（印を消してから記録すると isFirstStudyLog が true）
+		if _, err := db.Exec("UPDATE `user` SET firstStudyLogAt = NULL WHERE id = ?", userID); err != nil {
+			t.Fatal(err)
+		}
+		first := idOf(call("POST", "/api/study-logs", `{"date":"2026-09-01","minutes":30}`))
+		// 2回目は false
+		a := idOf(call("POST", "/api/study-logs", `{"date":"2026-09-02","minutes":45,"subject":"math","memo":"　応答一致　"}`))
+		call("DELETE", logPath(first), "")
+
+		// 書き換え。任意の項目を省くと null になる
+		call("PATCH", logPath(a), `{"date":"2026-09-03","minutes":60,"subject":"english","rangeStart":1,"rangeEnd":5,"rangeUnit":"page","memo":""}`)
+		call("PATCH", logPath(a), `{"date":"2026-09-03","minutes":61}`)
+
+		// 参考書つき。自分のでない・単位が違う・総量を超えるは 400
+		call("POST", "/api/study-logs", fmt.Sprintf(`{"date":"2026-09-01","minutes":30,"textbookId":%d}`, otherTextbook))
+		call("POST", "/api/study-logs", fmt.Sprintf(`{"date":"2026-09-01","minutes":30,"textbookId":%d,"rangeStart":1,"rangeEnd":1,"rangeUnit":%q}`, tbID, otherUnit))
+		call("POST", "/api/study-logs", fmt.Sprintf(`{"date":"2026-09-01","minutes":30,"textbookId":%d,"rangeStart":1,"rangeEnd":%d,"rangeUnit":%q}`, tbID, tbTotal+1, tbUnit))
+		b := idOf(call("POST", "/api/study-logs", fmt.Sprintf(`{"date":"2026-09-01","minutes":30,"textbookId":%d,"rangeStart":1,"rangeEnd":%d,"rangeUnit":%q}`, tbID, tbTotal, tbUnit)))
+		// 範囲を変えずに時間だけ直すときは、参考書の設定を見直さない
+		call("PATCH", logPath(b), fmt.Sprintf(`{"date":"2026-09-01","minutes":31,"textbookId":%d,"rangeStart":1,"rangeEnd":%d,"rangeUnit":%q}`, tbID, tbTotal, tbUnit))
+		// 範囲を総量より先へ動かすと 400、参考書を外すと通る
+		call("PATCH", logPath(b), fmt.Sprintf(`{"date":"2026-09-01","minutes":31,"textbookId":%d,"rangeStart":1,"rangeEnd":%d,"rangeUnit":%q}`, tbID, tbTotal+1, tbUnit))
+		call("PATCH", logPath(b), fmt.Sprintf(`{"date":"2026-09-01","minutes":31,"rangeStart":1,"rangeEnd":%d,"rangeUnit":%q}`, tbTotal+1, tbUnit))
+		// ほかの人の参考書へ付け替えると 400
+		call("PATCH", logPath(b), fmt.Sprintf(`{"date":"2026-09-01","minutes":31,"textbookId":%d}`, otherTextbook))
+		call("DELETE", logPath(b), "")
+
+		// 予定から作った実績は、日付・科目・参考書を書き換えない
+		if _, err := db.Exec("UPDATE StudyLog SET studyPlanId = ?, textbookId = ? WHERE id = ?", planID, tbID, a); err != nil {
+			t.Fatal(err)
+		}
+		call("PATCH", logPath(a), `{"date":"2026-01-01","minutes":10,"subject":"science","textbookId":null}`)
+		// ひも付いた参考書の範囲を動かすと、その参考書の設定で確かめる
+		call("PATCH", logPath(a), fmt.Sprintf(`{"date":"2026-01-01","minutes":10,"rangeStart":1,"rangeEnd":%d,"rangeUnit":%q}`, tbTotal+1, tbUnit))
+
+		// ほかの人の実績は 404（書き換えも削除もされない）
+		call("PATCH", logPath(otherLog), `{"date":"2026-09-01","minutes":30}`)
+		call("DELETE", logPath(otherLog), "")
+
+		// 消した後は 404
+		call("DELETE", logPath(a), "")
+		call("DELETE", logPath(a), "")
+		call("PATCH", logPath(a), `{"date":"2026-09-01","minutes":30}`)
+		return out
+	}
+
+	node := run(env.node)
+	gon := run(env.goURL)
+	if len(node) != len(gon) {
+		t.Fatalf("段の数が違う: Node %d、Go %d", len(node), len(gon))
+	}
+	for i := range node {
+		if diffs := compareResponses(node[i], gon[i]); len(diffs) > 0 {
+			t.Errorf("%d段目で食い違い（Node → Go）:\n  %s", i+1, strings.Join(diffs, "\n  "))
+		}
+	}
+}
+
+// sessionUserID は Cookie のセッションの利用者 ID。
+func sessionUserID(t *testing.T, db *sql.DB, cookie string) string {
+	t.Helper()
+	req, _ := http.NewRequest("GET", "/", nil)
+	req.Header.Set("Cookie", cookie)
+	s, err := (&sessionAuth{db: db, secret: []byte(os.Getenv("BETTER_AUTH_SECRET"))}).load(req)
+	if err != nil || s == nil {
+		t.Fatalf("セッションを読めません: %v", err)
+	}
+	return s.UserID
 }

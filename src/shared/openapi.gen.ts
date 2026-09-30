@@ -48,11 +48,33 @@ export interface paths {
         /** 自分の実績の一覧（新しい日付から。同じ日は記録した順） */
         get: operations["listStudyLogs"];
         put?: never;
-        post?: never;
+        /** 実績を1件記録する（初めての記録なら isFirstStudyLog が true） */
+        post: operations["createStudyLog"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/study-logs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 実績を消す */
+        delete: operations["deleteStudyLog"];
+        options?: never;
+        head?: never;
+        /** 実績を書き換える（本文は POST と同じ形で、全項目を送る）。予定から作った実績は、 日付・科目・参考書を書き換えない（送っても元の値のまま） */
+        patch: operations["updateStudyLog"];
         trace?: never;
     };
     "/api/study-logs/daily": {
@@ -460,6 +482,55 @@ export interface components {
             code: "INTERNAL_ERROR" | "OVERLOADED" | "NOT_FOUND" | "FST_ERR_CTP_BODY_TOO_LARGE" | "FST_ERR_CTP_INVALID_MEDIA_TYPE" | "FST_ERR_CTP_INVALID_CONTENT_LENGTH";
             reqId: string;
         };
+        /** @description 実績の記録・書き換え（Zod の createStudyLogSchema）。項目をまたぐ規則はスキーマに書けないので、ここには無い： 範囲の開始と終了はそろえて送る（range_incomplete）、開始 ≦ 終了（range_end_before_start）、 範囲を送ったら単位も送る（range_unit_required）、日付は今日（日本時間）以前（future_date）。 参考書を指定したら、自分の参考書で、範囲が参考書の単位と総量に合うこと（Error の 400） */
+        StudyLogInput: {
+            /** @description 暦にある日付（invalid_format・invalid_date） */
+            date: string;
+            /** Format: int64 */
+            minutes: number;
+            /** @enum {string|null} */
+            subject?: "english" | "math" | "japanese" | "science" | "social" | "other" | null;
+            /** Format: int64 */
+            textbookId?: number | null;
+            /** Format: int64 */
+            rangeStart?: number | null;
+            /** Format: int64 */
+            rangeEnd?: number | null;
+            /** @enum {string|null} */
+            rangeUnit?: "page" | "question" | "chapter" | "number" | "part" | "section" | null;
+            /** @description 500文字（コードポイント）まで。前後の空白は削る。null は不可 */
+            memo?: string;
+        };
+        /** @description 実績の行（書き込みの応答。一覧の StudyLog と違い、参考書は入れ子にせず userId・日時を持つ） */
+        StudyLogRow: {
+            /** Format: int64 */
+            id: number;
+            userId: string;
+            date: components["schemas"]["IsoDateTime"];
+            subject: string | null;
+            /** Format: int64 */
+            minutes: number;
+            /** Format: int64 */
+            textbookId: number | null;
+            /** Format: int64 */
+            rangeStart: number | null;
+            /** Format: int64 */
+            rangeEnd: number | null;
+            rangeUnit: string | null;
+            memo: string | null;
+            /** Format: int64 */
+            studyPlanId: number | null;
+            createdAt: components["schemas"]["IsoDateTime"];
+            updatedAt: components["schemas"]["IsoDateTime"];
+        };
+        /** @description 記録した実績と、それがその人の最初の記録か */
+        CreatedStudyLog: components["schemas"]["StudyLogRow"] & {
+            isFirstStudyLog: boolean;
+        };
+        Deleted: {
+            /** @enum {string} */
+            message: "Deleted";
+        };
         /** @description プロフィールの更新（Zod の profileSchema）。長さはコードポイントの数（絵文字も1）で数え、 前後の空白は長さを確かめた後に削る（空白だけでも通り、空文字で保存される） */
         ProfileInput: {
             nickname: string;
@@ -805,6 +876,8 @@ export interface components {
         From: string;
         /** @description 期間の終わり（その日を含む） */
         To: string;
+        /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+        ID: string;
     };
     requestBodies: never;
     headers: {
@@ -890,6 +963,132 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createStudyLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudyLogInput"];
+            };
+        };
+        responses: {
+            /** @description 記録した実績 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedStudyLog"];
+                };
+            };
+            /** @description 入力チェックで弾いた（ValidationError の形）か、参考書が自分のものでない・範囲が参考書の設定と 合わない（Error の形） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteStudyLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 消した */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deleted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description 無いか、自分のものでない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateStudyLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudyLogInput"];
+            };
+        };
+        responses: {
+            /** @description 書き換えた後の実績 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyLogRow"];
+                };
+            };
+            /** @description ID の形が違う・参考書が合わない（Error の形）か、入力チェックで弾いた（ValidationError の形） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description 無いか、自分のものでない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };

@@ -7,8 +7,8 @@ import (
 )
 
 // 学習記録・予定の一覧の API（JUK-73）。Node の routes/study-logs.ts・study-plans.ts の GET にあたる。
-// 書き込み（POST・PATCH・DELETE）は Node に残っていて、nginx が GET と HEAD だけを Go へ送る
-// （infra/nginx/juken-map-go-routes.conf）。
+// 学習記録の書き込みは study_log_writes.go（JUK-75）。予定の書き込みは Node に残っていて、
+// nginx が /api/study-plans の GET と HEAD だけを Go へ送る（infra/nginx/juken-map-go-routes.conf）。
 
 // 期間を省いて呼ばれたときの既定。画面はどれも明示して呼ぶので、これは古いクライアントや
 // 手で叩いたときのためのもの。Node と同じ値。
