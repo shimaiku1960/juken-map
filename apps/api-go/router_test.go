@@ -44,6 +44,9 @@ func newTestRouter() *router {
 	rt.user("DELETE /api/mine/{id}", reached)
 	rt.admin("GET /api/admin/thing", reached)
 	rt.admin("POST /api/admin/thing", reached)
+	rt.anonymousWrite("POST /api/report", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	return rt
 }
 
@@ -75,6 +78,10 @@ func TestRouterAccess(t *testing.T) {
 		{"admin: 管理者は通る", "POST", "/api/admin/thing", "admin", 200, `{"userId":"u2"}`},
 		{"admin: 2段階認証を通していない管理者は 403", "GET", "/api/admin/thing", "admin-no-2fa", 403,
 			`{"code":"TWO_FACTOR_REQUIRED","error":"管理画面を開くには、2段階認証を通してログインしてください。"}`},
+
+		{"anonymous-write: 未ログインでも通る", "POST", "/api/report", "", 204, ""},
+		{"anonymous-write: セッションを見ないので、停止中でも通る", "POST", "/api/report", "banned", 204, ""},
+		{"anonymous-write: 読み取りは無い", "GET", "/api/report", "", 404, ""},
 
 		// Fastify はメソッド違いも 404 にする。ServeMux の既定の 405 にならないこと。
 		{"メソッド違いは 404", "PUT", "/api/mine", "alice", 404, ""},
@@ -127,6 +134,7 @@ func TestRouterRoutes(t *testing.T) {
 		{"DELETE /api/mine/{id}", accessUser},
 		{"GET /api/admin/thing", accessAdmin},
 		{"POST /api/admin/thing", accessAdmin},
+		{"POST /api/report", accessAnonymousWrite},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("routes = %v", got)

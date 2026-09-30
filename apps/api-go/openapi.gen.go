@@ -21,21 +21,72 @@ func (e NotificationSlot) Valid() bool {
 	}
 }
 
+// Defines values for RegistrationTrackingMethod.
+const (
+	SignUpMethodEmail  RegistrationTrackingMethod = "email"
+	SignUpMethodGithub RegistrationTrackingMethod = "github"
+	SignUpMethodGoogle RegistrationTrackingMethod = "google"
+)
+
+// Valid indicates whether the value is a known member of the RegistrationTrackingMethod enum.
+func (e RegistrationTrackingMethod) Valid() bool {
+	switch e {
+	case SignUpMethodEmail:
+		return true
+	case SignUpMethodGithub:
+		return true
+	case SignUpMethodGoogle:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ServerErrorCode.
 const (
-	ServerErrorCodeInternal   ServerErrorCode = "INTERNAL_ERROR"
-	ServerErrorCodeNotFound   ServerErrorCode = "NOT_FOUND"
-	ServerErrorCodeOverloaded ServerErrorCode = "OVERLOADED"
+	ServerErrorCodeBodyTooLarge     ServerErrorCode = "FST_ERR_CTP_BODY_TOO_LARGE"
+	ServerErrorCodeInternal         ServerErrorCode = "INTERNAL_ERROR"
+	ServerErrorCodeInvalidMediaType ServerErrorCode = "FST_ERR_CTP_INVALID_MEDIA_TYPE"
+	ServerErrorCodeNotFound         ServerErrorCode = "NOT_FOUND"
+	ServerErrorCodeOverloaded       ServerErrorCode = "OVERLOADED"
 )
 
 // Valid indicates whether the value is a known member of the ServerErrorCode enum.
 func (e ServerErrorCode) Valid() bool {
 	switch e {
+	case ServerErrorCodeBodyTooLarge:
+		return true
 	case ServerErrorCodeInternal:
+		return true
+	case ServerErrorCodeInvalidMediaType:
 		return true
 	case ServerErrorCodeNotFound:
 		return true
 	case ServerErrorCodeOverloaded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SimulationCohort.
+const (
+	SimulationCohortDropped  SimulationCohort = "dropped"
+	SimulationCohortFading   SimulationCohort = "fading"
+	SimulationCohortSporadic SimulationCohort = "sporadic"
+	SimulationCohortSteady   SimulationCohort = "steady"
+)
+
+// Valid indicates whether the value is a known member of the SimulationCohort enum.
+func (e SimulationCohort) Valid() bool {
+	switch e {
+	case SimulationCohortDropped:
+		return true
+	case SimulationCohortFading:
+		return true
+	case SimulationCohortSporadic:
+		return true
+	case SimulationCohortSteady:
 		return true
 	default:
 		return false
@@ -231,6 +282,16 @@ type NotificationSummary struct {
 	Slot     NotificationSlot `json:"slot"`
 }
 
+// RegistrationTracking defines model for RegistrationTracking.
+type RegistrationTracking struct {
+	// Method 登録に使った方法（最初に作られたアカウント）。shouldTrack が true のときだけ
+	Method      *RegistrationTrackingMethod `json:"method,omitempty"`
+	ShouldTrack bool                        `json:"shouldTrack"`
+}
+
+// RegistrationTrackingMethod 登録に使った方法（最初に作られたアカウント）。shouldTrack が true のときだけ
+type RegistrationTrackingMethod string
+
 // ServerError 想定外の失敗・混雑・存在しないパス
 type ServerError struct {
 	Code  ServerErrorCode `json:"code"`
@@ -240,6 +301,45 @@ type ServerError struct {
 
 // ServerErrorCode defines model for ServerError.Code.
 type ServerErrorCode string
+
+// SimulationCohort 合成ユーザーの続き方の型
+type SimulationCohort string
+
+// SimulationState defines model for SimulationState.
+type SimulationState struct {
+	// NextSeq 次に使う連番（最後の連番＋1。だれもいなければ 1）
+	NextSeq int64            `json:"nextSeq"`
+	Users   []SimulationUser `json:"users"`
+}
+
+// SimulationUser defines model for SimulationUser.
+type SimulationUser struct {
+	// Cohort DB の値をそのまま返す（書き込みは SimulationCohort に限っている）
+	Cohort string `json:"cohort"`
+
+	// CreatedAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
+	CreatedAt   IsoDateTime `json:"createdAt"`
+	DormantFrom *IsoDate    `json:"dormantFrom"`
+	Email       string      `json:"email"`
+	LastActedOn *IsoDate    `json:"lastActedOn"`
+	Seq         int64       `json:"seq"`
+}
+
+// SimulationUserMark defines model for SimulationUserMark.
+type SimulationUserMark struct {
+	// Cohort 合成ユーザーの続き方の型
+	Cohort SimulationCohort `json:"cohort"`
+
+	// Email シミュレーション用のアドレス（delivered+simNNNNN@resend.dev）だけ
+	Email string `json:"email"`
+	Seq   int64  `json:"seq"`
+}
+
+// SimulationUserUpdate キーが無い項目は変えない。null なら消す
+type SimulationUserUpdate struct {
+	DormantFrom *IsoDate `json:"dormantFrom,omitempty"`
+	LastActedOn *IsoDate `json:"lastActedOn,omitempty"`
+}
 
 // StudyLog defines model for StudyLog.
 type StudyLog struct {
@@ -399,13 +499,22 @@ type InternalError = ServerError
 // NotFound ルートが自分で断るときのエラー。error は画面にそのまま出す文言
 type NotFound = Error
 
+// PayloadTooLarge 想定外の失敗・混雑・存在しないパス
+type PayloadTooLarge = ServerError
+
 // Unauthorized ルートが自分で断るときのエラー。error は画面にそのまま出す文言
 type Unauthorized = Error
+
+// UnsupportedMediaType 想定外の失敗・混雑・存在しないパス
+type UnsupportedMediaType = ServerError
 
 // SendDailyStudyNotificationsJSONBody defines parameters for SendDailyStudyNotifications.
 type SendDailyStudyNotificationsJSONBody struct {
 	Slot NotificationSlot `json:"slot"`
 }
+
+// ReportCspViolationApplicationReportsPlusJSONBody defines parameters for ReportCspViolation.
+type ReportCspViolationApplicationReportsPlusJSONBody = []map[string]interface{}
 
 // GetHealth200JSONResponseBodyOk defines parameters for GetHealth.
 type GetHealth200JSONResponseBodyOk bool
@@ -444,3 +553,12 @@ type ListUniversitiesParams struct {
 
 // SendDailyStudyNotificationsJSONRequestBody defines body for SendDailyStudyNotifications for application/json ContentType.
 type SendDailyStudyNotificationsJSONRequestBody SendDailyStudyNotificationsJSONBody
+
+// ReportCspViolationApplicationReportsPlusJSONRequestBody defines body for ReportCspViolation for application/reports+json ContentType.
+type ReportCspViolationApplicationReportsPlusJSONRequestBody = ReportCspViolationApplicationReportsPlusJSONBody
+
+// MarkSimulationUserJSONRequestBody defines body for MarkSimulationUser for application/json ContentType.
+type MarkSimulationUserJSONRequestBody = SimulationUserMark
+
+// UpdateSimulationUserJSONRequestBody defines body for UpdateSimulationUser for application/json ContentType.
+type UpdateSimulationUserJSONRequestBody = SimulationUserUpdate
