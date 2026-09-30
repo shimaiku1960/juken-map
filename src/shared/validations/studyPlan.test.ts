@@ -209,3 +209,33 @@ describe("updateStudyPlanSchema", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("予定の日付（JUK-75）", () => {
+  const createIssue = (date: unknown) => {
+    const result = createStudyPlansSchema.safeParse({ date, items: [{ content: "a" }] });
+    if (result.success) return null;
+    const [issue] = result.error.issues;
+    return { message: issue.message, code: issue.code === "custom" ? issue.params?.code : issue.code };
+  };
+
+  it("YYYY-MM-DD なら未来の日付も通す", () => {
+    expect(createIssue("2099-10-01")).toBeNull();
+    expect(createIssue("2024-02-29")).toBeNull();
+  });
+
+  it.each(["1", "2026-09-3", " ", "2026-09-01T10:00:00Z"])("形が違う %j は弾く", (date) => {
+    expect(createIssue(date)).toEqual({ message: "日付は YYYY-MM-DD で指定してください", code: "invalid_format" });
+  });
+
+  it("暦に無い日付は弾く", () => {
+    expect(createIssue("2026-02-30")).toEqual({ message: "存在しない日付です", code: "invalid_date" });
+  });
+
+  it("書き換えでも同じ規則。省けば通る", () => {
+    expect(updateStudyPlanSchema.safeParse({}).success).toBe(true);
+    expect(updateStudyPlanSchema.safeParse({ date: "2026-10-01" }).success).toBe(true);
+    const bad = updateStudyPlanSchema.safeParse({ date: "2026-13-01" });
+    expect(bad.success).toBe(false);
+    expect(bad.error?.issues[0].message).toBe("存在しない日付です");
+  });
+});

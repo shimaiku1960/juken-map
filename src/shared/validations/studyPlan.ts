@@ -1,5 +1,20 @@
 import { z } from "zod";
 import { SUBJECT_VALUES } from "@/shared/subjects";
+import { isCalendarYmd, YMD_PATTERN } from "@/shared/date";
+
+/**
+ * 日付の文字列に「YYYY-MM-DD の形」と「暦にある日付」の規則を足す（JUK-75）。実績と予定の日付で使う。
+ * 以前は形を見ずに new Date() へ渡していたので、"1" が 2001 年、"2026-09-3" がサーバーの時間帯の日付になり、
+ * 空白だけでは 500 になっていた。Go（apps/api-go）も同じ規則で弾く。
+ */
+export function ymdDate(field: z.ZodString) {
+  return field
+    .regex(YMD_PATTERN, "日付は YYYY-MM-DD で指定してください")
+    .refine(
+      (date) => !YMD_PATTERN.test(date) || isCalendarYmd(date),
+      { message: "存在しない日付です", params: { code: "invalid_date" } }
+    );
+}
 
 // 範囲の単位（固定リスト）
 export const RANGE_UNITS = [
@@ -92,7 +107,7 @@ export type StudyPlanItemInput = z.infer<typeof studyPlanItemSchema>;
 
 // 作成：1つの日付に複数の内容をまとめて登録する
 export const createStudyPlansSchema = z.object({
-  date: z.string().min(1, "日付を選択してください"), // "YYYY-MM-DD"
+  date: ymdDate(z.string().min(1, "日付を選択してください")),
   items: z.array(studyPlanItemSchema).min(1, "内容を1つ以上入力してください"),
 });
 
@@ -113,7 +128,7 @@ export type StudyPlanInput = z.infer<typeof studyPlanSchema>;
 // 更新用（部分更新を許可）。参考書・範囲・メモ・科目・完了を個別に更新できる。
 export const updateStudyPlanSchema = z
   .object({
-    date: z.string().min(1).optional(),
+    date: ymdDate(z.string().min(1)).optional(),
     textbookId: z.number().int().positive().nullable().optional(),
     rangeStart: z.number().int().positive().nullable().optional(),
     rangeEnd: z.number().int().positive().nullable().optional(),
