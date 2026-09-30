@@ -3,7 +3,8 @@
 #   - TypeScript（src/shared/openapi.gen.ts）：openapi-typescript
 # 形を変えるときはこのファイルを直し、`pnpm openapi:generate` を流す。CI は生成し直して差分が出たら落とす。
 #
-# 今ここにあるのは、Go が受け持つ API（読み取りと毎日の通知）。書き込みの API は Go へ移すとき（JUK-75）に足す。
+# 今ここにあるのは、Go が受け持つ API（読み取り・毎日の通知・sim・CSP の報告・登録の計測）。
+# 書き込みの API は Go へ移すとき（JUK-75）に足す。
 #
 # 書き方の決まり：
 #   - Node と Go はキーを必ず出す（値が無ければ null）。そのため項目は基本すべて required にし、
@@ -267,6 +268,111 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/analytics/registration:
+    post:
+      operationId: trackRegistration
+      summary: 本登録の完了を GA4 に送ってよいか（初回だけ true。2回目以降は false）
+      description: 本文は読まない（送られても使わない）
+      responses:
+        "200":
+          description: 送ってよいか。初回だけ登録に使った方法も返す
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationTracking" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/csp-report:
+    post:
+      operationId: reportCspViolation
+      summary: ブラウザが送る CSP の違反の報告。ログにだけ残す（DB には書かない）
+      description: >-
+        report-uri（application/csp-report）と report-to（application/reports+json）の両方の形を受ける。
+        読めない本文でも 204（ブラウザに送り直させない）。本文は 16KB まで、1回に読む報告は20件まで
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/csp-report:
+            schema: { type: object }
+          application/reports+json:
+            schema: { type: array, items: { type: object } }
+      responses:
+        "204":
+          description: 受け取った（中身が読めなくても同じ）
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+
+  /api/sim/state:
+    get:
+      operationId: getSimulationState
+      summary: シミュレーションの合成ユーザーの一覧と、次に使う連番（SIMULATION_ENABLED=on のときだけある）
+      security:
+        - simBearer: []
+      responses:
+        "200":
+          description: 合成ユーザー（連番の昇順）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SimulationState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/sim/users:
+    post:
+      operationId: markSimulationUser
+      summary: 登録を済ませた合成ユーザーに、連番と続き方の型を付ける
+      security:
+        - simBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SimulationUserMark" }
+      responses:
+        "204":
+          description: 付けた
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: その連番はすでに使われている
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/sim/users/{seq}:
+    patch:
+      operationId: updateSimulationUser
+      summary: 最後に操作した日・来なくなった日を記録する（キーが無い項目は変えない）
+      security:
+        - simBearer: []
+      parameters:
+        - name: seq
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SimulationUserUpdate" }
+      responses:
+        "204":
+          description: 記録した（変える項目が無ければ、その連番が無くても 204）
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -278,6 +384,10 @@ components:
       type: http
       scheme: bearer
       description: DAILY_NOTIFICATION_SECRET
+    simBearer:
+      type: http
+      scheme: bearer
+      description: SIMULATION_SECRET（cron とは別のトークン）
 
   parameters:
     From:
@@ -327,6 +437,16 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    PayloadTooLarge:
+      description: 本文が上限（ふだんは 1MiB、CSP の報告は 16KB）を超えた
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerError" }
+    UnsupportedMediaType:
+      description: 受け付けない Content-Type（受けるのは JSON・text/plain・CSP の報告の2種類。本文が無ければ無しでよい）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerError" }
     InternalError:
       description: 想定外の失敗。原因はログにだけ残す
       content:
@@ -379,8 +499,14 @@ components:
         error: { type: string }
         code:
           type: string
-          enum: [INTERNAL_ERROR, OVERLOADED, NOT_FOUND]
-          x-enum-varnames: [ServerErrorCodeInternal, ServerErrorCodeOverloaded, ServerErrorCodeNotFound]
+          # FST_ERR_CTP_* は Fastify の code をそのまま使っている（Node の error-handling.ts）
+          enum: [INTERNAL_ERROR, OVERLOADED, NOT_FOUND, FST_ERR_CTP_BODY_TOO_LARGE, FST_ERR_CTP_INVALID_MEDIA_TYPE]
+          x-enum-varnames:
+            - ServerErrorCodeInternal
+            - ServerErrorCodeOverloaded
+            - ServerErrorCodeNotFound
+            - ServerErrorCodeBodyTooLarge
+            - ServerErrorCodeInvalidMediaType
         reqId: { type: string }
 
     Textbook:
@@ -677,3 +803,70 @@ components:
         sent: { type: integer, format: int64 }
         skipped: { type: integer, format: int64 }
         failed: { type: integer, format: int64 }
+
+    RegistrationTracking:
+      type: object
+      required: [shouldTrack]
+      properties:
+        shouldTrack: { type: boolean }
+        method:
+          description: 登録に使った方法（最初に作られたアカウント）。shouldTrack が true のときだけ
+          type: string
+          enum: [email, google, github]
+          x-enum-varnames: [SignUpMethodEmail, SignUpMethodGoogle, SignUpMethodGithub]
+
+    SimulationCohort:
+      description: 合成ユーザーの続き方の型
+      type: string
+      enum: [steady, fading, sporadic, dropped]
+      x-enum-varnames: [SimulationCohortSteady, SimulationCohortFading, SimulationCohortSporadic, SimulationCohortDropped]
+
+    SimulationUser:
+      type: object
+      required: [seq, email, cohort, createdAt, dormantFrom, lastActedOn]
+      properties:
+        seq: { type: integer, format: int64 }
+        email: { type: string }
+        cohort:
+          description: DB の値をそのまま返す（書き込みは SimulationCohort に限っている）
+          type: string
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+        dormantFrom:
+          allOf: [{ $ref: "#/components/schemas/IsoDate" }]
+          nullable: true
+        lastActedOn:
+          allOf: [{ $ref: "#/components/schemas/IsoDate" }]
+          nullable: true
+
+    SimulationState:
+      type: object
+      required: [nextSeq, users]
+      properties:
+        nextSeq:
+          description: 次に使う連番（最後の連番＋1。だれもいなければ 1）
+          type: integer
+          format: int64
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/SimulationUser" }
+
+    SimulationUserMark:
+      type: object
+      required: [email, seq, cohort]
+      properties:
+        email:
+          description: シミュレーション用のアドレス（delivered+simNNNNN@resend.dev）だけ
+          type: string
+        seq: { type: integer, format: int64, minimum: 1 }
+        cohort: { $ref: "#/components/schemas/SimulationCohort" }
+
+    SimulationUserUpdate:
+      description: キーが無い項目は変えない。null なら消す
+      type: object
+      properties:
+        lastActedOn:
+          allOf: [{ $ref: "#/components/schemas/IsoDate" }]
+          nullable: true
+        dormantFrom:
+          allOf: [{ $ref: "#/components/schemas/IsoDate" }]
+          nullable: true

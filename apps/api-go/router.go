@@ -25,7 +25,9 @@ const (
 	accessPublic access = "public" // E1 誰でも呼べる読み取り
 	accessUser   access = "user"   // E3 ログイン必須。デモは書き込み不可。持ち主の確認はハンドラが行う
 	accessAdmin  access = "admin"  // E4 ログイン＋role=admin
-	accessJob    access = "job"    // E6 自分のジョブ（cron）。セッションではなく共有トークンで守る
+	accessJob    access = "job"    // E6 自分のジョブ（cron・sim）。セッションではなく共有トークンで守る
+	// E7 ログイン不要の書き込み（CSP 違反の報告）。書き込めても害が無い設計にする（DB に書かない・大きさに上限）
+	accessAnonymousWrite access = "anonymous-write"
 )
 
 // デモアカウント（面接官向け・閲覧専用）。Node の src/shared/demo.ts と同じ値。
@@ -85,6 +87,12 @@ func (rt *router) public(pattern string, h http.HandlerFunc) {
 	rt.handle(pattern, accessPublic, h)
 }
 
+// anonymousWrite はログインせずに書き込めるルートを登録する。セッションは読まない。
+// 誰が送ってきても困らないことは、ハンドラの側で保つ（DB に書かない・読む大きさに上限を置く）。
+func (rt *router) anonymousWrite(pattern string, h http.HandlerFunc) {
+	rt.handle(pattern, accessAnonymousWrite, h)
+}
+
 // user はログイン必須のルートを登録する。未ログインは 401、停止中は 403、
 // デモアカウントの書き込み（GET・HEAD 以外）は 403 で、ハンドラまで来ない。
 func (rt *router) user(pattern string, h sessionHandler) {
@@ -125,7 +133,7 @@ func (rt *router) admin(pattern string, h sessionHandler) {
 	})
 }
 
-// job は GitHub Actions などが共有トークンで呼ぶルートを登録する。
+// job は GitHub Actions などが共有トークンで呼ぶルートを登録する（cron と sim はトークンが別）。
 // `Authorization: Bearer <secret>` が合わなければ 401 で、ハンドラまで来ない。
 // secret が空なら何が送られても 401（設定し忘れで誰でも呼べる状態にしない）。
 // Node はトークンをハンドラの中で確かめていたが、Go では登録の時点で必ず付くようにした。

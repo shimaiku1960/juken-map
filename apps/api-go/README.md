@@ -45,6 +45,8 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 | `RESEND_BASE_URL` | `https://api.resend.com` | Resend の送り先。手元の比較で偽のサーバーへ向けるときだけ変える（Node の SDK と同じ名前） |
 | `LINE_CHANNEL_ACCESS_TOKEN` | なし | 毎日の通知を LINE で送るトークン |
 | `LINE_API_BASE` | `https://api.line.me/v2/bot` | LINE の送り先。テスト用 |
+| `SIMULATION_ENABLED` | なし | `on` のときだけシミュレーションの API（`/api/sim/*`）を登録する。それ以外は 404 |
+| `SIMULATION_SECRET` | なし | シミュレーションの API の共有トークン（cron とは別）。空なら必ず 401 |
 
 ## 本番
 
@@ -55,6 +57,10 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
        │  /api/universities・/api/universities/{id}
        │    GET・HEAD                                 ─▶ juken-map-go
        │    それ以外（POST など）                      ─▶ juken-map（Node）
+       ├─ POST /api/analytics/registration・POST /api/csp-report・
+       │  POST /api/cron/daily-study-notifications     ─▶ juken-map-go
+       ├─ GET /api/sim/state・POST /api/sim/users・
+       │  PATCH /api/sim/users/{seq}                   ─▶ juken-map-go（ほかのメソッドは Node）
        └─ それ以外                                     ─▶ juken-map（3000 か 3001、Node）
 ```
 

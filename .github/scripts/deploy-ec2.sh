@@ -147,8 +147,9 @@ fi
 # Go に渡すのは Go が読む値だけ（apps/api-go/README.md の環境変数の表）。
 # DATABASE_URL は Node と同じ接続先（シークレットがあればアプリ用＝DML だけのユーザー）。
 # 毎日の通知（JUK-74）を Go が送るので、送信に使う3つ（Resend のキー・LINE の送信用トークン・cron の共有トークン）も渡す。
+# シミュレーションの API（JUK-80）も Go が受けるので、有効にするかと共有トークンの2つも渡す（.env に無ければ渡らず、404 のまま）。
 # LINE の Webhook の署名用（LINE_CHANNEL_SECRET）や LINE ログインの秘密は、Go がまだ使わないので渡さない。
-grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|DAILY_NOTIFICATION_SECRET)=' \
+grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|DAILY_NOTIFICATION_SECRET|SIMULATION_ENABLED|SIMULATION_SECRET)=' \
   "$RUNTIME_ENV_FILE" > "$GO_ENV_FILE" || true
 for key in DATABASE_URL BETTER_AUTH_SECRET; do
   grep -q "^$key=" "$GO_ENV_FILE" || { echo "Go に渡す $key が見つからない" >&2; exit 1; }
