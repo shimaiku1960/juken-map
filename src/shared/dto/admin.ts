@@ -1,5 +1,12 @@
-// 管理者ページ（/admin）で API と画面が受け渡す形。組み立ては apps/api/src/services/admin-service.ts。
-// 日時は JSON で届くので ISO 文字列。
+// 管理者ページ（/admin）で API と画面が受け渡す形。日時は JSON で届くので ISO 文字列。
+//
+// 利用者の管理（概要・一覧・停止・削除）は Go も返すので、形の正は API の契約（openapi/openapi.yaml）で、
+// ここは生成した型（openapi.gen.ts）に名前を付けて並べているだけ（JUK-78）。形を変えるときは契約を直して
+// `pnpm openapi:generate` を流す。マスター編集の型は、まだ Node だけが返すので下に手で書いている。
+
+import type { components } from "@/shared/openapi.gen";
+
+type Schemas = components["schemas"];
 
 /**
  * 利用者の種別。合成ユーザーが実ユーザーの数字に混ざらないように分けて数える。
@@ -8,48 +15,17 @@
  *   seed  手元の負荷検証用 seed（db/seed-synthetic.ts）が作る合成ユーザー
  *   demo  面接官向けのデモアカウント
  */
-export const USER_KINDS = ["real", "sim", "seed", "demo"] as const;
-export type UserKind = (typeof USER_KINDS)[number];
+export type UserKind = Schemas["UserKind"];
+/** 並びは画面の表示順。契約の enum と同じ値を並べる（型で食い違いを止める）。 */
+export const USER_KINDS = ["real", "sim", "seed", "demo"] as const satisfies readonly UserKind[];
 
-export type KindStats = {
-  kind: UserKind;
-  total: number;
-  verified: number;
-  newLast7Days: number;
-  activeLast7Days: number;
-  activeLast30Days: number;
-};
-
-export type AdminOverview = {
-  kinds: KindStats[];
-  /** 実ユーザーの日別新規登録（Asia/Tokyo の日付、直近30日。登録0の日は含まない）。 */
-  realSignupsByDay: { date: string; count: number }[];
-};
-
-export type AdminUser = {
-  id: string;
-  email: string | null;
-  nickname: string | null;
-  name: string | null;
-  kind: UserKind;
-  role: "user" | "admin";
-  emailVerified: boolean;
-  /** 管理者に停止された日時。null なら停止していない。停止中はログインできない。 */
-  bannedAt: string | null;
-  createdAt: string;
-  /** 認証方法（account.providerId）。"credential" はメール＋パスワード。 */
-  providers: string[];
-  lastLoginAt: string | null;
-  studyLogCount: number;
-  lastStudyLogAt: string | null;
-};
-
-export type AdminUserList = {
-  users: AdminUser[];
-  total: number;
-  page: number;
-  pageSize: number;
-};
+export type KindStats = Schemas["KindStats"];
+export type AdminOverview = Schemas["AdminOverview"];
+export type AdminUser = Schemas["AdminUser"];
+export type AdminUserList = Schemas["AdminUserList"];
+export type AdminUserRef = Schemas["AdminUserRef"];
+export type AdminBanResult = Schemas["AdminBanResult"];
+export type AdminDeleteResult = Schemas["AdminDeleteResult"];
 
 // ---- マスター編集（/admin/masters） ----
 

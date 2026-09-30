@@ -487,6 +487,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 管理画面の概要。種別ごとの人数と、実ユーザーの日別新規登録（管理者＋2段階認証だけ） */
+        get: operations["getAdminOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 種別で絞った利用者の一覧（新しい順、1ページ50人） */
+        get: operations["listAdminUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{id}/ban": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 利用者を停止する。今のセッションを消して画面を落とし、次のログインは Node（Better Auth）が断る */
+        post: operations["banUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{id}/unban": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 停止を解除する（止まっていなければ何も変わらない） */
+        post: operations["unbanUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 利用者を消す。確認のため、本人のメールアドレスが一致しないと消さない */
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -501,6 +586,75 @@ export interface components {
          * @description 日付だけ（"YYYY-MM-DD"、日本時間の日付）
          */
         IsoDate: string;
+        /**
+         * @description 利用者の種別。real は実際の利用者、sim は本番のシミュレーション、seed は手元の負荷検証用、 demo は面接官向けのデモアカウント
+         * @enum {string}
+         */
+        UserKind: "real" | "sim" | "seed" | "demo";
+        KindStats: {
+            kind: components["schemas"]["UserKind"];
+            total: number;
+            verified: number;
+            newLast7Days: number;
+            /** @description 直近7日に学習記録を作った人（記録した日時で数える） */
+            activeLast7Days: number;
+            activeLast30Days: number;
+        };
+        AdminOverview: {
+            kinds: components["schemas"]["KindStats"][];
+            /** @description 実ユーザーの日別新規登録（日本時間の日付、直近30日。登録0の日は含まない） */
+            realSignupsByDay: {
+                date: components["schemas"]["IsoDate"];
+                count: number;
+            }[];
+        };
+        AdminUser: {
+            id: string;
+            email: string | null;
+            nickname: string | null;
+            name: string | null;
+            kind: components["schemas"]["UserKind"];
+            /** @enum {string} */
+            role: "user" | "admin";
+            emailVerified: boolean;
+            /** @description 管理者に停止された日時。null なら停止していない */
+            bannedAt: components["schemas"]["IsoDateTime"] | null;
+            createdAt: components["schemas"]["IsoDateTime"];
+            /** @description 認証方法（account.providerId）。credential はメール＋パスワード */
+            providers: string[];
+            lastLoginAt: components["schemas"]["IsoDateTime"] | null;
+            studyLogCount: number;
+            lastStudyLogAt: components["schemas"]["IsoDateTime"] | null;
+        };
+        AdminUserList: {
+            users: components["schemas"]["AdminUser"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        /** @description 操作した相手 */
+        AdminUserRef: {
+            id: string;
+            email: string | null;
+        };
+        AdminBanResult: {
+            id: string;
+            email: string | null;
+            bannedAt: components["schemas"]["IsoDateTime"];
+            /** @description 消したセッションの数（落とした画面の数） */
+            sessionsRemoved: number;
+        };
+        AdminDeleteResult: {
+            id: string;
+            email: string | null;
+            /** @description 一緒に消えた行数（記録のためだけ。消すのは外部キーの CASCADE） */
+            removed: {
+                studyLogs: number;
+                studyPlans: number;
+                textbooks: number;
+                finalGoals: number;
+            };
+        };
         LineConnectionStatus: {
             connected: boolean;
         };
@@ -920,6 +1074,24 @@ export interface components {
         };
     };
     responses: {
+        /** @description 管理者でない（{"error":"Forbidden"}）、2段階認証を通していない（code が TWO_FACTOR_REQUIRED）、 利用を停止されている、別のサイトからの書き込み */
+        AdminForbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 相手はいるが守られている（自分自身・他の管理者・デモアカウント） */
+        AdminUserProtected: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description 入力が不正（文言だけ） */
         BadRequest: {
             headers: {
@@ -994,6 +1166,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description 利用者の ID（Better Auth の user.id） */
+        AdminUserID: string;
         /** @description 期間の始まり（その日を含む） */
         From: string;
         /** @description 期間の終わり（その日を含む） */
@@ -2034,6 +2208,163 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             413: components["responses"]["BadRequest"];
+        };
+    };
+    getAdminOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 種別は USER_KINDS の順に全部並ぶ（0人の種別も 0 で） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOverview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listAdminUsers: {
+        parameters: {
+            query?: {
+                /** @description 省くと real */
+                kind?: components["schemas"]["UserKind"];
+                /** @description メールアドレスの部分一致（前後の空白は無視） */
+                q?: string;
+                /** @description 1から。省くと 1。数として読める文字列なら受け付ける（Zod の coerce） */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 一覧 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserList"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    banUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 利用者の ID（Better Auth の user.id） */
+                id: components["parameters"]["AdminUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 停止した。すでに停止済みなら最初に止めた日時のまま */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminBanResult"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminUserProtected"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    unbanUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 利用者の ID（Better Auth の user.id） */
+                id: components["parameters"]["AdminUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 解除した */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserRef"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 利用者の ID（Better Auth の user.id） */
+                id: components["parameters"]["AdminUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 大文字小文字と前後の空白は無視して比べる */
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 消した。ぶら下がる行は外部キーの CASCADE で一緒に消える */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDeleteResult"];
+                };
+            };
+            /** @description 入力チェックで弾いた（ValidationError の形：文言・コード・項目）か、 メールアドレスが一致しない（文言だけ）。どちらも error は必ずある */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminUserProtected"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
         };
     };
 }

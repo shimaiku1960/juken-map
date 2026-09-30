@@ -7,7 +7,8 @@ Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバ�
 持つ（JUK-73）。書き込みは、通知設定（`PUT /api/notification-preferences`）・プロフィール（`PUT /api/profile`）・
 学習記録（`POST /api/study-logs`・`PATCH`/`DELETE /api/study-logs/{id}`）・学習予定（`POST /api/study-plans`・
 `PATCH`/`DELETE /api/study-plans/{id}`・`POST /api/study-plans/{id}/complete`）を移している（JUK-75）。LINE 連携（`/api/line/*`：連携の確認・解除、トークからの連携、LINE Login、Webhook）は
-書き込みも含めて Go が受ける（JUK-79）。本番では nginx がこれらのパスだけを Go へ振り分け、
+書き込みも含めて Go が受ける（JUK-79）。管理画面の利用者の管理（`/api/admin/overview`・`/api/admin/users`・停止・停止解除・削除）も
+Go が受ける（JUK-78。マスター編集はまだ Node）。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
 ログインの発行と管理画面は Node に残す。Go は Node（Better Auth）が発行した
@@ -61,6 +62,7 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
        ├─ /api/line/*（全メソッド）                   ─▶ juken-map-go
+       ├─ /api/admin/overview・/api/admin/users・/api/admin/users/*（全メソッド） ─▶ juken-map-go
        ├─ /api/goals・/first-choice・
        │  /api/textbooks・/api/textbook-masters・
        │  /api/universities・/api/universities/{id}
