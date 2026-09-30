@@ -29,9 +29,10 @@ const (
 	forged                 // 署名の合わない Cookie
 	unknownUser            // 署名は正しいが、DB に無いトークン
 	eachUser               // 合成ユーザー全員（PARITY_COOKIES の1行ずつ）
+	firstUser              // 合成ユーザーの1人目だけ（DB を書き換える書き込み。parity_writes_test.go）
 )
 
-var whoNames = map[who]string{anonymous: "未ログイン", forged: "偽の署名", unknownUser: "無いセッション", eachUser: "利用者"}
+var whoNames = map[who]string{anonymous: "未ログイン", forged: "偽の署名", unknownUser: "無いセッション", eachUser: "利用者", firstUser: "1人目"}
 
 // parityCases が比べるリクエストの一覧。Go へ移した API を足していく。
 var parityCases = []struct {

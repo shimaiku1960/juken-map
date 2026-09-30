@@ -166,7 +166,25 @@ export interface paths {
         };
         /** 自分の通知設定（保存していなければ全部 false） */
         get: operations["getNotificationPreferences"];
-        put?: never;
+        /** 自分の通知設定を保存する（無ければ作る） */
+        put: operations["saveNotificationPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 自分のニックネームを変える */
+        put: operations["updateProfile"];
         post?: never;
         delete?: never;
         options?: never;
@@ -261,6 +279,30 @@ export interface components {
             /** @enum {string} */
             code: "INTERNAL_ERROR" | "OVERLOADED" | "NOT_FOUND";
             reqId: string;
+        };
+        /** @description 本文を読む段階で断ったときのエラー（Node では Fastify が投げ、setErrorHandler が形を整える）。 code は Fastify のエラーの名前 */
+        BodyError: {
+            error: string;
+            /** @enum {string} */
+            code: "FST_ERR_CTP_BODY_TOO_LARGE" | "FST_ERR_CTP_INVALID_MEDIA_TYPE" | "FST_ERR_CTP_INVALID_CONTENT_LENGTH" | "BAD_REQUEST";
+            reqId: string;
+        };
+        /** @description プロフィールの更新（Zod の profileSchema）。長さはコードポイントの数（絵文字も1）で数え、 前後の空白は長さを確かめた後に削る（空白だけでも通り、空文字で保存される） */
+        ProfileInput: {
+            nickname: string;
+        };
+        /** @description 利用者の行（PUT /api/profile が返す） */
+        User: {
+            id: string;
+            name: string | null;
+            email: string | null;
+            image: string | null;
+            nickname: string | null;
+            createdAt: components["schemas"]["IsoDateTime"];
+            updatedAt: components["schemas"]["IsoDateTime"];
+            emailVerified: boolean;
+            firstStudyLogAt: components["schemas"]["IsoDateTime"] | null;
+            analyticsSignUpTrackedAt: components["schemas"]["IsoDateTime"] | null;
         };
         /** @description 実績・予定に JOIN した参考書（表示用） */
         Textbook: {
@@ -512,6 +554,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 本文を読む段階で断った（大きすぎる 413・受け取れない形式 415・Content-Length と合わない 400） */
+        BodyError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["BodyError"];
             };
         };
         /** @description 想定外の失敗。原因はログにだけ残す */
@@ -787,6 +838,74 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    saveNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreference"];
+            };
+        };
+        responses: {
+            /** @description 保存した通知設定 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreference"];
+                };
+            };
+            /** @description 入力チェックで弾いた（ValidationError の形）か、LINE と連携せずに LINE 通知を選んだ（Error の形） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["BodyError"];
+            415: components["responses"]["BodyError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileInput"];
+            };
+        };
+        responses: {
+            /** @description 更新した後の利用者 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["BodyError"];
+            415: components["responses"]["BodyError"];
             500: components["responses"]["InternalError"];
         };
     };

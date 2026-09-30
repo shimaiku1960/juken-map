@@ -3,7 +3,11 @@
 #   - TypeScript（src/shared/openapi.gen.ts）：openapi-typescript
 # 形を変えるときはこのファイルを直し、`pnpm openapi:generate` を流す。CI は生成し直して差分が出たら落とす。
 #
-# 今ここにあるのは、Go が受け持つ API（読み取りと毎日の通知）。書き込みの API は Go へ移すとき（JUK-75）に足す。
+# 今ここにあるのは、Go が受け持つ API（読み取りと毎日の通知、移した書き込み）。書き込みの API は Go へ移すとき（JUK-75）に足す。
+#
+# 書き込みのリクエストの本文には「形」（型・必須・enum・長さ・範囲）を書く。規則の正は Zod
+# （src/shared/validations/）で、Go は同じ規則を apps/api-go に手で書く（項目をまたぐ規則はスキーマに
+# 書けないため）。ここの制約は読む人と生成する型のためのもので、実行時にこのファイルで検証はしない。
 #
 # 書き方の決まり：
 #   - Node と Go はキーを必ず出す（値が無ければ null）。そのため項目は基本すべて required にし、
@@ -187,6 +191,55 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      operationId: saveNotificationPreferences
+      summary: 自分の通知設定を保存する（無ければ作る）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationPreference" }
+      responses:
+        "200":
+          description: 保存した通知設定
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPreference" }
+        "400":
+          # oneOf で2つの形を並べると、oapi-codegen が union の型と外部の runtime パッケージを持ち込むので、
+          # 両方に共通する Error（error だけ）で書く。
+          description: >-
+            入力チェックで弾いた（ValidationError の形）か、LINE と連携せずに LINE 通知を選んだ（Error の形）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/BodyError" }
+        "415": { $ref: "#/components/responses/BodyError" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/profile:
+    put:
+      operationId: updateProfile
+      summary: 自分のニックネームを変える
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfileInput" }
+      responses:
+        "200":
+          description: 更新した後の利用者
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/BodyError" }
+        "415": { $ref: "#/components/responses/BodyError" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /api/universities:
     get:
@@ -327,6 +380,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    BodyError:
+      description: 本文を読む段階で断った（大きすぎる 413・受け取れない形式 415・Content-Length と合わない 400）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/BodyError" }
     InternalError:
       description: 想定外の失敗。原因はログにだけ残す
       content:
@@ -382,6 +440,49 @@ components:
           enum: [INTERNAL_ERROR, OVERLOADED, NOT_FOUND]
           x-enum-varnames: [ServerErrorCodeInternal, ServerErrorCodeOverloaded, ServerErrorCodeNotFound]
         reqId: { type: string }
+
+    BodyError:
+      description: >-
+        本文を読む段階で断ったときのエラー（Node では Fastify が投げ、setErrorHandler が形を整える）。
+        code は Fastify のエラーの名前
+      type: object
+      required: [error, code, reqId]
+      properties:
+        error: { type: string }
+        code:
+          type: string
+          enum: [FST_ERR_CTP_BODY_TOO_LARGE, FST_ERR_CTP_INVALID_MEDIA_TYPE, FST_ERR_CTP_INVALID_CONTENT_LENGTH, BAD_REQUEST]
+          x-enum-varnames: [BodyErrorCodeTooLarge, BodyErrorCodeInvalidMediaType, BodyErrorCodeInvalidContentLength, BodyErrorCodeBadRequest]
+        reqId: { type: string }
+
+    ProfileInput:
+      description: >-
+        プロフィールの更新（Zod の profileSchema）。長さはコードポイントの数（絵文字も1）で数え、
+        前後の空白は長さを確かめた後に削る（空白だけでも通り、空文字で保存される）
+      type: object
+      required: [nickname]
+      properties:
+        nickname: { type: string, minLength: 1, maxLength: 50 }
+
+    User:
+      description: 利用者の行（PUT /api/profile が返す）
+      type: object
+      required: [id, name, email, image, nickname, createdAt, updatedAt, emailVerified, firstStudyLogAt, analyticsSignUpTrackedAt]
+      properties:
+        id: { type: string }
+        name: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        image: { type: string, nullable: true }
+        nickname: { type: string, nullable: true }
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+        updatedAt: { $ref: "#/components/schemas/IsoDateTime" }
+        emailVerified: { type: boolean }
+        firstStudyLogAt:
+          allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
+          nullable: true
+        analyticsSignUpTrackedAt:
+          allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
+          nullable: true
 
     Textbook:
       description: 実績・予定に JOIN した参考書（表示用）

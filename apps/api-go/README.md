@@ -4,7 +4,8 @@ Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバ�
 今は `GET /api/dashboard`（JUK-69）と、学習記録・予定の一覧（`GET /api/study-logs`・`/api/study-logs/daily`・
 `/api/study-plans`）、志望校（`GET /api/goals`・`/api/goals/first-choice`）、参考書（`GET /api/textbooks`・`/api/textbook-masters`）、
 通知設定（`GET /api/notification-preferences`）、大学（`GET /api/universities`・`/api/universities/{id}`）を
-持つ（JUK-73）。本番では nginx がこれらのパスだけを Go へ振り分け、
+持つ（JUK-73）。書き込みは、通知設定（`PUT /api/notification-preferences`）とプロフィール（`PUT /api/profile`）から
+移している（JUK-75）。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
 ログインの発行・管理画面・外部連携は Node に残す。Go は Node（Better Auth）が発行した
@@ -51,10 +52,11 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
        ├─ /api/study-logs・/daily・/api/study-plans・/api/goals・/first-choice・
-       │  /api/textbooks・/api/textbook-masters・/api/notification-preferences・
+       │  /api/textbooks・/api/textbook-masters・
        │  /api/universities・/api/universities/{id}
        │    GET・HEAD                                 ─▶ juken-map-go
        │    それ以外（POST など）                      ─▶ juken-map（Node）
+       ├─ /api/notification-preferences・/api/profile（全メソッド） ─▶ juken-map-go
        └─ それ以外                                     ─▶ juken-map（3000 か 3001、Node）
 ```
 
@@ -94,6 +96,34 @@ path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。
 2. `parity_test.go` の `parityCases`（Node と応答が同じかを確かめる。不正な入力のケースも）
 3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスに書き込みが残っているなら、
    `/api/study-logs` と同じく GET・HEAD 以外を `@node` へ回す
+
+## 書き込みのルート
+
+本文は `readBody`（`body.go`）で読み、入力は `readObject`（`validate.go`）で確かめる。
+
+```go
+body, ok := readBody(w, r)   // 415・413 はここで返す。壊れた JSON は「本文なし」になる（Node と同じ）
+if !ok {
+	return
+}
+in := readObject(body)
+input := ProfileInput{Nickname: in.string("nickname", nicknameRule)}
+if in.reject(w) {            // 最初の1件を {error, code, field} の 400 で返す
+	return
+}
+```
+
+- **入力チェックの規則の正は Zod**（`src/shared/validations/`）で、画面のフォームと Node が使う。
+  Go は同じ規則を手で書く。契約（`openapi/openapi.yaml`）には形（型・必須・長さ）だけを書き、Go の型はそこから作る。
+  項目をまたぐ規則や「今日より未来は不可」はスキーマに書けないため、規則は2か所に持つと決めた（JUK-75）
+- ずれは応答一致テスト（`parity_writes_test.go`）に不正な入力を並べて見つける。Zod の規則を変えたら、
+  Go も直してケースを足す
+- Zod の issue は「スキーマに書いた項目の順、項目の中では書いたチェックの順」に積まれ、Node は最初の1件だけを返す。
+  `readObject` の読み取りも書いた順に確かめ、最初の1件で止まる。文字列の長さは Zod 4.5 と同じくコードポイントで数え、
+  trim は JavaScript の `String#trim` と同じ文字を削る
+- Cookie で認証する書き込みは、別のサイトから送られたら 403（`router.go` の `sameOrigin`、標準の
+  `http.CrossOriginProtection`）。Node の自前 API には無く、Go だけが持つ
+- DB に書く時刻は `nowMillis()`（ミリ秒で切り捨て）。そのまま渡すと MySQL が DATETIME(3) へ丸め、Node とずれる
 
 クエリ文字列は `r.URL.Query()` ではなく `parseQuery`（`query.go`）で読む。Go の標準は `;` を含む組や
 壊れた `%` を黙って捨てるが、Node（Fastify）は値として受け取るので、そのままでは応答がずれる。
@@ -157,12 +187,15 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `study_handlers.go` | 学習記録・予定の一覧の API | `routes/study-logs.ts`・`study-plans.ts` の GET |
 | `goals.go` | 志望校の一覧と第一志望（応答の型と SQL） | `services/goal-service.ts`・`routes/goals.ts`・`home.ts` の GET |
 | `textbooks.go` | 参考書の一覧と参考書マスター（応答の型と SQL） | `services/textbook-service.ts`・`routes/textbooks.ts`・`textbook-masters.ts` の GET |
-| `notification_preferences.go` | 通知設定（保存していなければ全部 false） | `routes/notification-preferences.ts` の GET |
+| `notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存 | `routes/notification-preferences.ts` |
 | `universities.go` | 大学の一覧（メモリに1分持ち、ETag と 304、gzip 済みを返す）と大学詳細 | `services/university-service.ts`・`routes/universities.ts` |
 | `notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる | `routes/cron.ts`・`services/sendDailyNotifications.ts` |
 | `daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 | `domain/dailyNotification.ts` |
 | `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
-| `parity_test.go`・`parity.sh` | Node と応答を比べる | — |
+| `body.go` | リクエスト本文の読み方（Content-Type・1MiB の上限・壊れた JSON）、415・413 の形 | Fastify の本文の解析・`server.ts` の JSON パーサー |
+| `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） | `src/shared/validations/`・`routes/validation-error.ts` |
+| `profile.go` | プロフィールの更新 | `routes/profile.ts`・`services/user-service.ts` の updateProfile |
+| `parity_test.go`・`parity_writes_test.go`・`parity.sh` | Node と応答を比べる（書き込みは、書き換えた行を最後に戻す） | — |
 | `compare-notifications.sh` | 毎日の通知を Node と Go で送り比べる（偽の Resend へ） | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
 
@@ -184,5 +217,5 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 - 応答の圧縮（Node は br・gzip。Go は持たず、本番では nginx が gzip にする。比べるときは `Accept-Encoding: identity`）
 - セッションの有効期限の延長（Better Auth は古くなったセッションを更新するが、Go は読むだけ）。
   画面はほかの API（Node）も呼ぶので、そちらで延長される
-- OpenTelemetry のトレース、リクエスト本文の読み取り（上限・JSON の検証）— 書き込みの API を移すときに足す
+- OpenTelemetry のトレース
 - Node に無いもの：1リクエスト10秒の上限（DB の照会と接続待ちもここで止まる）
