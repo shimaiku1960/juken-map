@@ -40,20 +40,9 @@ func unescapeQuery(s string) string {
 	return s
 }
 
-// validationError は入力チェックで弾いたときの 400 の本文（JUK-76）。Node の routes/validation-error.ts と同じ形。
-//   - Error：画面にそのまま出す文言
-//   - Code ：機械が読む種類。自分で書いた規則は名前（range_end_before_start など）、
-//     組み込みのチェックは Zod の code（invalid_format・invalid_type など）と同じ値
-//   - Field：どの項目か。項目に結びつかなければ null
-type validationError struct {
-	Error string  `json:"error"`
-	Code  string  `json:"code"`
-	Field *string `json:"field"`
-}
-
 // writeValidationError は 400 を返す。Node と同じく、弾いた理由の最初の1件だけを返す。
 func writeValidationError(w http.ResponseWriter, code, field, message string) {
-	writeJSON(w, http.StatusBadRequest, validationError{Error: message, Code: code, Field: &field})
+	writeJSON(w, http.StatusBadRequest, ValidationError{Error: message, Code: code, Field: &field})
 }
 
 // ymdPattern は Node の ymdField（z.string().regex(/^\d{4}-\d{2}-\d{2}$/)）と同じ形。

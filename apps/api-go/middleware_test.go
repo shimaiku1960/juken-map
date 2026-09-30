@@ -178,7 +178,7 @@ func TestNotFoundBody(t *testing.T) {
 	res := serve(h, "GET", "/api/nothing", "")
 	body := decodeJSON(t, res.Body.String())
 	// Node の spa.ts と同じ形。reqId は応答ヘッダーと同じ値。
-	if body["code"] != codeNotFound || body["error"] != fallbackClientMessage || body["reqId"] != res.Header().Get("X-Request-Id") {
+	if body["code"] != string(codeNotFound) || body["error"] != fallbackClientMessage || body["reqId"] != res.Header().Get("X-Request-Id") {
 		t.Errorf("本文 = %v", body)
 	}
 	if got := res.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
@@ -204,7 +204,7 @@ func TestRecoverPanic(t *testing.T) {
 		t.Errorf("原因が応答に出ている: %s", res.Body)
 	}
 	body := decodeJSON(t, res.Body.String())
-	if body["code"] != codeInternal || body["error"] != serverMessage {
+	if body["code"] != string(codeInternal) || body["error"] != serverMessage {
 		t.Errorf("本文 = %v", body)
 	}
 	lines := logLines(t, buf)
@@ -242,7 +242,7 @@ func TestLimitInFlight(t *testing.T) {
 		t.Fatalf("status = %d, Retry-After = %q", res.Code, res.Header().Get("Retry-After"))
 	}
 	body := decodeJSON(t, res.Body.String())
-	if body["code"] != codeOverloaded || body["error"] != overloadedMessage {
+	if body["code"] != string(codeOverloaded) || body["error"] != overloadedMessage {
 		t.Errorf("本文 = %v", body)
 	}
 	if shed := findLog(logLines(t, buf), "request shed: overloaded"); shed == nil || shed["level"] != float64(40) {

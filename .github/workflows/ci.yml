@@ -75,6 +75,11 @@ jobs:
       - name: Lint
         run: pnpm exec eslint --max-warnings 0
 
+      # API の契約（openapi/openapi.yaml）から作った TypeScript の型が、コミットされているものと同じか（JUK-76）。
+      # 契約だけ直して生成し忘れた、生成物を手で直した、を落とす。
+      - name: OpenAPI types (TypeScript)
+        run: bash scripts/openapi-generate.sh --check ts
+
       # デプロイスクリプトのポート判断（無停止デプロイの要）。2026-09-23、upstream ファイルが
       # まだ無い初回の状態を試していなかったせいで本番のデプロイが落ちたので、ここで見る。
       - name: Deploy script port logic
@@ -141,6 +146,10 @@ jobs:
 
       - name: Format
         run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt -w . で整形してください"; exit 1; }
+
+      # API の契約（openapi/openapi.yaml）から作った Go の型が、コミットされているものと同じか（JUK-76）。
+      - name: OpenAPI types (Go)
+        run: bash ../../scripts/openapi-generate.sh --check go
 
       - name: Vet
         run: |

@@ -18,20 +18,6 @@ const (
 
 // 応答の形（src/shared/dto/study.ts の Dashboard）。学習記録・予定の型は study.go にある。
 
-type dateRangeDTO struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-}
-
-type dashboardDTO struct {
-	Month        string            `json:"month"`
-	LogRange     dateRangeDTO      `json:"logRange"`
-	Logs         []studyLogDTO     `json:"logs"`
-	PlanRange    dateRangeDTO      `json:"planRange"`
-	Plans        []studyPlanDTO    `json:"plans"`
-	DailyMinutes []dailyMinutesDTO `json:"dailyMinutes"`
-}
-
 type dashboardHandler struct {
 	store *studyStore
 }
@@ -47,7 +33,7 @@ func (h *dashboardHandler) serve(w http.ResponseWriter, r *http.Request, s *sess
 
 // get はダッシュボードの初回表示ぶんをまとめて返す。Node 側の getDashboard にあたる。
 // now を引数で受け取るのは、テストで「今日」を固定できるようにするため。
-func (h *dashboardHandler) get(ctx context.Context, userID string, now time.Time) (*dashboardDTO, error) {
+func (h *dashboardHandler) get(ctx context.Context, userID string, now time.Time) (*Dashboard, error) {
 	today := dateOnTokyo(now)
 	start, end := monthStart(today), monthEnd(today)
 
@@ -60,9 +46,9 @@ func (h *dashboardHandler) get(ctx context.Context, userID string, now time.Time
 	// 3本の SQL を同時に投げる（Node 側の Promise.all にあたる）。
 	// errgroup は、どれか1本が失敗したら ctx を取り消して残りを止め、最初のエラーを返す。
 	var (
-		logs  []studyLogDTO
-		plans []studyPlanDTO
-		daily []dailyMinutesDTO
+		logs  []StudyLog
+		plans []StudyPlan
+		daily []DailyStudyMinutes
 	)
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() (err error) {
@@ -81,11 +67,11 @@ func (h *dashboardHandler) get(ctx context.Context, userID string, now time.Time
 		return nil, err
 	}
 
-	return &dashboardDTO{
+	return &Dashboard{
 		Month:        today.Format("2006-01"),
-		LogRange:     dateRangeDTO{From: ymd(logFrom), To: ymd(logTo)},
+		LogRange:     DateRange{From: ymd(logFrom), To: ymd(logTo)},
 		Logs:         logs,
-		PlanRange:    dateRangeDTO{From: ymd(planFrom), To: ymd(planTo)},
+		PlanRange:    DateRange{From: ymd(planFrom), To: ymd(planTo)},
 		Plans:        plans,
 		DailyMinutes: daily,
 	}, nil

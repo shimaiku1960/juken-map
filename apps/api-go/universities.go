@@ -184,34 +184,11 @@ func (st *universityStore) listForExplore(ctx context.Context) ([]exploreUnivers
 	return universities, rows.Err()
 }
 
-// 大学詳細の応答の形。Node は DB の行をそのまま返しているので、列の名前と並びを揃える。
-// 学部とタグの型は志望校（goals.go）と同じ。
-type universityDetailDTO struct {
-	ID         int64        `json:"id"`
-	Name       string       `json:"name"`
-	Prefecture string       `json:"prefecture"`
-	Type       string       `json:"type"`
-	CreatedAt  string       `json:"createdAt"`
-	Faculties  []facultyRow `json:"faculties"`
-}
-
-// facultyRow は大学詳細の学部。志望校の facultyDTO と違い、大学を入れ子にしない。
-type facultyRow struct {
-	ID           int64    `json:"id"`
-	Name         string   `json:"name"`
-	ExamDate     string   `json:"examDate"`
-	CreatedAt    string   `json:"createdAt"`
-	UniversityID int64    `json:"universityId"`
-	Tags         []tagDTO `json:"tags"`
-}
-
-type universityDetailResponse struct {
-	University           *universityDetailDTO `json:"university"`
-	RegisteredFacultyIDs []int64              `json:"registeredFacultyIds"`
-}
+// 大学詳細の応答の型は openapi/openapi.yaml から生成した UniversityDetailResponse。
+// 学部（FacultyWithTags）は志望校の学部と違い、大学を入れ子にしない。
 
 // findDetail は大学詳細ページ用。学部と、絞り込みに使うタグまで一度に引く。無ければ nil。
-func (st *universityStore) findDetail(ctx context.Context, id int64) (*universityDetailDTO, error) {
+func (st *universityStore) findDetail(ctx context.Context, id int64) (*UniversityDetail, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT u.id, u.name, u.prefecture, u.type, u.createdAt,
 		        f.id AS f_id, f.name AS f_name, f.examDate AS f_examDate,
@@ -230,10 +207,10 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*universit
 	}
 	defer rows.Close()
 
-	var detail *universityDetailDTO
+	var detail *UniversityDetail
 	for rows.Next() {
 		var (
-			u                            universityDetailDTO
+			u                            UniversityDetail
 			fID, fUniversityID, tID      *int64
 			fName, fExamDate, fCreatedAt *string
 			tName, tCreatedAt            *string
@@ -247,7 +224,7 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*universit
 		}
 		if detail == nil {
 			u.CreatedAt = isoFromDatetime(u.CreatedAt)
-			u.Faculties = make([]facultyRow, 0)
+			u.Faculties = make([]FacultyWithTags, 0)
 			detail = &u
 		}
 		// 学部が1つも無い大学は、学部の列が NULL の行が1行だけ来る
@@ -255,18 +232,18 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*universit
 			continue
 		}
 		if n := len(detail.Faculties); n == 0 || detail.Faculties[n-1].ID != *fID {
-			detail.Faculties = append(detail.Faculties, facultyRow{
+			detail.Faculties = append(detail.Faculties, FacultyWithTags{
 				ID:           *fID,
 				Name:         *fName,
 				ExamDate:     isoFromDatetime(*fExamDate),
 				CreatedAt:    isoFromDatetime(*fCreatedAt),
 				UniversityID: *fUniversityID,
-				Tags:         make([]tagDTO, 0),
+				Tags:         make([]Tag, 0),
 			})
 		}
 		if tID != nil {
 			f := &detail.Faculties[len(detail.Faculties)-1]
-			f.Tags = append(f.Tags, tagDTO{ID: *tID, Name: *tName, CreatedAt: isoFromDatetime(*tCreatedAt)})
+			f.Tags = append(f.Tags, Tag{ID: *tID, Name: *tName, CreatedAt: isoFromDatetime(*tCreatedAt)})
 		}
 	}
 	return detail, rows.Err()
@@ -345,7 +322,7 @@ func (h *universityHandlers) detail(w http.ResponseWriter, r *http.Request, s *s
 		internalError(w, r, fmt.Errorf("universities/:id goals: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, universityDetailResponse{University: university, RegisteredFacultyIDs: registered})
+	writeJSON(w, http.StatusOK, UniversityDetailResponse{University: *university, RegisteredFacultyIds: registered})
 }
 
 // matchesETag は If-None-Match（カンマ区切りで複数並べられる）に etag が含まれるか。

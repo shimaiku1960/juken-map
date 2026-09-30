@@ -18,49 +18,6 @@ const (
 // ここから下の型が応答の形（src/shared/dto/study.ts）。
 // json タグが JSON のキー名になる。NULL になりうる列はポインタにして、nil が null になる。
 
-type textbookDTO struct {
-	ID          int64   `json:"id"`
-	MasterID    *int64  `json:"masterId"`
-	Name        string  `json:"name"`
-	TotalAmount *int64  `json:"totalAmount"`
-	RangeUnit   *string `json:"rangeUnit"`
-	TargetDate  *string `json:"targetDate"`
-	Subject     *string `json:"subject"`
-}
-
-type studyLogDTO struct {
-	ID          int64        `json:"id"`
-	Date        string       `json:"date"`
-	Minutes     int64        `json:"minutes"`
-	Subject     *string      `json:"subject"`
-	TextbookID  *int64       `json:"textbookId"`
-	Textbook    *textbookDTO `json:"textbook"`
-	RangeStart  *int64       `json:"rangeStart"`
-	RangeEnd    *int64       `json:"rangeEnd"`
-	RangeUnit   *string      `json:"rangeUnit"`
-	Memo        *string      `json:"memo"`
-	StudyPlanID *int64       `json:"studyPlanId"`
-}
-
-type studyPlanDTO struct {
-	ID         int64        `json:"id"`
-	Date       string       `json:"date"`
-	Content    *string      `json:"content"`
-	Subject    *string      `json:"subject"`
-	Done       bool         `json:"done"`
-	StudyLogID *int64       `json:"studyLogId"`
-	TextbookID *int64       `json:"textbookId"`
-	Textbook   *textbookDTO `json:"textbook"`
-	RangeStart *int64       `json:"rangeStart"`
-	RangeEnd   *int64       `json:"rangeEnd"`
-	RangeUnit  *string      `json:"rangeUnit"`
-}
-
-type dailyMinutesDTO struct {
-	Date    string `json:"date"`
-	Minutes int64  `json:"minutes"`
-}
-
 // dateRange は「自分のものを、ある期間ぶんだけ」取るときの期間。from・to はどちらも日付（その日の 00:00 UTC）。
 // to が nil なら上限なし。Node 側の DateRange（services/date-range.ts）にあたる。
 type dateRange struct {
@@ -122,11 +79,11 @@ func (c *textbookCols) dest(ignore *sql.RawBytes) []any {
 }
 
 // dto は参考書の DTO を作る。JOIN の相手が居なければ nil（JSON では null）。
-func (c *textbookCols) dto() *textbookDTO {
+func (c *textbookCols) dto() *Textbook {
 	if c.id == nil {
 		return nil
 	}
-	tb := &textbookDTO{
+	tb := &Textbook{
 		ID:          *c.id,
 		MasterID:    c.masterID,
 		Name:        *c.name,
@@ -147,7 +104,7 @@ type studyStore struct {
 }
 
 // listStudyLogs は新しい日付から並べる。同じ日付の中は記録した順（id 昇順）。
-func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRange) ([]studyLogDTO, error) {
+func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRange) ([]StudyLog, error) {
 	where, args := r.where("l", userID)
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+logColumns+","+textbookColumns+`
@@ -165,10 +122,10 @@ func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRa
 	defer rows.Close()
 
 	// nil のままだと JSON で null になる。空でも [] を返すため、長さ0で作っておく。
-	logs := make([]studyLogDTO, 0)
+	logs := make([]StudyLog, 0)
 	for rows.Next() {
 		var (
-			l      studyLogDTO
+			l      StudyLog
 			date   string
 			tb     textbookCols
 			ignore sql.RawBytes
@@ -191,7 +148,7 @@ func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRa
 
 // listStudyPlans は古い日付から並べる。同じ日付の中は作った順（id 昇順）。
 // 実績は予定1件につき最大1件（StudyLog.studyPlanId が UNIQUE）なので、JOIN しても行は増えない。
-func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateRange) ([]studyPlanDTO, error) {
+func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateRange) ([]StudyPlan, error) {
 	where, args := r.where("p", userID)
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+planColumns+","+textbookColumns+`, l.id AS log_id
@@ -208,10 +165,10 @@ func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateR
 	}
 	defer rows.Close()
 
-	plans := make([]studyPlanDTO, 0)
+	plans := make([]StudyPlan, 0)
 	for rows.Next() {
 		var (
-			p      studyPlanDTO
+			p      StudyPlan
 			date   string
 			tb     textbookCols
 			ignore sql.RawBytes
@@ -232,7 +189,7 @@ func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateR
 }
 
 // listDailyStudyMinutes は日ごとの合計学習時間を、新しい日付から返す。
-func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, r dateRange) ([]dailyMinutesDTO, error) {
+func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, r dateRange) ([]DailyStudyMinutes, error) {
 	where, args := r.where("l", userID)
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT l.date, SUM(l.minutes) AS minutes
@@ -248,10 +205,10 @@ func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, 
 	}
 	defer rows.Close()
 
-	daily := make([]dailyMinutesDTO, 0)
+	daily := make([]DailyStudyMinutes, 0)
 	for rows.Next() {
 		var (
-			d    dailyMinutesDTO
+			d    DailyStudyMinutes
 			date string
 		)
 		// SUM() は DECIMAL で返ってくるが、整数の文字列なので int64 へそのまま入る。
