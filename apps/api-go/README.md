@@ -5,10 +5,11 @@ Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバ�
 `/api/study-plans`）、志望校（`GET /api/goals`・`/api/goals/first-choice`）、参考書（`GET /api/textbooks`・`/api/textbook-masters`）、
 通知設定（`GET /api/notification-preferences`）、大学（`GET /api/universities`・`/api/universities/{id}`）を
 持つ（JUK-73）。書き込みは、通知設定（`PUT /api/notification-preferences`）・プロフィール（`PUT /api/profile`）・
-学習記録（`POST /api/study-logs`・`PATCH`/`DELETE /api/study-logs/{id}`）を移している（JUK-75）。本番では nginx がこれらのパスだけを Go へ振り分け、
+学習記録（`POST /api/study-logs`・`PATCH`/`DELETE /api/study-logs/{id}`）を移している（JUK-75）。LINE 連携（`/api/line/*`：連携の確認・解除、トークからの連携、LINE Login、Webhook）は
+書き込みも含めて Go が受ける（JUK-79）。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
-ログインの発行・管理画面・外部連携は Node に残す。Go は Node（Better Auth）が発行した
+ログインの発行と管理画面は Node に残す。Go は Node（Better Auth）が発行した
 セッション Cookie を、同じ DB と同じ `BETTER_AUTH_SECRET` で確かめるだけ。
 
 ## 動かし方
@@ -45,7 +46,12 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 | `RESEND_API_KEY` | なし | 毎日の通知のメールを送る Resend のキー |
 | `RESEND_BASE_URL` | `https://api.resend.com` | Resend の送り先。手元の比較で偽のサーバーへ向けるときだけ変える（Node の SDK と同じ名前） |
 | `LINE_CHANNEL_ACCESS_TOKEN` | なし | 毎日の通知を LINE で送るトークン |
-| `LINE_API_BASE` | `https://api.line.me/v2/bot` | LINE の送り先。テスト用 |
+| `LINE_API_BASE` | `https://api.line.me/v2/bot` | LINE の送り先（Messaging API）。テスト用 |
+| `LINE_CHANNEL_SECRET` | なし | LINE の Webhook の署名を確かめる。空なら Webhook は必ず 401 |
+| `LINE_LOGIN_CHANNEL_ID` | なし | LINE Login（プロフィールからの連携）のチャネル ID。空なら連携を始められない |
+| `LINE_LOGIN_CHANNEL_SECRET` | なし | LINE Login のチャネルシークレット |
+| `LINE_LOGIN_API_BASE` | `https://api.line.me` | LINE Login の API（トークン・ID トークンの確認・友だち状態）。テスト用 |
+| `WEB_ORIGIN` | `https://juken-map.com` | 画面のオリジン。LINE Login の戻り先と、終わったあとのリダイレクト先。手元は Vite の URL |
 | `SIMULATION_ENABLED` | なし | `on` のときだけシミュレーションの API（`/api/sim/*`）を登録する。それ以外は 404 |
 | `SIMULATION_SECRET` | なし | シミュレーションの API の共有トークン（cron とは別）。空なら必ず 401 |
 
@@ -53,6 +59,7 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
+       ├─ /api/line/*（全メソッド）                   ─▶ juken-map-go
        ├─ /api/study-plans・/api/goals・/first-choice・
        │  /api/textbooks・/api/textbook-masters・
        │  /api/universities・/api/universities/{id}

@@ -2,7 +2,7 @@
 // 最初の1本の GET /api/dashboard（JUK-69）に続けて、読み取りの API（JUK-73）と書き込みの API（JUK-75）を移している。
 // 本番では nginx が移したパスだけを Go へ振り分ける（infra/nginx/juken-map-go-routes.conf、JUK-72）。
 //
-// ログインの発行・管理画面・外部連携は Node に残す。セッションは Node 側（Better Auth）が
+// LINE 連携も Go が受ける（JUK-79）。ログインの発行と管理画面は Node に残す。セッションは Node 側（Better Auth）が
 // 発行したものを、同じ DB と同じ BETTER_AUTH_SECRET で確かめるだけ。
 package main
 
@@ -60,6 +60,18 @@ func run() error {
 			resendKey:  os.Getenv("RESEND_API_KEY"),
 			lineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
 			lineToken:  os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
+		},
+	}, lineConfig{
+		channelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
+		webOrigin:     envOr("WEB_ORIGIN", siteURL),
+		client: &httpLineClient{
+			client:         &http.Client{},
+			botBase:        envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
+			accessToken:    os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
+			loginBase:      envOr("LINE_LOGIN_API_BASE", "https://api.line.me"),
+			authorizeURL:   "https://access.line.me/oauth2/v2.1/authorize",
+			loginChannelID: os.Getenv("LINE_LOGIN_CHANNEL_ID"),
+			loginSecret:    os.Getenv("LINE_LOGIN_CHANNEL_SECRET"),
 		},
 	})
 
@@ -119,7 +131,7 @@ func run() error {
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
-func registerRoutes(rt *router, db *sql.DB, jobs jobConfig) {
+func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig) {
 	study := &studyStore{db: db}
 	studyHandlers := &studyHandlers{store: study}
 
@@ -157,6 +169,14 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig) {
 	rt.user("POST /api/analytics/registration", analytics.registration)
 	rt.anonymousWrite("POST /api/csp-report", cspReport)
 
+	lineRoutes := &lineHandlers{store: &sqlLineStore{db: db}, line: line.client, channelSecret: line.channelSecret, webOrigin: line.webOrigin}
+	rt.user("GET /api/line/connection", lineRoutes.connection)
+	rt.user("DELETE /api/line/connection", lineRoutes.disconnect)
+	rt.user("POST /api/line/account-link", lineRoutes.accountLink)
+	rt.oauth("GET /api/line/oauth/start", lineRoutes.oauthStart)
+	rt.oauth("GET /api/line/oauth/callback", lineRoutes.oauthCallback)
+	rt.webhook("POST /api/line/webhook", lineRoutes.webhook)
+
 	cron := &cronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, jobs.messenger), now: time.Now}
 	rt.job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)
 
@@ -176,6 +196,13 @@ type jobConfig struct {
 	simulationEnabled       bool
 	simulationSecret        string
 	messenger               messenger
+}
+
+// lineConfig は LINE 連携（line.go）の設定。
+type lineConfig struct {
+	channelSecret string // Webhook の署名を確かめる。空なら Webhook は必ず 401
+	webOrigin     string // 画面のオリジン。OAuth の戻り先とリダイレクト先に使う
+	client        lineClient
 }
 
 type serverOptions struct {

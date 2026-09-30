@@ -3,7 +3,7 @@
 #   - TypeScript（src/shared/openapi.gen.ts）：openapi-typescript
 # 形を変えるときはこのファイルを直し、`pnpm openapi:generate` を流す。CI は生成し直して差分が出たら落とす。
 #
-# 今ここにあるのは、Go が受け持つ API（読み取り・毎日の通知・sim・CSP の報告・登録の計測・移した書き込み）。
+# 今ここにあるのは、Go が受け持つ API（読み取り・毎日の通知・sim・CSP の報告・登録の計測・移した書き込み・LINE 連携）。
 # 書き込みの API は Go へ移すとき（JUK-75）に足す。
 #
 # 書き込みのリクエストの本文には「形」（型・必須・enum・長さ・範囲）を書く。規則の正は Zod
@@ -508,6 +508,114 @@ paths:
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/line/connection:
+    get:
+      operationId: getLineConnection
+      summary: LINE と連携しているか（プロフィール画面）
+      responses:
+        "200":
+          description: 連携の有無
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LineConnectionStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      operationId: disconnectLine
+      summary: LINE との連携を解除する。LINE の通知設定も切る
+      responses:
+        "200":
+          description: 解除した（連携していなくても 200）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LineConnectionStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/line/account-link:
+    post:
+      operationId: startLineAccountLink
+      summary: トークから始めた連携（Account Link）で、使い捨ての nonce を発行して LINE の連携画面の URL を返す
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [linkToken]
+              properties:
+                linkToken: { type: string, minLength: 1, maxLength: 255 }
+      responses:
+        "200":
+          description: 画面はこの URL へ移る
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirectUrl]
+                properties:
+                  redirectUrl: { type: string, format: uri }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/line/oauth/start:
+    get:
+      operationId: startLineLogin
+      summary: LINE Login を始める（画面遷移。未ログインはログイン画面へ）
+      responses:
+        "302":
+          description: LINE の同意画面、ログイン画面、または失敗を知らせるプロフィール画面へ
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/line/oauth/callback:
+    get:
+      operationId: completeLineLogin
+      summary: LINE Login の戻り先。結果はプロフィール画面へ ?line=<結果> で知らせる
+      parameters:
+        - { name: state, in: query, required: false, schema: { type: string } }
+        - { name: code, in: query, required: false, schema: { type: string } }
+        - { name: error, in: query, required: false, schema: { type: string } }
+      responses:
+        "302":
+          description: >-
+            プロフィール画面へ（line=connected・cancelled・invalid・expired・friend-required・already-used・failed）。
+            セッションが切れていれば、この URL を戻り先にしてログイン画面へ
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/line/webhook:
+    post:
+      operationId: receiveLineWebhook
+      summary: LINE の Webhook。署名（x-line-signature）を本文のまま確かめ、同じイベントの再送は処理しない
+      security: []
+      parameters:
+        - { name: x-line-signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: LINE の Webhook の本文（使う項目は apps/api-go/line.go の lineEvent）
+      responses:
+        "200":
+          description: 受け取った（イベントごとの失敗はログにだけ残す）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413": { $ref: "#/components/responses/BadRequest" }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -606,6 +714,12 @@ components:
       type: string
       format: date
       x-go-type: string
+
+    LineConnectionStatus:
+      type: object
+      required: [connected]
+      properties:
+        connected: { type: boolean }
 
     Error:
       description: ルートが自分で断るときのエラー。error は画面にそのまま出す文言

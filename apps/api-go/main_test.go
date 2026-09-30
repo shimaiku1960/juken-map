@@ -26,6 +26,12 @@ func TestRegisteredRoutes(t *testing.T) {
 		{"GET /api/universities/{id}", accessUser},
 		{"POST /api/analytics/registration", accessUser},
 		{"POST /api/csp-report", accessAnonymousWrite},
+		{"GET /api/line/connection", accessUser},
+		{"DELETE /api/line/connection", accessUser},
+		{"POST /api/line/account-link", accessUser},
+		{"GET /api/line/oauth/start", accessOAuth},
+		{"GET /api/line/oauth/callback", accessOAuth},
+		{"POST /api/line/webhook", accessWebhook},
 		{"POST /api/cron/daily-study-notifications", accessJob},
 		{"GET /api/sim/state", accessJob},
 		{"POST /api/sim/users", accessJob},
@@ -34,7 +40,7 @@ func TestRegisteredRoutes(t *testing.T) {
 
 	// ハンドラは呼ばないので、DB は nil のままでよい。
 	rt := newRouter(fakeSessions(nil))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{})
 
 	if len(rt.routes) != len(want) {
 		t.Fatalf("routes = %v\nwant %v", rt.routes, want)
