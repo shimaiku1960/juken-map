@@ -246,6 +246,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analytics/registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 本登録の完了を GA4 に送ってよいか（初回だけ true。2回目以降は false）
+         * @description 本文は読まない（送られても使わない）
+         */
+        post: operations["trackRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/csp-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * ブラウザが送る CSP の違反の報告。ログにだけ残す（DB には書かない）
+         * @description report-uri（application/csp-report）と report-to（application/reports+json）の両方の形を受ける。 読めない本文でも 204（ブラウザに送り直させない）。本文は 16KB まで、1回に読む報告は20件まで
+         */
+        post: operations["reportCspViolation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sim/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** シミュレーションの合成ユーザーの一覧と、次に使う連番（SIMULATION_ENABLED=on のときだけある） */
+        get: operations["getSimulationState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sim/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 登録を済ませた合成ユーザーに、連番と続き方の型を付ける */
+        post: operations["markSimulationUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sim/users/{seq}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 最後に操作した日・来なくなった日を記録する（キーが無い項目は変えない） */
+        patch: operations["updateSimulationUser"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -277,14 +368,7 @@ export interface components {
         ServerError: {
             error: string;
             /** @enum {string} */
-            code: "INTERNAL_ERROR" | "OVERLOADED" | "NOT_FOUND";
-            reqId: string;
-        };
-        /** @description 本文を読む段階で断ったときのエラー（Node では Fastify が投げ、setErrorHandler が形を整える）。 code は Fastify のエラーの名前 */
-        BodyError: {
-            error: string;
-            /** @enum {string} */
-            code: "FST_ERR_CTP_BODY_TOO_LARGE" | "FST_ERR_CTP_INVALID_MEDIA_TYPE" | "FST_ERR_CTP_INVALID_CONTENT_LENGTH" | "BAD_REQUEST";
+            code: "INTERNAL_ERROR" | "OVERLOADED" | "NOT_FOUND" | "FST_ERR_CTP_BODY_TOO_LARGE" | "FST_ERR_CTP_INVALID_MEDIA_TYPE" | "FST_ERR_CTP_INVALID_CONTENT_LENGTH";
             reqId: string;
         };
         /** @description プロフィールの更新（Zod の profileSchema）。長さはコードポイントの数（絵文字も1）で数え、 前後の空白は長さを確かめた後に削る（空白だけでも通り、空文字で保存される） */
@@ -509,6 +593,49 @@ export interface components {
             /** Format: int64 */
             failed: number;
         };
+        RegistrationTracking: {
+            shouldTrack: boolean;
+            /**
+             * @description 登録に使った方法（最初に作られたアカウント）。shouldTrack が true のときだけ
+             * @enum {string}
+             */
+            method?: "email" | "google" | "github";
+        };
+        /**
+         * @description 合成ユーザーの続き方の型
+         * @enum {string}
+         */
+        SimulationCohort: "steady" | "fading" | "sporadic" | "dropped";
+        SimulationUser: {
+            /** Format: int64 */
+            seq: number;
+            email: string;
+            /** @description DB の値をそのまま返す（書き込みは SimulationCohort に限っている） */
+            cohort: string;
+            createdAt: components["schemas"]["IsoDateTime"];
+            dormantFrom: components["schemas"]["IsoDate"] | null;
+            lastActedOn: components["schemas"]["IsoDate"] | null;
+        };
+        SimulationState: {
+            /**
+             * Format: int64
+             * @description 次に使う連番（最後の連番＋1。だれもいなければ 1）
+             */
+            nextSeq: number;
+            users: components["schemas"]["SimulationUser"][];
+        };
+        SimulationUserMark: {
+            /** @description シミュレーション用のアドレス（delivered+simNNNNN@resend.dev）だけ */
+            email: string;
+            /** Format: int64 */
+            seq: number;
+            cohort: components["schemas"]["SimulationCohort"];
+        };
+        /** @description キーが無い項目は変えない。null なら消す */
+        SimulationUserUpdate: {
+            lastActedOn?: components["schemas"]["IsoDate"] | null;
+            dormantFrom?: components["schemas"]["IsoDate"] | null;
+        };
     };
     responses: {
         /** @description 入力が不正（文言だけ） */
@@ -556,13 +683,22 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description 本文を読む段階で断った（大きすぎる 413・受け取れない形式 415・Content-Length と合わない 400） */
-        BodyError: {
+        /** @description 本文が上限（ふだんは 1MiB、CSP の報告は 16KB）を超えた */
+        PayloadTooLarge: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["BodyError"];
+                "application/json": components["schemas"]["ServerError"];
+            };
+        };
+        /** @description 受け付けない Content-Type（受けるのは JSON・text/plain・CSP の報告の2種類。本文が無ければ無しでよい） */
+        UnsupportedMediaType: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ServerError"];
             };
         };
         /** @description 想定外の失敗。原因はログにだけ残す */
@@ -874,8 +1010,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            413: components["responses"]["BodyError"];
-            415: components["responses"]["BodyError"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -904,8 +1040,8 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            413: components["responses"]["BodyError"];
-            415: components["responses"]["BodyError"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -999,6 +1135,145 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    trackRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 送ってよいか。初回だけ登録に使った方法も返す */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationTracking"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reportCspViolation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/csp-report": Record<string, never>;
+                "application/reports+json": Record<string, never>[];
+            };
+        };
+        responses: {
+            /** @description 受け取った（中身が読めなくても同じ） */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+        };
+    };
+    getSimulationState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 合成ユーザー（連番の昇順） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulationState"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    markSimulationUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimulationUserMark"];
+            };
+        };
+        responses: {
+            /** @description 付けた */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description その連番はすでに使われている */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateSimulationUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimulationUserUpdate"];
+            };
+        };
+        responses: {
+            /** @description 記録した（変える項目が無ければ、その連番が無くても 204） */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };

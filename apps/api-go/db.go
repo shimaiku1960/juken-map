@@ -77,6 +77,10 @@ func dbConfig(databaseURL string) (*mysql.Config, error) {
 	// 既定（false）ではサーバー側のプリペアドステートメントになり、準備・実行・後始末で
 	// 1クエリ3往復かかる。Node の mysql2 の query() もドライバ側で埋め込んでいるので、条件を揃える。
 	cfg.InterpolateParams = true
+	// UPDATE の件数を「値が変わった行」ではなく「WHERE に当たった行」で数える。
+	// Node の mysql2 は既定でこの数え方（FOUND_ROWS）なので、同じ値で UPDATE しても 1 になる。
+	// 揃えないと、同じ日付をもう一度記録したときに Go だけが「見つからない（404）」を返す（JUK-80、sim.go）。
+	cfg.ClientFoundRows = true
 
 	// RDS へは TLS で繋ぎ、証明書とホスト名を確かめる（パスワードと利用者のデータが平文で流れない）。
 	// 手元と CI の MySQL は証明書を持たないので対象外。Node の createPool と同じ条件。

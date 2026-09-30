@@ -52,6 +52,8 @@ func run() error {
 	rt := newRouter(auth.load)
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
+		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
+		simulationSecret:        os.Getenv("SIMULATION_SECRET"),
 		messenger: &httpMessenger{
 			client:     &http.Client{},
 			resendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
@@ -146,13 +148,28 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig) {
 	rt.user("GET /api/universities", universities.list)
 	rt.user("GET /api/universities/{id}", universities.detail)
 
+	analytics := &analyticsHandlers{store: &analyticsStore{db: db}}
+	rt.user("POST /api/analytics/registration", analytics.registration)
+	rt.anonymousWrite("POST /api/csp-report", cspReport)
+
 	cron := &cronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, jobs.messenger), now: time.Now}
 	rt.job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)
+
+	// シミュレーションの API は SIMULATION_ENABLED=on のときだけ存在する（付けなければ 404）。
+	if jobs.simulationEnabled {
+		sim := &simHandlers{store: &simStore{db: db}}
+		rt.job("GET /api/sim/state", jobs.simulationSecret, sim.state)
+		rt.job("POST /api/sim/users", jobs.simulationSecret, sim.markUser)
+		rt.job("PATCH /api/sim/users/{seq}", jobs.simulationSecret, sim.updateUser)
+	}
 }
 
-// jobConfig はジョブ（cron）の入口が使う設定。秘密の値と外部サービスへの送り方。
+// jobConfig はジョブ（cron・sim）の入口が使う設定。秘密の値と外部サービスへの送り方。
+// cron と sim はトークンが別（片方が漏れても、もう片方は呼べない）。
 type jobConfig struct {
 	dailyNotificationSecret string
+	simulationEnabled       bool
+	simulationSecret        string
 	messenger               messenger
 }
 

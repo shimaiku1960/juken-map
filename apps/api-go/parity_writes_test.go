@@ -10,7 +10,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -22,7 +21,7 @@ const jsonType = "application/json"
 
 // writeCases が比べる書き込み。入力チェックで弾くものは DB を変えないので全員に送り、
 // 成功するもの（firstUser）は1人だけにする。
-var writeCases = []struct {
+var userWriteCases = []struct {
 	method      string
 	path        string
 	contentType string // "" なら付けない
@@ -52,7 +51,7 @@ var writeCases = []struct {
 	{"PUT", "/api/notification-preferences", "application/x-www-form-urlencoded", `a=1`, []who{eachUser}, nil},
 	{"PUT", "/api/notification-preferences", "APPLICATION/JSON; charset=utf-8", `{}`, []who{eachUser}, nil},
 	{"PUT", "/api/notification-preferences", jsonType, "{\"a\":\"\xff\"}", []who{firstUser}, nil},
-	{"PUT", "/api/notification-preferences", jsonType, `{"a":"` + strings.Repeat("x", bodyLimit) + `"}`, []who{firstUser}, nil},
+	{"PUT", "/api/notification-preferences", jsonType, `{"a":"` + strings.Repeat("x", defaultBodyLimit) + `"}`, []who{firstUser}, nil},
 	// 書き込みの無いメソッドは 404（Node にも無い）
 	{"POST", "/api/notification-preferences", jsonType, `{}`, []who{firstUser}, nil},
 
@@ -69,45 +68,29 @@ var writeCases = []struct {
 	{"PUT", "/api/profile", jsonType, `"x"`, []who{eachUser}, nil},
 }
 
-func TestParityWrites(t *testing.T) {
-	nodeURL, goURL := os.Getenv("PARITY_NODE_URL"), os.Getenv("PARITY_GO_URL")
-	users := strings.Fields(os.Getenv("PARITY_COOKIES"))
-	if nodeURL == "" || goURL == "" || len(users) == 0 {
-		t.Fatal("parity.sh から動かしてください")
-	}
+func TestParityUserWrites(t *testing.T) {
+	env := parityEnv(t)
 	db, err := openDB(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	restore := snapshotUser(t, db, users[0])
+	restore := snapshotUser(t, db, env.cookiesFor(firstUser)[0])
 	defer restore()
 
-	cookieName, _, _ := strings.Cut(users[0], "=")
-	cookiesFor := func(w who) []string {
-		switch w {
-		case forged:
-			return []string{cookieName + "=" + sign("forged-token", "not-the-secret")}
-		case unknownUser:
-			return []string{cookieName + "=" + sign("no-such-token", os.Getenv("BETTER_AUTH_SECRET"))}
-		case eachUser:
-			return users
-		case firstUser:
-			return users[:1]
-		}
-		return []string{""}
-	}
-
-	for _, c := range writeCases {
+	for _, c := range userWriteCases {
 		for _, w := range c.as {
 			name := c.body
 			if len(name) > 60 {
 				name = name[:60] + "…"
 			}
 			t.Run(fmt.Sprintf("%s %s %q（%s）", c.method, c.path, name, whoNames[w]), func(t *testing.T) {
-				for i, cookie := range cookiesFor(w) {
-					node := send(t, nodeURL, c.method, c.path, cookie, c.contentType, c.body)
-					gon := send(t, goURL, c.method, c.path, cookie, c.contentType, c.body)
+				for i, cookie := range env.cookiesFor(w) {
+					pr := parityRequest{method: c.method, path: c.path, cookie: cookie, body: c.body, header: map[string]string{}}
+					if c.contentType != "" {
+						pr.header["Content-Type"] = c.contentType
+					}
+					node, gon := send(t, env.node, pr), send(t, env.goURL, pr)
 					for _, key := range c.ignore {
 						maskKey(node.body, key)
 						maskKey(gon.body, key)
@@ -119,45 +102,6 @@ func TestParityWrites(t *testing.T) {
 			})
 		}
 	}
-}
-
-// send は本文を付けて送る。Content-Length は本文のバイト数（Go のクライアントが付ける）。
-func send(t *testing.T, base, method, path, cookie, contentType, body string) response {
-	t.Helper()
-	req, err := http.NewRequest(method, base+path, strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if body == "" {
-		// 本文が無いときは Content-Length も付けない（Node の「本文なし」の判定に合わせる）。
-		req.Body, req.ContentLength = nil, 0
-	}
-	if cookie != "" {
-		req.Header.Set("Cookie", cookie)
-	}
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-	req.Header.Set("Accept-Encoding", "identity")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("%s %s%s: %v", method, base, path, err)
-	}
-	defer res.Body.Close()
-	raw, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return response{status: res.StatusCode, header: res.Header, body: decodeBody(t, raw)}
-}
-
-func decodeBody(t *testing.T, raw []byte) any {
-	t.Helper()
-	v, err := parseJSON(string(raw))
-	if err != nil {
-		t.Fatalf("本文が JSON でない: %q", raw)
-	}
-	return v
 }
 
 // maskKey は、値が毎回変わる項目を「有る」という印に置き換える。

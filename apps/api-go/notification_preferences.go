@@ -78,11 +78,11 @@ func (h *notificationPreferenceHandlers) get(w http.ResponseWriter, r *http.Requ
 
 // save は PUT /api/notification-preferences。入力チェックは Zod の notificationPreferenceSchema と同じ（4つとも真偽値）。
 func (h *notificationPreferenceHandlers) save(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r)
+	body, ok := readBody(w, r, defaultBodyLimit)
 	if !ok {
 		return
 	}
-	in := readObject(body)
+	in := readObject(body.value())
 	input := NotificationPreference{
 		EmailMorningEnabled: in.boolean("emailMorningEnabled"),
 		EmailEveningEnabled: in.boolean("emailEveningEnabled"),

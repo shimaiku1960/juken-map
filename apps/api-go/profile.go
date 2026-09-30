@@ -62,11 +62,11 @@ type profileHandlers struct {
 
 // update は PUT /api/profile。
 func (h *profileHandlers) update(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r)
+	body, ok := readBody(w, r, defaultBodyLimit)
 	if !ok {
 		return
 	}
-	in := readObject(body)
+	in := readObject(body.value())
 	input := ProfileInput{Nickname: in.string("nickname", nicknameRule)}
 	if in.reject(w) {
 		return

@@ -46,6 +46,8 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 | `RESEND_BASE_URL` | `https://api.resend.com` | Resend の送り先。手元の比較で偽のサーバーへ向けるときだけ変える（Node の SDK と同じ名前） |
 | `LINE_CHANNEL_ACCESS_TOKEN` | なし | 毎日の通知を LINE で送るトークン |
 | `LINE_API_BASE` | `https://api.line.me/v2/bot` | LINE の送り先。テスト用 |
+| `SIMULATION_ENABLED` | なし | `on` のときだけシミュレーションの API（`/api/sim/*`）を登録する。それ以外は 404 |
+| `SIMULATION_SECRET` | なし | シミュレーションの API の共有トークン（cron とは別）。空なら必ず 401 |
 
 ## 本番
 
@@ -57,6 +59,10 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
        │    GET・HEAD                                 ─▶ juken-map-go
        │    それ以外（POST など）                      ─▶ juken-map（Node）
        ├─ /api/notification-preferences・/api/profile（全メソッド） ─▶ juken-map-go
+       ├─ POST /api/analytics/registration・POST /api/csp-report・
+       │  POST /api/cron/daily-study-notifications     ─▶ juken-map-go
+       ├─ GET /api/sim/state・POST /api/sim/users・
+       │  PATCH /api/sim/users/{seq}                   ─▶ juken-map-go（ほかのメソッドは Node）
        └─ それ以外                                     ─▶ juken-map（3000 か 3001、Node）
 ```
 
@@ -102,11 +108,11 @@ path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。
 本文は `readBody`（`body.go`）で読み、入力は `readObject`（`validate.go`）で確かめる。
 
 ```go
-body, ok := readBody(w, r)   // 415・413 はここで返す。壊れた JSON は「本文なし」になる（Node と同じ）
+body, ok := readBody(w, r, defaultBodyLimit)   // 415・413 はここで返す。壊れた JSON は「本文なし」になる（Node と同じ）
 if !ok {
 	return
 }
-in := readObject(body)
+in := readObject(body.value())   // value() は Node の request.body と同じ値（本文なしと null を区別する）
 input := ProfileInput{Nickname: in.string("nickname", nicknameRule)}
 if in.reject(w) {            // 最初の1件を {error, code, field} の 400 で返す
 	return
@@ -192,10 +198,10 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる | `routes/cron.ts`・`services/sendDailyNotifications.ts` |
 | `daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 | `domain/dailyNotification.ts` |
 | `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
-| `body.go` | リクエスト本文の読み方（Content-Type・1MiB の上限・壊れた JSON）、415・413 の形 | Fastify の本文の解析・`server.ts` の JSON パーサー |
+| `body.go` | リクエスト本文の読み方（Content-Type・上限・壊れた JSON・不正な UTF-8）、415・413 の形 | Fastify の本文の解析・`server.ts` の JSON パーサー |
 | `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） | `src/shared/validations/`・`routes/validation-error.ts` |
 | `profile.go` | プロフィールの更新 | `routes/profile.ts`・`services/user-service.ts` の updateProfile |
-| `parity_test.go`・`parity_writes_test.go`・`parity.sh` | Node と応答を比べる（書き込みは、書き換えた行を最後に戻す） | — |
+| `parity_test.go`・`parity_writes_test.go`・`parity.sh` | Node と応答を比べる（ログイン済みの書き込みは `parity_writes_test.go`。書き換えた行を最後に戻す） | — |
 | `compare-notifications.sh` | 毎日の通知を Node と Go で送り比べる（偽の Resend へ） | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
 

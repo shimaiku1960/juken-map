@@ -1,10 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"regexp"
@@ -13,89 +13,101 @@ import (
 	"unicode/utf8"
 )
 
-// リクエスト本文の読み方を Node（Fastify ＋ server.ts の JSON パーサー）に揃える（JUK-75）。
+// 書き込みの本文の読み方（JUK-80・JUK-75）。Node の Fastify が本文を解析する部分（server.ts の
+// addContentTypeParser と csp-report.ts）と同じ結果にする。Node に実際に送った結果と、
+// Fastify 5.12 のソース（lib/content-type.js・content-type-parser.js・handle-request.js）で確かめた。
 //
-// Node の決まりは次のとおりで、ここでも同じ順に判定する。
 //   - Content-Type が無く、本文も無い（Content-Length が無いか 0、かつ chunked でない）→ 本文なし
-//   - Content-Type が無いのに本文がある、または application/json・text/plain 以外 → 415
-//   - 本文が 1MiB を超える（Content-Length の申告だけで超えていても）→ 413
-//   - application/json で、空か JSON として読めない → 400 にせず「本文なし」として扱う。
-//     認証を通った後なので、ハンドラの入力チェックが「expected object, received undefined」で 400 にする
-//     （server.ts の addContentTypeParser。解析の失敗で認証より先に 400 を返さないための作り）
-//   - text/plain → 文字列（入力チェックが「received string」で弾く）
+//   - Content-Type が無いのに本文がある、または下の4つ以外 → 415（本文が空でも）
+//   - 上限を超えたら 413（ふだんは 1MiB、ルートごとに小さくできる）。Content-Length の申告だけで超えていても 413
+//   - JSON が空・壊れていても 400 にせず「本文なし」として扱い、判断をハンドラに任せる。
+//     認証を通っていない送り手が、JSON の中身で結果を知ることがないようにするため（server.ts のコメント）
+//   - text/plain は文字列のまま
 //
-// 認証（401・403）は本文を読む前にルーターが済ませているので、ログインしていない人には
-// 本文の中身で結果が変わることはない（Node も onRequest で先に断る）。
+// 認証・トークンの確認はルーターが先に済ませるので、ここに来るのは通してよいリクエストだけ
+// （Node も onRequest の拒否が本文の解析より先に走る）。
 
-// bodyLimit は本文の上限。Node の BODY_LIMIT（error-handling.ts）と同じ 1MiB。
-const bodyLimit = 1 << 20
+// defaultBodyLimit は Node の BODY_LIMIT（error-handling.ts）と同じ 1MiB。
+const defaultBodyLimit = 1 << 20
 
-// Node の CLIENT_MESSAGES と同じ文言。
-const (
-	bodyTooLargeMessage     = "送信されたデータが大きすぎます"
-	invalidMediaTypeMessage = "この形式のデータは受け取れません"
-)
+// bodyMediaTypes は受け付ける Content-Type と、その本文を JSON として読むか。
+// CSP の報告の2つは csp-report.ts がアプリ全体に登録しているので、どのルートでも JSON として読む。
+var bodyMediaTypes = map[string]bool{
+	"application/json":         true,
+	"application/csp-report":   true,
+	"application/reports+json": true,
+	"text/plain":               false,
+}
 
-// jsUndefined は「値が無い」を表す。JSON の null と区別するため、nil とは別の値にする。
+// requestBody は読んだ本文。
+type requestBody struct {
+	raw string
+	// json は JSON として読めたときの値（数は json.Number）。読めなかった・本文が無い・JSON の null のときは nil。
+	json any
+	// parsed は JSON として読めたか（本文が null なら json は nil のまま true）。
+	parsed bool
+	// text は text/plain で受けたか。
+	text bool
+}
+
+// jsUndefined は「値が無い」を表す。JSON の null（nil）と区別するため、別の値にする。
 // Node で言えば request.body が undefined のとき、オブジェクトにキーが無いときにあたる。
 type jsUndefined struct{}
 
-// readBody は本文を読み、JavaScript で JSON.parse したのと同じ値にして返す。
+// value は Node のハンドラが受け取る request.body と同じ値を返す。入力チェック（validate.go）に渡す。
 //   - 本文なし・JSON として読めない：jsUndefined{}
 //   - text/plain：string
-//   - JSON：nil（null）・bool・float64・string・[]any・map[string]any
-//
-// 413・415・400（Content-Length と中身が合わない）のときは応答を送って false を返す。
-// 呼び出し側は `body, ok := readBody(w, r); if !ok { return }` で抜ける。
-func readBody(w http.ResponseWriter, r *http.Request) (any, bool) {
+//   - JSON：nil（null）・bool・json.Number・string・[]any・map[string]any
+func (b requestBody) value() any {
+	switch {
+	case b.text:
+		return b.raw
+	case b.parsed:
+		return b.json
+	}
+	return jsUndefined{}
+}
+
+// readBody は本文を読む。受け付けない形なら 415、大きすぎれば 413、UTF-8 として不正で
+// Content-Length と合わなければ 400 を書いて ok=false を返す。
+func readBody(w http.ResponseWriter, r *http.Request, limit int64) (body requestBody, ok bool) {
 	ct, hasCT := r.Header["Content-Type"]
 	if !hasCT {
 		if isEmptyBody(r) {
-			return jsUndefined{}, true
+			return requestBody{}, true
 		}
-		writeClientError(w, r, http.StatusUnsupportedMediaType, BodyErrorCodeInvalidMediaType, invalidMediaTypeMessage)
-		return nil, false
+		rejectBody(w, r, http.StatusUnsupportedMediaType, ServerErrorCodeInvalidMediaType)
+		return requestBody{}, false
+	}
+	asJSON, known := bodyMediaTypes[mediaType(ct[0])]
+	if !known {
+		rejectBody(w, r, http.StatusUnsupportedMediaType, ServerErrorCodeInvalidMediaType)
+		return requestBody{}, false
 	}
 
-	asJSON := false
-	switch mediaType(ct[0]) {
-	case "application/json":
-		asJSON = true
-	case "text/plain":
-	default:
-		writeClientError(w, r, http.StatusUnsupportedMediaType, BodyErrorCodeInvalidMediaType, invalidMediaTypeMessage)
-		return nil, false
+	text, status, code, err := readBodyText(r, limit)
+	switch {
+	case err != nil:
+		internalError(w, r, err)
+		return requestBody{}, false
+	case status != 0:
+		rejectBody(w, r, status, code)
+		return requestBody{}, false
 	}
 
-	text, status, code := readBodyText(r)
-	if status != 0 {
-		message := fallbackClientMessage
-		if status == http.StatusRequestEntityTooLarge {
-			message = bodyTooLargeMessage
+	body = requestBody{raw: text, text: !asJSON}
+	if asJSON && text != "" {
+		if v, err := parseJSON(text); err == nil {
+			body.json, body.parsed = v, true
 		}
-		writeClientError(w, r, status, code, message)
-		return nil, false
 	}
-	if !asJSON {
-		return text, true
-	}
-	if text == "" {
-		return jsUndefined{}, true
-	}
-	v, err := parseJSON(text)
-	if err != nil {
-		return jsUndefined{}, true
-	}
-	return v, true
+	return body, true
 }
 
 // isEmptyBody は Fastify の isEmptyBody と同じ。chunked なら中身が空でも「本文あり」。
+// r.ContentLength は、サーバーが Content-Length ヘッダーから入れる値（無ければ 0、chunked なら -1）。
 func isEmptyBody(r *http.Request) bool {
-	if len(r.TransferEncoding) > 0 {
-		return false
-	}
-	cl := r.Header.Get("Content-Length")
-	return cl == "" || cl == "0"
+	return len(r.TransferEncoding) == 0 && r.ContentLength == 0
 }
 
 // Fastify の typeNameReg・subtypeNameReg（lib/content-type.js）。
@@ -121,37 +133,36 @@ func mediaType(header string) string {
 }
 
 // readBodyText は本文を UTF-8 の文字列として読む。Fastify の rawBody（parseAs: "string"）と同じ判定で、
-// 失敗したときは status（413 か 400）と Node の code を返す。
+// 断るときは status（413 か 400）と code を返す。読み取りそのものの失敗は err で返す。
 //
 // Fastify は本文を UTF-8 として読み、読めないバイトを U+FFFD（3バイト）に置き換えてから長さを数える。
 // そのため、不正なバイトを含むと数えた長さが Content-Length と合わず 400 になる。ここでも置き換えた後の
 // 長さで同じ判定をする。
-func readBodyText(r *http.Request) (text string, status int, code BodyErrorCode) {
-	const tooLarge = BodyErrorCodeTooLarge
-	declared, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
-	hasDeclared := err == nil
-	if hasDeclared && declared > bodyLimit {
-		return "", http.StatusRequestEntityTooLarge, tooLarge
+func readBodyText(r *http.Request, limit int64) (text string, status int, code ServerErrorCode, err error) {
+	// chunked のときは -1（長さの申告が無い）。
+	declared := r.ContentLength
+	hasDeclared := declared >= 0
+	if hasDeclared && declared > limit {
+		return "", http.StatusRequestEntityTooLarge, ServerErrorCodeBodyTooLarge, nil
 	}
 
 	// 上限より1バイト多く読めたら、上限を超えている。
-	raw, err := io.ReadAll(io.LimitReader(r.Body, bodyLimit+1))
-	switch {
-	case err != nil:
-		// 途中で切れた・読めなかった。Fastify も読み取りの失敗は 400 にする。
-		return "", http.StatusBadRequest, BodyErrorCodeBadRequest
-	case len(raw) > bodyLimit:
-		return "", http.StatusRequestEntityTooLarge, tooLarge
+	raw, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	if err != nil {
+		return "", 0, "", err
+	}
+	if int64(len(raw)) > limit {
+		return "", http.StatusRequestEntityTooLarge, ServerErrorCodeBodyTooLarge, nil
 	}
 
 	text = decodeUTF8Like(raw)
-	if len(text) > bodyLimit {
-		return "", http.StatusRequestEntityTooLarge, tooLarge
+	if int64(len(text)) > limit {
+		return "", http.StatusRequestEntityTooLarge, ServerErrorCodeBodyTooLarge, nil
 	}
 	if hasDeclared && int64(len(text)) != declared {
-		return "", http.StatusBadRequest, BodyErrorCodeInvalidContentLength
+		return "", http.StatusBadRequest, ServerErrorCodeInvalidContentLength, nil
 	}
-	return text, 0, ""
+	return text, 0, "", nil
 }
 
 // decodeUTF8Like は、Node の TextDecoder（WHATWG の UTF-8 デコーダ）と同じ規則で不正なバイトを U+FFFD にする。
@@ -217,9 +228,9 @@ func maximalSubpart(b []byte) int {
 	return n
 }
 
-// parseJSON は JSON.parse と同じ値を作る。数は float64 にし、範囲を超えたものは JavaScript と同じく
-// ±Infinity（小さすぎるものは 0）にする。Go の json.Unmarshal は範囲外の数をエラーにするので、
-// 数は文字列のまま受け取ってから変換する。前後の空白以外の余りがあれば失敗にする（JSON.parse と同じ）。
+// parseJSON は JSON.parse と同じく本文全体を1つの値として読む。前後の空白以外の余りがあれば失敗にする。
+// 数は json.Number で受ける（1.5 と 1 を区別して、整数かどうかを Zod と同じく確かめるため。
+// 範囲を超えた数も、JavaScript と同じく ±Infinity として読める。jsNumber を参照）。
 func parseJSON(text string) (any, error) {
 	dec := json.NewDecoder(strings.NewReader(text))
 	dec.UseNumber()
@@ -227,35 +238,25 @@ func parseJSON(text string) (any, error) {
 	if err := dec.Decode(&v); err != nil {
 		return nil, err
 	}
-	if rest := bytes.TrimLeft([]byte(text[dec.InputOffset():]), " \t\r\n"); len(rest) > 0 {
+	if rest := strings.TrimLeft(text[dec.InputOffset():], " \t\r\n"); rest != "" {
 		return nil, errors.New("JSON の後ろに余分な文字がある")
 	}
-	return toJSValue(v), nil
+	return v, nil
 }
 
-func toJSValue(v any) any {
-	switch x := v.(type) {
-	case json.Number:
-		f, err := strconv.ParseFloat(string(x), 64)
-		if err != nil && !errors.Is(err, strconv.ErrRange) {
-			// Decoder が数として読んだものなので、ここには来ない。
-			return math.NaN()
-		}
-		return f
-	case []any:
-		for i := range x {
-			x[i] = toJSValue(x[i])
-		}
-	case map[string]any:
-		for k := range x {
-			x[k] = toJSValue(x[k])
-		}
+// jsNumber は json.Number を JSON.parse と同じ float64 にする。範囲外の数は ±Infinity、小さすぎる数は 0。
+// strconv.ParseFloat は範囲外で ErrRange を返すが、値は ±Inf・0 になっているのでそのまま使う。
+func jsNumber(n json.Number) float64 {
+	f, err := strconv.ParseFloat(string(n), 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
+		// Decoder が数として読んだものなので、ここには来ない。
+		return math.NaN()
 	}
-	return v
+	return f
 }
 
-// writeClientError は Fastify が本文の段階で断ったときの形（{error, code, reqId}）で返す。
-// Node の setErrorHandler が 4xx に付ける文言と同じ。code は Fastify のエラーの名前（契約の BodyError）。
-func writeClientError(w http.ResponseWriter, r *http.Request, status int, code BodyErrorCode, message string) {
-	writeJSON(w, status, BodyError{Error: message, Code: code, ReqID: requestIDFrom(r.Context())})
+// rejectBody は本文を読まずに断る。Node の setErrorHandler と同じく、4xx は warn でログに残す。
+func rejectBody(w http.ResponseWriter, r *http.Request, status int, code ServerErrorCode) {
+	slog.WarnContext(r.Context(), "request rejected", "statusCode", status, "code", code)
+	writeErrorBody(w, r, status, code)
 }

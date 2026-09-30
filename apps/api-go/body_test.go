@@ -1,24 +1,104 @@
 package main
 
 import (
+	"encoding/json"
 	"math"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 )
+
+func TestReadBodyMediaTypes(t *testing.T) {
+	// Node（Fastify）で実際に確かめた結果と同じにする（2026-09-30、JUK-80）。
+	tests := []struct {
+		name        string
+		contentType string
+		body        string
+		limit       int64
+		wantStatus  int // 0 なら読めた
+		wantJSON    bool
+	}{
+		{"JSON", "application/json", `{"a":1}`, 100, 0, true},
+		{"CSP の報告", "application/csp-report", `{"csp-report":{}}`, 100, 0, true},
+		{"report-to", "application/reports+json", `[]`, 100, 0, true},
+		{"大文字と charset は無視", "APPLICATION/JSON; charset=utf-8", `{}`, 100, 0, true},
+		{"text/plain は文字列のまま（JSON にしない）", "text/plain", `{"a":1}`, 100, 0, false},
+		{"壊れた JSON は 400 にせず、本文なし", "application/json", `{no`, 100, 0, false},
+		{"JSON の後ろに余計なもの", "application/json", `{} x`, 100, 0, false},
+		{"空の JSON", "application/json", ``, 100, 0, false},
+		{"Content-Type も本文も無い", "", ``, 100, 0, false},
+		{"Content-Type が無いのに本文がある", "", `x`, 100, 415, false},
+		{"フォーム", "application/x-www-form-urlencoded", `a=b`, 100, 415, false},
+		{"似た名前", "application/csp-reportx", `{}`, 100, 415, false},
+		{"上限ちょうど", "text/plain", strings.Repeat("x", 100), 100, 0, false},
+		{"上限を1バイト超える", "text/plain", strings.Repeat("x", 101), 100, 413, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/", strings.NewReader(tt.body))
+			if tt.contentType != "" {
+				req.Header.Set("Content-Type", tt.contentType)
+			}
+			res := httptest.NewRecorder()
+			body, ok := readBody(res, req, tt.limit)
+
+			if tt.wantStatus != 0 {
+				if ok || res.Code != tt.wantStatus {
+					t.Fatalf("ok = %v, status = %d, want %d", ok, res.Code, tt.wantStatus)
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("読めなかった（status %d、本文 %s）", res.Code, res.Body)
+			}
+			if (body.json != nil) != tt.wantJSON {
+				t.Errorf("json = %#v, want JSON: %v", body.json, tt.wantJSON)
+			}
+		})
+	}
+}
+
+func TestReadBodyErrors(t *testing.T) {
+	// 断るときの本文は Node の setErrorHandler と同じ（code は Fastify のもの）。
+	for _, tt := range []struct {
+		name, contentType, body, want string
+	}{
+		{"415", "application/xml", "<a/>", `{"error":"この形式のデータは受け取れません","code":"FST_ERR_CTP_INVALID_MEDIA_TYPE","reqId":""}`},
+		{"413", "application/json", strings.Repeat("x", 11), `{"error":"送信されたデータが大きすぎます","code":"FST_ERR_CTP_BODY_TOO_LARGE","reqId":""}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", tt.contentType)
+			res := httptest.NewRecorder()
+			readBody(res, req, 10)
+			assertJSONEqual(t, res.Body.String(), tt.want)
+		})
+	}
+}
+
+func TestReadBodyNumbers(t *testing.T) {
+	// 数は json.Number で受け取る（1 と 1.0 と 1.5 を、整数かどうかの判定まで区別できるように）。
+	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"seq":1.5}`))
+	req.Header.Set("Content-Type", "application/json")
+	body, ok := readBody(httptest.NewRecorder(), req, defaultBodyLimit)
+	if !ok {
+		t.Fatal("読めなかった")
+	}
+	if n, isNumber := body.json.(map[string]any)["seq"].(json.Number); !isNumber || n.String() != "1.5" {
+		t.Errorf("seq = %#v", body.json)
+	}
+}
 
 // 期待値は、Node（apps/api）に同じリクエストを送って返ってきたもの（2026-09-30 に手元で確かめた）。
 
 // prefsHandler は PUT /api/notification-preferences の入力チェックまでを通す。保存の代わりに 200 で入力を返す。
 func prefsHandler(w http.ResponseWriter, r *http.Request) {
-	body, ok := readBody(w, r)
+	body, ok := readBody(w, r, defaultBodyLimit)
 	if !ok {
 		return
 	}
-	in := readObject(body)
+	in := readObject(body.value())
 	p := NotificationPreference{
 		EmailMorningEnabled: in.boolean("emailMorningEnabled"),
 		EmailEveningEnabled: in.boolean("emailEveningEnabled"),
@@ -31,7 +111,7 @@ func prefsHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, p)
 }
 
-func TestReadBody(t *testing.T) {
+func TestReadBodyLikeNode(t *testing.T) {
 	const valid = `{"emailMorningEnabled":true,"emailEveningEnabled":false,"lineMorningEnabled":false,"lineEveningEnabled":false}`
 	undefinedBody := `{"error":"Invalid input: expected object, received undefined","code":"invalid_type","field":null}`
 	missingFirst := `{"error":"Invalid input: expected boolean, received undefined","code":"invalid_type","field":"emailMorningEnabled"}`
@@ -84,10 +164,10 @@ func TestReadBody(t *testing.T) {
 		{"; の後ろが壊れていても読む", "application/json ;;; x", `{}`, false, 400, missingFirst},
 		{"前後の空白", "  application/json ", `{}`, false, 400, missingFirst},
 
-		{"1MiB ちょうどは読む", "application/json", strings.Repeat(" ", bodyLimit), false, 400, undefinedBody},
-		{"1MiB を超えたら 413", "application/json", strings.Repeat(" ", bodyLimit+1), false, 413, tooLarge},
-		{"chunked でも 413", "application/json", strings.Repeat(" ", bodyLimit+1), true, 413, tooLarge},
-		{"text/plain も 413", "text/plain", strings.Repeat(" ", bodyLimit+1), false, 413, tooLarge},
+		{"1MiB ちょうどは読む", "application/json", strings.Repeat(" ", defaultBodyLimit), false, 400, undefinedBody},
+		{"1MiB を超えたら 413", "application/json", strings.Repeat(" ", defaultBodyLimit+1), false, 413, tooLarge},
+		{"chunked でも 413", "application/json", strings.Repeat(" ", defaultBodyLimit+1), true, 413, tooLarge},
+		{"text/plain も 413", "text/plain", strings.Repeat(" ", defaultBodyLimit+1), false, 413, tooLarge},
 		{"UTF-8 として不正なバイトは Content-Length と合わず 400", "application/json", "{\"a\":\"\xff\"}", false, 400,
 			`{"error":"リクエストを処理できませんでした","code":"FST_ERR_CTP_INVALID_CONTENT_LENGTH","reqId":""}`},
 	}
@@ -100,8 +180,6 @@ func TestReadBody(t *testing.T) {
 			if tt.chunked {
 				req.TransferEncoding = []string{"chunked"}
 				req.ContentLength = -1
-			} else if tt.body != "" {
-				req.Header.Set("Content-Length", strconv.Itoa(len(tt.body)))
 			}
 			res := httptest.NewRecorder()
 			prefsHandler(res, req)
@@ -118,7 +196,7 @@ func TestReadBodyDeclaredTooLarge(t *testing.T) {
 	// Content-Length の申告だけで上限を超えていれば、本文を読まずに 413（Fastify と同じ）。
 	req := httptest.NewRequest("PUT", "/", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Length", "2000000")
+	req.ContentLength = 2000000
 	res := httptest.NewRecorder()
 	prefsHandler(res, req)
 	if res.Code != http.StatusRequestEntityTooLarge {
@@ -126,15 +204,16 @@ func TestReadBodyDeclaredTooLarge(t *testing.T) {
 	}
 }
 
-func TestParseJSONNumbers(t *testing.T) {
+func TestJSNumber(t *testing.T) {
 	// JSON.parse と同じく、範囲外の数は ±Infinity、小さすぎる数は 0 になる。
-	v, err := parseJSON(`[1, 1.5, 1e3, -0, 1e400, -1e400, 1e-400]`)
-	if err != nil {
-		t.Fatal(err)
+	tests := map[string]float64{
+		"1": 1, "1.5": 1.5, "1e3": 1000, "-0": math.Copysign(0, -1),
+		"1e400": math.Inf(1), "-1e400": math.Inf(-1), "1e-400": 0,
 	}
-	want := []any{1.0, 1.5, 1000.0, math.Copysign(0, -1), math.Inf(1), math.Inf(-1), 0.0}
-	if !reflect.DeepEqual(v, want) {
-		t.Errorf("parseJSON = %v, want %v", v, want)
+	for in, want := range tests {
+		if got := jsNumber(json.Number(in)); got != want || math.Signbit(got) != math.Signbit(want) {
+			t.Errorf("jsNumber(%s) = %v, want %v", in, got, want)
+		}
 	}
 }
 

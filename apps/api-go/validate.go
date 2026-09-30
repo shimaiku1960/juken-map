@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -136,17 +137,14 @@ func invalidType(field, expected string, got any) *validationIssue {
 
 // jsTypeName は Zod の parsedType と同じ名前を返す（JSON から来る値だけを考えればよい）。
 func jsTypeName(v any) string {
-	switch x := v.(type) {
+	switch v.(type) {
 	case jsUndefined:
 		return "undefined"
 	case nil:
 		return "null"
 	case bool:
 		return "boolean"
-	case float64:
-		if x != x {
-			return "NaN"
-		}
+	case json.Number:
 		return "number"
 	case string:
 		return "string"

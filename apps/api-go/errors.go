@@ -28,6 +28,12 @@ const (
 	overloadedMessage     = "ただいま混み合っています。少し待ってからもう一度お試しください"
 )
 
+// clientMessages は 4xx のうち、code ごとに決まった文言を出すもの。Node の error-handling.ts の CLIENT_MESSAGES と同じ。
+var clientMessages = map[ServerErrorCode]string{
+	ServerErrorCodeBodyTooLarge:     "送信されたデータが大きすぎます",
+	ServerErrorCodeInvalidMediaType: "この形式のデータは受け取れません",
+}
+
 // newErrorBody は Node の errorBody と同じ規則で文言を選ぶ。
 func newErrorBody(status int, code ServerErrorCode, reqID string) ServerError {
 	message := fallbackClientMessage
@@ -36,6 +42,8 @@ func newErrorBody(status int, code ServerErrorCode, reqID string) ServerError {
 		message = overloadedMessage
 	case status >= 500:
 		message = serverMessage
+	case clientMessages[code] != "":
+		message = clientMessages[code]
 	}
 	return ServerError{Error: message, Code: code, ReqID: reqID}
 }
