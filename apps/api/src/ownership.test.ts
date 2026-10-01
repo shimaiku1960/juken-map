@@ -3,6 +3,7 @@ import type { RouteOptions } from "fastify";
 
 // 利用者の API（入口 E3）で、他人の持ち物の ID を渡すと断られることを確かめる
 // （セキュリティ基準 06 の A3）。
+// Go へ移したルートは、同じことを apps/api-go/ownership_db_test.go（dbtest タグ、JUK-97）が確かめる。
 //
 // 全ルートを onRoute で集め、E3 のルートは1本残らず下の表 OWNERSHIP で分類させる。
 // ルートを足して表に書かなければ落ちるので、所有者の確認を持たないルートが

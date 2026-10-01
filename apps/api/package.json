@@ -8,7 +8,8 @@
     "migrate": "tsx --env-file-if-exists=../../.env src/migrate.ts",
     "admin:grant": "tsx --env-file-if-exists=../../.env src/grant-admin.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test-db:prepare": "tsx src/test-db/prepare.ts"
   },
   "dependencies": {
     "@fastify/compress": "^9.2.0",
