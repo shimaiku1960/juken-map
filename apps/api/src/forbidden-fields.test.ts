@@ -28,12 +28,9 @@ const { auth } = await import("./auth.ts");
 const { registerRoutes } = await import("./routes/index.ts");
 const { buildTestApp, request } = await import("./test-support.ts");
 const { select } = await import("@/api/infra/db");
-const { todayYmdTokyo } = await import("@/shared/date");
 const {
   cleanup,
   createFinalGoal,
-  createLineConnection,
-  createStudyLog,
   createStudyPlan,
   createTextbook,
   createUniversity,
@@ -85,20 +82,6 @@ const WRITES: Record<string, Arrange> = {
     return { url: `/api/goals/${id}` };
   },
 
-  // 実績
-  "POST /api/study-logs": async () => ({
-    url: "/api/study-logs",
-    body: { date: todayYmdTokyo(), minutes: 30 },
-  }),
-  "PATCH /api/study-logs/:id": async (caller) => {
-    const id = await createStudyLog(caller);
-    return { url: `/api/study-logs/${id}`, body: { date: todayYmdTokyo(), minutes: 45 } };
-  },
-  "DELETE /api/study-logs/:id": async (caller) => {
-    const id = await createStudyLog(caller);
-    return { url: `/api/study-logs/${id}` };
-  },
-
   // 予定
   "POST /api/study-plans": async (_caller, forbidden) => ({
     url: "/api/study-plans",
@@ -123,27 +106,6 @@ const WRITES: Record<string, Arrange> = {
     const id = await createTextbook(caller);
     return { url: `/api/textbooks/${id}`, body: { totalAmount: 100 } };
   },
-
-  // 設定・連携
-  "PUT /api/profile": async () => ({ url: "/api/profile", body: { nickname: "なまえ" } }),
-  "PUT /api/notification-preferences": async () => ({
-    url: "/api/notification-preferences",
-    body: {
-      emailMorningEnabled: true,
-      emailEveningEnabled: false,
-      lineMorningEnabled: false,
-      lineEveningEnabled: false,
-    },
-  }),
-  "POST /api/line/account-link": async () => ({
-    url: "/api/line/account-link",
-    body: { linkToken: "link-token" },
-  }),
-  "DELETE /api/line/connection": async (caller) => {
-    await createLineConnection(caller);
-    return { url: "/api/line/connection" };
-  },
-  "POST /api/analytics/registration": async () => ({ url: "/api/analytics/registration" }),
 };
 
 /** 呼んだ人の、利用者が変えてはいけない列。 */
@@ -210,7 +172,7 @@ afterAll(cleanup);
 describe("A4 表と登録されたルートの突き合わせ", () => {
   it("利用者の API の書き込みは全件が表にあり、表に余りも無い", () => {
     // 0件のまま通る（何も突き合わせていない）状態を防ぐ。
-    expect(userWrites.length).toBeGreaterThan(15);
+    expect(userWrites.length).toBeGreaterThan(8);
     expect(userWrites.filter((route) => !(route in WRITES))).toEqual([]);
     expect(Object.keys(WRITES).filter((route) => !userWrites.includes(route))).toEqual([]);
   });

@@ -7,7 +7,7 @@ import type {
 import type { Textbook } from "@/shared/dto/study";
 
 // 予定（p）・実績（l）・参考書（t）を SELECT するときの列と、JOIN の結果を
-// オブジェクトへ戻す関数。study-plan-service と study-log-service の両方で使う。
+// オブジェクトへ戻す関数。study-plan-service で使う（study-log-service は Go へ移して JUK-84 で消した）。
 //
 // 列は * ではなく明示する。テーブルに列が増えても、返す形が勝手に変わらないように。
 // 別名（p / l / t）は、使う側の FROM 句でこの名前を付けること。

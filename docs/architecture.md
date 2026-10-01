@@ -24,12 +24,12 @@ apps/api/               バックエンド一式（Fastify）
   ├ context.ts            requireSession / denyDemoWrite（門番）
   ├ seo.ts                robots / sitemap / ページ別 meta の生成
   ├ routes/               HTTP の入口（認証・検証・ステータスコードのみ）
-  ├ services/             ユースケース（goal / study-log / study-plan / textbook /
-  │                       university / notification / sendDailyNotifications）
+  ├ services/             ユースケース（goal / study-plan / textbook / university /
+  │                       user / admin / master）。Go へ移した分は消していく（JUK-84）
   ├ infra/                db（生 SQL の接続プール）, tables（テーブル1行の型）,
-  │                       email, resend, microcms, line, lineLogin
+  │                       email, resend, microcms
   ├ test-db/              テスト用 MySQL の準備と、テストデータの作成
-  ├ domain/               通知本文の組み立てなど
+  ├ domain/               参考書の範囲の確かめなど
   ├ observability/        サービスの所要時間計測
 
 src/shared/             2つのアプリが共有する、外部依存のない純粋関数・型のみ
@@ -211,6 +211,7 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移した�
 `updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
 
 `services/` はすべて移行済み（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）。
+そのうち study-log・notification・sendDailyNotifications・line-connection は、のちに Go へ移して Node から消した（JUK-84）。
 予定と実績で共通の列と、JOIN の結果を入れ子に戻す関数は `services/study-columns.ts` にある。
 Better Auth（`auth.ts`）も同じ mysql2 のプールを使う（内部の Kysely で読み書きする）。
 アプリの実行時も seed（`db/seed*.ts`）もマイグレーションの適用も Prisma を使っていない。
@@ -260,7 +261,7 @@ ORM を外すと、次のことを自分で持つことになる。どれも `in
   `IN (...)` で別に取る。生 SQL では自分で選ぶ。大学 → 学部 → タグのような一本道の
   1対多は JOIN 1本で取って詰め直す。ユーザー → 予定・実績のように1対多が並ぶときは、
   JOIN すると（予定 × 実績）の行に膨らみ合計がずれるので、別々の SQL に分ける
-  （`sendDailyNotifications.ts` の `findRecipients`）。
+  （毎日の通知の宛先を集める SQL。今は Go の `notifications.go`）。
 - **並び順。** Prisma が子を取る SQL には `ORDER BY` が無く、並びは DB が返した順だった
   （大学一覧のタグの順がそうだった）。親の `ORDER BY` も、同じ値の行どうしの順番までは決めない
   （予定・実績の一覧は同じ日付の中の順番が DB 任せだった）。生 SQL では最後に id で並べて順番を固定している。

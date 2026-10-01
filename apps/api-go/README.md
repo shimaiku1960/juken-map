@@ -117,8 +117,9 @@ path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。
 
 1. `main.go` の `registerRoutes` と、`main_test.go` の一覧（入口の種類を Node と揃える）
 2. `parity_test.go` の `parityCases`（Node と応答が同じかを確かめる。不正な入力のケースも）
-3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスに書き込みが残っているなら、
-   `/api/goals` と同じく GET・HEAD 以外を `@node` へ回す
+3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスの別のメソッドを Node に残すなら、
+   GET・HEAD 以外を Node へ回す名前付きの location が要る（JUK-84 で使う所が無くなり外した `@node`。
+   形は `git log -S '@node' -- infra/nginx/juken-map-go-routes.conf` で探せる）
 
 ## 書き込みのルート
 
@@ -168,29 +169,22 @@ bash apps/api-go/parity.sh                 # worktree のルートから。合�
 ```
 
 Node と Go を立ち上げ、同じリクエストを送って、ステータス・本文・ヘッダーを比べる。
+比べられるのは Node にまだ残っているルートだけ。9/30 までに移したものは Node から消した（JUK-84）。
 食い違うと、どこが違うかを `$.logs[3].textbook.name: … → …` の形で出す。
 両方のサーバーと合成データ（`pnpm db:seed:synthetic`）が要るので CI では動かさない。
 
-## 毎日の通知を Node と比べる
-
-```sh
-bash apps/api-go/compare-notifications.sh    # worktree のルートから。合成ユーザー100人
-N=30 LATENCY_MS=400 bash apps/api-go/compare-notifications.sh
-```
-
-偽の Resend（1通ごとに LATENCY_MS 待って 200 を返す）を立て、Node と Go に朝の通知を1回ずつ送らせる。
-宛先・件名・本文が同じかと、送り終わるまでの秒数を比べる。本物のメールは送らない。
-⚠️ 流している間、手元の DB の通知設定を書き換える（終わったら戻す）。DB は全 worktree で共有なので注意。
+## 毎日の通知の送り方
 
 Go は5本同時に送るが、メールは Resend の上限（チーム全体で毎秒10リクエスト。登録確認のメールなどと分け合う）を
 超えないよう毎秒5通に抑える。そのため、メールだけなら Go の速さは毎秒5通で頭打ちになる
-（100人・1通300ms で Node 31.2秒、Go 20.2秒）。
+（移す前に Node と送り比べた結果は 100人・1通300ms で Node 31.2秒、Go 20.2秒。比べたスクリプト
+`compare-notifications.sh` は、Node の通知の入口を消したとき（JUK-84）に一緒に消した）。
 
 ## Node と CPU を比べる
 
 ```sh
 bash apps/api-go/compare-cpu.sh            # worktree のルートから。N=500 件 × 交互3回
-API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compare-cpu.sh
+API_PATH=/api/goals bash apps/api-go/compare-cpu.sh
 ```
 
 負荷試験（k6）は使わない。手元で 300 RPS をかけると Mac 全体が詰まり、ほかの作業が
@@ -199,6 +193,9 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 分かるのは「1件の重さ」で、同時に何件さばけるか（限界 RPS）は分からない。
 
 ## ファイルの分け方
+
+右の列は移す前の Node のファイル。9/30 までに移した分（ダッシュボード・学習記録・大学・通知・プロフィール・
+LINE・計測・CSP・sim）は JUK-84 で Node から消したので、`git log --diff-filter=D -- apps/api/src` で探す。
 
 | ファイル | 役割 | Node 側で近いもの |
 | --- | --- | --- |
@@ -232,7 +229,6 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `admin_users.go` | 管理画面の利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） | `routes/admin.ts`・`services/admin-service.ts` |
 | `admin_masters.go` | 管理画面のマスター編集（大学・学部・タグ・参考書。使われている行は消さない、大学一覧のキャッシュを捨てる） | `routes/admin-masters.ts`・`services/master-service.ts` |
 | `parity_test.go`・`parity_writes_test.go`・`parity.sh` | Node と応答を比べる（ログイン済みの書き込みは `parity_writes_test.go`。書き換えた行を最後に戻す） | — |
-| `compare-notifications.sh` | 毎日の通知を Node と Go で送り比べる（偽の Resend へ） | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
 
 Go ではフォルダ1つが1つのパッケージで、ファイルの分け方はコンパイル結果に関係しない。

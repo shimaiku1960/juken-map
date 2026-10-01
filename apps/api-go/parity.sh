@@ -26,15 +26,9 @@ if [ -z "$cookies" ]; then
   exit 1
 fi
 
-# シミュレーションの API（JUK-80）は、有効にしたときだけ両方にある。比べるために手元でだけ有効にする。
-# 手元の .env に SIMULATION_SECRET が無ければ、使い捨ての値を両方に渡す。
-export SIMULATION_ENABLED=on
-export SIMULATION_SECRET=${SIMULATION_SECRET:-parity-sim-secret}
-
 start_servers "$NODE_PORT" "$GO_PORT"
 
 # BETTER_AUTH_SECRET は「署名は正しいが DB に無いトークン」を作るのに使う。
 cd "$ROOT/apps/api-go"
 (set -a; source "$ROOT/.env"; set +a
-  PARITY_NODE_URL=http://localhost:$NODE_PORT PARITY_GO_URL=http://localhost:$GO_PORT PARITY_COOKIES=$cookies \
-    PARITY_SIM_SECRET=$SIMULATION_SECRET go test -tags parity -run TestParity -count=1 -v .)
+  PARITY_NODE_URL=http://localhost:$NODE_PORT PARITY_GO_URL=http://localhost:$GO_PORT PARITY_COOKIES=$cookies go test -tags parity -run TestParity -count=1 -v .)

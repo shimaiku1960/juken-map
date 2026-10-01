@@ -13,7 +13,6 @@ vi.mock("@/api/infra/email", () => ({
 const { auth } = await import("./auth.ts");
 const { execute, pool } = await import("@/api/infra/db");
 const { sendPasswordChangedNotice, sendPasswordResetEmail } = await import("@/api/infra/email");
-const { registerProfileRoutes } = await import("./routes/profile.ts");
 const { buildTestApp, request } = await import("./test-support.ts");
 
 // 乗っ取り後の封じ込め（セキュリティ基準 06 の B6）。
@@ -25,7 +24,10 @@ const { buildTestApp, request } = await import("./test-support.ts");
 const emails: string[] = [];
 const password = "correct-horse-battery-staple";
 const newPassword = "new-correct-horse-battery";
-const app = buildTestApp(registerProfileRoutes);
+// ログインが要るルートなら何でもよい。業務の API は Go へ移っていくので、ここで1本だけ用意する。
+const app = buildTestApp((app) => {
+  app.get("/test/session", { config: { access: "user" } }, async () => ({ ok: true }));
+});
 
 afterAll(async () => {
   if (emails.length > 0) await execute("DELETE FROM `user` WHERE email IN (?)", [emails]);
@@ -61,9 +63,9 @@ async function signIn(email: string, pass = password) {
   return cookieFrom(headers);
 }
 
-/** ログインが要るアプリの API を、その Cookie で叩いた結果の状態コード。 */
+/** ログインが要るルートを、その Cookie で叩いた結果の状態コード。 */
 async function statusWith(cookie: string) {
-  const res = await request(app, "PUT", "/api/profile", { nickname: "テスト" }, { cookie });
+  const res = await request(app, "GET", "/test/session", undefined, { cookie });
   return res.statusCode;
 }
 

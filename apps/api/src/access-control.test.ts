@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { RouteOptions } from "fastify";
 
 // 全ルートを登録して onRoute で集め、入口の種類（config.access）ごとに、断るべき相手が
@@ -30,10 +30,6 @@ const getSession = auth.api.getSession as unknown as Mock;
 
 type Method = Parameters<typeof request>[1];
 type Route = { method: Method; url: string; access: string | undefined };
-
-// シミュレーション用のルートは SIMULATION_ENABLED=on のときだけ登録される。本番で有効に
-// することがあるので、一覧に含めて種類の付け忘れを見る。
-process.env.SIMULATION_ENABLED = "on";
 
 const routes: Route[] = [];
 const app = buildTestApp((app) => {
@@ -72,14 +68,10 @@ beforeEach(() => {
   getSession.mockReset();
 });
 
-afterAll(() => {
-  delete process.env.SIMULATION_ENABLED;
-});
-
 describe("A1 入口の一覧", () => {
   it("登録された全ルートに入口の種類が付いている", () => {
     // 0件のまま通る（何も確かめていない）状態を防ぐ。
-    expect(routes.length).toBeGreaterThan(50);
+    expect(routes.length).toBeGreaterThan(30);
     const known = Object.keys(ACCESS_ENTRY);
     expect(routes.filter((route) => !known.includes(route.access ?? "")).map(label)).toEqual([]);
   });
@@ -110,28 +102,13 @@ describe("A2 既定拒否", () => {
   it("利用者と管理者の API は、未ログインなら全件 401", async () => {
     getSession.mockResolvedValue(null);
     const targets = byAccess("user", "admin");
-    expect(targets.length).toBeGreaterThan(40);
+    expect(targets.length).toBeGreaterThan(25);
     expect(await mismatches(targets, (status) => status === 401)).toEqual([]);
   });
 
-  it("OAuth の入口は、未ログインならログイン画面へ送る", async () => {
-    getSession.mockResolvedValue(null);
-    const failed: string[] = [];
-    for (const route of byAccess("oauth")) {
-      const res = await request(app, route.method, `${urlOf(route)}?state=s&code=c`);
-      const location = String(res.headers.location ?? "");
-      if (res.statusCode !== 302 || !location.includes("/login")) {
-        failed.push(`${label(route)} → ${res.statusCode} ${location}`);
-      }
-    }
-    expect(byAccess("oauth").length).toBeGreaterThan(0);
-    expect(failed).toEqual([]);
-  });
-
-  it("自分のジョブの入口は、トークンが無ければ全件 401", async () => {
-    getSession.mockResolvedValue(adminSession);
-    expect(await mismatches(byAccess("job"), (status) => status === 401)).toEqual([]);
-  });
+  // OAuth の入口（LINE 連携）とジョブの入口（毎日の通知・シミュレーション）は Go へ移り、Node には無い（JUK-84）。
+  // 未ログインをログインへ送ること・デモを断ることは Go の line_test.go（TestLineOAuthStart・TestLineOAuthCallbackState）、
+  // トークンが無ければ 401 は notifications_test.go（TestCronHandler・TestJobWithoutSecret）が確かめる。
 
   it("利用を停止された人は、利用者の API で全件 403", async () => {
     getSession.mockResolvedValue(bannedSession);
@@ -177,10 +154,10 @@ describe("B7 管理者の2段階認証", () => {
 });
 
 describe("A6 読み取り専用（デモ）", () => {
-  it("デモの利用者は、利用者の API の書き込みと OAuth で全件 403", async () => {
+  it("デモの利用者は、利用者の API の書き込みで全件 403", async () => {
     getSession.mockResolvedValue(demoSession);
-    const targets = [...byAccess("user").filter(isWrite), ...byAccess("oauth")];
-    expect(targets.length).toBeGreaterThan(15);
+    const targets = byAccess("user").filter(isWrite);
+    expect(targets.length).toBeGreaterThan(8);
     expect(await mismatches(targets, (status) => status === 403)).toEqual([]);
   });
 

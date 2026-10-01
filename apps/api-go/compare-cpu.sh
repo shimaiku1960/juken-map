@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Node（apps/api）と Go（apps/api-go）の GET の API（既定は /api/dashboard）を、1リクエストあたりの
+# Node（apps/api）と Go（apps/api-go）の GET の API（既定は /api/study-plans）を、1リクエストあたりの
 # CPU 時間で比べる（JUK-69）。ルートを移すたびに、API_PATH を変えて同じ条件で測る（JUK-73）。
+# 比べられるのは Node にまだ残っているルートだけ（9/30 までに移したものは JUK-84 で Node から消した）。
 #
 # 負荷試験ではない。リクエストは1件ずつ順番に送るので、同時に動くのは
 # 「curl 1本・サーバー1つ・DB」だけで、Mac のほかの作業は止まらない。
@@ -10,7 +11,7 @@
 # 使い方（worktree のルートから）:
 #   bash apps/api-go/compare-cpu.sh
 #   N=1000 ROUNDS=5 bash apps/api-go/compare-cpu.sh
-#   API_PATH='/api/study-logs?from=2026-09-01&to=2026-09-30' bash apps/api-go/compare-cpu.sh
+#   API_PATH=/api/goals bash apps/api-go/compare-cpu.sh
 #
 # 前提: DB が起動していて、合成データ（pnpm db:seed:synthetic）が入っていること。
 set -euo pipefail
@@ -19,7 +20,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 N=${N:-500}              # 1回に送る件数
 ROUNDS=${ROUNDS:-3}      # Node と Go を交互に何回ずつ測るか
 WARMUP=${WARMUP:-300}    # 測る前の慣らし（Node の JIT、DB のキャッシュを温める）
-API_PATH=${API_PATH:-/api/dashboard}  # 測るパス（クエリも含められる）
+API_PATH=${API_PATH:-/api/study-plans?from=2026-09-01&to=2026-10-31}  # 測るパス（クエリも含められる）
 NODE_PORT=${NODE_PORT:-18000}
 GO_PORT=${GO_PORT:-18080}
 WORK=$(mktemp -d)
