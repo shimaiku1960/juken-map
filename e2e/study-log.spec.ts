@@ -152,3 +152,34 @@ test("予定外の学習方法を選んで戻れる", async ({ page }) => {
   await review.getByRole("button", { name: "保存せず終了" }).click();
   await review.getByRole("button", { name: "破棄する" }).click();
 });
+
+// 参考書の付いた実績を編集できる（JUK-100）。編集フォームは参考書があると「学習範囲」の欄を出し、
+// その見出しの部品の使い方を誤って描画ごと落ち、画面が真っ白になっていた。
+test("参考書の付いた実績を編集できる", async ({ page }) => {
+  await login(page, E2E_EMAIL, E2E_PASSWORD);
+
+  // 参考書の付いた実績を API で作る（ほかのテストと見分けるため、科目は理科・7分にする）
+  const textbooks: { id: number; name: string }[] = await (await page.request.get("/api/textbooks")).json();
+  const textbook = textbooks.find((t) => t.name === "E2E英語教材");
+  expect(textbook).toBeDefined();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(new Date());
+  const created = await page.request.post("/api/study-logs", {
+    data: { date: today, minutes: 7, subject: "science", textbookId: textbook!.id },
+  });
+  expect(created.status()).toBe(201);
+
+  await page.getByRole("link", { name: "記録・予定" }).click();
+  const log = page.getByRole("listitem").filter({ hasText: "理科" }).filter({ hasText: "7分" });
+  await log.first().getByRole("button", { name: /の理科の実績を編集$/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "学習実績を編集" });
+  await expect(dialog.getByText("学習範囲（任意）")).toBeVisible();
+  // 学習時間の欄は、ラベルが入力欄でなく囲みの div に付いているので、ほかのテストと同じくプレースホルダーで探す
+  await dialog.getByPlaceholder("分", { exact: true }).fill("8");
+  await dialog.getByRole("button", { name: "変更を保存" }).click();
+
+  await expect(page.getByText("学習実績を更新しました")).toBeVisible();
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "理科" }).filter({ hasText: "8分" }).first()
+  ).toBeVisible();
+});

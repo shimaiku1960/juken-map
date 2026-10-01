@@ -27,6 +27,7 @@ import {
 } from "@/web/components/StudyFields";
 import { Button } from "@/web/components/ui/button";
 import { Input } from "@/web/components/ui/input";
+import { Label } from "@/web/components/ui/label";
 import {
   Form,
   FormControl,
@@ -427,7 +428,8 @@ export default function StudyLogForm({
 
               {selectedTextbookId != null && (
                 <div className="space-y-2">
-                  <FormLabel>学習範囲（任意）</FormLabel>
+                  {/* 開始・終了・単位の3つの欄をまとめる見出し。FormLabel は1つの FormField の中でしか使えない（外で使うと描画が落ちる、JUK-100） */}
+                  <Label>学習範囲（任意）</Label>
                   <div className="flex flex-wrap items-start gap-2">
                     <FormField
                       control={form.control}
