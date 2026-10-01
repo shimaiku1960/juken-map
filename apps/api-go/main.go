@@ -183,6 +183,13 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig) {
 	rt.oauth("GET /api/line/oauth/callback", lineRoutes.oauthCallback)
 	rt.webhook("POST /api/line/webhook", lineRoutes.webhook)
 
+	adminUsers := &adminUserHandlers{store: &sqlAdminUserStore{db: db}, now: time.Now}
+	rt.admin("GET /api/admin/overview", adminUsers.overview)
+	rt.admin("GET /api/admin/users", adminUsers.listUsers)
+	rt.admin("POST /api/admin/users/{id}/ban", adminUsers.ban)
+	rt.admin("POST /api/admin/users/{id}/unban", adminUsers.unban)
+	rt.admin("DELETE /api/admin/users/{id}", adminUsers.deleteUser)
+
 	cron := &cronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, jobs.messenger), now: time.Now}
 	rt.job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)
 

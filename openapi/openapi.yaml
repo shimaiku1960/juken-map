@@ -3,7 +3,7 @@
 #   - TypeScript（src/shared/openapi.gen.ts）：openapi-typescript
 # 形を変えるときはこのファイルを直し、`pnpm openapi:generate` を流す。CI は生成し直して差分が出たら落とす。
 #
-# 今ここにあるのは、Go が受け持つ API（読み取り・毎日の通知・sim・CSP の報告・登録の計測・移した書き込み・LINE 連携）。
+# 今ここにあるのは、Go が受け持つ API（読み取り・毎日の通知・sim・CSP の報告・登録の計測・移した書き込み・LINE 連携・利用者の管理）。
 # 書き込みの API は Go へ移すとき（JUK-75）に足す。
 #
 # 書き込みのリクエストの本文には「形」（型・必須・enum・長さ・範囲）を書く。規則の正は Zod
@@ -740,6 +740,124 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "413": { $ref: "#/components/responses/BadRequest" }
 
+  /api/admin/overview:
+    get:
+      operationId: getAdminOverview
+      summary: 管理画面の概要。種別ごとの人数と、実ユーザーの日別新規登録（管理者＋2段階認証だけ）
+      responses:
+        "200":
+          description: 種別は USER_KINDS の順に全部並ぶ（0人の種別も 0 で）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOverview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/users:
+    get:
+      operationId: listAdminUsers
+      summary: 種別で絞った利用者の一覧（新しい順、1ページ50人）
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/UserKind" }
+          description: 省くと real
+        - name: q
+          in: query
+          required: false
+          description: メールアドレスの部分一致（前後の空白は無視）
+          schema: { type: string, maxLength: 191 }
+        - name: page
+          in: query
+          required: false
+          description: 1から。省くと 1。数として読める文字列なら受け付ける（Zod の coerce）
+          schema: { type: integer, minimum: 1, maximum: 10000 }
+      responses:
+        "200":
+          description: 一覧
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/users/{id}/ban:
+    post:
+      operationId: banUser
+      summary: 利用者を停止する。今のセッションを消して画面を落とし、次のログインは Node（Better Auth）が断る
+      parameters:
+        - $ref: "#/components/parameters/AdminUserID"
+      responses:
+        "200":
+          description: 停止した。すでに停止済みなら最初に止めた日時のまま
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBanResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminUserProtected" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/users/{id}/unban:
+    post:
+      operationId: unbanUser
+      summary: 停止を解除する（止まっていなければ何も変わらない）
+      parameters:
+        - $ref: "#/components/parameters/AdminUserID"
+      responses:
+        "200":
+          description: 解除した
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserRef" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/users/{id}:
+    delete:
+      operationId: deleteUser
+      summary: 利用者を消す。確認のため、本人のメールアドレスが一致しないと消さない
+      parameters:
+        - $ref: "#/components/parameters/AdminUserID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, minLength: 1, maxLength: 191, description: 大文字小文字と前後の空白は無視して比べる }
+      responses:
+        "200":
+          description: 消した。ぶら下がる行は外部キーの CASCADE で一緒に消える
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminDeleteResult" }
+        "400":
+          description: >-
+            入力チェックで弾いた（ValidationError の形：文言・コード・項目）か、
+            メールアドレスが一致しない（文言だけ）。どちらも error は必ずある
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminUserProtected" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -757,6 +875,12 @@ components:
       description: SIMULATION_SECRET（cron とは別のトークン）
 
   parameters:
+    AdminUserID:
+      name: id
+      in: path
+      required: true
+      description: 利用者の ID（Better Auth の user.id）
+      schema: { type: string, minLength: 1, maxLength: 191 }
     From:
       name: from
       in: query
@@ -785,6 +909,18 @@ components:
       schema: { type: string }
 
   responses:
+    AdminForbidden:
+      description: >-
+        管理者でない（{"error":"Forbidden"}）、2段階認証を通していない（code が TWO_FACTOR_REQUIRED）、
+        利用を停止されている、別のサイトからの書き込み
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AdminUserProtected:
+      description: 相手はいるが守られている（自分自身・他の管理者・デモアカウント）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     BadRequest:
       description: 入力が不正（文言だけ）
       content:
@@ -838,6 +974,114 @@ components:
       type: string
       format: date
       x-go-type: string
+
+    UserKind:
+      description: >-
+        利用者の種別。real は実際の利用者、sim は本番のシミュレーション、seed は手元の負荷検証用、
+        demo は面接官向けのデモアカウント
+      type: string
+      enum: [real, sim, seed, demo]
+      x-enum-varnames: [UserKindReal, UserKindSim, UserKindSeed, UserKindDemo]
+
+    KindStats:
+      type: object
+      required: [kind, total, verified, newLast7Days, activeLast7Days, activeLast30Days]
+      properties:
+        kind: { $ref: "#/components/schemas/UserKind" }
+        total: { type: integer }
+        verified: { type: integer }
+        newLast7Days: { type: integer }
+        activeLast7Days: { type: integer, description: 直近7日に学習記録を作った人（記録した日時で数える） }
+        activeLast30Days: { type: integer }
+
+    AdminOverview:
+      type: object
+      required: [kinds, realSignupsByDay]
+      properties:
+        kinds:
+          type: array
+          items: { $ref: "#/components/schemas/KindStats" }
+        realSignupsByDay:
+          description: 実ユーザーの日別新規登録（日本時間の日付、直近30日。登録0の日は含まない）
+          type: array
+          items:
+            type: object
+            required: [date, count]
+            properties:
+              date: { $ref: "#/components/schemas/IsoDate" }
+              count: { type: integer }
+
+    AdminUser:
+      type: object
+      required: [id, email, nickname, name, kind, role, emailVerified, bannedAt, createdAt, providers, lastLoginAt, studyLogCount, lastStudyLogAt]
+      properties:
+        id: { type: string }
+        email: { type: string, nullable: true }
+        nickname: { type: string, nullable: true }
+        name: { type: string, nullable: true }
+        kind: { $ref: "#/components/schemas/UserKind" }
+        role: { type: string, enum: [user, admin] }
+        emailVerified: { type: boolean }
+        bannedAt:
+          allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
+          nullable: true
+          description: 管理者に停止された日時。null なら停止していない
+        createdAt: { $ref: "#/components/schemas/IsoDateTime" }
+        providers:
+          description: 認証方法（account.providerId）。credential はメール＋パスワード
+          type: array
+          items: { type: string }
+        lastLoginAt:
+          allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
+          nullable: true
+        studyLogCount: { type: integer }
+        lastStudyLogAt:
+          allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
+          nullable: true
+
+    AdminUserList:
+      type: object
+      required: [users, total, page, pageSize]
+      properties:
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUser" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    AdminUserRef:
+      description: 操作した相手
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: string }
+        email: { type: string, nullable: true }
+
+    AdminBanResult:
+      type: object
+      required: [id, email, bannedAt, sessionsRemoved]
+      properties:
+        id: { type: string }
+        email: { type: string, nullable: true }
+        bannedAt: { $ref: "#/components/schemas/IsoDateTime" }
+        sessionsRemoved: { type: integer, description: 消したセッションの数（落とした画面の数） }
+
+    AdminDeleteResult:
+      type: object
+      required: [id, email, removed]
+      properties:
+        id: { type: string }
+        email: { type: string, nullable: true }
+        removed:
+          description: 一緒に消えた行数（記録のためだけ。消すのは外部キーの CASCADE）
+          type: object
+          required: [studyLogs, studyPlans, textbooks, finalGoals]
+          properties:
+            studyLogs: { type: integer }
+            studyPlans: { type: integer }
+            textbooks: { type: integer }
+            finalGoals: { type: integer }
 
     LineConnectionStatus:
       type: object
