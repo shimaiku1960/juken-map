@@ -6,7 +6,8 @@ Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバ�
 通知設定（`GET /api/notification-preferences`）、大学（`GET /api/universities`・`/api/universities/{id}`）を
 持つ（JUK-73）。書き込みは、通知設定（`PUT /api/notification-preferences`）・プロフィール（`PUT /api/profile`）・
 学習記録（`POST /api/study-logs`・`PATCH`/`DELETE /api/study-logs/{id}`）・学習予定（`POST /api/study-plans`・
-`PATCH`/`DELETE /api/study-plans/{id}`・`POST /api/study-plans/{id}/complete`）を移している（JUK-75）。LINE 連携（`/api/line/*`：連携の確認・解除、トークからの連携、LINE Login、Webhook）は
+`PATCH`/`DELETE /api/study-plans/{id}`・`POST /api/study-plans/{id}/complete`）・志望校（`POST /api/goals`・
+`PUT`/`PATCH`/`DELETE /api/goals/{id}`）・参考書（`POST /api/textbooks`・`PATCH /api/textbooks/{id}`）を移している（JUK-75）。LINE 連携（`/api/line/*`：連携の確認・解除、トークからの連携、LINE Login、Webhook）は
 書き込みも含めて Go が受ける（JUK-79）。管理画面の API（`/api/admin/*`：利用者の管理と、大学・学部・タグ・参考書のマスター編集）も
 Go が受ける（JUK-78）。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。

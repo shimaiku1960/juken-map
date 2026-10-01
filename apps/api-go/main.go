@@ -2,7 +2,7 @@
 // 最初の1本の GET /api/dashboard（JUK-69）に続けて、読み取りの API（JUK-73）と書き込みの API（JUK-75）を移している。
 // 本番では nginx が移したパスだけを Go へ振り分ける（infra/nginx/juken-map-go-routes.conf、JUK-72）。
 //
-// LINE 連携も Go が受ける（JUK-79）。ログインの発行と管理画面は Node に残す。セッションは Node 側（Better Auth）が
+// LINE 連携（JUK-79）と管理画面の API（JUK-78）も Go が受ける。ログインの発行は Node に残す。セッションは Node 側（Better Auth）が
 // 発行したものを、同じ DB と同じ BETTER_AUTH_SECRET で確かめるだけ。
 package main
 
@@ -155,10 +155,16 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig) {
 	goals := &goalHandlers{store: &goalStore{db: db}}
 	rt.user("GET /api/goals", goals.list)
 	rt.user("GET /api/goals/first-choice", goals.firstChoice)
+	rt.user("POST /api/goals", goals.create)
+	rt.user("PUT /api/goals/{id}", goals.replace)
+	rt.user("PATCH /api/goals/{id}", goals.update)
+	rt.user("DELETE /api/goals/{id}", goals.delete)
 
 	textbooks := &textbookHandlers{store: &textbookStore{db: db}}
 	rt.user("GET /api/textbooks", textbooks.list)
 	rt.user("GET /api/textbook-masters", textbooks.listMasters)
+	rt.user("POST /api/textbooks", textbooks.create)
+	rt.user("PATCH /api/textbooks/{id}", textbooks.updateProgress)
 
 	prefs := &notificationPreferenceHandlers{store: &notificationPreferenceStore{db: db}}
 	rt.user("GET /api/notification-preferences", prefs.get)

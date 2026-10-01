@@ -163,11 +163,34 @@ export interface paths {
         /** 志望校の一覧（学部・大学・学部のタグつき。作った順） */
         get: operations["listGoals"];
         put?: never;
-        post?: never;
+        /** 志望校を登録する（学部・大学つきで返す。タグは付けない） */
+        post: operations["createGoal"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/goals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** 志望校の学部を差し替える（facultyId が無ければ何も変えない。status は受け付けるが書かない） */
+        put: operations["replaceGoalFaculty"];
+        post?: never;
+        /** 志望校を消す */
+        delete: operations["deleteGoal"];
+        options?: never;
+        head?: never;
+        /** 第一志望・メモ・ステータスのうち送った項目だけを書き換える（第一志望は1人1校に保つ） */
+        patch: operations["updateGoal"];
         trace?: never;
     };
     "/api/goals/first-choice": {
@@ -197,11 +220,32 @@ export interface paths {
         /** 自分の参考書の一覧（名前順） */
         get: operations["listTextbooks"];
         put?: never;
-        post?: never;
+        /** 参考書を登録する（名前で作るか、参考書マスターから作る） */
+        post: operations["createTextbook"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/textbooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 逆算設定（総量・単位・目標日・科目）の送った項目だけを書き換える */
+        patch: operations["updateTextbookProgress"];
         trace?: never;
     };
     "/api/textbook-masters": {
@@ -1044,6 +1088,56 @@ export interface components {
         Deleted: {
             /** @enum {string} */
             message: "Deleted";
+        };
+        OkMessage: {
+            /** @enum {string} */
+            message: "OK";
+        };
+        /** @description 志望校の登録（Zod の goalSchema）。status を省くと decided */
+        GoalInput: {
+            /** Format: int64 */
+            facultyId: number;
+            /** @enum {string} */
+            status?: "candidate" | "decided";
+        };
+        /** @description 学部の差し替え（Zod の updateGoalSchema。goalSchema の全項目を任意にしたもの） */
+        GoalUpdateInput: {
+            /** Format: int64 */
+            facultyId?: number;
+            /** @enum {string} */
+            status?: "candidate" | "decided";
+        };
+        /** @description 第一志望・メモ・ステータスの書き換え（Zod の patchGoalSchema）。送った項目だけを書き換える */
+        GoalPatchInput: {
+            isFirstChoice?: boolean;
+            note?: string | null;
+            /** @enum {string} */
+            status?: "candidate" | "decided";
+        };
+        /** @description 参考書の登録（Zod の createTextbookSchema）。名前で作る形が先に当たる（両方送ると名前で作る）。 どちらにも当たらなければ invalid_union（field は null）。Go は本文を手で読む（textbook_writes.go）ので、 oneOf の型は作らない（作ると oapi-codegen の runtime への依存が増える） */
+        TextbookInput: components["schemas"]["TextbookNameInput"] | components["schemas"]["TextbookFromMasterInput"];
+        TextbookNameInput: {
+            /** @description 前後の空白を削ってから長さを確かめる */
+            name: string;
+            /** @enum {string|null} */
+            subject?: "english" | "math" | "japanese" | "science" | "social" | "other" | null;
+            /** @enum {string} */
+            rangeUnit?: "page" | "question" | "chapter" | "number" | "part" | "section";
+        };
+        TextbookFromMasterInput: {
+            /** Format: int64 */
+            masterId: number;
+        };
+        /** @description 逆算設定の書き換え（Zod の updateTextbookProgressSchema）。送った項目だけを書き換える */
+        TextbookProgressInput: {
+            /** Format: int64 */
+            totalAmount?: number;
+            /** @enum {string} */
+            rangeUnit?: "page" | "question" | "chapter" | "number" | "part" | "section";
+            /** @description 暦にある日付（Zod の z.iso.date()） */
+            targetDate?: string | null;
+            /** @enum {string|null} */
+            subject?: "english" | "math" | "japanese" | "science" | "social" | "other" | null;
         };
         /** @description プロフィールの更新（Zod の profileSchema）。長さはコードポイントの数（絵文字も1）で数え、 前後の空白は長さを確かめた後に削る（空白だけでも通り、空文字で保存される） */
         ProfileInput: {
@@ -1921,6 +2015,167 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    createGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalInput"];
+            };
+        };
+        responses: {
+            /** @description 登録した志望校 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirstChoiceGoal"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description 同じ学部をすでに登録している */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    replaceGoalFaculty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description 差し替えた後の志望校（学部は含まない） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalFields"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description 無いか、自分のものでない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 消した */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deleted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description 無いか、自分のものでない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalPatchInput"];
+            };
+        };
+        responses: {
+            /** @description 書き換えた */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkMessage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description 無いか、自分のものでない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     getFirstChoiceGoal: {
         parameters: {
             query?: never;
@@ -1964,6 +2219,104 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createTextbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TextbookInput"];
+            };
+        };
+        responses: {
+            /** @description 登録した参考書 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TextbookRow"];
+                };
+            };
+            /** @description 入力チェックで弾いた（ValidationError の形）か、マスターに総量の候補が無い（Error の形） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description 参考書マスターが無い */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 同じ名前の参考書をすでに登録している */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTextbookProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TextbookProgressInput"];
+            };
+        };
+        responses: {
+            /** @description 書き換えた後の参考書 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TextbookRow"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description 無いか、自分のものでない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };

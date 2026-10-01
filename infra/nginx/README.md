@@ -144,11 +144,11 @@ server {
 - `location = /api/dashboard` の完全一致は `location /` より優先されるので、include の位置で結果は変わらない
 - 書き込みも Go へ移したパス（`/api/study-logs`・`/api/study-logs/daily`・`/api/study-logs/{id}`・
   `/api/study-plans`・`/api/study-plans/{id}`・`/api/study-plans/{id}/complete`・
-  `/api/notification-preferences`・`/api/profile`、JUK-75）は、メソッドで分けずにすべて Go へ送る
-- 読み取りだけを移したパス（`/api/goals`・
-  `/api/goals/first-choice`・`/api/textbooks`・`/api/textbook-masters`・`/api/universities`・`/api/universities/{id}`、JUK-73）は、
+  `/api/notification-preferences`・`/api/profile`・`/api/goals`・`/api/goals/{id}`・`/api/goals/first-choice`・
+  `/api/textbooks`・`/api/textbooks/{id}`、JUK-75）は、メソッドで分けずにすべて Go へ送る
+- 読み取りだけを移したパス（`/api/textbook-masters`・`/api/universities`・`/api/universities/{id}`、JUK-73）は、
   GET・HEAD だけを Go へ送り、それ以外は `return 418` → `error_page 418 = @node` で Node へ回す。
-  同じパスの書き込み（POST）がまだ Node にあるため。名前付きの location へ渡すので、method と本文はそのまま届く
+  これらのパスには Node にも書き込みが無く、Node の 404 になる（Node から消すときに JUK-84 で整理する）。名前付きの location へ渡すので、method と本文はそのまま届く
   （nginx 1.28 のリハーサルで、POST の本文が Node の検証まで届くことを確かめた）
 - デプロイは Node と Go の新しいコンテナを両方起こし、両方のスモークテストが通ったときだけ、
   2つの upstream と振り分けをまとめて書き換えて1回だけ reload する。

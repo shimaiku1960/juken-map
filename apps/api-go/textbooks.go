@@ -9,8 +9,7 @@ import (
 
 // 参考書の読み取り（JUK-73）。Node の routes/textbooks.ts・textbook-masters.ts の GET と、
 // services/textbook-service.ts の listTextbooks・listTextbookMasters にあたる。
-// 書き込み（POST /api/textbooks・PATCH /api/textbooks/:id）は Node に残っていて、
-// nginx が GET と HEAD だけを Go へ送る。
+// 書き込み（POST /api/textbooks・PATCH /api/textbooks/:id）は textbook_writes.go。
 
 // ここから下の型が応答の形。Node は DB の行をそのまま返している（src/shared/dto には無い）ので、
 // 列の名前と並びも Node の TEXTBOOK_COLUMNS・groupMasters に揃える。
@@ -20,11 +19,31 @@ type textbookStore struct {
 	db *sql.DB
 }
 
+// textbookRowColumns は Node の TEXTBOOK_COLUMNS と同じ列と並び。scanTextbook で読む。
+const textbookRowColumns = "id, userId, masterId, name, totalAmount, rangeUnit, targetDate, subject, createdAt, updatedAt"
+
+// scanTextbook は textbookRowColumns の1行を読み、日時を ISO にする。scan は rows.Scan か row.Scan。
+func scanTextbook(scan func(...any) error) (TextbookRow, error) {
+	var t TextbookRow
+	if err := scan(
+		&t.ID, &t.UserID, &t.MasterID, &t.Name, &t.TotalAmount, &t.RangeUnit,
+		&t.TargetDate, &t.Subject, &t.CreatedAt, &t.UpdatedAt,
+	); err != nil {
+		return t, err
+	}
+	if t.TargetDate != nil {
+		iso := isoFromDatetime(*t.TargetDate)
+		t.TargetDate = &iso
+	}
+	t.CreatedAt = isoFromDatetime(t.CreatedAt)
+	t.UpdatedAt = isoFromDatetime(t.UpdatedAt)
+	return t, nil
+}
+
 // listTextbooks は自分の参考書の一覧。名前は (userId, name) で UNIQUE なので、名前順だけで並びが決まる。
 func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]TextbookRow, error) {
 	rows, err := st.db.QueryContext(ctx,
-		`SELECT id, userId, masterId, name, totalAmount, rangeUnit, targetDate, subject, createdAt, updatedAt
-		 FROM Textbook WHERE userId = ? ORDER BY name ASC`,
+		"SELECT "+textbookRowColumns+" FROM Textbook WHERE userId = ? ORDER BY name ASC",
 		userID,
 	)
 	if err != nil {
@@ -34,19 +53,10 @@ func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]Te
 
 	textbooks := make([]TextbookRow, 0)
 	for rows.Next() {
-		var t TextbookRow
-		if err := rows.Scan(
-			&t.ID, &t.UserID, &t.MasterID, &t.Name, &t.TotalAmount, &t.RangeUnit,
-			&t.TargetDate, &t.Subject, &t.CreatedAt, &t.UpdatedAt,
-		); err != nil {
+		t, err := scanTextbook(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		if t.TargetDate != nil {
-			iso := isoFromDatetime(*t.TargetDate)
-			t.TargetDate = &iso
-		}
-		t.CreatedAt = isoFromDatetime(t.CreatedAt)
-		t.UpdatedAt = isoFromDatetime(t.UpdatedAt)
 		textbooks = append(textbooks, t)
 	}
 	return textbooks, rows.Err()

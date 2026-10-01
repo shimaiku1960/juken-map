@@ -361,6 +361,39 @@ func oneOf(values []string, code, message string) stringCheck {
 	return stringCheck{ok: func(s string) bool { return slices.Contains(values, s) }, code: code, message: message}
 }
 
+// optionalEnum は文言を指定しない z.enum(values).optional()（nullable なら .nullable().optional()）。
+// .nullable() の無い項目に null を送ると、型の issue ではなく invalid_value になる（Zod 4 の z.enum）。
+func (in *objectInput) optionalEnum(key string, values []string, nullable bool) optional[string] {
+	return readOptional(in, key, nullable, func(field string, v any) (string, *validationIssue) {
+		return checkEnum(field, v, values)
+	})
+}
+
+func checkEnum(field string, v any, values []string) (string, *validationIssue) {
+	s, isString := v.(string)
+	if !isString || !slices.Contains(values, s) {
+		return "", &validationIssue{code: "invalid_value", field: field, message: enumMessage(values)}
+	}
+	return s, nil
+}
+
+// enumMessage は z.enum の既定の文言（Invalid option: expected one of "a"|"b"）。値は Zod のスキーマに書いた順。
+func enumMessage(values []string) string {
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = `"` + v + `"`
+	}
+	return "Invalid option: expected one of " + strings.Join(quoted, "|")
+}
+
+// isoDateCheck は z.iso.date()：YYYY-MM-DD の形で、暦にある日付（グレゴリオ暦のうるう年）。
+// Zod は1つの正規表現で確かめるので、形の誤りも暦に無い日付も同じ invalid_format の1件になる。
+var isoDateCheck = stringCheck{
+	ok:      func(s string) bool { return ymdPattern.MatchString(s) && isCalendarYMD(s) },
+	code:    "invalid_format",
+	message: "Invalid ISO date",
+}
+
 // addIssue は項目の読み取りの後に、superRefine の ctx.addIssue にあたる issue を足す。
 // すでに issue があれば何もしない（最初の1件だけを返すので）。
 func (in *objectInput) addIssue(code, field, message string) {
