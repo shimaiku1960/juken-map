@@ -31,6 +31,7 @@ const PROTECTED_MESSAGES: Record<ProtectedReason, string> = {
   self: "自分自身は停止・削除できません",
   admin: "他の管理者は停止・削除できません（先に権限を外してください）",
   demo: "デモアカウントは停止・削除できません",
+  no_email: "メールアドレスの無い利用者は、本人の確認ができないため削除できません",
 };
 
 /**

@@ -294,6 +294,21 @@ describe("停止・解除・削除", () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it("メールアドレスの無い利用者は、空白だけを打っても削除できない（409）", async () => {
+    const user = await createUser();
+    await execute("UPDATE `user` SET email = NULL WHERE id = ?", [user.id]);
+
+    const res = await request(app, "DELETE", `/api/admin/users/${user.id}`, { email: " " });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "メールアドレスの無い利用者は、本人の確認ができないため削除できません" });
+    const [{ remaining }] = await select<{ remaining: number }>(
+      "SELECT COUNT(*) AS remaining FROM `user` WHERE id = ?",
+      [user.id]
+    );
+    expect(Number(remaining)).toBe(1);
+  });
+
   it("自分自身は削除できない", async () => {
     const user = await createUser();
     actAs(user.id);

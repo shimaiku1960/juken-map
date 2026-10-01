@@ -170,6 +170,7 @@ func newAdminUserTestRouter() (*router, *fakeAdminUserStore) {
 		"demo":   {ID: "demo", Email: strPtr(demoEmail), Role: "user"},
 		"old":    {ID: "old", Email: strPtr("old@example.com"), Role: "user", BannedAt: strPtr("2026-09-01T00:00:00.000Z")},
 		"noMail": {ID: "noMail", Role: "user"},
+		"blank":  {ID: "blank", Email: strPtr(""), Role: "user"},
 	}}
 	h := &adminUserHandlers{store: store, now: time.Now}
 	rt := newRouter(fakeSessions(testSessions))
@@ -218,10 +219,10 @@ func TestAdminUserActions(t *testing.T) {
 		{"削除：メールが空は 400", "DELETE", "/api/admin/users/u1", `{"email":""}`, 400,
 			`{"error":"Too small: expected string to have >=1 characters","code":"too_small","field":"email"}`},
 		{"削除：メール違いは 400", "DELETE", "/api/admin/users/u1", `{"email":"bob@example.com"}`, 400, `{"error":"メールアドレスが一致しません"}`},
-		// user.email は NULL を許す。Node は (email ?? "") と、打った値の前後の空白を削ったものを比べるので、
-		// メールの無い相手は空白だけで一致して消える。移行では Node と同じ動きに揃え、直すかは別に決める。
-		{"削除：メールの無い相手は、空白だけで一致する（Node と同じ）", "DELETE", "/api/admin/users/noMail", `{"email":" "}`, 200,
-			`{"id":"noMail","email":null,"removed":{"studyLogs":3,"studyPlans":0,"textbooks":0,"finalGoals":0}}`},
+		// user.email は NULL を許す。空白だけを打つと空文字どうしで一致してしまうので、メールの無い相手は消さない（JUK-89）。
+		{"削除：メールの無い相手は、空白だけを打っても 409", "DELETE", "/api/admin/users/noMail", `{"email":" "}`, 409, `{"error":"メールアドレスの無い利用者は、本人の確認ができないため削除できません"}`},
+		{"削除：メールの無い相手は、何を打っても 409", "DELETE", "/api/admin/users/noMail", `{"email":"x@example.com"}`, 409, `{"error":"メールアドレスの無い利用者は、本人の確認ができないため削除できません"}`},
+		{"削除：メールが空文字の相手も 409", "DELETE", "/api/admin/users/blank", `{"email":" "}`, 409, `{"error":"メールアドレスの無い利用者は、本人の確認ができないため削除できません"}`},
 		{"削除：守られた相手は、メールが合っていても 409", "DELETE", "/api/admin/users/demo", `{"email":"` + demoEmail + `"}`, 409, `{"error":"デモアカウントは停止・削除できません"}`},
 		{"削除：大文字小文字と前後の空白は無視して比べる", "DELETE", "/api/admin/users/u1", `{"email":"  ALICE@example.com "}`, 200,
 			`{"id":"u1","email":"alice@example.com","removed":{"studyLogs":3,"studyPlans":0,"textbooks":0,"finalGoals":0}}`},

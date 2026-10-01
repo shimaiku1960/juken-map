@@ -186,7 +186,8 @@ export function listAdminUsers(params: { kind: UserKind; q?: string; page: numbe
 // 「他の管理者」は、管理者どうしで潰し合えないようにするため（付け替えは pnpm admin:grant だけ）。
 // デモは面接官向けの共有アカウントで、消えると /login のデモボタンが動かなくなる。
 
-export type ProtectedReason = "self" | "admin" | "demo";
+// no_email は削除だけの守り。確認のメールアドレスを突き合わせられないので消さない（JUK-89）。
+export type ProtectedReason = "self" | "admin" | "demo" | "no_email";
 
 export type UserActionOutcome<T> =
   | { result: "ok"; value: T }
@@ -284,7 +285,10 @@ export function deleteUser(id: string, actorId: string, email: string) {
   return measured("admin.deleteUser", async (): Promise<UserActionOutcome<DeleteResult>> => {
     const target = await findTarget(id, actorId);
     if (target.result !== "ok") return target;
-    if ((target.value.email ?? "").toLowerCase() !== email.trim().toLowerCase()) {
+    // メールの無い相手は、空白だけを打てば空文字どうしで一致してしまうので、比べる前に断る。
+    // 画面（AdminPage の DeleteUserDialog）も、メールが無ければ削除ボタンを押せない。
+    if (!target.value.email) return { result: "protected", reason: "no_email" };
+    if (target.value.email.toLowerCase() !== email.trim().toLowerCase()) {
       return { result: "email_mismatch" };
     }
 

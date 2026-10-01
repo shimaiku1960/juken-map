@@ -1415,7 +1415,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description 相手はいるが守られている（自分自身・他の管理者・デモアカウント） */
+        /** @description 相手はいるが守られている（自分自身・他の管理者・デモアカウント。削除はメールアドレスの無い相手も） */
         AdminUserProtected: {
             headers: {
                 [name: string]: unknown;
