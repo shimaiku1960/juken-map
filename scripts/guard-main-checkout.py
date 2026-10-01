@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
-"""本体のチェックアウトで main 以外のブランチへ切り替えるコマンドを止める。
+"""本体のチェックアウトを main 以外へ切り替えるコマンドと、本体のファイルの書き換えを止める。
 
-Claude Code の PreToolUse(Bash) フック（.claude/settings.json）から呼ばれ、標準入力で
-ツール呼び出しの JSON を受け取る。本体は main のまま置いておき、作業は
+Claude Code の PreToolUse(Bash / Edit / Write / NotebookEdit) フック（.claude/settings.json）
+から呼ばれ、標準入力でツール呼び出しの JSON を受け取る。本体は main のまま置いておき、作業は
 `pnpm wt:new` で作った worktree で行う決まり（AGENTS.md「作業は worktree で行う」）なので、
-本体の HEAD を main 以外へ動かす操作だけを止める。
+本体の HEAD を main 以外へ動かす操作と、本体のファイルを書き換える操作を止める。
 
 止めるもの（本体のチェックアウトに対して実行されるとき）:
   git switch <main 以外> / git switch -c ... / git switch -
   git checkout <main 以外のブランチやコミット> / git checkout -b ...
   gh pr checkout ...
+  Edit / Write / NotebookEdit で本体の中のファイルを書き換える
 止めないもの:
   main へ戻る操作、ファイルの復元（git checkout -- <path>、git checkout <path>）、
-  worktree の中での切り替え、別のリポジトリ（.agent-memory など）での操作
+  worktree の中での切り替えや編集、別のリポジトリ（.agent-memory など）での操作、
+  gitignore 済みのファイル（.env など。本体にあるものが実体で、worktree からもリンクで使う）の編集
 
-コマンドの解釈は `cd <dir>` と `git -C <dir>` までを追う。読み取れない書き方で
-すり抜けることはありうる（ルールを思い出させるための仕組みで、完全な強制ではない）。
+コマンドの解釈は `cd <dir>` と `git -C <dir>` までを追う。Bash の sed -i やリダイレクトでの
+書き換えは見ていない。読み取れない書き方ですり抜けることはありうる（ルールを思い出させる
+ための仕組みで、完全な強制ではない）。
 """
 import json
 import os
@@ -131,28 +134,57 @@ def find_violation(command, cwd, project_common_dir):
     return None
 
 
+def edited_main_checkout(path, cwd, project_common_dir):
+    """path が本体のチェックアウトの中の（gitignore 済みでない）ファイルなら、本体のパスを返す。"""
+    # シンボリックリンクは実体で判断する（本体の .agent-memory は本体の外の別リポジトリ）。
+    path = os.path.realpath(os.path.join(cwd, os.path.expanduser(path)))
+    # 新しく作るファイルは、まだ無いので、在るところまで親をたどってリポジトリを調べる。
+    existing = os.path.dirname(path)
+    while not os.path.isdir(existing) and existing != os.path.dirname(existing):
+        existing = os.path.dirname(existing)
+    top = git(existing, "rev-parse", "--show-toplevel")
+    if not top or not is_main_checkout_of_this_repo(top, project_common_dir):
+        return None
+    if git(top, "check-ignore", "-q", "--", path) is not None:
+        return None
+    return top
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
     except ValueError:
         return
-    command = (payload.get("tool_input") or {}).get("command") or ""
-    if not re.search(r"\b(checkout|switch)\b", command):
+    tool_input = payload.get("tool_input") or {}
+    command = tool_input.get("command") or ""
+    edit_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+    if not edit_path and not re.search(r"\b(checkout|switch)\b", command):
         return
     cwd = payload.get("cwd") or os.getcwd()
     project_dir = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
     project_common_dir = git(project_dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
     if not project_common_dir:
         return
-    where = find_violation(command, cwd, project_common_dir)
-    if not where:
-        return
-    reason = (
-        f"本体のチェックアウト（{where}）は main のまま置いておく決まりです"
-        "（AGENTS.md「作業は worktree で行う」）。main 以外のブランチで作業するときは、"
-        "`pnpm wt:new <ブランチ名>` で worktree を作り、その中で操作してください。"
-        "既にある worktree は `git worktree list` で確認できます。"
-    )
+    if edit_path:
+        where = edited_main_checkout(edit_path, cwd, project_common_dir)
+        if not where:
+            return
+        reason = (
+            f"本体のチェックアウト（{where}）のファイルは書き換えない決まりです"
+            "（AGENTS.md「作業は worktree で行う」）。ほかのセッションの作業と混ざらないよう、"
+            "`pnpm wt:new <ブランチ名>` で worktree を作り、そちらのファイルを編集してください。"
+            "既にある worktree は `git worktree list` で確認できます。"
+        )
+    else:
+        where = find_violation(command, cwd, project_common_dir)
+        if not where:
+            return
+        reason = (
+            f"本体のチェックアウト（{where}）は main のまま置いておく決まりです"
+            "（AGENTS.md「作業は worktree で行う」）。main 以外のブランチで作業するときは、"
+            "`pnpm wt:new <ブランチ名>` で worktree を作り、その中で操作してください。"
+            "既にある worktree は `git worktree list` で確認できます。"
+        )
     json.dump(
         {
             "hookSpecificOutput": {
