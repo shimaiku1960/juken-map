@@ -15,9 +15,11 @@
 # GO_PORT などが無いので、WT_SLOT から決める）。apps/web/vite.config.ts と playwright.config.ts も同じ規則で読む。
 
 _local_ports_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# .env.worktree の値を読む。無ければ空。呼ぶ側は set -e なので、ファイルが無くても失敗を返さない
+# （本体のチェックアウトと CI には .env.worktree が無い）。
 _local_ports_get() {
   local key=$1 file="$_local_ports_root/.env.worktree"
-  [ -f "$file" ] && sed -n "s/^$key=//p" "$file" | tail -1
+  if [ -f "$file" ]; then sed -n "s/^$key=//p" "$file" | tail -1; fi
 }
 
 WT_SLOT=${WT_SLOT:-$(_local_ports_get WT_SLOT)}
