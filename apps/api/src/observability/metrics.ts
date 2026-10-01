@@ -29,6 +29,33 @@ const httpRequestDuration = new Histogram({
   registers: [registry],
 });
 
+// アプリが送ろうとしたメールの数（セキュリティ基準 H1）。送信量の急増と、上限（email-limits.ts）で
+// 止めたことをアラートで知らせる（terraform/grafana/alerting.tf）。カウンターなので、デプロイで
+// 0 に戻っても increase() が正しく数える（resend_quota_used のように値が消えて鳴らなくなることが無い）。
+const emailSendsTotal = new Counter({
+  name: "email_sends_total",
+  help: "アプリが送ろうとしたメールの数（result：sent・blocked＝上限で止めた・failed）",
+  labelNames: ["kind", "result"],
+  registers: [registry],
+});
+
+const EMAIL_SEND_RESULTS = ["sent", "blocked", "failed"] as const;
+export type EmailSendResult = (typeof EMAIL_SEND_RESULTS)[number];
+
+/**
+ * 全部の組み合わせを 0 で作っておく。値の無い系列にいきなり 1 が現れると、Prometheus の
+ * increase() は1点目を比べる相手が無くて数えられず、最初の「上限で止めた」を見落とす。
+ */
+export function initEmailSendCounts(kinds: readonly string[]) {
+  for (const kind of kinds) {
+    for (const result of EMAIL_SEND_RESULTS) emailSendsTotal.inc({ kind, result }, 0);
+  }
+}
+
+export function countEmailSend(kind: string, result: EmailSendResult) {
+  emailSendsTotal.inc({ kind, result });
+}
+
 // Resend の送信枠をどれだけ使ったか（セキュリティ基準 E1）。メールを送ったときの応答ヘッダー
 // （x-resend-daily-quota・x-resend-monthly-quota。使った数）をそのまま写す。日の分は無料プランにだけ付く。
 // 送らないあいだは古い値が残り続けるので、いつ読んだかも出し、アラートは新しい値だけを見る

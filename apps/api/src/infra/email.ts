@@ -1,8 +1,8 @@
-import { type EmailKind, reserveEmailSend } from "@/api/infra/email-limits";
+import { EMAIL_KINDS, type EmailKind, reserveEmailSend } from "@/api/infra/email-limits";
 import { getResend } from "@/api/infra/resend";
 import { withDeadline } from "@/api/infra/timeout";
 import { logger } from "@/api/observability/logger";
-import { observeResendQuota } from "@/api/observability/metrics";
+import { countEmailSend, initEmailSendCounts, observeResendQuota } from "@/api/observability/metrics";
 import { SITE_URL } from "@/shared/site";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
@@ -22,21 +22,32 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
+initEmailSendCounts(EMAIL_KINDS);
+
 /**
  * 1通送る。宛先ごと・全体の上限（email-limits.ts）を超えるなら送らずに false を返す。
  * Resend は失敗しても例外にせず error を返すので、ここで例外に直す。
  */
 async function send(kind: EmailKind, to: string, subject: string, html: string): Promise<boolean> {
-  if (!(await reserveEmailSend(kind, to))) return false;
-
-  const { error, headers } = await withDeadline(
-    getResend().emails.send({ from: FROM, to, subject, html }),
-    `resend.${kind}`
-  );
-  observeResendQuota(headers);
-  if (error) {
-    throw new Error(error.message);
+  if (!(await reserveEmailSend(kind, to))) {
+    countEmailSend(kind, "blocked");
+    return false;
   }
+
+  try {
+    const { error, headers } = await withDeadline(
+      getResend().emails.send({ from: FROM, to, subject, html }),
+      `resend.${kind}`
+    );
+    observeResendQuota(headers);
+    if (error) {
+      throw new Error(error.message);
+    }
+  } catch (error) {
+    countEmailSend(kind, "failed");
+    throw error;
+  }
+  countEmailSend(kind, "sent");
   return true;
 }
 

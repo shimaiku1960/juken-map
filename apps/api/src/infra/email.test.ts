@@ -16,6 +16,7 @@ vi.mock("@/api/infra/resend", () => ({
 
 // 上限の数え方は email-limits.test.ts が本物の DB で確かめる。ここでは「上限なら送らない」だけを見る。
 vi.mock("@/api/infra/email-limits", () => ({
+  EMAIL_KINDS: ["verification", "password-reset", "password-changed", "admin-new-user"],
   reserveEmailSend: vi.fn(),
 }));
 
@@ -26,6 +27,14 @@ beforeEach(() => {
 
 const send = vi.fn();
 const originalNotificationEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+
+describe("送信量のメトリクス", () => {
+  it("まだ送っていない組み合わせも 0 で出しておく（最初の1件を increase() が見落とさないように）", async () => {
+    const text = await registry.metrics();
+    expect(text).toContain('email_sends_total{kind="password-reset",result="blocked"} 0');
+    expect(text).toContain('email_sends_total{kind="admin-new-user",result="sent"} 0');
+  });
+});
 
 describe("notifyAdminOfNewUser", () => {
   beforeEach(() => {
@@ -161,6 +170,10 @@ describe("確認メール・再設定メール", () => {
     expect(reserveEmailSend).toHaveBeenCalledWith("verification", "user@example.com");
     expect(reserveEmailSend).toHaveBeenCalledWith("password-reset", "user@example.com");
     expect(send).not.toHaveBeenCalled();
+    // 止めたことは、送信量のアラート（H1）のために数える。
+    const text = await registry.metrics();
+    expect(text).toContain('email_sends_total{kind="verification",result="blocked"} 1');
+    expect(text).toContain('email_sends_total{kind="password-reset",result="blocked"} 1');
   });
 
   it("Resend のエラーを例外にする（Better Auth がログに残す）", async () => {
@@ -169,6 +182,7 @@ describe("確認メール・再設定メール", () => {
     await expect(sendPasswordResetEmail("user@example.com", "https://juken-map.com/reset")).rejects.toThrow(
       "daily_quota_exceeded"
     );
+    expect(await registry.metrics()).toContain('email_sends_total{kind="password-reset",result="failed"} 1');
   });
 
   it("応答ヘッダーの送信枠の使用数をメトリクスに写す", async () => {
@@ -184,5 +198,6 @@ describe("確認メール・再設定メール", () => {
     expect(text).toContain('resend_quota_used{period="daily"} 42');
     expect(text).toContain('resend_quota_used{period="monthly"} 1234');
     expect(text).toMatch(/resend_quota_observed_timestamp_seconds\{period="daily"\} \d/);
+    expect(text).toContain('email_sends_total{kind="verification",result="sent"} 1');
   });
 });
