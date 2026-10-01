@@ -7,9 +7,11 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "pnpm run db:start && pnpm run db:migrate && pnpm run \"/^dev:(api|web)$/\"",
+    "dev": "pnpm run db:start && pnpm run db:migrate && pnpm run \"/^dev:(api|web|go|proxy)$/\"",
     "dev:api": "pnpm --filter @juken-map/api dev",
     "dev:web": "pnpm --filter @juken-map/web dev",
+    "dev:go": "bash scripts/dev-go.sh",
+    "dev:proxy": "bash scripts/local-proxy.sh",
     "lint": "eslint",
     "test": "vitest run",
     "check": "pnpm exec eslint --max-warnings 0 && pnpm exec tsc --noEmit && pnpm -r typecheck && pnpm test && pnpm -r test && pnpm --filter @juken-map/web build",

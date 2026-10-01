@@ -1,20 +1,70 @@
 #!/usr/bin/env bash
-# E2E 用に、本番と同じ構成（Fastify が API と SPA の両方を配る）を API_PORT（既定 3000）で起動する。
-# Playwright の webServer から呼ばれる。E2E_BASE_URL を指定した場合は使われない。
+# E2E 用に、本番と同じ構成を起動する。Playwright の webServer から呼ばれる（E2E_BASE_URL を指定した場合は使われない）。
+#
+#   ブラウザ → nginx（E2E_PORT）─┬─ infra/nginx/juken-map-go-routes.conf のパス → Go（E2E_GO_PORT）
+#                                └─ それ以外（ログイン・ページ配信など）     → Node（E2E_NODE_PORT、SPA も配る）
+#
+# 本番と同じ振り分けを通すので、E2E は Go が返す API を確かめる（JUK-96。それまでは Node だけを立てていて、
+# Go へ移した API を E2E が一度も通っていなかった）。ポートの決め方は scripts/local-ports.sh。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/local-ports.sh"
+WORK="$(mktemp -d)"
+
+pids=()
+cleanup() {
+  for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
+  # pnpm は tsx・node を子として起動するので、親を止めても残ることがある。待ち受けているプロセスで止める。
+  local port
+  for port in "$E2E_NODE_PORT" "$E2E_GO_PORT"; do
+    lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
+  done
+  docker rm -f "juken-map-proxy-$E2E_PORT" >/dev/null 2>&1 || true
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM INT
 
 pnpm --dir "$ROOT" --filter @juken-map/web build
+(cd "$ROOT/apps/api-go" && go build -o "$WORK/api-go" .)
+
+# Better Auth は自分の URL を BETTER_AUTH_URL から読む。.env は開発用に Vite を指しているので、
+# ブラウザが開く nginx の番号に合わせて上書きする（--env-file は、すでにある環境変数を上書きしない）。
+export BETTER_AUTH_URL="http://localhost:$E2E_PORT"
 
 # apps/api は cwd が apps/api になるので、配信元は絶対パスで渡す。
-export WEB_DIST_DIR="$ROOT/apps/web/dist"
-# playwright.config.ts が E2E のポート（既定 3000、worktree では .env.worktree の E2E_PORT）を
-# API_PORT で渡してくる。
-export API_PORT="${API_PORT:-3000}"
-# Better Auth は自分の URL を BETTER_AUTH_URL から読む。.env は開発用に Vite(5173) を
-# 指しているため、そのままだと E2E が 3000 番で起動したサーバーに対して origin 不一致で
-# 全滅する。ここで起動するポートに合わせて上書きする。
-export BETTER_AUTH_URL="http://localhost:${API_PORT}"
+WEB_DIST_DIR="$ROOT/apps/web/dist" API_PORT="$E2E_NODE_PORT" \
+  pnpm --dir "$ROOT" --filter @juken-map/api start &
+pids+=($!)
 
-exec pnpm --dir "$ROOT" --filter @juken-map/api start
+# Go は .env を自分では読まないので、ここで読む（CI は .env が無く、ジョブの環境変数だけで動く）。
+# 先に決めた値が .env で上書きされないよう、読んだ後に改めて渡す。
+(
+  if [ -f "$ROOT/.env" ]; then set -a; source "$ROOT/.env"; set +a; fi
+  BETTER_AUTH_URL="http://localhost:$E2E_PORT" PORT="$E2E_GO_PORT" WEB_ORIGIN="http://localhost:$E2E_PORT" \
+    exec "$WORK/api-go"
+) &
+pids+=($!)
+
+# Node と Go の両方が応答してから nginx を立てる。Playwright は nginx の応答で起動完了とみなすので、
+# 先に立てると、どちらかがまだ起動中のうちにテストが始まることがある。
+for _ in $(seq 1 120); do
+  curl -sf -o /dev/null "localhost:$E2E_NODE_PORT/api/health" && curl -sf -o /dev/null "localhost:$E2E_GO_PORT/api/health" && break
+  sleep 0.5
+done
+
+bash "$ROOT/scripts/local-proxy.sh" "$E2E_PORT" "$E2E_NODE_PORT" "$E2E_GO_PORT" &
+pids+=($!)
+
+# どれか1つでも止まったら全部止める（片方だけ動いていると、E2E が分かりにくい失敗をする）。
+# macOS の bash は 3.2 で wait -n が無いので、見回って確かめる。
+while true; do
+  for pid in "${pids[@]}"; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "e2e-server: 起動したプロセス（${pid}）が止まったので、全部止めます" >&2
+      exit 1
+    fi
+  done
+  sleep 1
+done

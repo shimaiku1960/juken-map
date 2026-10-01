@@ -17,6 +17,10 @@ Go が受ける（JUK-78）。本番では nginx がこれらのパスだけを 
 
 ## 動かし方
 
+ふだんの開発では、リポジトリのルートの `pnpm dev` が Go も起動する（`dev:go`、4100番）。
+画面からは nginx（`dev:proxy`）が本番と同じ振り分けで Go へ送る（JUK-96、`infra/nginx/README.md`）。
+Go だけを動かすときは次のとおり。
+
 ```sh
 cd apps/api-go
 set -a; source ../../.env; set +a   # DATABASE_URL と BETTER_AUTH_SECRET を読む
