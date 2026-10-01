@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 // 大学の読み取り（JUK-73）。Node の routes/universities.ts と services/university-service.ts にあたる。
 //   - GET /api/universities       大学を探す画面の一覧。全員に同じもの
 //   - GET /api/universities/{id}  大学詳細。学部・タグと、自分が志望校に登録済みの学部
-// 大学・学部・タグの編集は管理画面（Node の /api/admin/*）にある。
+// 大学・学部・タグの編集は管理画面（admin_masters.go）にあり、変えたら下のキャッシュを捨てる。
 
 // 一覧の応答の形。画面が使うのは大学の列と「学部ごとのタグ名」だけなので、Node と同じくそれだけ返す。
 // JSON のバイト列を Node の JSON.stringify と同じにする（下の ETag を Node と揃えるため）ので、
@@ -45,10 +46,9 @@ type exploreTagDTO struct {
 // 大学一覧は全員に同じもので、変わるのは管理画面でマスターを編集したときだけ。毎回 DB を引くと
 // 一番重い API（大学 823 件 × LEFT JOIN 3本）になるので、JSON にした状態でメモリに持つ。
 //
-// Node は管理画面の編集で自分のキャッシュを捨てているが、その編集は Go には届かない
-// （管理 API は JUK-78 で Go へ移すまで Node にある）。そこで期限を Node の10分より短い1分にする。
-// 編集が大学を探す画面に出るまで、最大1分かかる。管理 API を Go へ移したら、編集のときに捨てる形にする。
-const exploreCacheTTL = time.Minute
+// 管理画面の編集（admin_masters.go）は invalidate で捨てるので、編集はすぐ一覧に出る。期限は、
+// DB を直接書き換えたとき（seed など）の保険で、Node と同じ10分。
+const exploreCacheTTL = 10 * time.Minute
 
 // exploreSnapshot は一覧の JSON と、その gzip 版・ETag。
 // 圧縮は読み込みのときの1回だけなので、圧縮率を最大にしてよい。リクエストのたびに nginx が
@@ -67,6 +67,12 @@ type universityStore struct {
 	snapshot atomic.Pointer[exploreSnapshot]
 	// 期限切れの直後に同時に来たリクエストは、1回の読み込みを待ち合わせる（Node の exploreLoading）。
 	loading singleflight.Group
+	// generation は invalidate のたびに増える。読み込みの途中で捨てられたら、その結果は編集の前の
+	// DB から作ったかもしれないので置かない（Node の exploreGeneration）。
+	// 「世代を比べて置く」と「世代を進めて捨てる」の間に割り込まれないよう、両方を mu の中で行う
+	// （Node は1本のスレッドで動くので、この順番の心配が無い）。
+	mu         sync.Mutex
+	generation uint64
 }
 
 func newUniversityStore(db *sql.DB) *universityStore {
@@ -79,6 +85,9 @@ func (st *universityStore) explore(ctx context.Context) (*exploreSnapshot, error
 		return s, nil
 	}
 	v, err, _ := st.loading.Do("explore", func() (any, error) {
+		st.mu.Lock()
+		generation := st.generation
+		st.mu.Unlock()
 		// 待ち合わせている全員のための読み込みなので、最初に来たリクエストが切断しても止めない。
 		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
@@ -86,13 +95,28 @@ func (st *universityStore) explore(ctx context.Context) (*exploreSnapshot, error
 		if err != nil {
 			return nil, err
 		}
-		st.snapshot.Store(s)
+		st.mu.Lock()
+		if st.generation == generation {
+			st.snapshot.Store(s)
+		}
+		st.mu.Unlock()
 		return s, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return v.(*exploreSnapshot), nil
+}
+
+// invalidate は大学・学部・タグのつながりを変えたら呼ぶ（Node の invalidateUniversitiesForExplore）。
+// 次のリクエストで DB から作り直す。読み込みの途中なら、その待ち合わせには加わらせず、新しく読み込ませる。
+// 確定（commit）してから呼ぶこと。確定前に呼ぶと、別のリクエストが古い DB を読んで置き直せる。
+func (st *universityStore) invalidate() {
+	st.mu.Lock()
+	st.generation++
+	st.snapshot.Store(nil)
+	st.mu.Unlock()
+	st.loading.Forget("explore")
 }
 
 func (st *universityStore) loadExplore(ctx context.Context) (*exploreSnapshot, error) {

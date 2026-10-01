@@ -5,6 +5,7 @@ import { measured } from "@/api/observability/measured";
 import { invalidateUniversitiesForExplore } from "@/api/services/university-service";
 import type {
   AdminFaculty,
+  AdminFacultySnapshot,
   AdminTag,
   AdminTextbookMaster,
   AdminUniversity,
@@ -203,7 +204,8 @@ export function deleteUniversity(id: number) {
   });
 }
 
-type FacultySnapshot = { id: number; universityId: number; name: string; examDate: string; tagIds: number[] };
+// 学部の作成・書き換えの応答と、監査ログの「前・後」の形。
+type FacultySnapshot = AdminFacultySnapshot;
 
 async function findFacultySnapshot(id: number, db?: PoolConnection): Promise<FacultySnapshot | null> {
   const [row] = await select<Pick<FacultyRow, "id" | "universityId" | "name" | "examDate">>(

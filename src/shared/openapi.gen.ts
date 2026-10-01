@@ -572,6 +572,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/universities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 大学の一覧（名前の部分一致、名前順、1ページ50件）。学部の数と、配下の学部を志望校にしている件数つき */
+        get: operations["listAdminUniversities"];
+        put?: never;
+        /** 大学を作る。大学を探す画面の一覧のキャッシュを捨てる */
+        post: operations["createUniversity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/universities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 大学と、その学部（タグ・志望校にしている件数つき） */
+        get: operations["getAdminUniversity"];
+        put?: never;
+        post?: never;
+        /** 大学を消す（学部は CASCADE で一緒に消える）。配下の学部が1件でも志望校に使われていれば消さない */
+        delete: operations["deleteUniversity"];
+        options?: never;
+        head?: never;
+        /** 大学を書き換える（全項目を送る） */
+        patch: operations["updateUniversity"];
+        trace?: never;
+    };
+    "/api/admin/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 学部に付けられるタグ（id 順） */
+        get: operations["listAdminTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/faculties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 学部を作る。同じ大学に同じ名前の学部があれば作らない */
+        post: operations["createFaculty"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/faculties/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 学部を消す。志望校に1件でも使われていれば消さない */
+        delete: operations["deleteFaculty"];
+        options?: never;
+        head?: never;
+        /** 学部を書き換える（名前・受験日・タグ。タグは送ったものに置き換える） */
+        patch: operations["updateFaculty"];
+        trace?: never;
+    };
+    "/api/admin/textbook-masters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 参考書マスター（名前・出版社・ISBN の部分一致、id 順、先頭200件まで） */
+        get: operations["listAdminTextbookMasters"];
+        put?: never;
+        /** 参考書マスターを作る */
+        post: operations["createTextbookMaster"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/textbook-masters/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 参考書マスターを消す（総量の候補は CASCADE で一緒に消える）。利用者の参考書が1冊でも使っていれば消さない */
+        delete: operations["deleteTextbookMaster"];
+        options?: never;
+        head?: never;
+        /** 参考書マスターを書き換える（総量の候補は送ったものに置き換える）。利用者が登録済みの参考書は 総量を自分の行に写し取っているので変わらない（これから登録する人から効く） */
+        patch: operations["updateTextbookMaster"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -654,6 +779,119 @@ export interface components {
                 textbooks: number;
                 finalGoals: number;
             };
+        };
+        AdminUniversity: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            prefecture: string;
+            /** @description 国立・公立・私立 */
+            type: string;
+            facultyCount: number;
+            /** @description 配下の学部を志望校にしている件数。1件でもあれば大学は削除できない */
+            goalCount: number;
+        };
+        AdminUniversityList: {
+            universities: components["schemas"]["AdminUniversity"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        AdminTag: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
+        AdminFaculty: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /**
+             * Format: date
+             * @description YYYY-MM-DD（UTC の0時で保存している日付部分）
+             */
+            examDate: string;
+            tags: components["schemas"]["AdminTag"][];
+            /** @description この学部を志望校にしている件数。1件でもあれば削除できない */
+            goalCount: number;
+        };
+        AdminUniversityDetail: {
+            university: components["schemas"]["AdminUniversity"];
+            faculties: components["schemas"]["AdminFaculty"][];
+        };
+        /** @description 学部の作成・書き換えの応答（監査ログの「前・後」と同じ形） */
+        AdminFacultySnapshot: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            universityId: number;
+            name: string;
+            /**
+             * Format: date
+             * @description YYYY-MM-DD
+             */
+            examDate: string;
+            tagIds: number[];
+        };
+        /** @description 参考書の総量の候補（単位ごと） */
+        AdminTextbookMasterMetric: {
+            unit: string;
+            totalAmount: number;
+            /** @description 利用者が参考書を登録したとき、この候補で総量が入る */
+            isDefault: boolean;
+        };
+        AdminTextbookMaster: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            publisher: string | null;
+            edition: string | null;
+            isbn: string;
+            metrics: components["schemas"]["AdminTextbookMasterMetric"][];
+            /** @description この参考書から登録された利用者の参考書の数。1冊でもあれば削除できない */
+            textbookCount: number;
+        };
+        /** @description 大学の作成・書き換え（Zod の universityInputSchema） */
+        UniversityInput: {
+            /** @description 前後の空白を削ってから数える */
+            name: string;
+            /** @description 47都道府県のどれか（src/shared/prefectures.ts の PREFECTURES） */
+            prefecture: string;
+            /** @enum {string} */
+            type: "国立" | "公立" | "私立";
+        };
+        /** @description 学部の書き換え（Zod の facultyInputSchema）。受験日は YYYY-MM-DD で、JavaScript の new Date と同じく 日は 31 まで受け付けて繰り上げる（2027-02-30 は 3月2日）。タグは重ねられない */
+        FacultyInput: {
+            /** @description 前後の空白を削ってから数える */
+            name: string;
+            examDate: string;
+            tagIds: number[];
+        };
+        /** @description 学部の作成（Zod の createFacultySchema）。FacultyInput に大学を足したもの */
+        CreateFacultyInput: {
+            /** @description 前後の空白を削ってから数える */
+            name: string;
+            examDate: string;
+            tagIds: number[];
+            /** Format: int64 */
+            universityId: number;
+        };
+        /** @description 参考書マスターの作成・書き換え（Zod の textbookMasterInputSchema）。スキーマに書けない規則：総量の候補は 単位が重ならず（duplicate_units）、既定（isDefault）がちょうど1つ（default_unit_required） */
+        TextbookMasterInput: {
+            /** @description 前後の空白を削ってから数える */
+            name: string;
+            /** @description 前後の空白を削り、空なら null で保存する */
+            publisher?: string | null;
+            /** @description 前後の空白を削り、空なら null で保存する */
+            edition?: string | null;
+            /** @description ハイフン・空白を除き大文字にしてから、10桁（最後は X 可）か13桁 */
+            isbn: string;
+            metrics: {
+                /** @enum {string} */
+                unit: "page" | "question" | "chapter" | "number" | "part" | "section";
+                totalAmount: number;
+                isDefault: boolean;
+            }[];
         };
         LineConnectionStatus: {
             connected: boolean;
@@ -1092,6 +1330,24 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description 名前・ISBN が重なっている、または使われていて消せない（文言に件数が入る。大学・学部は志望校、参考書は利用者の参考書） */
+        AdminMasterConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 入力チェックで弾いた（ValidationError の形：文言・コード・項目）か、存在しないタグが含まれている （文言だけ）。どちらも error は必ずある */
+        AdminFacultyBadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description 入力が不正（文言だけ） */
         BadRequest: {
             headers: {
@@ -1168,6 +1424,8 @@ export interface components {
     parameters: {
         /** @description 利用者の ID（Better Auth の user.id） */
         AdminUserID: string;
+        /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
+        AdminMasterID: string;
         /** @description 期間の始まり（その日を含む） */
         From: string;
         /** @description 期間の終わり（その日を含む） */
@@ -2362,6 +2620,393 @@ export interface operations {
             403: components["responses"]["AdminForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["AdminUserProtected"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listAdminUniversities: {
+        parameters: {
+            query?: {
+                /** @description 大学名の部分一致。前後の空白を削ってから100文字（コードポイント）まで。空なら絞らない */
+                q?: string;
+                /** @description 1から。省くと 1。数として読める文字列なら受け付ける（Zod の coerce） */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 一覧 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUniversityList"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createUniversity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniversityInput"];
+            };
+        };
+        responses: {
+            /** @description 作った */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUniversity"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            409: components["responses"]["AdminMasterConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAdminUniversity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
+                id: components["parameters"]["AdminMasterID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 大学と学部 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUniversityDetail"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteUniversity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
+                id: components["parameters"]["AdminMasterID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 消した */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminMasterConflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateUniversity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
+                id: components["parameters"]["AdminMasterID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniversityInput"];
+            };
+        };
+        responses: {
+            /** @description 書き換えた後の大学 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUniversity"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminMasterConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listAdminTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description タグ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTag"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createFaculty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFacultyInput"];
+            };
+        };
+        responses: {
+            /** @description 作った */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFacultySnapshot"];
+                };
+            };
+            400: components["responses"]["AdminFacultyBadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminMasterConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteFaculty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
+                id: components["parameters"]["AdminMasterID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 消した */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminMasterConflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateFaculty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
+                id: components["parameters"]["AdminMasterID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FacultyInput"];
+            };
+        };
+        responses: {
+            /** @description 書き換えた後の学部 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFacultySnapshot"];
+                };
+            };
+            400: components["responses"]["AdminFacultyBadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminMasterConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listAdminTextbookMasters: {
+        parameters: {
+            query?: {
+                /** @description 前後の空白を削ってから100文字（コードポイント）まで。空なら絞らない */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 一覧 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTextbookMaster"][];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createTextbookMaster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TextbookMasterInput"];
+            };
+        };
+        responses: {
+            /** @description 作った */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTextbookMaster"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            409: components["responses"]["AdminMasterConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTextbookMaster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
+                id: components["parameters"]["AdminMasterID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 消した */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminMasterConflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTextbookMaster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
+                id: components["parameters"]["AdminMasterID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TextbookMasterInput"];
+            };
+        };
+        responses: {
+            /** @description 書き換えた後の参考書マスター */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTextbookMaster"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["AdminMasterConflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];

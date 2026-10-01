@@ -858,6 +858,274 @@ paths:
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  # ---- マスター編集（/admin/masters、JUK-78）。変更はすべて構造化ログ「admin master change」に残す ----
+
+  /api/admin/universities:
+    get:
+      operationId: listAdminUniversities
+      summary: 大学の一覧（名前の部分一致、名前順、1ページ50件）。学部の数と、配下の学部を志望校にしている件数つき
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: 大学名の部分一致。前後の空白を削ってから100文字（コードポイント）まで。空なら絞らない
+          schema: { type: string, maxLength: 100 }
+        - name: page
+          in: query
+          required: false
+          description: 1から。省くと 1。数として読める文字列なら受け付ける（Zod の coerce）
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: 一覧
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUniversityList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      operationId: createUniversity
+      summary: 大学を作る。大学を探す画面の一覧のキャッシュを捨てる
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UniversityInput" }
+      responses:
+        "201":
+          description: 作った
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUniversity" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/universities/{id}:
+    get:
+      operationId: getAdminUniversity
+      summary: 大学と、その学部（タグ・志望校にしている件数つき）
+      parameters:
+        - $ref: "#/components/parameters/AdminMasterID"
+      responses:
+        "200":
+          description: 大学と学部
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUniversityDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    patch:
+      operationId: updateUniversity
+      summary: 大学を書き換える（全項目を送る）
+      parameters:
+        - $ref: "#/components/parameters/AdminMasterID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UniversityInput" }
+      responses:
+        "200":
+          description: 書き換えた後の大学
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUniversity" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      operationId: deleteUniversity
+      summary: 大学を消す（学部は CASCADE で一緒に消える）。配下の学部が1件でも志望校に使われていれば消さない
+      parameters:
+        - $ref: "#/components/parameters/AdminMasterID"
+      responses:
+        "204": { description: 消した }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/tags:
+    get:
+      operationId: listAdminTags
+      summary: 学部に付けられるタグ（id 順）
+      responses:
+        "200":
+          description: タグ
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminTag" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/faculties:
+    post:
+      operationId: createFaculty
+      summary: 学部を作る。同じ大学に同じ名前の学部があれば作らない
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateFacultyInput" }
+      responses:
+        "201":
+          description: 作った
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFacultySnapshot" }
+        "400": { $ref: "#/components/responses/AdminFacultyBadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/faculties/{id}:
+    patch:
+      operationId: updateFaculty
+      summary: 学部を書き換える（名前・受験日・タグ。タグは送ったものに置き換える）
+      parameters:
+        - $ref: "#/components/parameters/AdminMasterID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FacultyInput" }
+      responses:
+        "200":
+          description: 書き換えた後の学部
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFacultySnapshot" }
+        "400": { $ref: "#/components/responses/AdminFacultyBadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      operationId: deleteFaculty
+      summary: 学部を消す。志望校に1件でも使われていれば消さない
+      parameters:
+        - $ref: "#/components/parameters/AdminMasterID"
+      responses:
+        "204": { description: 消した }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/textbook-masters:
+    get:
+      operationId: listAdminTextbookMasters
+      summary: 参考書マスター（名前・出版社・ISBN の部分一致、id 順、先頭200件まで）
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: 前後の空白を削ってから100文字（コードポイント）まで。空なら絞らない
+          schema: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: 一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminTextbookMaster" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      operationId: createTextbookMaster
+      summary: 参考書マスターを作る
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TextbookMasterInput" }
+      responses:
+        "201":
+          description: 作った
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTextbookMaster" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/admin/textbook-masters/{id}:
+    patch:
+      operationId: updateTextbookMaster
+      summary: >-
+        参考書マスターを書き換える（総量の候補は送ったものに置き換える）。利用者が登録済みの参考書は
+        総量を自分の行に写し取っているので変わらない（これから登録する人から効く）
+      parameters:
+        - $ref: "#/components/parameters/AdminMasterID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TextbookMasterInput" }
+      responses:
+        "200":
+          description: 書き換えた後の参考書マスター
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTextbookMaster" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      operationId: deleteTextbookMaster
+      summary: 参考書マスターを消す（総量の候補は CASCADE で一緒に消える）。利用者の参考書が1冊でも使っていれば消さない
+      parameters:
+        - $ref: "#/components/parameters/AdminMasterID"
+      responses:
+        "204": { description: 消した }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AdminMasterConflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -881,6 +1149,14 @@ components:
       required: true
       description: 利用者の ID（Better Auth の user.id）
       schema: { type: string, minLength: 1, maxLength: 191 }
+    AdminMasterID:
+      name: id
+      in: path
+      required: true
+      description: >-
+        マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で
+        code は invalid_format）
+      schema: { type: string, pattern: "^[1-9][0-9]{0,14}$" }
     From:
       name: from
       in: query
@@ -918,6 +1194,19 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     AdminUserProtected:
       description: 相手はいるが守られている（自分自身・他の管理者・デモアカウント）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AdminMasterConflict:
+      description: >-
+        名前・ISBN が重なっている、または使われていて消せない（文言に件数が入る。大学・学部は志望校、参考書は利用者の参考書）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AdminFacultyBadRequest:
+      description: >-
+        入力チェックで弾いた（ValidationError の形：文言・コード・項目）か、存在しないタグが含まれている
+        （文言だけ）。どちらも error は必ずある
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1082,6 +1371,161 @@ components:
             studyPlans: { type: integer }
             textbooks: { type: integer }
             finalGoals: { type: integer }
+
+    AdminUniversity:
+      type: object
+      required: [id, name, prefecture, type, facultyCount, goalCount]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        prefecture: { type: string }
+        type: { type: string, description: 国立・公立・私立 }
+        facultyCount: { type: integer }
+        goalCount: { type: integer, description: 配下の学部を志望校にしている件数。1件でもあれば大学は削除できない }
+
+    AdminUniversityList:
+      type: object
+      required: [universities, total, page, pageSize]
+      properties:
+        universities:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUniversity" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    AdminTag:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+
+    AdminFaculty:
+      type: object
+      required: [id, name, examDate, tags, goalCount]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        examDate:
+          description: YYYY-MM-DD（UTC の0時で保存している日付部分）
+          type: string
+          format: date
+          x-go-type: string
+        tags:
+          type: array
+          items: { $ref: "#/components/schemas/AdminTag" }
+        goalCount: { type: integer, description: この学部を志望校にしている件数。1件でもあれば削除できない }
+
+    AdminUniversityDetail:
+      type: object
+      required: [university, faculties]
+      properties:
+        university: { $ref: "#/components/schemas/AdminUniversity" }
+        faculties:
+          type: array
+          items: { $ref: "#/components/schemas/AdminFaculty" }
+
+    AdminFacultySnapshot:
+      description: 学部の作成・書き換えの応答（監査ログの「前・後」と同じ形）
+      type: object
+      required: [id, universityId, name, examDate, tagIds]
+      properties:
+        id: { type: integer, format: int64 }
+        universityId: { type: integer, format: int64 }
+        name: { type: string }
+        examDate:
+          description: YYYY-MM-DD
+          type: string
+          format: date
+          x-go-type: string
+        tagIds:
+          type: array
+          items: { type: integer, format: int64 }
+
+    AdminTextbookMasterMetric:
+      description: 参考書の総量の候補（単位ごと）
+      type: object
+      required: [unit, totalAmount, isDefault]
+      properties:
+        unit: { type: string }
+        totalAmount: { type: integer }
+        isDefault: { type: boolean, description: 利用者が参考書を登録したとき、この候補で総量が入る }
+
+    AdminTextbookMaster:
+      type: object
+      required: [id, name, publisher, edition, isbn, metrics, textbookCount]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        publisher: { type: string, nullable: true }
+        edition: { type: string, nullable: true }
+        isbn: { type: string }
+        metrics:
+          type: array
+          items: { $ref: "#/components/schemas/AdminTextbookMasterMetric" }
+        textbookCount: { type: integer, description: この参考書から登録された利用者の参考書の数。1冊でもあれば削除できない }
+
+    UniversityInput:
+      description: 大学の作成・書き換え（Zod の universityInputSchema）
+      type: object
+      required: [name, prefecture, type]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, description: 前後の空白を削ってから数える }
+        prefecture: { type: string, description: 47都道府県のどれか（src/shared/prefectures.ts の PREFECTURES） }
+        type: { type: string, enum: [国立, 公立, 私立], x-enum-varnames: [UniversityTypeNational, UniversityTypePublic, UniversityTypePrivate] }
+
+    FacultyInput:
+      description: >-
+        学部の書き換え（Zod の facultyInputSchema）。受験日は YYYY-MM-DD で、JavaScript の new Date と同じく
+        日は 31 まで受け付けて繰り上げる（2027-02-30 は 3月2日）。タグは重ねられない
+      type: object
+      required: [name, examDate, tagIds]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, description: 前後の空白を削ってから数える }
+        examDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        tagIds:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: integer, format: int64, minimum: 1 }
+
+    CreateFacultyInput:
+      description: 学部の作成（Zod の createFacultySchema）。FacultyInput に大学を足したもの
+      type: object
+      required: [name, examDate, tagIds, universityId]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, description: 前後の空白を削ってから数える }
+        examDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        tagIds:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: integer, format: int64, minimum: 1 }
+        universityId: { type: integer, format: int64, minimum: 1 }
+
+    TextbookMasterInput:
+      description: >-
+        参考書マスターの作成・書き換え（Zod の textbookMasterInputSchema）。スキーマに書けない規則：総量の候補は
+        単位が重ならず（duplicate_units）、既定（isDefault）がちょうど1つ（default_unit_required）
+      type: object
+      required: [name, isbn, metrics]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150, description: 前後の空白を削ってから数える }
+        publisher: { type: string, nullable: true, maxLength: 100, description: 前後の空白を削り、空なら null で保存する }
+        edition: { type: string, nullable: true, maxLength: 50, description: 前後の空白を削り、空なら null で保存する }
+        isbn: { type: string, description: ハイフン・空白を除き大文字にしてから、10桁（最後は X 可）か13桁 }
+        metrics:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            type: object
+            required: [unit, totalAmount, isDefault]
+            properties:
+              unit: { type: string, enum: [page, question, chapter, number, part, section] }
+              totalAmount: { type: integer, minimum: 1, maximum: 100000 }
+              isDefault: { type: boolean }
 
     LineConnectionStatus:
       type: object
