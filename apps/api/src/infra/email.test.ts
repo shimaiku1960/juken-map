@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getResend } from "@/api/infra/resend";
-import { notifyAdminOfNewUser } from "@/api/infra/email";
+import { notifyAdminOfNewUser, sendPasswordChangedNotice } from "@/api/infra/email";
 import { takeLogLines } from "@/api/test-support";
 
 vi.mock("@/api/infra/resend", () => ({
@@ -83,6 +83,43 @@ describe("notifyAdminOfNewUser", () => {
       expect.objectContaining({
         level: 50,
         msg: "[registration-notification] Failed to send notification.",
+        err: expect.objectContaining({ message: "Resend unavailable" }),
+      }),
+    ]);
+  });
+});
+
+describe("sendPasswordChangedNotice", () => {
+  beforeEach(() => {
+    send.mockReset();
+    vi.mocked(getResend).mockReturnValue({
+      emails: { send },
+    } as unknown as ReturnType<typeof getResend>);
+  });
+
+  it("本人のアドレスへ、再設定の画面へのリンクを付けて送る", async () => {
+    send.mockResolvedValue({ data: { id: "email-id" }, error: null });
+
+    await sendPasswordChangedNotice("user@example.com");
+
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        to: "user@example.com",
+        subject: "【受験マップ】パスワードが変更されました",
+        html: expect.stringContaining('href="https://juken-map.com/forgot-password"'),
+      })
+    );
+  });
+
+  it("送れなくても投げずにログへ残す（再設定ではこの後にセッションを消すため）", async () => {
+    send.mockRejectedValue(new Error("Resend unavailable"));
+    takeLogLines();
+
+    await expect(sendPasswordChangedNotice("user@example.com")).resolves.toBeUndefined();
+    expect(takeLogLines()).toEqual([
+      expect.objectContaining({
+        level: 50,
+        msg: "[password-changed-notice] Failed to send notice.",
         err: expect.objectContaining({ message: "Resend unavailable" }),
       }),
     ]);

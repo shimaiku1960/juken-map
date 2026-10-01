@@ -1,6 +1,7 @@
 import { getResend } from "@/api/infra/resend";
 import { withDeadline } from "@/api/infra/timeout";
 import { logger } from "@/api/observability/logger";
+import { SITE_URL } from "@/shared/site";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
 
@@ -44,6 +45,34 @@ export async function sendPasswordResetEmail(to: string, url: string) {
     }),
     "resend.sendPasswordResetEmail"
   );
+}
+
+/**
+ * パスワードが変わったことを本人に知らせる（変更・再設定のどちらも。セキュリティ基準 B6）。
+ * 乗っ取った人がパスワードを変えたとき、本人が気づいて再設定できるようにする。
+ *
+ * 変更はもう済んでいるので、送れなくても失敗にせずログに残すだけにする。
+ * 再設定では Better Auth がこの後にセッションを消すので、ここで投げるとその削除が飛ばされる。
+ */
+export async function sendPasswordChangedNotice(to: string) {
+  try {
+    const { error } = await withDeadline(
+      getResend().emails.send({
+        from: FROM,
+        to,
+        subject: "【受験マップ】パスワードが変更されました",
+        html: `<p>受験マップのパスワードが変更されました。ほかの端末のログインはすべて解除しています。</p>
+<p>心当たりがない場合は、すぐに以下からパスワードを再設定してください。</p>
+<p><a href="${SITE_URL}/forgot-password">パスワードを再設定する</a></p>`,
+      }),
+      "resend.sendPasswordChangedNotice"
+    );
+    if (error) {
+      throw new Error(error.message);
+    }
+  } catch (error) {
+    logger.error({ err: error }, "[password-changed-notice] Failed to send notice.");
+  }
 }
 
 /**
