@@ -7,11 +7,11 @@ Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバ�
 持つ（JUK-73）。書き込みは、通知設定（`PUT /api/notification-preferences`）・プロフィール（`PUT /api/profile`）・
 学習記録（`POST /api/study-logs`・`PATCH`/`DELETE /api/study-logs/{id}`）・学習予定（`POST /api/study-plans`・
 `PATCH`/`DELETE /api/study-plans/{id}`・`POST /api/study-plans/{id}/complete`）を移している（JUK-75）。LINE 連携（`/api/line/*`：連携の確認・解除、トークからの連携、LINE Login、Webhook）は
-書き込みも含めて Go が受ける（JUK-79）。管理画面の利用者の管理（`/api/admin/overview`・`/api/admin/users`・停止・停止解除・削除）も
-Go が受ける（JUK-78。マスター編集はまだ Node）。本番では nginx がこれらのパスだけを Go へ振り分け、
+書き込みも含めて Go が受ける（JUK-79）。管理画面の API（`/api/admin/*`：利用者の管理と、大学・学部・タグ・参考書のマスター編集）も
+Go が受ける（JUK-78）。本番では nginx がこれらのパスだけを Go へ振り分け、
 それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
 
-ログインの発行と管理画面は Node に残す。Go は Node（Better Auth）が発行した
+ログインの発行は Node に残す。Go は Node（Better Auth）が発行した
 セッション Cookie を、同じ DB と同じ `BETTER_AUTH_SECRET` で確かめるだけ。
 
 ## 動かし方
@@ -62,7 +62,7 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
        ├─ /api/line/*（全メソッド）                   ─▶ juken-map-go
-       ├─ /api/admin/overview・/api/admin/users・/api/admin/users/*（全メソッド） ─▶ juken-map-go
+       ├─ /api/admin/*（全メソッド）                  ─▶ juken-map-go
        ├─ /api/goals・/first-choice・
        │  /api/textbooks・/api/textbook-masters・
        │  /api/universities・/api/universities/{id}
@@ -85,8 +85,8 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
   Node に戻す手順は `infra/nginx/README.md` の「Go の振り分け」
 - 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない。
   例外は大学の一覧で、全員に同じ 80KB なので、Go が1回だけ gzip にした形を持って返す
-- 大学の一覧は Go のメモリに1分持つ。管理画面（Node）で大学・学部・タグを編集しても Go のキャッシュは
-  捨てられないので、大学を探す画面に出るまで最大1分かかる。管理 API を Go へ移したら（JUK-78）、編集のときに捨てる
+- 大学の一覧は Go のメモリに10分持つ。管理画面で大学・学部を編集したら（`admin_masters.go`）その場で捨てるので、
+  編集はすぐ大学を探す画面に出る。10分の期限は、DB を直接書き換えたとき（seed など）の保険
 - RDS へは TLS で繋ぐ（`db.go`。ホスト名が `.rds.amazonaws.com` のときだけ）。証明書は
   `rds-ca-ap-northeast-1.pem` を実行ファイルに埋め込む
 - ログとメトリクスは Node と同じ `job="juken-map-api"` で Grafana Cloud に入り、
@@ -215,7 +215,7 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `goals.go` | 志望校の一覧と第一志望（応答の型と SQL） | `services/goal-service.ts`・`routes/goals.ts`・`home.ts` の GET |
 | `textbooks.go` | 参考書の一覧と参考書マスター（応答の型と SQL） | `services/textbook-service.ts`・`routes/textbooks.ts`・`textbook-masters.ts` の GET |
 | `notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存 | `routes/notification-preferences.ts` |
-| `universities.go` | 大学の一覧（メモリに1分持ち、ETag と 304、gzip 済みを返す）と大学詳細 | `services/university-service.ts`・`routes/universities.ts` |
+| `universities.go` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 | `services/university-service.ts`・`routes/universities.ts` |
 | `notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる | `routes/cron.ts`・`services/sendDailyNotifications.ts` |
 | `daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 | `domain/dailyNotification.ts` |
 | `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
@@ -224,6 +224,8 @@ API_PATH='/api/study-plans?from=2026-09-01&to=2026-10-31' bash apps/api-go/compa
 | `study_plan_writes.go` | 学習予定の作成（まとめて）・書き換え（送った項目だけ）・削除・完了（実績を作る） | `routes/study-plans.ts` の POST・PATCH・DELETE・complete、`study-plan-service.ts` |
 | `study_log_writes.go` | 学習記録の記録・書き換え・削除（参考書の範囲の確かめ、初回記録の印） | `routes/study-logs.ts` の POST・`study-log-item.ts`・`study-log-service.ts`・`domain/textbookRange.ts` |
 | `profile.go` | プロフィールの更新 | `routes/profile.ts`・`services/user-service.ts` の updateProfile |
+| `admin_users.go` | 管理画面の利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） | `routes/admin.ts`・`services/admin-service.ts` |
+| `admin_masters.go` | 管理画面のマスター編集（大学・学部・タグ・参考書。使われている行は消さない、大学一覧のキャッシュを捨てる） | `routes/admin-masters.ts`・`services/master-service.ts` |
 | `parity_test.go`・`parity_writes_test.go`・`parity.sh` | Node と応答を比べる（ログイン済みの書き込みは `parity_writes_test.go`。書き換えた行を最後に戻す） | — |
 | `compare-notifications.sh` | 毎日の通知を Node と Go で送り比べる（偽の Resend へ） | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |

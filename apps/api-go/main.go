@@ -167,7 +167,8 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig) {
 	profile := &profileHandlers{store: &userStore{db: db}}
 	rt.user("PUT /api/profile", profile.update)
 
-	universities := &universityHandlers{store: newUniversityStore(db)}
+	universityStore := newUniversityStore(db)
+	universities := &universityHandlers{store: universityStore}
 	rt.user("GET /api/universities", universities.list)
 	rt.user("GET /api/universities/{id}", universities.detail)
 
@@ -189,6 +190,22 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig) {
 	rt.admin("POST /api/admin/users/{id}/ban", adminUsers.ban)
 	rt.admin("POST /api/admin/users/{id}/unban", adminUsers.unban)
 	rt.admin("DELETE /api/admin/users/{id}", adminUsers.deleteUser)
+
+	// マスター編集。大学・学部を変えたら、大学を探す画面の一覧（上の universities）のキャッシュを捨てる。
+	masters := &adminMasterHandlers{store: &sqlAdminMasterStore{db: db, universitiesChanged: universityStore.invalidate}}
+	rt.admin("GET /api/admin/universities", masters.listUniversities)
+	rt.admin("POST /api/admin/universities", masters.createUniversity)
+	rt.admin("GET /api/admin/universities/{id}", masters.universityDetail)
+	rt.admin("PATCH /api/admin/universities/{id}", masters.updateUniversity)
+	rt.admin("DELETE /api/admin/universities/{id}", masters.deleteUniversity)
+	rt.admin("GET /api/admin/tags", masters.listTags)
+	rt.admin("POST /api/admin/faculties", masters.createFaculty)
+	rt.admin("PATCH /api/admin/faculties/{id}", masters.updateFaculty)
+	rt.admin("DELETE /api/admin/faculties/{id}", masters.deleteFaculty)
+	rt.admin("GET /api/admin/textbook-masters", masters.listTextbookMasters)
+	rt.admin("POST /api/admin/textbook-masters", masters.createTextbookMaster)
+	rt.admin("PATCH /api/admin/textbook-masters/{id}", masters.updateTextbookMaster)
+	rt.admin("DELETE /api/admin/textbook-masters/{id}", masters.deleteTextbookMaster)
 
 	cron := &cronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, jobs.messenger), now: time.Now}
 	rt.job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)

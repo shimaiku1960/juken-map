@@ -305,20 +305,29 @@ func readAdminUsersQuery(query map[string][]string) (UserKind, string, int, *val
 		q = values[0]
 	}
 
-	page := 1 // z.coerce.number().int().positive().max(10_000).default(1)
-	if values, ok := query["page"]; ok {
-		// z.coerce.number() は Number(値)。配列は "1,2" のように , でつないだ文字列として数に直る（["3"] は 3）。
-		f := jsNumberFromString(strings.Join(values, ","))
-		if math.IsNaN(f) {
-			return "", "", 0, &validationIssue{code: "invalid_type", field: "page", message: "Invalid input: expected number, received NaN"}
-		}
-		n, issue := checkNumber("page", jsonNumberOf(f), numberRule{int: true, positive: true, max: adminUsersMaxPage})
-		if issue != nil {
-			return "", "", 0, issue
-		}
-		page = int(n)
+	page, issue := readPageQuery(query, adminUsersMaxPage)
+	if issue != nil {
+		return "", "", 0, issue
 	}
 	return kind, q, page, nil
+}
+
+// readPageQuery は z.coerce.number().int().positive().max(max).default(1) の page を読む。
+func readPageQuery(query map[string][]string, max float64) (int, *validationIssue) {
+	values, ok := query["page"]
+	if !ok {
+		return 1, nil
+	}
+	// z.coerce.number() は Number(値)。配列は "1,2" のように , でつないだ文字列として数に直る（["3"] は 3）。
+	f := jsNumberFromString(strings.Join(values, ","))
+	if math.IsNaN(f) {
+		return 0, &validationIssue{code: "invalid_type", field: "page", message: "Invalid input: expected number, received NaN"}
+	}
+	n, issue := checkNumber("page", jsonNumberOf(f), numberRule{int: true, positive: true, max: max})
+	if issue != nil {
+		return 0, issue
+	}
+	return int(n), nil
 }
 
 // jsNumberFromString は JavaScript の Number(文字列) と同じ規則で数にする。読めなければ NaN。

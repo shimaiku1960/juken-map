@@ -113,7 +113,8 @@ func (in *objectInput) optionalBool(key string) optional[bool] {
 	})
 }
 
-// array は z.array(…).min(1, minMessage)。要素は呼び出し側が readObjectAt(element, in.field(key)+".0") で読む。
+// array は z.array(…).min(1, minMessage)。minMessage が空なら min は無い（z.array(…) だけ）。
+// 要素は呼び出し側が readObjectAt(element, in.field(key)+".0") などで読む。
 func (in *objectInput) array(key, minMessage string) []any {
 	v, ok := in.value(key)
 	if !ok {
@@ -123,7 +124,7 @@ func (in *objectInput) array(key, minMessage string) []any {
 	switch {
 	case !isArray:
 		in.issue = invalidType(in.field(key), "array", v)
-	case len(a) == 0:
+	case len(a) == 0 && minMessage != "":
 		in.issue = &validationIssue{code: "too_small", field: in.field(key), message: minMessage}
 	}
 	return a
@@ -148,6 +149,9 @@ type stringRule struct {
 	checks []stringCheck
 	// trim は .trim()。max より後に書いているスキーマは、削る前の長さで max を確かめる（Zod と同じ）。
 	trim bool
+	// trimFirst は z.string().trim().min(…) のように .trim() を先に書いたスキーマ。Zod はチェックを書いた順に
+	// 流すので、min・max・checks は削った後の文字列で確かめる（"  " は min(1) に引っかかる）。
+	trimFirst bool
 }
 
 // stringCheck は .regex()・.refine() の1つ。ok が false なら code と message の issue になる。
@@ -176,6 +180,9 @@ func checkString(key string, v any, rule stringRule) (string, *validationIssue) 
 			issue.message = rule.typeMessage
 		}
 		return "", issue
+	}
+	if rule.trimFirst {
+		s = jsTrim(s)
 	}
 	n := codePointLength(s)
 	switch {
@@ -332,6 +339,21 @@ func (in *objectInput) optionalInt(key string, rule numberRule, nullable bool) o
 		f, issue := checkNumber(key, v, rule)
 		return int64(f), issue
 	})
+}
+
+// enum は z.enum(VALUES, { error: message })。文字列でない値・キーが無いときも、型の issue ではなく
+// invalid_value の message になる（Zod 4 の z.enum は型と値をまとめて1つの issue にする）。
+func (in *objectInput) enum(key string, valid func(string) bool, message string) string {
+	v, ok := in.value(key)
+	if !ok {
+		return ""
+	}
+	s, isString := v.(string)
+	if !isString || !valid(s) {
+		in.issue = &validationIssue{code: "invalid_value", field: in.field(key), message: message}
+		return ""
+	}
+	return s
 }
 
 // oneOf は .refine((v) => VALUES.includes(v)) のチェック。

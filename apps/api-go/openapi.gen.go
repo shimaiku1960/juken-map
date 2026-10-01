@@ -339,6 +339,57 @@ func (e StudyPlanUpdateInputSubject) Valid() bool {
 	}
 }
 
+// Defines values for TextbookMasterInputMetricsUnit.
+const (
+	TextbookMasterInputMetricsUnitChapter  TextbookMasterInputMetricsUnit = "chapter"
+	TextbookMasterInputMetricsUnitNumber   TextbookMasterInputMetricsUnit = "number"
+	TextbookMasterInputMetricsUnitPage     TextbookMasterInputMetricsUnit = "page"
+	TextbookMasterInputMetricsUnitPart     TextbookMasterInputMetricsUnit = "part"
+	TextbookMasterInputMetricsUnitQuestion TextbookMasterInputMetricsUnit = "question"
+	TextbookMasterInputMetricsUnitSection  TextbookMasterInputMetricsUnit = "section"
+)
+
+// Valid indicates whether the value is a known member of the TextbookMasterInputMetricsUnit enum.
+func (e TextbookMasterInputMetricsUnit) Valid() bool {
+	switch e {
+	case TextbookMasterInputMetricsUnitChapter:
+		return true
+	case TextbookMasterInputMetricsUnitNumber:
+		return true
+	case TextbookMasterInputMetricsUnitPage:
+		return true
+	case TextbookMasterInputMetricsUnitPart:
+		return true
+	case TextbookMasterInputMetricsUnitQuestion:
+		return true
+	case TextbookMasterInputMetricsUnitSection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UniversityInputType.
+const (
+	UniversityTypeNational UniversityInputType = "国立"
+	UniversityTypePrivate  UniversityInputType = "私立"
+	UniversityTypePublic   UniversityInputType = "公立"
+)
+
+// Valid indicates whether the value is a known member of the UniversityInputType enum.
+func (e UniversityInputType) Valid() bool {
+	switch e {
+	case UniversityTypeNational:
+		return true
+	case UniversityTypePrivate:
+		return true
+	case UniversityTypePublic:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UserKind.
 const (
 	UserKindDemo UserKind = "demo"
@@ -418,6 +469,28 @@ type AdminDeleteResult struct {
 	} `json:"removed"`
 }
 
+// AdminFaculty defines model for AdminFaculty.
+type AdminFaculty struct {
+	// ExamDate YYYY-MM-DD（UTC の0時で保存している日付部分）
+	ExamDate string `json:"examDate"`
+
+	// GoalCount この学部を志望校にしている件数。1件でもあれば削除できない
+	GoalCount int        `json:"goalCount"`
+	ID        int64      `json:"id"`
+	Name      string     `json:"name"`
+	Tags      []AdminTag `json:"tags"`
+}
+
+// AdminFacultySnapshot 学部の作成・書き換えの応答（監査ログの「前・後」と同じ形）
+type AdminFacultySnapshot struct {
+	// ExamDate YYYY-MM-DD
+	ExamDate     string  `json:"examDate"`
+	ID           int64   `json:"id"`
+	Name         string  `json:"name"`
+	TagIds       []int64 `json:"tagIds"`
+	UniversityID int64   `json:"universityId"`
+}
+
 // AdminOverview defines model for AdminOverview.
 type AdminOverview struct {
 	Kinds []KindStats `json:"kinds"`
@@ -429,6 +502,61 @@ type AdminOverview struct {
 		// Date 日付だけ（"YYYY-MM-DD"、日本時間の日付）
 		Date IsoDate `json:"date"`
 	} `json:"realSignupsByDay"`
+}
+
+// AdminTag defines model for AdminTag.
+type AdminTag struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// AdminTextbookMaster defines model for AdminTextbookMaster.
+type AdminTextbookMaster struct {
+	Edition   *string                     `json:"edition"`
+	ID        int64                       `json:"id"`
+	Isbn      string                      `json:"isbn"`
+	Metrics   []AdminTextbookMasterMetric `json:"metrics"`
+	Name      string                      `json:"name"`
+	Publisher *string                     `json:"publisher"`
+
+	// TextbookCount この参考書から登録された利用者の参考書の数。1冊でもあれば削除できない
+	TextbookCount int `json:"textbookCount"`
+}
+
+// AdminTextbookMasterMetric 参考書の総量の候補（単位ごと）
+type AdminTextbookMasterMetric struct {
+	// IsDefault 利用者が参考書を登録したとき、この候補で総量が入る
+	IsDefault   bool   `json:"isDefault"`
+	TotalAmount int    `json:"totalAmount"`
+	Unit        string `json:"unit"`
+}
+
+// AdminUniversity defines model for AdminUniversity.
+type AdminUniversity struct {
+	FacultyCount int `json:"facultyCount"`
+
+	// GoalCount 配下の学部を志望校にしている件数。1件でもあれば大学は削除できない
+	GoalCount  int    `json:"goalCount"`
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Prefecture string `json:"prefecture"`
+
+	// Type 国立・公立・私立
+	Type string `json:"type"`
+}
+
+// AdminUniversityDetail defines model for AdminUniversityDetail.
+type AdminUniversityDetail struct {
+	Faculties  []AdminFaculty  `json:"faculties"`
+	University AdminUniversity `json:"university"`
+}
+
+// AdminUniversityList defines model for AdminUniversityList.
+type AdminUniversityList struct {
+	Page         int               `json:"page"`
+	PageSize     int               `json:"pageSize"`
+	Total        int               `json:"total"`
+	Universities []AdminUniversity `json:"universities"`
 }
 
 // AdminUser defines model for AdminUser.
@@ -493,6 +621,16 @@ type CompletedStudyPlan struct {
 
 	// Plan 予定の行（書き込みの応答）
 	Plan StudyPlanRow `json:"plan"`
+}
+
+// CreateFacultyInput 学部の作成（Zod の createFacultySchema）。FacultyInput に大学を足したもの
+type CreateFacultyInput struct {
+	ExamDate string `json:"examDate"`
+
+	// Name 前後の空白を削ってから数える
+	Name         string  `json:"name"`
+	TagIds       []int64 `json:"tagIds"`
+	UniversityID int64   `json:"universityId"`
 }
 
 // CreatedCount defines model for CreatedCount.
@@ -597,6 +735,15 @@ type Faculty struct {
 	ID           int64       `json:"id"`
 	Name         string      `json:"name"`
 	UniversityID int64       `json:"universityId"`
+}
+
+// FacultyInput 学部の書き換え（Zod の facultyInputSchema）。受験日は YYYY-MM-DD で、JavaScript の new Date と同じく 日は 31 まで受け付けて繰り上げる（2027-02-30 は 3月2日）。タグは重ねられない
+type FacultyInput struct {
+	ExamDate string `json:"examDate"`
+
+	// Name 前後の空白を削ってから数える
+	Name   string  `json:"name"`
+	TagIds []int64 `json:"tagIds"`
 }
 
 // FacultyWithTags defines model for FacultyWithTags.
@@ -986,6 +1133,29 @@ type TextbookMaster struct {
 	UpdatedAt IsoDateTime `json:"updatedAt"`
 }
 
+// TextbookMasterInput 参考書マスターの作成・書き換え（Zod の textbookMasterInputSchema）。スキーマに書けない規則：総量の候補は 単位が重ならず（duplicate_units）、既定（isDefault）がちょうど1つ（default_unit_required）
+type TextbookMasterInput struct {
+	// Edition 前後の空白を削り、空なら null で保存する
+	Edition *string `json:"edition,omitempty"`
+
+	// Isbn ハイフン・空白を除き大文字にしてから、10桁（最後は X 可）か13桁
+	Isbn    string `json:"isbn"`
+	Metrics []struct {
+		IsDefault   bool                           `json:"isDefault"`
+		TotalAmount int                            `json:"totalAmount"`
+		Unit        TextbookMasterInputMetricsUnit `json:"unit"`
+	} `json:"metrics"`
+
+	// Name 前後の空白を削ってから数える
+	Name string `json:"name"`
+
+	// Publisher 前後の空白を削り、空なら null で保存する
+	Publisher *string `json:"publisher,omitempty"`
+}
+
+// TextbookMasterInputMetricsUnit defines model for TextbookMasterInput.Metrics.Unit.
+type TextbookMasterInputMetricsUnit string
+
 // TextbookMasterMetric defines model for TextbookMasterMetric.
 type TextbookMasterMetric struct {
 	// CreatedAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
@@ -1045,6 +1215,19 @@ type UniversityDetailResponse struct {
 	University           UniversityDetail `json:"university"`
 }
 
+// UniversityInput 大学の作成・書き換え（Zod の universityInputSchema）
+type UniversityInput struct {
+	// Name 前後の空白を削ってから数える
+	Name string `json:"name"`
+
+	// Prefecture 47都道府県のどれか（src/shared/prefectures.ts の PREFECTURES）
+	Prefecture string              `json:"prefecture"`
+	Type       UniversityInputType `json:"type"`
+}
+
+// UniversityInputType defines model for UniversityInput.Type.
+type UniversityInputType string
+
 // User 利用者の行（PUT /api/profile が返す）
 type User struct {
 	AnalyticsSignUpTrackedAt *IsoDateTime `json:"analyticsSignUpTrackedAt"`
@@ -1078,6 +1261,9 @@ type ValidationError struct {
 	Field *string `json:"field"`
 }
 
+// AdminMasterID defines model for AdminMasterID.
+type AdminMasterID = string
+
 // AdminUserID defines model for AdminUserID.
 type AdminUserID = string
 
@@ -1090,8 +1276,14 @@ type ID = string
 // To defines model for To.
 type To = string
 
+// AdminFacultyBadRequest ルートが自分で断るときのエラー。error は画面にそのまま出す文言
+type AdminFacultyBadRequest = Error
+
 // AdminForbidden ルートが自分で断るときのエラー。error は画面にそのまま出す文言
 type AdminForbidden = Error
+
+// AdminMasterConflict ルートが自分で断るときのエラー。error は画面にそのまま出す文言
+type AdminMasterConflict = Error
 
 // AdminUserProtected ルートが自分で断るときのエラー。error は画面にそのまま出す文言
 type AdminUserProtected = Error
@@ -1116,6 +1308,21 @@ type Unauthorized = Error
 
 // UnsupportedMediaType 想定外の失敗・混雑・存在しないパス
 type UnsupportedMediaType = ServerError
+
+// ListAdminTextbookMastersParams defines parameters for ListAdminTextbookMasters.
+type ListAdminTextbookMastersParams struct {
+	// Q 前後の空白を削ってから100文字（コードポイント）まで。空なら絞らない
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// ListAdminUniversitiesParams defines parameters for ListAdminUniversities.
+type ListAdminUniversitiesParams struct {
+	// Q 大学名の部分一致。前後の空白を削ってから100文字（コードポイント）まで。空なら絞らない
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Page 1から。省くと 1。数として読める文字列なら受け付ける（Zod の coerce）
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+}
 
 // ListAdminUsersParams defines parameters for ListAdminUsers.
 type ListAdminUsersParams struct {
@@ -1200,6 +1407,24 @@ type ListStudyPlansParams struct {
 type ListUniversitiesParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
+
+// CreateFacultyJSONRequestBody defines body for CreateFaculty for application/json ContentType.
+type CreateFacultyJSONRequestBody = CreateFacultyInput
+
+// UpdateFacultyJSONRequestBody defines body for UpdateFaculty for application/json ContentType.
+type UpdateFacultyJSONRequestBody = FacultyInput
+
+// CreateTextbookMasterJSONRequestBody defines body for CreateTextbookMaster for application/json ContentType.
+type CreateTextbookMasterJSONRequestBody = TextbookMasterInput
+
+// UpdateTextbookMasterJSONRequestBody defines body for UpdateTextbookMaster for application/json ContentType.
+type UpdateTextbookMasterJSONRequestBody = TextbookMasterInput
+
+// CreateUniversityJSONRequestBody defines body for CreateUniversity for application/json ContentType.
+type CreateUniversityJSONRequestBody = UniversityInput
+
+// UpdateUniversityJSONRequestBody defines body for UpdateUniversity for application/json ContentType.
+type UpdateUniversityJSONRequestBody = UniversityInput
 
 // DeleteUserJSONRequestBody defines body for DeleteUser for application/json ContentType.
 type DeleteUserJSONRequestBody DeleteUserJSONBody
