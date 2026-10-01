@@ -132,8 +132,8 @@ server {
 - 毎日の通知の入口（`POST /api/cron/daily-study-notifications`、JUK-74）も Go が受ける。送り終えるまで時間がかかるので、
   `proxy_read_timeout` を60秒と明示している（Go は50秒で打ち切る）
 - 登録の計測（`POST /api/analytics/registration`）・CSP の違反の報告（`POST /api/csp-report`）・
-  シミュレーション（`/api/sim/state`・`/api/sim/users`・`/api/sim/users/{seq}`）も Go が受ける（JUK-80）。
-  sim は Go にあるメソッドだけを送り、ほかは Node に任せる（Node は `/api/sim/*` のどれでもトークンが無ければ 401 を返すため）
+  シミュレーション（`/api/sim/` で始まるパス）も Go が受ける（JUK-80）。Node の sim は JUK-84 で消したので、
+  前方一致で全部 Go へ送る
 - 管理画面の API（`/api/admin/` で始まるパス、JUK-78：利用者の管理とマスター編集）は書き込みも含めて全部 Go が受ける
 - LINE 連携（`/api/line/` で始まるパス、JUK-79）は書き込みも含めて全部 Go が受ける。Webhook の署名は本文のバイト列で
   確かめるので、nginx では本文を書き換えない
@@ -146,17 +146,22 @@ server {
   `/api/study-plans`・`/api/study-plans/{id}`・`/api/study-plans/{id}/complete`・
   `/api/notification-preferences`・`/api/profile`・`/api/goals`・`/api/goals/{id}`・`/api/goals/first-choice`・
   `/api/textbooks`・`/api/textbooks/{id}`、JUK-75）は、メソッドで分けずにすべて Go へ送る
-- 読み取りだけを移したパス（`/api/textbook-masters`・`/api/universities`・`/api/universities/{id}`、JUK-73）は、
-  GET・HEAD だけを Go へ送り、それ以外は `return 418` → `error_page 418 = @node` で Node へ回す。
-  これらのパスには Node にも書き込みが無く、Node の 404 になる（Node から消すときに JUK-84 で整理する）。名前付きの location へ渡すので、method と本文はそのまま届く
-  （nginx 1.28 のリハーサルで、POST の本文が Node の検証まで届くことを確かめた）
+- 読み取りだけのパス（`/api/textbook-masters`・`/api/universities`・`/api/universities/{id}`、JUK-73）も、
+  メソッドで分けずに Go へ送る。GET・HEAD 以外は Go が Node と同じ 404 を返す。
+  JUK-84 までは GET・HEAD 以外を `error_page 418 = @node` で Node へ回していたが、Node から消したので外した
 - デプロイは Node と Go の新しいコンテナを両方起こし、両方のスモークテストが通ったときだけ、
   2つの upstream と振り分けをまとめて書き換えて1回だけ reload する。
   `nginx -t` が通らなければ3つとも元に戻す（`scripts/test-deploy-go-routes.sh` で確かめている）
 
 ### Node に戻す
 
-Node の `/api/dashboard` は消していないので、振り分けを外すだけで Node が返すようになる。
+**9/30 までに Go へ移したパス**（ダッシュボード・学習記録・参考書マスターと大学の読み取り・通知設定・
+プロフィール・毎日の通知・登録の計測・CSP の報告・シミュレーション・LINE 連携）は、JUK-84 で Node から消した。
+振り分けを外しても Node は 404 を返すだけなので、下の手順では戻らない。戻すには、JUK-84 のコミットを
+revert して main に入れ、Node のイメージをデプロイしてから振り分けを外す。
+
+10/1 に移したパス（学習予定・志望校・参考書の書き込みと、志望校・参考書・学習予定の読み取り、管理画面）は、
+まだ Node に残してあるので、振り分けを外すだけで Node が返すようになる。
 
 - **急ぐとき（本番だけ、次のデプロイまで）**：SSM で次を流す。次のデプロイでリポジトリの中身に戻る
 

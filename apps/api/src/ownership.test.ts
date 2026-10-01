@@ -27,17 +27,14 @@ vi.mock("@/api/infra/microcms", () => ({
 const { auth } = await import("./auth.ts");
 const { registerRoutes } = await import("./routes/index.ts");
 const { buildTestApp, request } = await import("./test-support.ts");
-const { todayYmdTokyo } = await import("@/shared/date");
 const {
   cleanup,
   createFinalGoal,
-  createStudyLog,
   createStudyPlan,
   createTextbook,
   createUniversity,
   createUser,
   findFinalGoals,
-  findStudyLog,
   findStudyLogs,
   findStudyPlan,
   findStudyPlans,
@@ -100,55 +97,6 @@ const OWNERSHIP: Record<string, Classification> = {
       },
     },
   },
-
-  // 実績
-  "GET /api/study-logs": { kind: "none", reason: "自分の実績の一覧" },
-  "GET /api/study-logs/daily": { kind: "none", reason: "自分の日ごとの学習時間" },
-  "POST /api/study-logs": {
-    kind: "owned",
-    cases: {
-      他人の参考書: async (caller, holder) => {
-        const textbookId = await createTextbook(holder);
-        return {
-          url: "/api/study-logs",
-          body: { date: todayYmdTokyo(), minutes: 30, textbookId },
-          read: () => findStudyLogs(caller),
-        };
-      },
-    },
-  },
-  "PATCH /api/study-logs/:id": {
-    kind: "owned",
-    cases: {
-      他人の実績: async (_caller, holder) => {
-        const id = await createStudyLog(holder);
-        return {
-          url: `/api/study-logs/${id}`,
-          body: { date: todayYmdTokyo(), minutes: 45 },
-          read: () => findStudyLog(id),
-        };
-      },
-      他人の参考書: async (caller, holder) => {
-        const id = await createStudyLog(caller);
-        const textbookId = await createTextbook(holder);
-        return {
-          url: `/api/study-logs/${id}`,
-          body: { date: todayYmdTokyo(), minutes: 30, textbookId },
-          read: () => findStudyLog(id),
-        };
-      },
-    },
-  },
-  "DELETE /api/study-logs/:id": {
-    kind: "owned",
-    cases: {
-      他人の実績: async (_caller, holder) => {
-        const id = await createStudyLog(holder);
-        return { url: `/api/study-logs/${id}`, read: () => findStudyLog(id) };
-      },
-    },
-  },
-  "GET /api/dashboard": { kind: "none", reason: "自分の集計" },
 
   // 予定
   "GET /api/study-plans": { kind: "none", reason: "自分の予定の一覧" },
@@ -214,20 +162,6 @@ const OWNERSHIP: Record<string, Classification> = {
       },
     },
   },
-  "GET /api/textbook-masters": { kind: "none", reason: "参考書マスターの一覧" },
-
-  // 大学
-  "GET /api/universities": { kind: "none", reason: "大学マスターの検索" },
-  "GET /api/universities/:id": { kind: "master", reason: "大学マスター。登録済みかどうかはセッションの人で絞る" },
-
-  // 設定・連携
-  "PUT /api/profile": { kind: "none", reason: "自分のプロフィール" },
-  "GET /api/notification-preferences": { kind: "none", reason: "自分の通知設定" },
-  "PUT /api/notification-preferences": { kind: "none", reason: "自分の通知設定" },
-  "POST /api/line/account-link": { kind: "none", reason: "linkToken は LINE が発行したもので、nonce はセッションの人に結ぶ" },
-  "GET /api/line/connection": { kind: "none", reason: "自分の LINE 連携" },
-  "DELETE /api/line/connection": { kind: "none", reason: "自分の LINE 連携" },
-  "POST /api/analytics/registration": { kind: "none", reason: "自分の登録計測" },
 };
 
 const userRoutes: string[] = [];
@@ -263,7 +197,7 @@ afterAll(cleanup);
 describe("A3 表と登録されたルートの突き合わせ", () => {
   it("利用者の API は全件が表で分類されていて、表に余りも無い", () => {
     // 0件のまま通る（何も突き合わせていない）状態を防ぐ。
-    expect(userRoutes.length).toBeGreaterThan(20);
+    expect(userRoutes.length).toBeGreaterThan(10);
     expect(userRoutes.filter((route) => !(route in OWNERSHIP))).toEqual([]);
     expect(Object.keys(OWNERSHIP).filter((route) => !userRoutes.includes(route))).toEqual([]);
   });

@@ -215,9 +215,10 @@ func TestParityAdminUsers(t *testing.T) {
 			}
 		}
 		// 分担：Go が消した session の Cookie は、Node でも使えない（今の画面が落ちる）。次のログインを Node が
-		// 断ることは apps/api/src/auth.banned-login.test.ts が確かめる
+		// 断ることは apps/api/src/auth.banned-login.test.ts が確かめる。
+		// Node の業務の API は Go へ移って消えていくので、Node に残る Better Auth のログイン必須の入口で見る。
 		for _, cookie := range []string{nodeCookie, goCookie} {
-			if r := fetch(t, env.node, "GET", "/api/dashboard", cookie); r.status != 401 {
+			if r := fetch(t, env.node, "GET", "/api/auth/list-sessions", cookie); r.status != 401 {
 				t.Errorf("停止した人の Cookie で Node が %d を返した", r.status)
 			}
 		}

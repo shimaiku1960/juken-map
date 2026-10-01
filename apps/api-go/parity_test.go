@@ -8,8 +8,6 @@
 package main
 
 import (
-	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,27 +39,15 @@ var parityCases = []struct {
 	as     []who
 }{
 	{"GET", "/api/health", []who{anonymous}},
-	{"GET", "/api/dashboard", []who{anonymous, forged, unknownUser, eachUser}},
 
-	// 学習記録・予定の一覧（JUK-73）。期間を省いたとき（既定の期間）・両端を指定・上限なし
-	{"GET", "/api/study-logs", []who{anonymous, forged, unknownUser, eachUser}},
-	{"GET", "/api/study-logs?from=2026-01-01&to=2026-12-31", []who{eachUser}},
-	{"GET", "/api/study-logs?from=2026-09-01", []who{eachUser}},
-	{"GET", "/api/study-logs/daily", []who{anonymous, eachUser}},
-	{"GET", "/api/study-logs/daily?from=2025-01-01&to=2026-09-15", []who{eachUser}},
+	// 9/30 までに移した API（ダッシュボード・学習記録・大学・参考書マスター・通知設定・毎日の通知・LINE 連携・
+	// 登録の計測・CSP の報告・シミュレーション）は、Node から消したので比べられない（JUK-84）。
+	// それまでのケースは git の履歴にある（git log -S TestParityAnalytics -- apps/api-go）。
+
+	// 学習予定の一覧（JUK-73）。期間を省いたとき（既定の期間）・両端を指定
 	{"GET", "/api/study-plans", []who{anonymous, eachUser}},
 	{"GET", "/api/study-plans?from=2026-09-01&to=2026-10-31", []who{eachUser}},
-	// 不正な期間。400 の本文（Zod の issues）と、暦に無い日付で空の一覧になるところ
-	{"GET", "/api/study-logs?from=abc&to=x", []who{eachUser}},
-	{"GET", "/api/study-logs?from=2026-09-01&from=2026-09-02", []who{eachUser}},
-	{"GET", "/api/study-logs?from=2026-09-28;to=x", []who{eachUser}},
-	{"GET", "/api/study-logs?fr%6Fm=abc", []who{eachUser}},
-	{"GET", "/api/study-logs?from", []who{eachUser}},
-	{"GET", "/api/study-logs?from=%ZZ", []who{eachUser}},
-	{"GET", "/api/study-logs?from=2026-13-45", []who{eachUser}},
-	// 2月30日は3月2日に繰り越される（JavaScript の new Date と同じ）
-	{"GET", "/api/study-logs?from=2026-02-30&to=2026-09-30", []who{eachUser}},
-	{"GET", "/api/study-logs/daily?to=bad", []who{eachUser}},
+	// 不正な期間
 	{"GET", "/api/study-plans?from=2026-09-01&to=2026-04-31", []who{eachUser}},
 	{"GET", "/api/study-plans?to=2026-09-01&to=2026-09-02", []who{eachUser}},
 
@@ -71,188 +57,30 @@ var parityCases = []struct {
 	// クエリは読まない（Node も読まない）
 	{"GET", "/api/goals?status=decided", []who{eachUser}},
 
-	// 参考書（JUK-73）。マスターは全員に同じもの
+	// 参考書（JUK-73）
 	{"GET", "/api/textbooks", []who{anonymous, forged, unknownUser, eachUser}},
-	{"GET", "/api/textbook-masters", []who{anonymous, eachUser}},
-
-	// 通知設定（JUK-73）。保存していない人は全部 false
-	{"GET", "/api/notification-preferences", []who{anonymous, forged, unknownUser, eachUser}},
-
-	// 大学（JUK-73）。一覧は全員に同じもの。詳細は登録済みの学部が人によって違う（1 は学部なし、258 は13学部）
-	{"GET", "/api/universities", []who{anonymous, forged, unknownUser, eachUser}},
-	{"GET", "/api/universities/1", []who{anonymous, eachUser}},
-	{"GET", "/api/universities/258", []who{eachUser}},
-	{"GET", "/api/universities/999999", []who{eachUser}},
-	{"GET", "/api/universities/abc", []who{eachUser}},
-	{"GET", "/api/universities/0", []who{eachUser}},
-	{"POST", "/api/universities/1", []who{eachUser}},
-
-	// 毎日の通知（JUK-74）。トークンが無ければ 401（手元の .env は DAILY_NOTIFICATION_SECRET が空なので、
-	// どちらも必ず 401 になり、実際には送らない）
-	{"POST", "/api/cron/daily-study-notifications", []who{anonymous, eachUser}},
-
-	// LINE 連携（JUK-79）。JSON を返すものだけ（OAuth の2本は LINE やログインへの 302 なので、line_test.go で見る）。
-	// 解除とアカウント連携は、合成ユーザーの状態を変えないよう、断られるものだけを比べる。
-	// Webhook は本文も署名も無いので 401（どちらも署名を確かめる前に本文を JSON として読まない）
-	{"GET", "/api/line/connection", []who{anonymous, forged, unknownUser, eachUser}},
-	{"DELETE", "/api/line/connection", []who{anonymous, forged}},
-	{"POST", "/api/line/account-link", []who{anonymous, eachUser}},
-	{"POST", "/api/line/webhook", []who{anonymous, eachUser}},
-	{"PUT", "/api/line/connection", []who{eachUser}},
 
 	// どのルートにも当たらないもの。Go に無いものは Node にも無い（Node にあるものは移していないだけ）。
 	{"GET", "/api/no-such-route", []who{anonymous}},
+	// GET だけがある Go のパスに POST。Node は JUK-84 でパスごと消したので、どちらも 404
 	{"POST", "/api/dashboard", []who{eachUser}},
-}
-
-// parityWrites は本文やトークンの付いた書き込みの比較（JUK-80）。どれも DB を変えない入力にしてある
-// （変えるものは下の TestParityAnalytics・TestParitySimStateful で順番を決めて比べる）。
-var parityWrites = []struct {
-	name        string
-	method      string
-	path        string
-	contentType string
-	body        string
-	as          []who
-	simToken    string // "ok" なら正しい SIMULATION_SECRET、"bad" なら違う値を Bearer で送る
-}{
-	// CSP の報告。誰でも送れて、読めない本文でも 204。形が違えば 415、16KB を超えたら 413
-	{"report-uri", "POST", "/api/csp-report", "application/csp-report", `{"csp-report":{"blocked-uri":"inline"}}`, []who{anonymous, eachUser}, ""},
-	{"report-to", "POST", "/api/csp-report", "application/reports+json", `[{"type":"csp-violation","body":{}}]`, []who{anonymous}, ""},
-	{"壊れた JSON", "POST", "/api/csp-report", "application/csp-report", `{not`, []who{anonymous}, ""},
-	{"JSON", "POST", "/api/csp-report", "application/json", `{}`, []who{anonymous}, ""},
-	{"text/plain", "POST", "/api/csp-report", "text/plain", `hello`, []who{anonymous}, ""},
-	{"本文なし", "POST", "/api/csp-report", "", ``, []who{anonymous}, ""},
-	{"Content-Type なしで本文あり", "POST", "/api/csp-report", "", `x`, []who{anonymous}, ""},
-	{"フォーム", "POST", "/api/csp-report", "application/x-www-form-urlencoded", `a=b`, []who{anonymous}, ""},
-	{"16KB ちょうど", "POST", "/api/csp-report", "text/plain", strings.Repeat("x", 16*1024), []who{anonymous}, ""},
-	{"16KB を超える", "POST", "/api/csp-report", "application/csp-report", strings.Repeat("x", 16*1024+1), []who{anonymous}, ""},
-	{"読み取りは無い", "GET", "/api/csp-report", "", ``, []who{anonymous}, ""},
-
-	// 登録の計測。未ログインは 401。形の違う本文は、ログイン済みでも DB に触る前に 415
-	{"計測（未ログイン）", "POST", "/api/analytics/registration", "", ``, []who{anonymous, forged, unknownUser}, ""},
-	{"計測（形が違う）", "POST", "/api/analytics/registration", "application/xml", `<a/>`, []who{eachUser}, ""},
-
-	// シミュレーション。トークンが無い・違えば 401（本文より先に断る）
-	{"sim 状態（トークンなし）", "GET", "/api/sim/state", "", ``, []who{anonymous, eachUser}, ""},
-	{"sim 状態（違うトークン）", "GET", "/api/sim/state", "", ``, []who{anonymous}, "bad"},
-	{"sim 状態", "GET", "/api/sim/state", "", ``, []who{anonymous}, "ok"},
-	{"sim 付与（トークンなし・形が違う）", "POST", "/api/sim/users", "application/xml", `<a/>`, []who{anonymous}, ""},
-	{"sim 付与（壊れた JSON）", "POST", "/api/sim/users", "application/json", `{no`, []who{anonymous}, "ok"},
-	{"sim 付与（本文なし）", "POST", "/api/sim/users", "", ``, []who{anonymous}, "ok"},
-	{"sim 付与（実ユーザー）", "POST", "/api/sim/users", "application/json", `{"email":"a@b.com","seq":1,"cohort":"steady"}`, []who{anonymous}, "ok"},
-	{"sim 付与（小数）", "POST", "/api/sim/users", "application/json", `{"email":"delivered+sim1@resend.dev","seq":1.5,"cohort":"steady"}`, []who{anonymous}, "ok"},
-	{"sim 付与（知らない型）", "POST", "/api/sim/users", "application/json", `{"email":"delivered+sim1@resend.dev","seq":1,"cohort":"x"}`, []who{anonymous}, "ok"},
-	{"sim 付与（居ない）", "POST", "/api/sim/users", "application/json", `{"email":"delivered+sim99999@resend.dev","seq":99999,"cohort":"steady"}`, []who{anonymous}, "ok"},
-	{"sim 付与（形が違う）", "POST", "/api/sim/users", "application/xml", `<a/>`, []who{anonymous}, "ok"},
-	{"sim 更新（連番が文字）", "PATCH", "/api/sim/users/abc", "application/json", `{}`, []who{anonymous}, "ok"},
-	{"sim 更新（連番が0）", "PATCH", "/api/sim/users/0", "application/json", `{}`, []who{anonymous}, "ok"},
-	{"sim 更新（空は居なくても 204）", "PATCH", "/api/sim/users/99999", "application/json", `{}`, []who{anonymous}, "ok"},
-	{"sim 更新（1e3）", "PATCH", "/api/sim/users/1e3", "application/json", `{}`, []who{anonymous}, "ok"},
-	{"sim 更新（居ない）", "PATCH", "/api/sim/users/99999", "application/json", `{"lastActedOn":"2026-09-30"}`, []who{anonymous}, "ok"},
-	{"sim 更新（日付の形）", "PATCH", "/api/sim/users/99999", "application/json", `{"lastActedOn":"2026/09/30"}`, []who{anonymous}, "ok"},
-	{"sim 更新（null の本文）", "PATCH", "/api/sim/users/99999", "application/json", `null`, []who{anonymous}, "ok"},
-	{"sim 更新（配列）", "PATCH", "/api/sim/users/99999", "application/json", `[]`, []who{anonymous}, "ok"},
-}
-
-func TestParityWrites(t *testing.T) {
-	env := parityEnv(t)
-	for _, c := range parityWrites {
-		for _, w := range c.as {
-			t.Run(fmt.Sprintf("%s %s %s（%s）", c.method, c.path, c.name, whoNames[w]), func(t *testing.T) {
-				for i, cookie := range env.cookiesFor(w) {
-					pr := parityRequest{method: c.method, path: c.path, cookie: cookie, body: c.body, header: map[string]string{}}
-					if c.contentType != "" {
-						pr.header["Content-Type"] = c.contentType
-					}
-					switch c.simToken {
-					case "ok":
-						pr.header["Authorization"] = "Bearer " + env.simSecret
-					case "bad":
-						pr.header["Authorization"] = "Bearer not-the-secret"
-					}
-					if diffs := compareResponses(send(t, env.node, pr), send(t, env.goURL, pr)); len(diffs) > 0 {
-						t.Fatalf("%d人目で食い違い（Node → Go）:\n  %s", i+1, strings.Join(diffs, "\n  "))
-					}
-				}
-			})
-		}
-	}
-}
-
-// TestParityAnalytics は登録の計測を比べる。1回目で「計測済み」の印が付くので、同じ人に Node → Go → Node の順で
-// 送り、Go と2回目の Node（どちらも印が付いた後）を比べる。1回目の Node は true でも false でもよい。
-func TestParityAnalytics(t *testing.T) {
-	env := parityEnv(t)
-	for i, cookie := range env.cookiesFor(eachUser) {
-		pr := parityRequest{method: "POST", path: "/api/analytics/registration", cookie: cookie}
-		first := send(t, env.node, pr)
-		if first.status != http.StatusOK {
-			t.Fatalf("%d人目: Node の1回目が %d", i+1, first.status)
-		}
-		gon := send(t, env.goURL, pr)
-		node := send(t, env.node, pr)
-		if diffs := compareResponses(node, gon); len(diffs) > 0 {
-			t.Fatalf("%d人目で食い違い（Node → Go）:\n  %s", i+1, strings.Join(diffs, "\n  "))
-		}
-	}
-}
-
-// TestParitySimStateful は DB を書き換える sim の API を、元の値のまま書き戻す形で比べる。
-// 同じ値で UPDATE しても「当たった」と数えること（Node の mysql2 の FOUND_ROWS。Go の ClientFoundRows）もここで確かめる。
-func TestParitySimStateful(t *testing.T) {
-	env := parityEnv(t)
-	auth := map[string]string{"Authorization": "Bearer " + env.simSecret, "Content-Type": "application/json"}
-	state := send(t, env.node, parityRequest{method: "GET", path: "/api/sim/state", header: auth})
-	users, _ := state.body.(map[string]any)["users"].([]any)
-	if len(users) < 2 {
-		t.Skip("シミュレーションの合成ユーザーが2人以上いないので飛ばす（pnpm sim:run で作れる）")
-	}
-	u0, u1 := users[0].(map[string]any), users[1].(map[string]any)
-	asJSON := func(v any) string { b, _ := json.Marshal(v); return string(b) }
-
-	for _, c := range []parityRequest{
-		// 今の値をそのまま書き戻す（どちらも 204。値が変わらなくても「見つからない」にならない）
-		{method: "PATCH", path: fmt.Sprintf("/api/sim/users/%v", u0["seq"]),
-			body: asJSON(map[string]any{"lastActedOn": u0["lastActedOn"], "dormantFrom": u0["dormantFrom"]})},
-		// 付与も同じ連番・型で付け直す（updatedAt だけが変わる）
-		{method: "POST", path: "/api/sim/users",
-			body: asJSON(map[string]any{"email": u0["email"], "seq": u0["seq"], "cohort": u0["cohort"]})},
-		// 別の人の連番を付けようとすると 409（UNIQUE）で、何も変わらない
-		{method: "POST", path: "/api/sim/users",
-			body: asJSON(map[string]any{"email": u0["email"], "seq": u1["seq"], "cohort": u0["cohort"]})},
-	} {
-		c.header = auth
-		t.Run(c.method+" "+c.path+" "+c.body, func(t *testing.T) {
-			if diffs := compareResponses(send(t, env.node, c), send(t, env.goURL, c)); len(diffs) > 0 {
-				t.Fatalf("食い違い（Node → Go）:\n  %s", strings.Join(diffs, "\n  "))
-			}
-		})
-	}
-
-	// 書き戻した後の状態も、Node と Go で同じ
-	after := parityRequest{method: "GET", path: "/api/sim/state", header: auth}
-	if diffs := compareResponses(send(t, env.node, after), send(t, env.goURL, after)); len(diffs) > 0 {
-		t.Fatalf("状態が食い違う:\n  %s", strings.Join(diffs, "\n  "))
-	}
 }
 
 // parityEnvironment は parity.sh が渡す接続先と、誰として送るかの Cookie。
 type parityEnvironment struct {
-	node, goURL, simSecret string
-	cookiesFor             func(who) []string
+	node, goURL string
+	cookiesFor  func(who) []string
 }
 
 func parityEnv(t *testing.T) parityEnvironment {
 	t.Helper()
 	nodeURL, goURL := os.Getenv("PARITY_NODE_URL"), os.Getenv("PARITY_GO_URL")
 	users := strings.Fields(os.Getenv("PARITY_COOKIES"))
-	simSecret := os.Getenv("PARITY_SIM_SECRET")
-	if nodeURL == "" || goURL == "" || len(users) == 0 || simSecret == "" {
+	if nodeURL == "" || goURL == "" || len(users) == 0 {
 		t.Fatal("parity.sh から動かしてください")
 	}
 	cookieName, _, _ := strings.Cut(users[0], "=")
-	return parityEnvironment{node: nodeURL, goURL: goURL, simSecret: simSecret, cookiesFor: func(w who) []string {
+	return parityEnvironment{node: nodeURL, goURL: goURL, cookiesFor: func(w who) []string {
 		switch w {
 		case forged:
 			return []string{cookieName + "=" + sign("forged-token", "not-the-secret")}
@@ -469,61 +297,4 @@ func diffJSON(path string, a, b any) []string {
 	}
 	walk(path, a, b)
 	return out
-}
-
-// TestParityUniversitiesConditional は、大学の一覧の 304 と圧縮を比べる。
-// parityCases は Accept-Encoding: identity で本文を比べるので、ここだけ別に見る。
-func TestParityUniversitiesConditional(t *testing.T) {
-	nodeURL, goURL := os.Getenv("PARITY_NODE_URL"), os.Getenv("PARITY_GO_URL")
-	users := strings.Fields(os.Getenv("PARITY_COOKIES"))
-	if nodeURL == "" || goURL == "" || len(users) == 0 {
-		t.Fatal("parity.sh から動かしてください")
-	}
-	get := func(base string, header map[string]string) *http.Response {
-		t.Helper()
-		req, _ := http.NewRequest("GET", base+"/api/universities", nil)
-		req.Header.Set("Cookie", users[0])
-		for k, v := range header {
-			req.Header.Set(k, v)
-		}
-		res, err := http.DefaultTransport.RoundTrip(req) // 自動の解凍をさせない
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { res.Body.Close() })
-		return res
-	}
-
-	// JSON のバイト列が同じなので、ETag も同じになる（振り分けを行き来しても 304 が効く）
-	etag := get(nodeURL, map[string]string{"Accept-Encoding": "identity"}).Header.Get("ETag")
-	if goETag := get(goURL, map[string]string{"Accept-Encoding": "identity"}).Header.Get("ETag"); goETag != etag {
-		t.Fatalf("ETag: Node %q, Go %q", etag, goETag)
-	}
-
-	for _, inm := range []string{etag, "W/" + etag, `"other", W/` + etag} {
-		for name, base := range map[string]string{"Node": nodeURL, "Go": goURL} {
-			res := get(base, map[string]string{"If-None-Match": inm})
-			body, _ := io.ReadAll(res.Body)
-			if res.StatusCode != http.StatusNotModified || len(body) != 0 {
-				t.Errorf("%s If-None-Match %s: status %d, 本文 %d バイト", name, inm, res.StatusCode, len(body))
-			}
-		}
-	}
-
-	// gzip を受け付けるなら、どちらも圧縮済みを返し、解凍すると同じ JSON
-	var plain [2][]byte
-	for i, base := range []string{nodeURL, goURL} {
-		res := get(base, map[string]string{"Accept-Encoding": "gzip"})
-		if res.Header.Get("Content-Encoding") != "gzip" {
-			t.Fatalf("%s: Content-Encoding = %q", base, res.Header.Get("Content-Encoding"))
-		}
-		zr, err := gzip.NewReader(res.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		plain[i], _ = io.ReadAll(zr)
-	}
-	if !bytes.Equal(plain[0], plain[1]) {
-		t.Errorf("解凍した本文が違う（Node %d バイト、Go %d バイト）", len(plain[0]), len(plain[1]))
-	}
 }

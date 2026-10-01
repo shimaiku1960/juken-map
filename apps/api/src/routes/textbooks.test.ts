@@ -7,16 +7,12 @@ vi.mock("../auth.ts", () => ({
 
 const { auth } = await import("../auth.ts");
 const { registerTextbookRoutes } = await import("./textbooks.ts");
-const { registerTextbookMasterRoutes } = await import("./textbook-masters.ts");
 const { buildTestApp, request, demoSession } = await import("../test-support.ts");
 const { cleanup, createTextbook, createTextbookMaster, createUser, findTextbooks } =
   await import("../test-db/fixtures.ts");
 
 const getSession = auth.api.getSession as unknown as Mock;
-const app = buildTestApp((app) => {
-  registerTextbookRoutes(app);
-  registerTextbookMasterRoutes(app);
-});
+const app = buildTestApp(registerTextbookRoutes);
 
 const post = (body: unknown) => request(app, "POST", "/api/textbooks", body);
 const patch = (id: number, body: unknown) =>
@@ -49,28 +45,6 @@ describe("GET /api/textbooks", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().map((t: { name: string }) => t.name)).toEqual(["物理のエッセンス", "青チャート"]);
-  });
-});
-
-describe("GET /api/textbook-masters", () => {
-  it("マスターごとに総量の候補を id 順で返す", async () => {
-    const masterId = await createTextbookMaster({
-      name: "システム英単語",
-      metrics: [
-        { unit: "number", totalAmount: 2021, isDefault: true },
-        { unit: "page", totalAmount: 400 },
-      ],
-    });
-
-    const res = await request(app, "GET", "/api/textbook-masters");
-
-    expect(res.statusCode).toBe(200);
-    const master = res.json().find((m: { id: number }) => m.id === masterId);
-    expect(master).toMatchObject({ name: "システム英単語" });
-    expect(master.metrics).toEqual([
-      expect.objectContaining({ unit: "number", totalAmount: 2021, isDefault: true }),
-      expect.objectContaining({ unit: "page", totalAmount: 400, isDefault: false }),
-    ]);
   });
 });
 

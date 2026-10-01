@@ -1,42 +1,20 @@
 import type { FastifyInstance } from "fastify";
 import { registerAdminRoutes } from "./admin.ts";
 import { registerAdminMasterRoutes } from "./admin-masters.ts";
-import { registerAnalyticsRoutes } from "./analytics.ts";
 import { registerBlogRoutes } from "./blog.ts";
-import { registerCronRoutes } from "./cron.ts";
-import { registerCspReportRoutes } from "./csp-report.ts";
 import { registerGoalRoutes } from "./goals.ts";
 import { registerHomeRoutes } from "./home.ts";
 import { registerLineRoutes } from "./line.ts";
-import { registerNotificationPreferenceRoutes } from "./notification-preferences.ts";
-import { registerProfileRoutes } from "./profile.ts";
-import { registerSimRoutes } from "./sim.ts";
-import { registerStudyLogItemRoutes } from "./study-log-item.ts";
-import { registerDashboardRoutes } from "./dashboard.ts";
-import { registerStudyLogRoutes } from "./study-logs.ts";
 import { registerStudyPlanRoutes } from "./study-plans.ts";
-import { registerTextbookMasterRoutes } from "./textbook-masters.ts";
 import { registerTextbookRoutes } from "./textbooks.ts";
-import { registerUniversityRoutes } from "./universities.ts";
 
 export function registerRoutes(app: FastifyInstance) {
   registerAdminRoutes(app);
   registerAdminMasterRoutes(app);
-  registerAnalyticsRoutes(app);
   registerBlogRoutes(app);
-  registerCronRoutes(app);
-  registerCspReportRoutes(app);
   registerGoalRoutes(app);
   registerHomeRoutes(app);
   registerLineRoutes(app);
-  registerNotificationPreferenceRoutes(app);
-  registerProfileRoutes(app);
-  registerSimRoutes(app);
-  registerDashboardRoutes(app);
-  registerStudyLogRoutes(app);
-  registerStudyLogItemRoutes(app);
   registerStudyPlanRoutes(app);
-  registerTextbookMasterRoutes(app);
   registerTextbookRoutes(app);
-  registerUniversityRoutes(app);
 }
