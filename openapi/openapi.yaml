@@ -336,6 +336,105 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      operationId: createGoal
+      summary: 志望校を登録する（学部・大学つきで返す。タグは付けない）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoalInput" }
+      responses:
+        "201":
+          description: 登録した志望校
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FirstChoiceGoal" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409":
+          description: 同じ学部をすでに登録している
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/goals/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    put:
+      operationId: replaceGoalFaculty
+      summary: 志望校の学部を差し替える（facultyId が無ければ何も変えない。status は受け付けるが書かない）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoalUpdateInput" }
+      responses:
+        "200":
+          description: 差し替えた後の志望校（学部は含まない）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoalFields" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: 無いか、自分のものでない
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    patch:
+      operationId: updateGoal
+      summary: 第一志望・メモ・ステータスのうち送った項目だけを書き換える（第一志望は1人1校に保つ）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoalPatchInput" }
+      responses:
+        "200":
+          description: 書き換えた
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkMessage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: 無いか、自分のものでない
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      operationId: deleteGoal
+      summary: 志望校を消す
+      responses:
+        "200":
+          description: 消した
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Deleted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: 無いか、自分のものでない
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /api/goals/first-choice:
     get:
@@ -367,6 +466,70 @@ paths:
                 items: { $ref: "#/components/schemas/TextbookRow" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      operationId: createTextbook
+      summary: 参考書を登録する（名前で作るか、参考書マスターから作る）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TextbookInput" }
+      responses:
+        "201":
+          description: 登録した参考書
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TextbookRow" }
+        "400":
+          description: >-
+            入力チェックで弾いた（ValidationError の形）か、マスターに総量の候補が無い（Error の形）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: 参考書マスターが無い
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: 同じ名前の参考書をすでに登録している
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/textbooks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    patch:
+      operationId: updateTextbookProgress
+      summary: 逆算設定（総量・単位・目標日・科目）の送った項目だけを書き換える
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TextbookProgressInput" }
+      responses:
+        "200":
+          description: 書き換えた後の参考書
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TextbookRow" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: 無いか、自分のものでない
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /api/textbook-masters:
@@ -1758,6 +1921,78 @@ components:
       required: [message]
       properties:
         message: { type: string, enum: [Deleted] }
+
+    OkMessage:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, enum: [OK], x-enum-varnames: [OkMessageOK] }
+
+    GoalInput:
+      description: 志望校の登録（Zod の goalSchema）。status を省くと decided
+      type: object
+      required: [facultyId]
+      properties:
+        facultyId: { type: integer, format: int64, minimum: 1 }
+        status: { type: string, enum: [candidate, decided] }
+
+    GoalUpdateInput:
+      description: 学部の差し替え（Zod の updateGoalSchema。goalSchema の全項目を任意にしたもの）
+      type: object
+      properties:
+        facultyId: { type: integer, format: int64, minimum: 1 }
+        status: { type: string, enum: [candidate, decided] }
+
+    GoalPatchInput:
+      description: 第一志望・メモ・ステータスの書き換え（Zod の patchGoalSchema）。送った項目だけを書き換える
+      type: object
+      properties:
+        isFirstChoice: { type: boolean }
+        note: { type: string, maxLength: 500, nullable: true }
+        status: { type: string, enum: [candidate, decided] }
+
+    TextbookInput:
+      description: >-
+        参考書の登録（Zod の createTextbookSchema）。名前で作る形が先に当たる（両方送ると名前で作る）。
+        どちらにも当たらなければ invalid_union（field は null）。Go は本文を手で読む（textbook_writes.go）ので、
+        oneOf の型は作らない（作ると oapi-codegen の runtime への依存が増える）
+      x-go-type: any
+      oneOf:
+        - $ref: "#/components/schemas/TextbookNameInput"
+        - $ref: "#/components/schemas/TextbookFromMasterInput"
+
+    TextbookNameInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, description: 前後の空白を削ってから長さを確かめる }
+        subject:
+          type: string
+          nullable: true
+          enum: [english, math, japanese, science, social, other]
+        rangeUnit:
+          type: string
+          enum: [page, question, chapter, number, part, section]
+
+    TextbookFromMasterInput:
+      type: object
+      required: [masterId]
+      properties:
+        masterId: { type: integer, format: int64, minimum: 1 }
+
+    TextbookProgressInput:
+      description: 逆算設定の書き換え（Zod の updateTextbookProgressSchema）。送った項目だけを書き換える
+      type: object
+      properties:
+        totalAmount: { type: integer, format: int64, minimum: 1, maximum: 100000 }
+        rangeUnit:
+          type: string
+          enum: [page, question, chapter, number, part, section]
+        targetDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$", nullable: true, description: 暦にある日付（Zod の z.iso.date()） }
+        subject:
+          type: string
+          nullable: true
+          enum: [english, math, japanese, science, social, other]
 
     ProfileInput:
       description: >-

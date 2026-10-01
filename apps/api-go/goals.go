@@ -10,7 +10,7 @@ import (
 
 // 志望校の読み取り（JUK-73）。Node の routes/goals.ts・home.ts の GET と、
 // services/goal-service.ts の listGoals・findFirstChoiceGoal にあたる。
-// 書き込み（POST /api/goals・/api/goals/:id）は Node に残っていて、nginx が GET と HEAD だけを Go へ送る。
+// 書き込み（POST /api/goals・PUT/PATCH/DELETE /api/goals/:id）は goal_writes.go。
 
 // 応答の型は openapi/openapi.yaml から生成した Goal（一覧。学部のタグつき）と
 // FirstChoiceGoal（第一志望。タグは無く、キーごと出さない）。Node の pickGoal・pickFaculty と同じ形。

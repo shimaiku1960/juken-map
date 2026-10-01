@@ -66,6 +66,60 @@ func (e DeletedMessage) Valid() bool {
 	}
 }
 
+// Defines values for GoalInputStatus.
+const (
+	GoalInputStatusCandidate GoalInputStatus = "candidate"
+	GoalInputStatusDecided   GoalInputStatus = "decided"
+)
+
+// Valid indicates whether the value is a known member of the GoalInputStatus enum.
+func (e GoalInputStatus) Valid() bool {
+	switch e {
+	case GoalInputStatusCandidate:
+		return true
+	case GoalInputStatusDecided:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GoalPatchInputStatus.
+const (
+	GoalPatchInputStatusCandidate GoalPatchInputStatus = "candidate"
+	GoalPatchInputStatusDecided   GoalPatchInputStatus = "decided"
+)
+
+// Valid indicates whether the value is a known member of the GoalPatchInputStatus enum.
+func (e GoalPatchInputStatus) Valid() bool {
+	switch e {
+	case GoalPatchInputStatusCandidate:
+		return true
+	case GoalPatchInputStatusDecided:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GoalUpdateInputStatus.
+const (
+	GoalUpdateInputStatusCandidate GoalUpdateInputStatus = "candidate"
+	GoalUpdateInputStatusDecided   GoalUpdateInputStatus = "decided"
+)
+
+// Valid indicates whether the value is a known member of the GoalUpdateInputStatus enum.
+func (e GoalUpdateInputStatus) Valid() bool {
+	switch e {
+	case GoalUpdateInputStatusCandidate:
+		return true
+	case GoalUpdateInputStatusDecided:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotificationSlot.
 const (
 	NotificationSlotEvening NotificationSlot = "evening"
@@ -78,6 +132,21 @@ func (e NotificationSlot) Valid() bool {
 	case NotificationSlotEvening:
 		return true
 	case NotificationSlotMorning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OkMessageMessage.
+const (
+	OkMessageOK OkMessageMessage = "OK"
+)
+
+// Valid indicates whether the value is a known member of the OkMessageMessage enum.
+func (e OkMessageMessage) Valid() bool {
+	switch e {
+	case OkMessageOK:
 		return true
 	default:
 		return false
@@ -363,6 +432,126 @@ func (e TextbookMasterInputMetricsUnit) Valid() bool {
 	case TextbookMasterInputMetricsUnitQuestion:
 		return true
 	case TextbookMasterInputMetricsUnitSection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TextbookNameInputRangeUnit.
+const (
+	TextbookNameInputRangeUnitChapter  TextbookNameInputRangeUnit = "chapter"
+	TextbookNameInputRangeUnitNumber   TextbookNameInputRangeUnit = "number"
+	TextbookNameInputRangeUnitPage     TextbookNameInputRangeUnit = "page"
+	TextbookNameInputRangeUnitPart     TextbookNameInputRangeUnit = "part"
+	TextbookNameInputRangeUnitQuestion TextbookNameInputRangeUnit = "question"
+	TextbookNameInputRangeUnitSection  TextbookNameInputRangeUnit = "section"
+)
+
+// Valid indicates whether the value is a known member of the TextbookNameInputRangeUnit enum.
+func (e TextbookNameInputRangeUnit) Valid() bool {
+	switch e {
+	case TextbookNameInputRangeUnitChapter:
+		return true
+	case TextbookNameInputRangeUnitNumber:
+		return true
+	case TextbookNameInputRangeUnitPage:
+		return true
+	case TextbookNameInputRangeUnitPart:
+		return true
+	case TextbookNameInputRangeUnitQuestion:
+		return true
+	case TextbookNameInputRangeUnitSection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TextbookNameInputSubject.
+const (
+	TextbookNameInputSubjectEnglish  TextbookNameInputSubject = "english"
+	TextbookNameInputSubjectJapanese TextbookNameInputSubject = "japanese"
+	TextbookNameInputSubjectMath     TextbookNameInputSubject = "math"
+	TextbookNameInputSubjectOther    TextbookNameInputSubject = "other"
+	TextbookNameInputSubjectScience  TextbookNameInputSubject = "science"
+	TextbookNameInputSubjectSocial   TextbookNameInputSubject = "social"
+)
+
+// Valid indicates whether the value is a known member of the TextbookNameInputSubject enum.
+func (e TextbookNameInputSubject) Valid() bool {
+	switch e {
+	case TextbookNameInputSubjectEnglish:
+		return true
+	case TextbookNameInputSubjectJapanese:
+		return true
+	case TextbookNameInputSubjectMath:
+		return true
+	case TextbookNameInputSubjectOther:
+		return true
+	case TextbookNameInputSubjectScience:
+		return true
+	case TextbookNameInputSubjectSocial:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TextbookProgressInputRangeUnit.
+const (
+	TextbookProgressInputRangeUnitChapter  TextbookProgressInputRangeUnit = "chapter"
+	TextbookProgressInputRangeUnitNumber   TextbookProgressInputRangeUnit = "number"
+	TextbookProgressInputRangeUnitPage     TextbookProgressInputRangeUnit = "page"
+	TextbookProgressInputRangeUnitPart     TextbookProgressInputRangeUnit = "part"
+	TextbookProgressInputRangeUnitQuestion TextbookProgressInputRangeUnit = "question"
+	TextbookProgressInputRangeUnitSection  TextbookProgressInputRangeUnit = "section"
+)
+
+// Valid indicates whether the value is a known member of the TextbookProgressInputRangeUnit enum.
+func (e TextbookProgressInputRangeUnit) Valid() bool {
+	switch e {
+	case TextbookProgressInputRangeUnitChapter:
+		return true
+	case TextbookProgressInputRangeUnitNumber:
+		return true
+	case TextbookProgressInputRangeUnitPage:
+		return true
+	case TextbookProgressInputRangeUnitPart:
+		return true
+	case TextbookProgressInputRangeUnitQuestion:
+		return true
+	case TextbookProgressInputRangeUnitSection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TextbookProgressInputSubject.
+const (
+	TextbookProgressInputSubjectEnglish  TextbookProgressInputSubject = "english"
+	TextbookProgressInputSubjectJapanese TextbookProgressInputSubject = "japanese"
+	TextbookProgressInputSubjectMath     TextbookProgressInputSubject = "math"
+	TextbookProgressInputSubjectOther    TextbookProgressInputSubject = "other"
+	TextbookProgressInputSubjectScience  TextbookProgressInputSubject = "science"
+	TextbookProgressInputSubjectSocial   TextbookProgressInputSubject = "social"
+)
+
+// Valid indicates whether the value is a known member of the TextbookProgressInputSubject enum.
+func (e TextbookProgressInputSubject) Valid() bool {
+	switch e {
+	case TextbookProgressInputSubjectEnglish:
+		return true
+	case TextbookProgressInputSubjectJapanese:
+		return true
+	case TextbookProgressInputSubjectMath:
+		return true
+	case TextbookProgressInputSubjectOther:
+		return true
+	case TextbookProgressInputSubjectScience:
+		return true
+	case TextbookProgressInputSubjectSocial:
 		return true
 	default:
 		return false
@@ -824,6 +1013,34 @@ type GoalFields struct {
 	UserID        string      `json:"userId"`
 }
 
+// GoalInput 志望校の登録（Zod の goalSchema）。status を省くと decided
+type GoalInput struct {
+	FacultyID int64            `json:"facultyId"`
+	Status    *GoalInputStatus `json:"status,omitempty"`
+}
+
+// GoalInputStatus defines model for GoalInput.Status.
+type GoalInputStatus string
+
+// GoalPatchInput 第一志望・メモ・ステータスの書き換え（Zod の patchGoalSchema）。送った項目だけを書き換える
+type GoalPatchInput struct {
+	IsFirstChoice *bool                 `json:"isFirstChoice,omitempty"`
+	Note          *string               `json:"note,omitempty"`
+	Status        *GoalPatchInputStatus `json:"status,omitempty"`
+}
+
+// GoalPatchInputStatus defines model for GoalPatchInput.Status.
+type GoalPatchInputStatus string
+
+// GoalUpdateInput 学部の差し替え（Zod の updateGoalSchema。goalSchema の全項目を任意にしたもの）
+type GoalUpdateInput struct {
+	FacultyID *int64                 `json:"facultyId,omitempty"`
+	Status    *GoalUpdateInputStatus `json:"status,omitempty"`
+}
+
+// GoalUpdateInputStatus defines model for GoalUpdateInput.Status.
+type GoalUpdateInputStatus string
+
 // IsoDate 日付だけ（"YYYY-MM-DD"、日本時間の日付）
 type IsoDate = string
 
@@ -870,6 +1087,14 @@ type NotificationSummary struct {
 	Skipped  int64            `json:"skipped"`
 	Slot     NotificationSlot `json:"slot"`
 }
+
+// OkMessage defines model for OkMessage.
+type OkMessage struct {
+	Message OkMessageMessage `json:"message"`
+}
+
+// OkMessageMessage defines model for OkMessage.Message.
+type OkMessageMessage string
 
 // ProfileInput プロフィールの更新（Zod の profileSchema）。長さはコードポイントの数（絵文字も1）で数え、 前後の空白は長さを確かめた後に削る（空白だけでも通り、空文字で保存される）
 type ProfileInput struct {
@@ -1116,6 +1341,14 @@ type Textbook struct {
 	TotalAmount *int64       `json:"totalAmount"`
 }
 
+// TextbookFromMasterInput defines model for TextbookFromMasterInput.
+type TextbookFromMasterInput struct {
+	MasterID int64 `json:"masterId"`
+}
+
+// TextbookInput 参考書の登録（Zod の createTextbookSchema）。名前で作る形が先に当たる（両方送ると名前で作る）。 どちらにも当たらなければ invalid_union（field は null）。Go は本文を手で読む（textbook_writes.go）ので、 oneOf の型は作らない（作ると oapi-codegen の runtime への依存が増える）
+type TextbookInput = any
+
 // TextbookMaster defines model for TextbookMaster.
 type TextbookMaster struct {
 	// CreatedAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
@@ -1169,6 +1402,36 @@ type TextbookMasterMetric struct {
 	// UpdatedAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
 	UpdatedAt IsoDateTime `json:"updatedAt"`
 }
+
+// TextbookNameInput defines model for TextbookNameInput.
+type TextbookNameInput struct {
+	// Name 前後の空白を削ってから長さを確かめる
+	Name      string                      `json:"name"`
+	RangeUnit *TextbookNameInputRangeUnit `json:"rangeUnit,omitempty"`
+	Subject   *TextbookNameInputSubject   `json:"subject,omitempty"`
+}
+
+// TextbookNameInputRangeUnit defines model for TextbookNameInput.RangeUnit.
+type TextbookNameInputRangeUnit string
+
+// TextbookNameInputSubject defines model for TextbookNameInput.Subject.
+type TextbookNameInputSubject string
+
+// TextbookProgressInput 逆算設定の書き換え（Zod の updateTextbookProgressSchema）。送った項目だけを書き換える
+type TextbookProgressInput struct {
+	RangeUnit *TextbookProgressInputRangeUnit `json:"rangeUnit,omitempty"`
+	Subject   *TextbookProgressInputSubject   `json:"subject,omitempty"`
+
+	// TargetDate 暦にある日付（Zod の z.iso.date()）
+	TargetDate  *string `json:"targetDate,omitempty"`
+	TotalAmount *int64  `json:"totalAmount,omitempty"`
+}
+
+// TextbookProgressInputRangeUnit defines model for TextbookProgressInput.RangeUnit.
+type TextbookProgressInputRangeUnit string
+
+// TextbookProgressInputSubject defines model for TextbookProgressInput.Subject.
+type TextbookProgressInputSubject string
 
 // TextbookRow 自分の参考書（DB の行そのまま）
 type TextbookRow struct {
@@ -1435,6 +1698,15 @@ type SendDailyStudyNotificationsJSONRequestBody SendDailyStudyNotificationsJSONB
 // ReportCspViolationApplicationReportsPlusJSONRequestBody defines body for ReportCspViolation for application/reports+json ContentType.
 type ReportCspViolationApplicationReportsPlusJSONRequestBody = ReportCspViolationApplicationReportsPlusJSONBody
 
+// CreateGoalJSONRequestBody defines body for CreateGoal for application/json ContentType.
+type CreateGoalJSONRequestBody = GoalInput
+
+// UpdateGoalJSONRequestBody defines body for UpdateGoal for application/json ContentType.
+type UpdateGoalJSONRequestBody = GoalPatchInput
+
+// ReplaceGoalFacultyJSONRequestBody defines body for ReplaceGoalFaculty for application/json ContentType.
+type ReplaceGoalFacultyJSONRequestBody = GoalUpdateInput
+
 // StartLineAccountLinkJSONRequestBody defines body for StartLineAccountLink for application/json ContentType.
 type StartLineAccountLinkJSONRequestBody StartLineAccountLinkJSONBody
 
@@ -1467,3 +1739,9 @@ type UpdateStudyPlanJSONRequestBody = StudyPlanUpdateInput
 
 // CompleteStudyPlanJSONRequestBody defines body for CompleteStudyPlan for application/json ContentType.
 type CompleteStudyPlanJSONRequestBody = CompleteStudyPlanInput
+
+// CreateTextbookJSONRequestBody defines body for CreateTextbook for application/json ContentType.
+type CreateTextbookJSONRequestBody = TextbookInput
+
+// UpdateTextbookProgressJSONRequestBody defines body for UpdateTextbookProgress for application/json ContentType.
+type UpdateTextbookProgressJSONRequestBody = TextbookProgressInput
