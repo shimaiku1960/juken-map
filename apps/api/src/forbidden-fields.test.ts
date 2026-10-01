@@ -3,6 +3,7 @@ import type { RouteOptions } from "fastify";
 
 // 利用者が変えてはいけない項目（ロール・持ち主・停止状態・メール確認状態など）を、
 // 書き込みの本文に混ぜても書き換わらないことを確かめる（セキュリティ基準 06 の A4）。
+// Go へ移したルートは、同じことを apps/api-go/forbidden_fields_db_test.go（dbtest タグ、JUK-97）が確かめる。
 //
 // 利用者の API（入口 E3）の書き込みを onRoute で全件集め、下の表 WRITES に1本ずつ
 // 「成功する本文」を書かせる。表に無いルートがあれば落ちるので、ルートを足して

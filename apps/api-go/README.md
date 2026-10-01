@@ -113,11 +113,13 @@ rt.job("POST /api/cron/…", secret, cron.handle)           // タイマー（in
 path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。想定外の失敗は
 `internalError(w, r, err)` に渡す（500 を返し、原因はログにだけ残す）。
 
-移したら、次の3か所に足す。
+移したら、次の4か所に足す。
 
 1. `main.go` の `registerRoutes` と、`main_test.go` の一覧（入口の種類を Node と揃える）
 2. `parity_test.go` の `parityCases`（Node と応答が同じかを確かめる。不正な入力のケースも）
-3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスの別のメソッドを Node に残すなら、
+3. user のルートなら、`ownership_db_test.go`（他人の ID、A3）と `forbidden_fields_db_test.go`（禁止項目、A4）の表。
+   書かなければ CI のこの2本が落ちる（下の「DB に流すテスト」）
+4. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスの別のメソッドを Node に残すなら、
    GET・HEAD 以外を Node へ回す名前付きの location が要る（JUK-84 で使う所が無くなり外した `@node`。
    形は `git log -S '@node' -- infra/nginx/juken-map-go-routes.conf` で探せる）
 
@@ -161,6 +163,23 @@ if in.reject(w) {            // 最初の1件を {error, code, field} の 400 �
 クエリ文字列は `r.URL.Query()` ではなく `parseQuery`（`query.go`）で読む。Go の標準は `;` を含む組や
 壊れた `%` を黙って捨てるが、Node（Fastify）は値として受け取るので、そのままでは応答がずれる。
 不正な入力の 400 は、Node の Zod と同じ形（`validationIssue`）で返す。
+
+## DB に流すテスト（A3・A4）
+
+```sh
+pnpm test:go-db                      # リポジトリのルートから。先に pnpm db:start
+```
+
+セキュリティ基準 06 の A3（他人の持ち物の ID を断る）と A4（禁止項目を混ぜても書き換わらない）を、
+本物の MySQL に流して確かめる（JUK-97。Node の `ownership.test.ts`・`forbidden-fields.test.ts` と同じ考え方）。
+`registerRoutes` の user のルートを全件、表と突き合わせるので、ルートを足して表に書かなければ落ちる。
+
+- `dbtest` タグのテスト（`*_db_test.go` のうち `//go:build dbtest` のもの）。ふだんの `go test` では動かない
+- DB は Node のテストと同じ `juken_map_test`。本番と同じマイグレーションが当たり、本番と同じ DML だけの権限で繋ぐ。
+  `pnpm --filter @juken-map/api test-db:prepare` が用意する（`pnpm test:go-db` は先にこれを呼ぶ）
+- セッションは Cookie「test」の値を利用者 ID として読む（Better Auth の Cookie の確かめは `auth_test.go`）
+- CI は MySQL のある check のジョブで回す（go のジョブには DB が無い）
+- 守りを外すと落ちることは確かめた（参考書の持ち主の確認を外すと A3 が2本、プロフィールの更新で role を書くと A4 が1本落ちる）
 
 ## Node と応答を比べる
 
@@ -228,6 +247,7 @@ LINE・計測・CSP・sim）は JUK-84 で Node から消したので、`git log
 | `profile.go` | プロフィールの更新 | `routes/profile.ts`・`services/user-service.ts` の updateProfile |
 | `admin_users.go` | 管理画面の利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） | `routes/admin.ts`・`services/admin-service.ts` |
 | `admin_masters.go` | 管理画面のマスター編集（大学・学部・タグ・参考書。使われている行は消さない、大学一覧のキャッシュを捨てる） | `routes/admin-masters.ts`・`services/master-service.ts` |
+| `ownership_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3）と禁止項目（A4）を本物の DB で確かめる（dbtest タグ） | `ownership.test.ts`・`forbidden-fields.test.ts` |
 | `parity_test.go`・`parity_writes_test.go`・`parity.sh` | Node と応答を比べる（ログイン済みの書き込みは `parity_writes_test.go`。書き換えた行を最後に戻す） | — |
 | `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
 

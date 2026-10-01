@@ -122,6 +122,21 @@ jobs:
           pnpm --filter @juken-map/api test
           pnpm --filter @juken-map/web test
 
+      # Go の API を本物の MySQL に流すテスト（apps/api-go の dbtest タグ、JUK-97）。他人の ID を断ること（A3）と、
+      # 禁止項目を混ぜても書き換わらないこと（A4）を、本番で動いている Go のルートで確かめる。
+      # DB は Node のテストと同じ juken_map_test（本番と同じマイグレーションと、DML だけの権限）。
+      # MySQL がこのジョブにしか無いので、go のジョブではなくここで動かす。
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/api-go/go.mod
+          cache-dependency-path: apps/api-go/go.sum
+
+      - name: Test Go with DB
+        run: |
+          pnpm --filter @juken-map/api test-db:prepare
+          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4' -count=1 ./...
+
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA
         run: pnpm --filter @juken-map/web build
@@ -155,6 +170,7 @@ jobs:
         run: |
           go vet ./...
           go vet -tags parity ./...
+          go vet -tags dbtest ./...
 
       # -race は、複数の goroutine が同じ値を同時に書き換えていないかを実行しながら見る。
       - name: Test
