@@ -54,12 +54,15 @@ const (
 	protectedSelf  protectedReason = "self"
 	protectedAdmin protectedReason = "admin"
 	protectedDemo  protectedReason = "demo"
+	// protectedNoEmail は削除だけの守り。確認のメールアドレスを突き合わせられないので消さない（JUK-89）。
+	protectedNoEmail protectedReason = "no_email"
 )
 
 var protectedMessages = map[protectedReason]string{
-	protectedSelf:  "自分自身は停止・削除できません",
-	protectedAdmin: "他の管理者は停止・削除できません（先に権限を外してください）",
-	protectedDemo:  "デモアカウントは停止・削除できません",
+	protectedSelf:    "自分自身は停止・削除できません",
+	protectedAdmin:   "他の管理者は停止・削除できません（先に権限を外してください）",
+	protectedDemo:    "デモアカウントは停止・削除できません",
+	protectedNoEmail: "メールアドレスの無い利用者は、本人の確認ができないため削除できません",
 }
 
 // adminTarget は停止・削除の相手。
@@ -218,11 +221,12 @@ func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s
 	if !ok {
 		return
 	}
-	current := ""
-	if target.Email != nil {
-		current = *target.Email
+	// メールの無い相手は、空白だけを打てば空文字どうしで一致してしまうので、比べる前に断る（Node と同じ）。
+	if target.Email == nil || *target.Email == "" {
+		writeError(w, http.StatusConflict, protectedMessages[protectedNoEmail])
+		return
 	}
-	if strings.ToLower(current) != strings.ToLower(jsTrim(email)) {
+	if strings.ToLower(*target.Email) != strings.ToLower(jsTrim(email)) {
 		writeError(w, http.StatusBadRequest, "メールアドレスが一致しません")
 		return
 	}
