@@ -1,11 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { reserveEmailSend } from "@/api/infra/email-limits";
 import { getResend } from "@/api/infra/resend";
-import { notifyAdminOfNewUser, sendPasswordChangedNotice } from "@/api/infra/email";
+import {
+  notifyAdminOfNewUser,
+  sendPasswordChangedNotice,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from "@/api/infra/email";
+import { registry } from "@/api/observability/metrics";
 import { takeLogLines } from "@/api/test-support";
 
 vi.mock("@/api/infra/resend", () => ({
   getResend: vi.fn(),
 }));
+
+// 上限の数え方は email-limits.test.ts が本物の DB で確かめる。ここでは「上限なら送らない」だけを見る。
+vi.mock("@/api/infra/email-limits", () => ({
+  reserveEmailSend: vi.fn(),
+}));
+
+beforeEach(() => {
+  vi.mocked(reserveEmailSend).mockReset();
+  vi.mocked(reserveEmailSend).mockResolvedValue(true);
+});
 
 const send = vi.fn();
 const originalNotificationEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
@@ -123,5 +140,49 @@ describe("sendPasswordChangedNotice", () => {
         err: expect.objectContaining({ message: "Resend unavailable" }),
       }),
     ]);
+  });
+});
+
+describe("確認メール・再設定メール", () => {
+  beforeEach(() => {
+    send.mockReset();
+    vi.mocked(getResend).mockReturnValue({
+      emails: { send },
+    } as unknown as ReturnType<typeof getResend>);
+    registry.resetMetrics();
+  });
+
+  it("上限を超えるなら送らない（E1）", async () => {
+    vi.mocked(reserveEmailSend).mockResolvedValue(false);
+
+    await sendVerificationEmail("user@example.com", "https://juken-map.com/verify");
+    await sendPasswordResetEmail("user@example.com", "https://juken-map.com/reset");
+
+    expect(reserveEmailSend).toHaveBeenCalledWith("verification", "user@example.com");
+    expect(reserveEmailSend).toHaveBeenCalledWith("password-reset", "user@example.com");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("Resend のエラーを例外にする（Better Auth がログに残す）", async () => {
+    send.mockResolvedValue({ data: null, error: { message: "daily_quota_exceeded" }, headers: null });
+
+    await expect(sendPasswordResetEmail("user@example.com", "https://juken-map.com/reset")).rejects.toThrow(
+      "daily_quota_exceeded"
+    );
+  });
+
+  it("応答ヘッダーの送信枠の使用数をメトリクスに写す", async () => {
+    send.mockResolvedValue({
+      data: { id: "email-id" },
+      error: null,
+      headers: { "x-resend-daily-quota": "42", "x-resend-monthly-quota": "1234" },
+    });
+
+    await sendVerificationEmail("user@example.com", "https://juken-map.com/verify");
+
+    const text = await registry.metrics();
+    expect(text).toContain('resend_quota_used{period="daily"} 42');
+    expect(text).toContain('resend_quota_used{period="monthly"} 1234');
+    expect(text).toMatch(/resend_quota_observed_timestamp_seconds\{period="daily"\} \d/);
   });
 });
