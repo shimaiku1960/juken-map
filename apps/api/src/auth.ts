@@ -8,6 +8,8 @@ import {
   sendVerificationEmail,
   sendPasswordResetEmail,
 } from "@/api/infra/email";
+import { clearSignInAttempts, recordSignInAttempt } from "@/api/sign-in-throttle";
+import { DEMO_EMAIL } from "@/shared/demo";
 
 // アプリ唯一の Better Auth 定義。Next.js 側にあった同等の定義は削除済み。
 //
@@ -122,6 +124,17 @@ export const auth = betterAuth({
       await notifyAdminOfNewUser(user);
     },
   },
+  advanced: {
+    // 確認メール・再設定メールを送り終えるのを待たずに応答する（セキュリティ基準 B4）。
+    // 待つと、登録済みのメールアドレスだけ Resend の分だけ遅く返り、応答時間で登録の有無が分かる。
+    // 送れなかったときに画面へ伝えないのは今までと同じ（Better Auth は待っていたときも
+    // 失敗をログに残して握りつぶしていた）。渡される promise は Better Auth が catch 済み。
+    backgroundTasks: {
+      handler: (promise) => {
+        void promise;
+      },
+    },
+  },
   socialProviders: {
     google: {
       clientId: process.env.AUTH_GOOGLE_ID as string,
@@ -134,6 +147,25 @@ export const auth = betterAuth({
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      // アカウント単位の回数制限（セキュリティ基準 B4。IP 単位は Better Auth の rateLimit）。
+      // デモアカウントはパスワードを画面に載せていて守る意味が無く、わざと失敗させれば
+      // 面接官が入れなくなるので数えない。
+      if (ctx.path === "/sign-in/email") {
+        const email: unknown = ctx.body?.email;
+        if (typeof email === "string" && email !== DEMO_EMAIL) {
+          const attempt = await recordSignInAttempt(email);
+          if (!attempt.allowed) {
+            throw new APIError(
+              "TOO_MANY_REQUESTS",
+              {
+                code: "TOO_MANY_SIGN_IN_ATTEMPTS",
+                message: "ログインの試行が多すぎます。しばらく待ってから、もう一度お試しください。",
+              },
+              { "X-Retry-After": String(attempt.retryAfterSeconds) }
+            );
+          }
+        }
+      }
       // パスワードを変えたら、ほかのセッションを必ず消す（セキュリティ基準 B6）。Better Auth は
       // 本文の revokeOtherSessions に任せていて既定は消さないので、何が送られてきても true にする。
       // 消したあと今の端末には新しいセッションが発行されるので、変更した本人はログインしたまま。
@@ -143,6 +175,15 @@ export const auth = betterAuth({
       }
     }),
     after: createAuthMiddleware(async (ctx) => {
+      // パスワードが合っていたら数を消す。メール未確認（EMAIL_NOT_VERIFIED）はパスワードを
+      // 確かめたあとに断られるので、これも合っていた扱いにする。
+      if (ctx.path === "/sign-in/email") {
+        const returned = ctx.context.returned;
+        const email: unknown = ctx.body?.email;
+        const passwordMatched =
+          !isAPIError(returned) || returned.body?.code === "EMAIL_NOT_VERIFIED";
+        if (passwordMatched && typeof email === "string") await clearSignInAttempts(email);
+      }
       // 変更できたときだけ知らせる（今のパスワードが違うなどで断ったときは returned が APIError）。
       if (ctx.path === "/change-password") {
         const returned = ctx.context.returned as { user?: { email?: string } } | undefined;

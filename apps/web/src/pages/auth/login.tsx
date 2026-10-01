@@ -55,6 +55,9 @@ export default function LoginPage() {
         setErrorMessage(
           "メールアドレスの確認が完了していません。確認メールをご確認ください。"
         );
+      } else if (error.status === 429) {
+        // IP 単位（Better Auth）とアカウント単位（auth.ts）の回数制限。IP 単位の文言は英語なのでここで出し分ける。
+        setErrorMessage("ログインの試行が多すぎます。しばらく待ってから、もう一度お試しください。");
       } else {
         setErrorMessage(error.message ?? "ログインに失敗しました");
       }
