@@ -170,6 +170,24 @@ Node の `/api/dashboard` は消していないので、振り分けを外すだ
 - **ずっと戻すとき**：`juken-map-go-routes.conf` から location を消して main に入れる。
   Go のコンテナは動き続けるが、誰からも呼ばれなくなる
 
+## 手元（開発・E2E）でも同じ振り分けを通す（2026-10-01 追加、JUK-96）
+
+開発（`pnpm dev`）と E2E（`scripts/e2e-server.sh`）も、Docker の nginx（`nginx:1.28`）を前に置き、
+本番と同じ `juken-map-go-routes.conf` をそのまま読む。それまでは `/api` を全部 Node に送っていて、
+E2E が Go の API を一度も通っていなかった。
+
+```
+開発  ブラウザ → Vite :5173 → nginx :4200 ─┬─ go-routes.conf のパス → Go   :4100
+                                          └─ それ以外             → Node :4000
+E2E   ブラウザ → nginx :3000 ─┬─ go-routes.conf のパス → Go   :4400
+                             └─ それ以外             → Node :4300（SPA も配る）
+```
+
+- サイト設定は `local/default.conf.template`。本番のサイト設定と同じ形で、違うのは HTTP であることと転送先だけ
+- 起動は `scripts/local-proxy.sh`、ポートは `scripts/local-ports.sh`（worktree の N 番目は上の番号に N を足す）
+- コンテナから手元の Node・Go へは `host.docker.internal` で届く（Linux の CI では `--add-host` で作る）
+- 振り分けファイルを書き換えたら、開発中は `pnpm dev`（の dev:proxy）を起動し直す
+
 ## Step 3 で必要になる変更
 
 現在は `location /` が全部 3000 番へ流している。分離後はパスで振り分ける。

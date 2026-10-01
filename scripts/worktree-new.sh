@@ -73,7 +73,9 @@ done < <(git -C "$main_root" worktree list --porcelain)
 slot=""
 for n in $(seq 1 89); do
   [[ "$used_slots" == *" $n "* ]] && continue
-  if port_in_use $((5173 + n)) || port_in_use $((4000 + n)) || port_in_use $((3010 + n)); then
+  # ポートの割り当ては scripts/local-ports.sh（Go・nginx・E2E の内側の分も N でずらす）。
+  if port_in_use $((5173 + n)) || port_in_use $((4000 + n)) || port_in_use $((3010 + n)) \
+    || port_in_use $((4100 + n)) || port_in_use $((4200 + n)); then
     continue
   fi
   slot="$n"
@@ -102,7 +104,7 @@ cat <<EOF
 worktree を作りました。
   場所:     $dir
   ブランチ: $branch
-  画面:     http://localhost:$web_port （API $((4000 + slot)) / E2E $((3010 + slot))）
+  画面:     http://localhost:$web_port （nginx $((4200 + slot)) → Node $((4000 + slot))・Go $((4100 + slot)) / E2E $((3010 + slot))）
 
 次の手順:
   cd $dir

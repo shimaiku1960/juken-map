@@ -42,10 +42,13 @@ export default defineConfig({
   webServer: externalBaseURL
     ? undefined
     : {
-        // 本番と同じ構成（Fastify が API と SPA の両方を配る）を e2ePort（既定 3000）で起動する。
+        // 本番と同じ構成（nginx が Node と Go へ振り分け、Node が SPA も配る）を e2ePort（既定 3000）で起動する。
         // apps/web のビルドを含むので、初回は少し時間がかかる。
         command: "bash scripts/e2e-server.sh",
-        env: { API_PORT: String(e2ePort) },
+        // nginx はここで待ち受け、内側の Node・Go のポートは scripts/local-ports.sh が決める。
+        env: { E2E_PORT: String(e2ePort) },
+        // 既定の SIGKILL だと e2e-server.sh の後片付けが動かず、nginx のコンテナが残る（Docker は SIGTERM で止まる）。
+        gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
         url: e2eURL,
         reuseExistingServer: !isCI,
         timeout: 180_000,

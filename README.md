@@ -128,7 +128,8 @@ flowchart LR
 
 - Node.js 24
 - pnpm 12.3.4（`package.json`で固定）
-- Docker Desktopなど、Docker Composeを実行できる環境
+- Go（`apps/api-go/go.mod`の版。業務APIはGoが返すため、開発とE2Eでも起動する）
+- Docker Desktopなど、Docker Composeを実行できる環境（MySQLと、Node・Goへ振り分けるnginxを動かす）
 
 OAuthログイン、メール送信、ブログまで確認する場合は、Google・GitHub OAuth、Resend、microCMSの資格情報も必要です。
 
@@ -179,7 +180,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    pnpm run db:seed
    ```
 
-8. 開発サーバーを起動します。MySQLの起動とマイグレーション確認後、APIと画面が並列で起動します。
+8. 開発サーバーを起動します。MySQLの起動とマイグレーション確認後、Node・Go・nginx・画面が並列で起動します。
 
    ```bash
    pnpm dev
@@ -188,8 +189,10 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    APIと画面のログは、実行したターミナルに実行元の名前付きで表示されます。
    APIのログは手元では1リクエスト1行の読みやすい形、本番（`NODE_ENV=production`）では
    1行1件のJSONで出ます（`apps/api/src/observability/logger.ts`）。
-   Viteが`/api`を4000番へ同一オリジンでプロキシするため、本番（nginxが1オリジンで配る構成）と
-   同じ形になります。ブラウザで開くのは5173番です。
+   Viteが`/api`を同一オリジンのままnginx（4200番、Docker）へ送り、nginxが本番と同じ振り分けファイル
+   （`infra/nginx/juken-map-go-routes.conf`）でGo（4100番）とNode（4000番）へ分けます。本番と同じ形で
+   動かすためです。ブラウザで開くのは5173番です。Goは自動で再起動しないので、Goを書き換えたら
+   `pnpm dev`を起動し直します。
 
 9. [http://localhost:5173](http://localhost:5173)を開きます。
 
@@ -199,7 +202,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 pnpm dev
 ```
 
-`Ctrl+C`でAPIと画面をまとめて停止できます。MySQLコンテナはバックグラウンドで継続するため、停止する場合は`pnpm run db:stop`を実行します。
+`Ctrl+C`でNode・Go・nginx・画面をまとめて停止できます。MySQLコンテナはバックグラウンドで継続するため、停止する場合は`pnpm run db:stop`を実行します。
 
 [注意] `.env`を変更したら、APIプロセスを再起動してください。`--env-file`は起動時に一度しか
 読まれないため、`tsx watch`ではソース変更でしか再読み込みされません。
@@ -217,7 +220,8 @@ pnpm wt:remove fix/JUK-40-foo   # マージ後に片付ける
 ```
 
 `wt:new`は、`.env`などgitignore済みのファイルを本体へのリンクにし、空いているポート
-（N番目なら画面5173+N、API 4000+N、E2E 3010+N）を`.env.worktree`に書き、`pnpm install`まで
+（N番目なら画面5173+N、Node 4000+N、Go 4100+N、nginx 4200+N、E2E 3010+N。決め方は
+`scripts/local-ports.sh`）を`.env.worktree`に書き、`pnpm install`まで
 行います。MySQLは`docker-compose.yml`のプロジェクト名を固定しているので、どのworktreeからも
 同じコンテナを使います。Google・GitHubログインはコールバックURLのポートが合わないため、
 worktreeではメールとパスワードでログインします。
@@ -365,12 +369,14 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 
 | コマンド | 説明 |
 |---|---|
-| `pnpm dev` | MySQLとマイグレーションを準備し、APIとViteを並列で起動する |
-| `pnpm run dev:api` | Fastify（APIとSPA配信）を4000番で起動する |
-| `pnpm run dev:web` | Vite（画面）を5173番で起動する |
+| `pnpm dev` | MySQLとマイグレーションを準備し、Node・Go・nginx・Viteを並列で起動する |
+| `pnpm run dev:api` | Node（Fastify。ログイン・ブログ・SPA配信）を4000番で起動する |
+| `pnpm run dev:go` | Go（業務API）を4100番で起動する |
+| `pnpm run dev:proxy` | nginx（Docker）を4200番で起動し、本番と同じ振り分けでNodeとGoへ送る |
+| `pnpm run dev:web` | Vite（画面）を5173番で起動する。`/api`はnginxへ送る |
 | `pnpm run lint` | ESLintを実行する |
 | `pnpm run test` | ルート（`src/`）のVitestを実行する |
-| `pnpm run e2e` | PlaywrightのE2Eテストを実行する |
+| `pnpm run e2e` | PlaywrightのE2Eテストを実行する（本番と同じくnginxがNodeとGoへ振り分ける構成を立てる） |
 | `pnpm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
 | `pnpm run db:start` | MySQLコンテナを起動する |
 | `pnpm run db:stop` | MySQLコンテナを停止する |

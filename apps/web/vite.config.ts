@@ -9,13 +9,15 @@ const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 // git worktree では、ほかのチェックアウトとポートがぶつからないよう
 // scripts/worktree-new.sh が .env.worktree に別のポートを書く。本体のチェックアウトには
-// このファイルが無いので、既定の 5173 / 4000 になる。
+// このファイルが無いので、既定の 5173 / 4200 になる。決め方は scripts/local-ports.sh と同じ。
 const worktreeEnvPath = `${repoRoot}.env.worktree`;
 const worktreeEnv = existsSync(worktreeEnvPath)
   ? parseEnv(readFileSync(worktreeEnvPath, "utf8"))
   : {};
 const webPort = Number(process.env.WEB_PORT ?? worktreeEnv.WEB_PORT ?? 5173);
-const apiPort = Number(process.env.API_PORT ?? worktreeEnv.API_PORT ?? 4000);
+const slot = Number(worktreeEnv.WT_SLOT ?? 0);
+// /api の送り先は nginx（pnpm dev の dev:proxy）。本番と同じ振り分けで Node と Go へ分ける（JUK-96）。
+const proxyPort = Number(process.env.PROXY_PORT ?? worktreeEnv.PROXY_PORT ?? 4200 + slot);
 
 export default defineConfig(({ isSsrBuild }) => ({
   plugins: [react(), tailwindcss()],
@@ -52,12 +54,12 @@ export default defineConfig(({ isSsrBuild }) => ({
     // 使用中なら別の番号へずらさずに止める。ずれると BETTER_AUTH_URL と食い違い、
     // ログインが origin 不一致で失敗する。
     strictPort: true,
-    // 開発中は API を別プロセス（:4000）で動かす。同一オリジンに見せることで
-    // 本番（nginx で /api を Fastify へ振る構成）と同じ Cookie の扱いになる。
+    // 開発中は API を別プロセス（nginx の :4200 → Node :4000・Go :4100）で動かす。同一オリジンに見せることで
+    // 本番（nginx で /api を Node と Go へ振る構成）と同じ Cookie の扱いになる。
     // 別オリジンにすると SameSite=None; Secure が必要になり、本番と条件がずれる。
     proxy: {
       "/api": {
-        target: `http://127.0.0.1:${apiPort}`,
+        target: `http://127.0.0.1:${proxyPort}`,
         changeOrigin: false,
       },
     },

@@ -1,0 +1,31 @@
+# 手元（開発・E2E）の nginx のサイト設定（JUK-96）。本番のサイト設定（infra/nginx/README.md）と同じ形にして、
+# 振り分けは本番と同じ ../juken-map-go-routes.conf をそのまま読む。違うのは次だけ。
+#   - HTTPS ではなく 8080 番の HTTP（コンテナの外へは scripts/local-proxy.sh が好きな番号で出す）
+#   - 転送先が手元の Node と Go（NODE_PORT・GO_PORT は起動時に nginx の公式イメージが埋める）
+#
+# nginx の変数（$host など）は埋められない。公式イメージは、環境変数として渡した名前だけを置き換える。
+
+upstream juken_map_app {
+    server host.docker.internal:${NODE_PORT};
+}
+
+upstream juken_map_go {
+    server host.docker.internal:${GO_PORT};
+}
+
+server {
+    listen 8080;
+    server_name localhost;
+
+    include /etc/nginx/juken-map/go-routes.conf;
+
+    location / {
+        proxy_pass http://juken_map_app;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
