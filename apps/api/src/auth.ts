@@ -1,9 +1,10 @@
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { twoFactor } from "better-auth/plugins";
 import { pool, select } from "@/api/infra/db";
 import {
   notifyAdminOfNewUser,
+  sendPasswordChangedNotice,
   sendVerificationEmail,
   sendPasswordResetEmail,
 } from "@/api/infra/email";
@@ -105,6 +106,12 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user, url }) => {
       await sendPasswordResetEmail(user.email, url);
     },
+    // 再設定したら、その人のセッションを全部消す（乗っ取った人の画面も落ちる。セキュリティ基準 B6）。
+    // 再設定の画面はログインしていない状態で使うので、消して困るセッションは無い。
+    revokeSessionsOnPasswordReset: true,
+    onPasswordReset: async ({ user }) => {
+      await sendPasswordChangedNotice(user.email);
+    },
   },
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
@@ -124,6 +131,26 @@ export const auth = betterAuth({
       clientId: process.env.AUTH_GITHUB_ID as string,
       clientSecret: process.env.AUTH_GITHUB_SECRET as string,
     },
+  },
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // パスワードを変えたら、ほかのセッションを必ず消す（セキュリティ基準 B6）。Better Auth は
+      // 本文の revokeOtherSessions に任せていて既定は消さないので、何が送られてきても true にする。
+      // 消したあと今の端末には新しいセッションが発行されるので、変更した本人はログインしたまま。
+      // ただし新しいセッションには2段階認証の印が付かないので、管理者は入り直すことになる。
+      if (ctx.path === "/change-password") {
+        return { context: { body: { ...ctx.body, revokeOtherSessions: true } } };
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      // 変更できたときだけ知らせる（今のパスワードが違うなどで断ったときは returned が APIError）。
+      if (ctx.path === "/change-password") {
+        const returned = ctx.context.returned as { user?: { email?: string } } | undefined;
+        if (!isAPIError(returned) && returned?.user?.email) {
+          await sendPasswordChangedNotice(returned.user.email);
+        }
+      }
+    }),
   },
   plugins: [
     // 管理者の2段階認証（認証アプリの TOTP＋予備コード）。有効にできるのは誰でもだが、

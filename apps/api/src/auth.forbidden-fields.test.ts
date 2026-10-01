@@ -6,6 +6,7 @@ vi.mock("@/api/infra/email", () => ({
   notifyAdminOfNewUser: vi.fn(),
   sendVerificationEmail: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
+  sendPasswordChangedNotice: vi.fn(),
 }));
 
 const { auth } = await import("./auth.ts");

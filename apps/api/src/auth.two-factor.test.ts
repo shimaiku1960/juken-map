@@ -6,6 +6,7 @@ vi.mock("@/api/infra/email", () => ({
   notifyAdminOfNewUser: vi.fn(),
   sendVerificationEmail: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
+  sendPasswordChangedNotice: vi.fn(),
 }));
 
 // microCMS は読み込むだけで API キーを要求するので差し替える（管理 API の登録で読まれる）。
