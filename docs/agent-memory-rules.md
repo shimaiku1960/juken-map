@@ -21,10 +21,19 @@ auto-memory を正（source of truth）として扱うこと（作業再開時�
 auto-memory の実体は、非公開の GitHub リポジトリ `shimaiku1960/juken-map-memory`
 で git 管理している（このリポジトリは public のため、メモリは中に含めない）。
 
-- **作業開始時**は `git -C .agent-memory pull --rebase` で最新を取り込む。
+- **作業開始時**は `git -C .agent-memory pull --rebase --autostash` で最新を取り込む。
 - **メモリを更新したら**、`.agent-memory` の中で commit して push する。push が
-  拒否されたら `pull --rebase` してから再度 push する。コンフリクトは勝手に解決せず
-  ユーザーに報告する。
+  拒否されたら `pull --rebase --autostash` してから再度 push する。コンフリクトは勝手に
+  解決せずユーザーに報告する。
+- **コミットは自分が変えたファイルだけを、パスを指定して行う**：
+  `git -C .agent-memory add -- <変えたファイル>` →
+  `git -C .agent-memory commit -m "<何を記録したか>" -- <変えたファイル>`
+  （新しく作ったファイルは add しないと commit にパスを渡せない）。
+  `.agent-memory` はすべての worktree から同じクローンへのリンクで、HEAD と index が1つしかない。
+  並行するセッションが書きかけのファイルを `git add -A` / `git add .` / `git commit -a` で
+  巻き込まないよう、これらは使わない。パスつきの `git commit` は、ほかのセッションが
+  `git add` 済みのファイルも含めない。ほかのセッションの未コミットの変更は、
+  自分ではコミットも破棄もしない。
 - **`./.agent-memory` が無い環境**（別のPC、クラウドのセッション）では、最初に
   `git clone https://github.com/shimaiku1960/juken-map-memory.git .agent-memory`
   を実行する。clone できない（権限が無い）ときは、メモリなしで進めずユーザーに伝える。
@@ -72,9 +81,13 @@ Claude Code でも Codex でもないエージェント（例えば Cursor の�
   ファイル）で決定・方針・注意点を把握する。
 - **途中で作業を止めるとき**は、作業中の Issue に「次の一手」を1〜2行コメントする
   （例：「LPの画像に幅と高さを指定したところまで。次は Lighthouse で CLS を測り直す」）。
-- **新しいタスクは Linear の Issue にする**。ラベルは `api` / `web` / `db` / `infra` /
-  `test` / `ops` / `docs` から選び、本文に背景となるトピックファイル名を書く。経緯の本文は
-  コピーせず、メモリ側を正のままにする。完了したら Done、やめたら Canceled にする。
+- **新しいタスクは Linear の Issue にする**。ラベルはラベルグループ「分野」から1つ選び
+  （AGENTS.md 参照。旧ラベル `api` / `web` などは 2026-09-24 に廃止）、本文に背景となるトピック
+  ファイル名を書く。経緯の本文はコピーせず、メモリ側を正のままにする。完了したら Done、
+  やめたら Canceled にする。
+- **Issue に着手したら、セッションIDと worktree 名をコメントする**（例：「着手: セッション
+  `#61e99eea`（worktree `juk-95-parallel-session-guards`）」）。並行するセッションが同じ Issue を
+  始めないための印で、作業開始時にこの印や既にある worktree を見て、使用中の Issue を候補から外す。
 - **トピックファイルには作業の文脈を書く**（なぜ・注意点・実測値・ブロッカー）。
   タスクの状態（未着手・作業中・完了）はメモリに書かない。
 - **ブランチ名か PR 本文に `JUK-xx` を入れる**。Linear の GitHub 連携で PR を開くと
