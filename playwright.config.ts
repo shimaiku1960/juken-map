@@ -33,6 +33,10 @@ export default defineConfig({
   use: {
     baseURL: externalBaseURL ?? e2eURL,
     trace: "on-first-retry",
+    // 利用者は日本にいて、ブラウザは日本時間で動く。サーバーも「今日」「今月」を日本時間で決めるので、
+    // CI（UTC）でもブラウザを日本時間にそろえる。そろえないと、日本時間と UTC で日付・月がずれる
+    // 時間帯（日本時間の0時〜9時）に、画面とサーバーの「今月」が食い違う（JUK-87）。
+    timezoneId: "Asia/Tokyo",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: externalBaseURL

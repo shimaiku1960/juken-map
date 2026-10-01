@@ -11,13 +11,18 @@ const { buildTestApp, request } = await import("../test-support.ts");
 const { cleanup, createStudyLog, createStudyPlan, createUser } = await import(
   "../test-db/fixtures.ts"
 );
+const { tokyoDateRange } = await import("@/api/domain/dailyNotification");
 
 const getSession = auth.api.getSession as unknown as Mock;
 const app = buildTestApp(registerDashboardRoutes);
 const get = () => request(app, "GET", "/api/dashboard");
 
+// 学習記録・予定の日付は「日本時間の日付の UTC 0時」で保存する（画面から届く "YYYY-MM-DD" と同じ形）。
+// new Date()（今この瞬間）を入れると、日本時間の0時〜9時は UTC の日付が1日前になり、
+// ダッシュボードの期間（日本時間の今日を含む）から外れてテストが落ちる（JUK-87）。
+const today = () => new Date(`${tokyoDateRange().date}T00:00:00.000Z`);
 const daysFromToday = (days: number) =>
-  new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  new Date(today().getTime() + days * 24 * 60 * 60 * 1000);
 
 let owner: Awaited<ReturnType<typeof createUser>>;
 
@@ -37,8 +42,8 @@ describe("GET /api/dashboard", () => {
   });
 
   it("実績・予定・日別合計を1回でまとめて返し、期間も一緒に返す", async () => {
-    const log = await createStudyLog(owner.id, { date: new Date(), minutes: 45 });
-    const plan = await createStudyPlan(owner.id, { date: new Date() });
+    const log = await createStudyLog(owner.id, { date: today(), minutes: 45 });
+    const plan = await createStudyPlan(owner.id, { date: today() });
 
     const res = await get();
 
@@ -55,8 +60,8 @@ describe("GET /api/dashboard", () => {
 
   it("実績・予定に userId・作成日時・更新日時を含めない", async () => {
     // 画面が使わず、実績の一覧の約3割のバイト数を占めていた（JUK-49）
-    await createStudyLog(owner.id, { date: new Date() });
-    await createStudyPlan(owner.id, { date: new Date() });
+    await createStudyLog(owner.id, { date: today() });
+    await createStudyPlan(owner.id, { date: today() });
 
     const body = (await get()).json();
 
@@ -81,8 +86,8 @@ describe("GET /api/dashboard", () => {
     // 集約APIは1回で何種類も返すぶん、1か所でも userId の絞りが抜けると
     // 他人のデータがまとめて漏れる。3種類すべてを見る。
     const other = await createUser();
-    const othersLog = await createStudyLog(other.id, { date: new Date(), minutes: 99 });
-    const othersPlan = await createStudyPlan(other.id, { date: new Date() });
+    const othersLog = await createStudyLog(other.id, { date: today(), minutes: 99 });
+    const othersPlan = await createStudyPlan(other.id, { date: today() });
 
     const body = (await get()).json();
 
