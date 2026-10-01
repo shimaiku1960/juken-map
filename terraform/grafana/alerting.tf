@@ -241,3 +241,183 @@ resource "grafana_rule_group" "api_production" {
     }
   }
 }
+
+# 攻撃の兆候と監視の途絶（セキュリティ基準 H1・H3、JUK-98）。既存の api-production とはグループを分け、
+# 同じ形のルールを下の表から作る。通知先は同じ juken-map-email 1つに集める。
+#
+# H1 のしきい値は、本番の平常時の実測（2026-09-24〜10-01 の7日）から決めた。
+#   401：1時間に最大5件／403：最大7件／429：最大2件／管理画面の書き込み：0件
+# どれも「15分でその何倍か」を超えたら鳴らす。攻撃が無いときに鳴らない高さで、総当たりや一括操作なら超える。
+# 件数が無い時間帯はデータが無い（No data）。それは異常ではないので鳴らさない（止まったことは H3 で見る）。
+#
+# H3 は「データが無い」を異常として鳴らす（no_data_state = Alerting）。Node には死活監視（Synthetic
+# Monitoring）が30秒ごとに来るので、10分にリクエストが19件・ログが18行を下回ったことは無い。
+# 0 になったら、アプリか Alloy（集めて送る役）か Grafana Cloud までの経路のどこかが止まっている。
+locals {
+  security_signal_rules = {
+    auth_failures = {
+      name        = "受験マップ：認証失敗（401）の急増"
+      summary     = "15分間の 401 が20件を超えました"
+      description = "ログインの総当たりや、盗んだ Cookie の使い回しの兆候です。平常時は1時間に5件以下です。route 別の内訳と、ログの [Better Auth] を確かめてください。手順は docs/incident-response.md。"
+      datasource  = "grafanacloud-prom"
+      expr        = "sum(increase(http_requests_total{env=\"production\",status_code=\"401\"}[15m]))"
+      op          = "gt"
+      threshold   = 20
+      for         = "0s"
+      no_data     = "OK"
+    }
+    forbidden = {
+      name        = "受験マップ：権限なし（403）の急増"
+      summary     = "15分間の 403 が20件を超えました"
+      description = "他人のデータや管理機能を探っている兆候です。平常時は1時間に7件以下（デモアカウントの書き込み）です。route 別の内訳を確かめてください。手順は docs/incident-response.md。"
+      datasource  = "grafanacloud-prom"
+      expr        = "sum(increase(http_requests_total{env=\"production\",status_code=\"403\"}[15m]))"
+      op          = "gt"
+      threshold   = 20
+      for         = "0s"
+      no_data     = "OK"
+    }
+    rate_limited = {
+      name        = "受験マップ：回数制限（429）の急増"
+      summary     = "15分間の 429 が10件を超えました"
+      description = "ログインやメール送信の連打で、回数制限に当たっています。平常時は1時間に2件以下です。ログの TOO_MANY_SIGN_IN_ATTEMPTS と IP を確かめてください。手順は docs/incident-response.md。"
+      datasource  = "grafanacloud-prom"
+      expr        = "sum(increase(http_requests_total{env=\"production\",status_code=\"429\"}[15m]))"
+      op          = "gt"
+      threshold   = 10
+      for         = "0s"
+      no_data     = "OK"
+    }
+    admin_writes = {
+      name        = "受験マップ：管理画面の書き込みの急増"
+      summary     = "15分間の管理画面の書き込みが15件を超えました"
+      description = "管理者アカウントが乗っ取られ、一括で削除・停止されている兆候です。平常時は0件です。管理操作の監査ログを確かめてください。手順は docs/incident-response.md。"
+      datasource  = "grafanacloud-prom"
+      expr        = "sum(increase(http_requests_total{env=\"production\",route=~\"/api/admin/.*\",method!~\"GET|HEAD\"}[15m]))"
+      op          = "gt"
+      threshold   = 15
+      for         = "0s"
+      no_data     = "OK"
+    }
+    email_volume = {
+      name        = "受験マップ：メール送信の急増"
+      summary     = "1時間に送ったメールが20通を超えました"
+      description = "登録や再設定の連打で、Resend の枠（1日100通）を使い切られる兆候です。アプリ全体の上限は24時間80通です。email_sends_total の kind 別の内訳を確かめてください。手順は docs/incident-response.md。"
+      datasource  = "grafanacloud-prom"
+      expr        = "sum(increase(email_sends_total{env=\"production\",result=\"sent\"}[1h]))"
+      op          = "gt"
+      threshold   = 20
+      for         = "0s"
+      no_data     = "OK"
+    }
+    email_blocked = {
+      name        = "受験マップ：メール送信を上限で止めた"
+      summary     = "宛先ごとか全体の上限で、メールを送らなかったものがあります"
+      description = "同じ宛先への連続送信か、全体の上限（24時間80通）に当たりました。ログの [email-limits] で reason（recipient・global）と宛先のハッシュを確かめてください。手順は docs/incident-response.md。"
+      datasource  = "grafanacloud-prom"
+      expr        = "sum(increase(email_sends_total{env=\"production\",result=\"blocked\"}[1h]))"
+      op          = "gt"
+      threshold   = 0
+      for         = "0s"
+      no_data     = "OK"
+    }
+    metrics_gap = {
+      name        = "受験マップ：監視の途絶（メトリクスが届かない）"
+      summary     = "Node の API のメトリクスが10分間届いていません"
+      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map と alloy が動いているかを確かめてください。"
+      datasource  = "grafanacloud-prom"
+      expr        = "sum(increase(http_requests_total{env=\"production\",runtime=\"node\"}[10m]))"
+      op          = "lt"
+      threshold   = 1
+      for         = "5m"
+      no_data     = "Alerting"
+    }
+    logs_gap = {
+      name        = "受験マップ：監視の途絶（ログが届かない）"
+      summary     = "Node の API のログが15分間届いていません"
+      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map と alloy が動いているかを確かめてください。"
+      datasource  = "grafanacloud-logs"
+      expr        = "sum(count_over_time({job=\"juken-map-api\", env=\"production\", runtime=\"node\"}[15m]))"
+      op          = "lt"
+      threshold   = 1
+      for         = "5m"
+      no_data     = "Alerting"
+    }
+  }
+}
+
+resource "grafana_rule_group" "security_signals" {
+  name             = "security-signals"
+  folder_uid       = grafana_folder.juken_map.uid
+  interval_seconds = 60
+
+  dynamic "rule" {
+    for_each = local.security_signal_rules
+
+    content {
+      name      = rule.value.name
+      condition = "C"
+      for       = rule.value.for
+
+      no_data_state  = rule.value.no_data
+      exec_err_state = "Error"
+
+      annotations = {
+        summary     = rule.value.summary
+        description = rule.value.description
+      }
+
+      notification_settings {
+        contact_point = grafana_contact_point.email.name
+      }
+
+      data {
+        ref_id         = "A"
+        datasource_uid = rule.value.datasource
+
+        relative_time_range {
+          from = 3600
+          to   = 0
+        }
+
+        model = jsonencode({
+          editorMode    = "code"
+          expr          = rule.value.expr
+          instant       = true
+          queryType     = "instant"
+          intervalMs    = 1000
+          maxDataPoints = 43200
+          range         = false
+          refId         = "A"
+        })
+      }
+
+      data {
+        ref_id         = "C"
+        datasource_uid = "__expr__"
+        query_type     = "expression"
+
+        relative_time_range {
+          from = 0
+          to   = 0
+        }
+
+        model = jsonencode({
+          conditions = [{
+            evaluator = { params = [rule.value.threshold], type = rule.value.op }
+            operator  = { type = "and" }
+            query     = { params = ["C"] }
+            reducer   = { params = [], type = "last" }
+            type      = "query"
+          }]
+          datasource    = { type = "__expr__", uid = "__expr__" }
+          expression    = "A"
+          intervalMs    = 1000
+          maxDataPoints = 43200
+          refId         = "C"
+          type          = "threshold"
+        })
+      }
+    }
+  }
+}

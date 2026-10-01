@@ -15,7 +15,8 @@ import { logger } from "@/api/observability/logger";
 // 毎日の学習通知（Go のバッチ）はここを通らない。あちらは配信記録の UNIQUE 制約で
 // 「1人・1日・時間帯・経路ごとに1通」に絞られていて、呼べるのはジョブのトークンを持つ者だけ。
 
-export type EmailKind = "verification" | "password-reset" | "password-changed" | "admin-new-user";
+export const EMAIL_KINDS = ["verification", "password-reset", "password-changed", "admin-new-user"] as const;
+export type EmailKind = (typeof EMAIL_KINDS)[number];
 
 /** 同じ宛先へ1時間に送る数の上限。再設定を何度か頼み直す本人は困らない数にする。 */
 export const EMAIL_PER_RECIPIENT_PER_HOUR = 5;
