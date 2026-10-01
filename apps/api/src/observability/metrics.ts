@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { Counter, Histogram, Registry, collectDefaultMetrics } from "prom-client";
+import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
 import { logger } from "@/api/observability/logger";
 
 // Prometheus に読ませる数字（Metrics）。ログが「1件ずつの出来事」なのに対し、
@@ -28,6 +28,41 @@ const httpRequestDuration = new Histogram({
   buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
   registers: [registry],
 });
+
+// Resend の送信枠をどれだけ使ったか（セキュリティ基準 E1）。メールを送ったときの応答ヘッダー
+// （x-resend-daily-quota・x-resend-monthly-quota。使った数）をそのまま写す。日の分は無料プランにだけ付く。
+// 送らないあいだは古い値が残り続けるので、いつ読んだかも出し、アラートは新しい値だけを見る
+// （terraform/grafana/alerting.tf）。
+const resendQuotaUsed = new Gauge({
+  name: "resend_quota_used",
+  help: "Resend の送信枠のうち使った数（最後に送ったときの応答ヘッダー）",
+  labelNames: ["period"],
+  registers: [registry],
+});
+
+const resendQuotaObservedAt = new Gauge({
+  name: "resend_quota_observed_timestamp_seconds",
+  help: "resend_quota_used を最後に読んだ時刻（UNIX 秒）",
+  labelNames: ["period"],
+  registers: [registry],
+});
+
+const RESEND_QUOTA_HEADERS = {
+  daily: "x-resend-daily-quota",
+  monthly: "x-resend-monthly-quota",
+} as const;
+
+/** Resend の応答ヘッダーから、送信枠を使った数を読んでメトリクスに写す。 */
+export function observeResendQuota(headers: Record<string, string> | null | undefined, now = new Date()) {
+  if (!headers) return;
+  for (const [period, name] of Object.entries(RESEND_QUOTA_HEADERS)) {
+    const raw = headers[name];
+    const used = Number(raw);
+    if (!raw || !Number.isFinite(used)) continue;
+    resendQuotaUsed.set({ period }, used);
+    resendQuotaObservedAt.set({ period }, now.getTime() / 1000);
+  }
+}
 
 /**
  * メトリクスの route ラベルに入れる値。

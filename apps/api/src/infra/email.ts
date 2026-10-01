@@ -1,6 +1,8 @@
+import { type EmailKind, reserveEmailSend } from "@/api/infra/email-limits";
 import { getResend } from "@/api/infra/resend";
 import { withDeadline } from "@/api/infra/timeout";
 import { logger } from "@/api/observability/logger";
+import { observeResendQuota } from "@/api/observability/metrics";
 import { SITE_URL } from "@/shared/site";
 
 const FROM = "受験マップ <noreply@juken-map.com>";
@@ -20,30 +22,43 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
+/**
+ * 1通送る。宛先ごと・全体の上限（email-limits.ts）を超えるなら送らずに false を返す。
+ * Resend は失敗しても例外にせず error を返すので、ここで例外に直す。
+ */
+async function send(kind: EmailKind, to: string, subject: string, html: string): Promise<boolean> {
+  if (!(await reserveEmailSend(kind, to))) return false;
+
+  const { error, headers } = await withDeadline(
+    getResend().emails.send({ from: FROM, to, subject, html }),
+    `resend.${kind}`
+  );
+  observeResendQuota(headers);
+  if (error) {
+    throw new Error(error.message);
+  }
+  return true;
+}
+
+// 確認メールと再設定メールは、Better Auth が送り終えるのを待たずに呼ぶ（auth.ts の backgroundTasks）。
+// 投げた例外は Better Auth がログに残す。
 export async function sendVerificationEmail(to: string, url: string) {
-  // 登録・ログインの流れの中で待たされるので、Resend が詰まったら諦める。
-  await withDeadline(
-    getResend().emails.send({
-      from: FROM,
-      to,
-      subject: "【受験マップ】メールアドレスの確認",
-      html: `<p>以下のリンクをクリックしてメールアドレスを確認してください。</p>
-<p><a href="${url}">メールアドレスを確認する</a></p>`,
-    }),
-    "resend.sendVerificationEmail"
+  await send(
+    "verification",
+    to,
+    "【受験マップ】メールアドレスの確認",
+    `<p>以下のリンクをクリックしてメールアドレスを確認してください。</p>
+<p><a href="${url}">メールアドレスを確認する</a></p>`
   );
 }
 
 export async function sendPasswordResetEmail(to: string, url: string) {
-  await withDeadline(
-    getResend().emails.send({
-      from: FROM,
-      to,
-      subject: "【受験マップ】パスワードの再設定",
-      html: `<p>以下のリンクからパスワードを再設定してください。</p>
-<p><a href="${url}">パスワードを再設定する</a></p>`,
-    }),
-    "resend.sendPasswordResetEmail"
+  await send(
+    "password-reset",
+    to,
+    "【受験マップ】パスワードの再設定",
+    `<p>以下のリンクからパスワードを再設定してください。</p>
+<p><a href="${url}">パスワードを再設定する</a></p>`
   );
 }
 
@@ -56,20 +71,14 @@ export async function sendPasswordResetEmail(to: string, url: string) {
  */
 export async function sendPasswordChangedNotice(to: string) {
   try {
-    const { error } = await withDeadline(
-      getResend().emails.send({
-        from: FROM,
-        to,
-        subject: "【受験マップ】パスワードが変更されました",
-        html: `<p>受験マップのパスワードが変更されました。ほかの端末のログインはすべて解除しています。</p>
+    await send(
+      "password-changed",
+      to,
+      "【受験マップ】パスワードが変更されました",
+      `<p>受験マップのパスワードが変更されました。ほかの端末のログインはすべて解除しています。</p>
 <p>心当たりがない場合は、すぐに以下からパスワードを再設定してください。</p>
-<p><a href="${SITE_URL}/forgot-password">パスワードを再設定する</a></p>`,
-      }),
-      "resend.sendPasswordChangedNotice"
+<p><a href="${SITE_URL}/forgot-password">パスワードを再設定する</a></p>`
     );
-    if (error) {
-      throw new Error(error.message);
-    }
   } catch (error) {
     logger.error({ err: error }, "[password-changed-notice] Failed to send notice.");
   }
@@ -96,24 +105,17 @@ export async function notifyAdminOfNewUser(user: RegisteredUser) {
   }).format(user.createdAt);
 
   try {
-    const { error } = await withDeadline(
-      getResend().emails.send({
-        from: FROM,
-        to,
-        subject: "【受験マップ】新しいユーザーが登録しました",
-        html: `<p>受験マップに新しいユーザーが登録しました。</p>
+    await send(
+      "admin-new-user",
+      to,
+      "【受験マップ】新しいユーザーが登録しました",
+      `<p>受験マップに新しいユーザーが登録しました。</p>
 <dl>
   <dt>登録日時</dt><dd>${escapeHtml(registeredAt)}</dd>
   <dt>表示名</dt><dd>${escapeHtml(user.name)}</dd>
   <dt>メールアドレス</dt><dd>${escapeHtml(user.email)}</dd>
-</dl>`,
-      }),
-      "resend.notifyAdminOfNewUser"
+</dl>`
     );
-
-    if (error) {
-      throw new Error(error.message);
-    }
   } catch (error) {
     logger.error(
       { err: error },
