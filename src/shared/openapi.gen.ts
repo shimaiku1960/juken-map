@@ -1556,6 +1556,7 @@ export interface operations {
                     "application/json": {
                         /** @enum {boolean} */
                         ok: true;
+                        commit: string | null;
                     };
                 };
             };

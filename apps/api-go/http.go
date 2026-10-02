@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -27,7 +28,14 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // healthHandler は死活監視とデプロイ後の確認が叩く。DB まで繋がるかを見る。
 // Node と同じく、繋がらなければ 500 を返す（Node は SELECT 1 が throw して 500 になる）。
+//
+// commit はイメージを作ったコミット（Dockerfile が APP_COMMIT に埋め込む）。デプロイ後の E2E が、
+// 本番で新しい版が動いているかを見る（JUK-101）。埋め込まずに動かしたときは null。
 func healthHandler(db *sql.DB) http.HandlerFunc {
+	var commit *string
+	if c := os.Getenv("APP_COMMIT"); c != "" {
+		commit = &c
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		// r.Context() はクライアントが切断すると取り消される。そこに上限時間を足す。
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -36,6 +44,6 @@ func healthHandler(db *sql.DB) http.HandlerFunc {
 			internalError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "commit": commit})
 	}
 }
