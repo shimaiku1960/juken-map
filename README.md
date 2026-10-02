@@ -384,6 +384,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `pnpm run db:migrate` | まだ当てていないマイグレーション（`db/migrations/*/migration.sql`）をDBへ当てる |
 | `pnpm run db:seed` | 大学マスターとデモユーザーをローカルDBへ投入する（何度流しても同じ状態になる） |
 | `pnpm run admin:grant <メール>` | そのユーザーを管理者（`/admin`を開ける）にする。メール確認済みのユーザーだけ。`--revoke`で戻す。`--list`で管理者の一覧（2段階認証・パスワードの有無つき） |
+| `pnpm run incident <操作> [メール]` | 乗っ取りが起きたときの操作（セッションを見る・消す、止める、管理者全員のセッションを消す、2段階認証を戻す）。手順は`docs/incident-response.md` |
 | `pnpm run db:shell` | ローカルDB（`juken_map`）のMySQL対話画面を開く（`exit`で終了）。`-e "SQL"`を付けると1本だけ実行する |
 | `pnpm run obs:start` | Prometheus（9090番）・Grafana（3001番）・Loki（3100番）・Alloy（12345番）・Tempo（3200番）・Mailpit（8025番）を起動する |
 | `pnpm run obs:stop` | Prometheus・Grafana・Loki・Alloy・Tempo・Mailpitを停止する |
