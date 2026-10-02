@@ -47,6 +47,10 @@ COPY --chown=app:nodejs src/shared ./src/shared
 COPY --from=web-builder --chown=app:nodejs /app/apps/web/dist ./web
 COPY --chown=app:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
+# イメージを作ったコミット（git の SHA）。/api/health が返し、デプロイ後の E2E が本番で新しい版が
+# 動いているかを見る（JUK-101）。値が毎回変わるので、ビルドのキャッシュを壊さないよう最後に置く。
+ARG APP_COMMIT=""
+ENV APP_COMMIT=$APP_COMMIT
 USER app
 EXPOSE 3000
 ENTRYPOINT ["./docker-entrypoint.sh"]

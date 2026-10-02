@@ -106,7 +106,8 @@ export async function buildServer() {
     // デプロイ後のスモークテストが叩く。DB に繋がらなければ 500 になり、
     // 前のイメージへ自動で戻る（.github/scripts/deploy-ec2.sh）。
     await select("SELECT 1");
-    return { ok: true };
+    // commit はイメージを作ったコミット。デプロイ後の E2E が、本番で新しい版が動いているかを見る（JUK-101）
+    return { ok: true, commit: process.env.APP_COMMIT || null };
   });
 
   registerRoutes(app);
