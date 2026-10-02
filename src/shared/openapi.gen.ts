@@ -531,6 +531,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webhooks/microcms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * microCMS の Webhook。署名（x-microcms-signature）を本文のまま確かめ、公開中の中身が変わったら記事を作り直すデプロイを動かす
+         * @description 続けて来た通知は1分に1回の作り直しにまとめる（間の中の通知は、間が明けたときの1回に予約する）。
+         *     下書きの保存だけなど、公開中の中身が変わらない通知では動かさない。
+         */
+        post: operations["receiveMicrocmsWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/overview": {
         parameters: {
             query?: never;
@@ -2820,6 +2841,47 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             413: components["responses"]["BadRequest"];
+        };
+    };
+    receiveMicrocmsWebhook: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-microcms-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description 受け取った。dispatched はすぐ動かした、queued は予約した、skipped は動かさなかった */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        deploy: "dispatched" | "queued" | "skipped";
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            413: components["responses"]["BadRequest"];
+            /** @description GitHub の API でデプロイを動かせなかった */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getAdminOverview: {

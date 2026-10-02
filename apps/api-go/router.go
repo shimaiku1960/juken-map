@@ -24,7 +24,7 @@ const (
 	accessPublic  access = "public"  // E1 誰でも呼べる読み取り
 	accessUser    access = "user"    // E3 ログイン必須。デモは書き込み不可。持ち主の確認はハンドラが行う
 	accessAdmin   access = "admin"   // E4 ログイン＋role=admin
-	accessWebhook access = "webhook" // E5 外のサービスが呼ぶ（LINE）。署名はハンドラが本文と一緒に確かめる
+	accessWebhook access = "webhook" // E5 外のサービスが呼ぶ（LINE・microCMS）。署名はハンドラが本文と一緒に確かめる
 	accessJob     access = "job"     // E6 自分のジョブ（cron・sim）。セッションではなく共有トークンで守る
 	// E7 ログイン不要の書き込み（CSP 違反の報告）。書き込めても害が無い設計にする（DB に書かない・大きさに上限）
 	accessAnonymousWrite access = "anonymous-write"
@@ -168,7 +168,7 @@ func (rt *router) job(pattern, secret string, h http.HandlerFunc) {
 	})
 }
 
-// webhook は外のサービスが呼ぶルートを登録する（LINE の Webhook）。
+// webhook は外のサービスが呼ぶルートを登録する（LINE・microCMS の Webhook）。
 // 署名は受け取ったままの本文で確かめる必要があり、本文を読むのはハンドラなので、確認もハンドラが行う。
 // ルーターは何も断らない。種類を分けて登録するのは、一覧（TestRegisteredRoutes）で入口を取り違えないため。
 func (rt *router) webhook(pattern string, h http.HandlerFunc) {

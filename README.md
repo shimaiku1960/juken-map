@@ -361,6 +361,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `LINE_LOGIN_CHANNEL_ID` | プロフィールから直接LINE連携するLINE LoginチャネルID |
 | `LINE_LOGIN_CHANNEL_SECRET` | LINE Loginの認可コード交換 |
 | `MICROCMS_API_KEY` / `MICROCMS_SERVICE_DOMAIN` | ブログ記事の取得。本番のビルドでも記事を SSG するため、GitHub Secrets にも置く |
+| `MICROCMS_WEBHOOK_SECRET` / `GITHUB_DEPLOY_TOKEN` | microCMS で記事を変えたら、Go が Webhook を受けて deploy.yml を動かし、記事を作り直す。本番は Secrets Manager に置き、Go にだけ渡す |
 | `METRICS_PORT` | 設定したときだけ、そのポートでPrometheus用の`/metrics`を出す（任意） |
 | `LOG_FILE` | 手元の開発で、JSONのログをこのファイル（リポジトリのルートからの相対パス）にも書く。Loki用（任意） |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | 手元の開発で、設定したときだけOpenTelemetryのトレースをこの送り先（OTLP/HTTP）へ送る。Tempo用（任意） |

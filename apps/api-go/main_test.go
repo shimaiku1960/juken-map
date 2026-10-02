@@ -42,6 +42,7 @@ func TestRegisteredRoutes(t *testing.T) {
 		{"GET /api/line/oauth/start", accessOAuth},
 		{"GET /api/line/oauth/callback", accessOAuth},
 		{"POST /api/line/webhook", accessWebhook},
+		{"POST /api/webhooks/microcms", accessWebhook},
 		{"GET /api/admin/overview", accessAdmin},
 		{"GET /api/admin/users", accessAdmin},
 		{"POST /api/admin/users/{id}/ban", accessAdmin},
@@ -68,7 +69,7 @@ func TestRegisteredRoutes(t *testing.T) {
 
 	// ハンドラは呼ばないので、DB は nil のままでよい。
 	rt := newRouter(fakeSessions(nil))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	if len(rt.routes) != len(want) {
 		t.Fatalf("routes = %v\nwant %v", rt.routes, want)
