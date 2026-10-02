@@ -56,8 +56,8 @@ describe("入力検証の漏れ", () => {
 
   it("対象のルートが集まっている", () => {
     // 0件のまま全部通る（何も確かめていない）状態を防ぐ。
-    expect(withParams().length).toBeGreaterThan(10);
-    expect(withBody().length).toBeGreaterThan(10);
+    // 本文を受け取るルートは Go へ移して Node には無い（JUK-84）。足せば下の body の確かめに自動で入る。
+    expect(withParams().length).toBeGreaterThan(0);
   });
 
   it.each(["abc", "1.5", "0", "-1", "1e3"])(

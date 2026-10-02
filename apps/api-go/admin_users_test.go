@@ -14,7 +14,8 @@ import (
 )
 
 // 利用者の管理（admin_users.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
-// SQL は admin_users_db_test.go（parity.sh から流す）で本物の DB に通す。
+// 本物の DB に通して Node と応答を比べるテスト（admin_users_db_test.go）は、比べる相手の Node の API を
+// 消したときに一緒に消した（JUK-84）。
 
 // TestAdminRoutesRejectNonAdmins は、管理者用として登録した全ルートが、管理者＋2段階認証の
 // セッション以外を断ることを、ルートの一覧から自動で確かめる（セキュリティ基準 A5）。

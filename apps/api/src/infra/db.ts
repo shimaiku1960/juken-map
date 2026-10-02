@@ -170,43 +170,4 @@ export async function execute(
   return (await run(db, sql, params)) as ResultSetHeader;
 }
 
-/**
- * fn の中の SQL をすべて1つのトランザクションで流す。
- * fn が例外を投げたら全部取り消し、最後まで進んだら確定する。
- *
- * Prisma の `$transaction(async (tx) => ...)` がやっていたのと同じこと。
- * プールから接続を1本借り、その接続だけで BEGIN から COMMIT までを流す。
- * 別の接続で流した SQL はトランザクションの外になるので、fn の中では
- * 必ず受け取った tx を渡すこと。
- */
-export async function transaction<T>(
-  fn: (tx: PoolConnection) => Promise<T>
-): Promise<T> {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-    const result = await fn(connection);
-    await connection.commit();
-    return result;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    // 借りた接続は必ず返す。返し忘れるとプールが枯れ、全リクエストが止まる。
-    connection.release();
-  }
-}
-
-/**
- * 一意制約違反か。Prisma の P2002 にあたる MySQL のエラー（1062 ER_DUP_ENTRY）。
- */
-export function isDuplicateEntry(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "ER_DUP_ENTRY"
-  );
-}
-
 export { pool };

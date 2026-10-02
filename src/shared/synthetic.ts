@@ -11,18 +11,6 @@ export function simEmailFor(seq: number) {
   return `delivered+sim${String(seq).padStart(5, "0")}@resend.dev`;
 }
 
-/** SQL の LIKE で「シミュレーションの利用者」だけを選ぶ条件。 */
-export const SIM_EMAIL_LIKE = "delivered+sim%@resend.dev";
-
-const SIM_EMAIL_PATTERN = /^delivered\+sim\d+@resend\.dev$/;
-
-export function isSimEmail(email: string | null | undefined): boolean {
-  return typeof email === "string" && SIM_EMAIL_PATTERN.test(email.toLowerCase());
-}
-
 // 手元の負荷検証用 seed（db/seed-synthetic.ts）が作る利用者。本番には入れない。
 // .invalid は「実在しないことが保証されたTLD」（RFC 2606）で、誤って実メールを送らない。
 export const SEED_EMAIL_DOMAIN = "@synthetic.juken-map.invalid";
-
-/** SQL の LIKE で「seed の合成ユーザー」だけを選ぶ条件。 */
-export const SEED_EMAIL_LIKE = `%${SEED_EMAIL_DOMAIN}`;

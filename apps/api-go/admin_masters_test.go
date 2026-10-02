@@ -14,7 +14,8 @@ import (
 )
 
 // マスター編集（admin_masters.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
-// SQL は admin_masters_db_test.go（parity.sh から流す）で本物の DB に通し、Node と応答を比べる。
+// 本物の DB に通して Node と応答を比べるテスト（admin_masters_db_test.go）は、比べる相手の Node の API を
+// 消したときに一緒に消した（JUK-84）。
 
 // fakeAdminMasterStore は adminMasterStore の偽物。書き込みは受け取った入力を覚え、failure の結果を返す。
 type fakeAdminMasterStore struct {

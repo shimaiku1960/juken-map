@@ -16,7 +16,7 @@ import (
 )
 
 // LINE 連携のテスト。DB と LINE の API は偽物にする（Go の CI には DB が無い）。
-// SQL そのものは parity.sh（手元で Node と応答を比べる）で本物の DB に流して確かめる。
+// SQL そのものは line_db_test.go（dbtest タグ）で本物の DB に流して確かめる。
 
 const testChannelSecret = "channel-secret"
 

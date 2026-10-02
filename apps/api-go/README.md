@@ -1,17 +1,12 @@
 # api-go
 
-Node（`apps/api`）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
-今は `GET /api/dashboard`（JUK-69）と、学習記録・予定の一覧（`GET /api/study-logs`・`/api/study-logs/daily`・
-`/api/study-plans`）、志望校（`GET /api/goals`・`/api/goals/first-choice`）、参考書（`GET /api/textbooks`・`/api/textbook-masters`）、
-通知設定（`GET /api/notification-preferences`）、大学（`GET /api/universities`・`/api/universities/{id}`）を
-持つ（JUK-73）。書き込みは、通知設定（`PUT /api/notification-preferences`）・プロフィール（`PUT /api/profile`）・
-学習記録（`POST /api/study-logs`・`PATCH`/`DELETE /api/study-logs/{id}`）・学習予定（`POST /api/study-plans`・
-`PATCH`/`DELETE /api/study-plans/{id}`・`POST /api/study-plans/{id}/complete`）・志望校（`POST /api/goals`・
-`PUT`/`PATCH`/`DELETE /api/goals/{id}`）・参考書（`POST /api/textbooks`・`PATCH /api/textbooks/{id}`）を移している（JUK-75）。LINE 連携（`/api/line/*`：連携の確認・解除、トークからの連携、LINE Login、Webhook）は
-書き込みも含めて Go が受ける（JUK-79）。管理画面の API（`/api/admin/*`：利用者の管理と、大学・学部・タグ・参考書のマスター編集）も
-Go が受ける（JUK-78）。本番では nginx がこれらのパスだけを Go へ振り分け、
-それ以外は今までどおり Node が返す（JUK-72、下の「本番」）。
+業務の API を受けるサーバー（JUK-70）。Node（`apps/api`）の API を1本ずつ移し、移し終えたものは
+Node から消した（JUK-84）。ダッシュボード・学習記録と予定・志望校・参考書・大学・通知設定・プロフィール・
+毎日の通知・LINE 連携・管理画面・登録の計測・CSP の報告・シミュレーションを、書き込みも含めて Go が返す。
+本番では nginx がこれらのパスを Go へ振り分ける（JUK-72、下の「本番」）。
 
+Node に残っているのは、ログイン（Better Auth の `/api/auth/*`）・ブログ（`/api/blog`）・`/api/health`・
+`/line/settings`（画面への振り分け）と、画面（SPA）・sitemap の配信。
 ログインの発行は Node に残す。Go は Node（Better Auth）が発行した
 セッション Cookie を、同じ DB と同じ `BETTER_AUTH_SECRET` で確かめるだけ。
 
@@ -66,28 +61,23 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
-       ├─ /api/line/*（全メソッド）                   ─▶ juken-map-go
-       ├─ /api/admin/*（全メソッド）                  ─▶ juken-map-go
-       ├─ /api/goals・/first-choice・
-       │  /api/textbooks・/api/textbook-masters・
-       │  /api/universities・/api/universities/{id}
-       │    GET・HEAD                                 ─▶ juken-map-go
-       │    それ以外（POST など）                      ─▶ juken-map（Node）
-       ├─ /api/study-logs・/daily・/api/study-logs/{id}・
-       │  /api/study-plans・/api/study-plans/{id}・/{id}/complete・
+       ├─ /api/line/*・/api/admin/*・/api/sim/*（全メソッド） ─▶ juken-map-go
+       ├─ /api/study-logs・/daily・/{id}・
+       │  /api/study-plans・/{id}・/{id}/complete・
+       │  /api/goals・/{id}・/first-choice・
+       │  /api/textbooks・/{id}・/api/textbook-masters・
+       │  /api/universities・/{id}・
        │  /api/notification-preferences・/api/profile（全メソッド） ─▶ juken-map-go
        ├─ POST /api/analytics/registration・POST /api/csp-report・
        │  POST /api/cron/daily-study-notifications     ─▶ juken-map-go
-       ├─ GET /api/sim/state・POST /api/sim/users・
-       │  PATCH /api/sim/users/{seq}                   ─▶ juken-map-go（ほかのメソッドは Node）
-       └─ それ以外                                     ─▶ juken-map（3000 か 3001、Node）
+       └─ それ以外（/api/auth/*・/api/blog・/api/health・画面） ─▶ juken-map（3000 か 3001、Node）
 ```
 
 - イメージはこのディレクトリの `Dockerfile` で作り、ECR の `juken-map-go` に置く（`deploy.yml`）。
   Node と同じコミットのタグで、同じデプロイ（`.github/scripts/deploy-ec2.sh`）の中で入れ替える。
   Node と Go の両方のスモークテストが通ったときだけ、nginx を1回の reload で両方とも切り替える
 - 振り分けるパスは `infra/nginx/juken-map-go-routes.conf`。ルートを移したらここに足す。
-  Node に戻す手順は `infra/nginx/README.md` の「Go の振り分け」
+  Node に戻す手順は `infra/nginx/README.md` の「Node に戻す」（Node から消したので、振り分けを外すだけでは戻らない）
 - 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない。
   例外は大学の一覧で、全員に同じ 80KB なので、Go が1回だけ gzip にした形を持って返す
 - 大学の一覧は Go のメモリに10分持つ。管理画面で大学・学部を編集したら（`admin_masters.go`）その場で捨てるので、
@@ -113,13 +103,12 @@ rt.job("POST /api/cron/…", secret, cron.handle)           // タイマー（in
 path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。想定外の失敗は
 `internalError(w, r, err)` に渡す（500 を返し、原因はログにだけ残す）。
 
-移したら、次の4か所に足す。
+ルートを足したら、次の3か所に足す。
 
-1. `main.go` の `registerRoutes` と、`main_test.go` の一覧（入口の種類を Node と揃える）
-2. `parity_test.go` の `parityCases`（Node と応答が同じかを確かめる。不正な入力のケースも）
-3. user のルートなら、`ownership_db_test.go`（他人の ID、A3）と `forbidden_fields_db_test.go`（禁止項目、A4）の表。
+1. `main.go` の `registerRoutes` と、`main_test.go` の一覧（入口の種類）
+2. user のルートなら、`ownership_db_test.go`（他人の ID、A3）と `forbidden_fields_db_test.go`（禁止項目、A4）の表。
    書かなければ CI のこの2本が落ちる（下の「DB に流すテスト」）
-4. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスの別のメソッドを Node に残すなら、
+3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスの別のメソッドを Node に残すなら、
    GET・HEAD 以外を Node へ回す名前付きの location が要る（JUK-84 で使う所が無くなり外した `@node`。
    形は `git log -S '@node' -- infra/nginx/juken-map-go-routes.conf` で探せる）
 
@@ -142,8 +131,8 @@ if in.reject(w) {            // 最初の1件を {error, code, field} の 400 �
 - **入力チェックの規則の正は Zod**（`src/shared/validations/`）で、画面のフォームと Node が使う。
   Go は同じ規則を手で書く。契約（`openapi/openapi.yaml`）には形（型・必須・長さ）だけを書き、Go の型はそこから作る。
   項目をまたぐ規則や「今日より未来は不可」はスキーマに書けないため、規則は2か所に持つと決めた（JUK-75）
-- ずれは応答一致テスト（`parity_writes_test.go`）に不正な入力を並べて見つける。Zod の規則を変えたら、
-  Go も直してケースを足す
+- Zod の規則を変えたら、Go も直して `*_writes_test.go` にケースを足す。移すあいだは Node と応答を比べるテスト
+  （`parity.sh`）でずれを見つけていたが、比べる相手の Node の API を消したので一緒に消した（JUK-84）
 - Zod の issue は「スキーマに書いた項目の順、項目の中では書いたチェックの順」に積まれ、Node は最初の1件だけを返す。
   `readObject` の読み取りも書いた順に確かめ、最初の1件で止まる。文字列の長さは Zod 4.5 と同じくコードポイントで数え、
   trim は JavaScript の `String#trim` と同じ文字を削る
@@ -156,9 +145,6 @@ if in.reject(w) {            // 最初の1件を {error, code, field} の 400 �
   （範囲外の数は ±Infinity、安全な整数の外は too_big・too_small）
 - 入れ子のオブジェクトは `readObjectAt(element, "items.0")` で読み、`in.take(item)` で外側の issue にする。
   field は Zod と同じ `items.0.content` の形になる。配列は `in.array`（`.min(1)` も確かめる）
-- 成功する書き込みの応答一致は、同じ手順を Node と Go で順に流して各段を比べる（`TestParityStudyLogScenario`・
-  `TestParityStudyPlanScenario`）。両方が同じように失敗しても一致になるので、各段が狙いどおりのステータスかも確かめる。
-  手順は自分で作った行を自分で消し、書き換えた行は最後に戻す
 
 クエリ文字列は `r.URL.Query()` ではなく `parseQuery`（`query.go`）で読む。Go の標準は `;` を含む組や
 壊れた `%` を黙って捨てるが、Node（Fastify）は値として受け取るので、そのままでは応答がずれる。
@@ -171,7 +157,8 @@ pnpm test:go-db                      # リポジトリのルートから。先�
 ```
 
 セキュリティ基準 06 の A3（他人の持ち物の ID を断る）と A4（禁止項目を混ぜても書き換わらない）を、
-本物の MySQL に流して確かめる（JUK-97。Node の `ownership.test.ts`・`forbidden-fields.test.ts` と同じ考え方）。
+本物の MySQL に流して確かめる（JUK-97。Node の `ownership.test.ts`・`forbidden-fields.test.ts` を移したもの）。
+LINE 連携の SQL（`line_db_test.go` の `TestLineStore`）も同じ仕組みで流す。
 `registerRoutes` の user のルートを全件、表と突き合わせるので、ルートを足して表に書かなければ落ちる。
 
 - `dbtest` タグのテスト（`*_db_test.go` のうち `//go:build dbtest` のもの）。ふだんの `go test` では動かない
@@ -181,16 +168,11 @@ pnpm test:go-db                      # リポジトリのルートから。先�
 - CI は MySQL のある check のジョブで回す（go のジョブには DB が無い）
 - 守りを外すと落ちることは確かめた（参考書の持ち主の確認を外すと A3 が2本、プロフィールの更新で role を書くと A4 が1本落ちる）
 
-## Node と応答を比べる
+## Node と応答を比べる（消した）
 
-```sh
-bash apps/api-go/parity.sh                 # worktree のルートから。合成ユーザー50人ぶん
-```
-
-Node と Go を立ち上げ、同じリクエストを送って、ステータス・本文・ヘッダーを比べる。
-比べられるのは Node にまだ残っているルートだけ。9/30 までに移したものは Node から消した（JUK-84）。
-食い違うと、どこが違うかを `$.logs[3].textbook.name: … → …` の形で出す。
-両方のサーバーと合成データ（`pnpm db:seed:synthetic`）が要るので CI では動かさない。
+移すあいだは、Node と Go に同じリクエストを送ってステータス・本文・ヘッダーを比べていた（`parity.sh`、JUK-71）。
+比べる相手の Node の API をすべて消したので、`parity_test.go`・`parity_writes_test.go`・管理画面の比較
+（`admin_*_db_test.go`）・`servers.sh` と一緒に消した（JUK-84）。中身は `git log --diff-filter=D -- apps/api-go` で探せる。
 
 ## 毎日の通知の送り方
 
@@ -199,22 +181,14 @@ Go は5本同時に送るが、メールは Resend の上限（チーム全体�
 （移す前に Node と送り比べた結果は 100人・1通300ms で Node 31.2秒、Go 20.2秒。比べたスクリプト
 `compare-notifications.sh` は、Node の通知の入口を消したとき（JUK-84）に一緒に消した）。
 
-## Node と CPU を比べる
+## Node と CPU を比べる（消した）
 
-```sh
-bash apps/api-go/compare-cpu.sh            # worktree のルートから。N=500 件 × 交互3回
-API_PATH=/api/goals bash apps/api-go/compare-cpu.sh
-```
-
-負荷試験（k6）は使わない。手元で 300 RPS をかけると Mac 全体が詰まり、ほかの作業が
-できなくなるうえ、ほかのアプリの影響で結果も揺れる。このスクリプトは1件ずつ順番に送り、
-サーバーの CPU 時間の増分を件数で割るので、ほかの作業をしながら測れる。
-分かるのは「1件の重さ」で、同時に何件さばけるか（限界 RPS）は分からない。
+1リクエストあたりの CPU 時間を Node と比べる `compare-cpu.sh` も、比べる相手が無くなったので JUK-84 で消した。
 
 ## ファイルの分け方
 
-右の列は移す前の Node のファイル。9/30 までに移した分（ダッシュボード・学習記録・大学・通知・プロフィール・
-LINE・計測・CSP・sim）は JUK-84 で Node から消したので、`git log --diff-filter=D -- apps/api/src` で探す。
+右の列は移す前の Node のファイル。業務の API の分は JUK-84 で Node から消したので、
+`git log --diff-filter=D -- apps/api/src` で探す。
 
 | ファイル | 役割 | Node 側で近いもの |
 | --- | --- | --- |
@@ -248,8 +222,7 @@ LINE・計測・CSP・sim）は JUK-84 で Node から消したので、`git log
 | `admin_users.go` | 管理画面の利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） | `routes/admin.ts`・`services/admin-service.ts` |
 | `admin_masters.go` | 管理画面のマスター編集（大学・学部・タグ・参考書。使われている行は消さない、大学一覧のキャッシュを捨てる） | `routes/admin-masters.ts`・`services/master-service.ts` |
 | `ownership_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3）と禁止項目（A4）を本物の DB で確かめる（dbtest タグ） | `ownership.test.ts`・`forbidden-fields.test.ts` |
-| `parity_test.go`・`parity_writes_test.go`・`parity.sh` | Node と応答を比べる（ログイン済みの書き込みは `parity_writes_test.go`。書き換えた行を最後に戻す） | — |
-| `servers.sh` | Node と Go を並べて起動する（parity.sh・compare-cpu.sh が使う） | — |
+| `line_db_test.go` | LINE 連携の SQL を本物の DB で確かめる（dbtest タグ） | — |
 
 Go ではフォルダ1つが1つのパッケージで、ファイルの分け方はコンパイル結果に関係しない。
 上の分け方は、読む人が探しやすいようにしているだけ。
@@ -268,6 +241,6 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 - 応答の圧縮（Node は br・gzip。Go は持たず、本番では nginx が gzip にする。比べるときは `Accept-Encoding: identity`）
 - セッションの有効期限の延長（Better Auth は古くなったセッションを更新するが、Go は読むだけ）。
-  画面はほかの API（Node）も呼ぶので、そちらで延長される
+  画面は Better Auth のセッションの確認（`/api/auth/get-session`、Node）も呼ぶので、そちらで延長される
 - OpenTelemetry のトレース
 - Node に無いもの：1リクエスト10秒の上限（DB の照会と接続待ちもここで止まる）

@@ -123,9 +123,9 @@ server {
 `juken-map-go-routes.conf` が正**で、デプロイのたびに本番の `/etc/nginx/juken-map/go-routes.conf` へ置かれる。
 
 ```
-                         ┌─ go-routes.conf のパス（/api/dashboard・/api/health/go・学習記録と予定の GET）
+                         ┌─ go-routes.conf のパス（業務の API すべてと /api/health/go）
 [nginx] 443 の server ───┤      → upstream juken_map_go  → 127.0.0.1:8080 か 8081（juken-map-go）
-                         └─ location /（それ以外）
+                         └─ location /（それ以外：ログイン /api/auth/*・ブログ・/api/health・画面）
                                 → upstream juken_map_app → 127.0.0.1:3000 か 3001（juken-map、Node）
 ```
 
@@ -147,7 +147,7 @@ server {
   `/api/notification-preferences`・`/api/profile`・`/api/goals`・`/api/goals/{id}`・`/api/goals/first-choice`・
   `/api/textbooks`・`/api/textbooks/{id}`、JUK-75）は、メソッドで分けずにすべて Go へ送る
 - 読み取りだけのパス（`/api/textbook-masters`・`/api/universities`・`/api/universities/{id}`、JUK-73）も、
-  メソッドで分けずに Go へ送る。GET・HEAD 以外は Go が Node と同じ 404 を返す。
+  メソッドで分けずに Go へ送る。GET・HEAD 以外は Go が 404 を返す。
   JUK-84 までは GET・HEAD 以外を `error_page 418 = @node` で Node へ回していたが、Node から消したので外した
 - デプロイは Node と Go の新しいコンテナを両方起こし、両方のスモークテストが通ったときだけ、
   2つの upstream と振り分けをまとめて書き換えて1回だけ reload する。
@@ -155,25 +155,12 @@ server {
 
 ### Node に戻す
 
-**9/30 までに Go へ移したパス**（ダッシュボード・学習記録・参考書マスターと大学の読み取り・通知設定・
-プロフィール・毎日の通知・登録の計測・CSP の報告・シミュレーション・LINE 連携）は、JUK-84 で Node から消した。
-振り分けを外しても Node は 404 を返すだけなので、下の手順では戻らない。戻すには、JUK-84 のコミットを
-revert して main に入れ、Node のイメージをデプロイしてから振り分けを外す。
+Go へ移したパスは、JUK-84 で2回に分けて（9/30 までの分は #317、10/1 の分はその次の PR）すべて Node から消した。
+振り分けを外しても Node は 404 を返すだけなので、振り分けだけでは戻らない。
+戻すには、JUK-84 のコミットを revert して main に入れ、Node のイメージをデプロイしてから
+`juken-map-go-routes.conf` から該当の location を消す。
 
-10/1 に移したパス（学習予定・志望校・参考書の書き込みと、志望校・参考書・学習予定の読み取り、管理画面）は、
-まだ Node に残してあるので、振り分けを外すだけで Node が返すようになる。
-
-- **急ぐとき（本番だけ、次のデプロイまで）**：SSM で次を流す。次のデプロイでリポジトリの中身に戻る
-
-  ```sh
-  sudo cp /etc/nginx/juken-map/go-routes.conf /tmp/go-routes.conf.bak
-  : | sudo tee /etc/nginx/juken-map/go-routes.conf
-  sudo nginx -t && sudo systemctl reload nginx
-  ```
-
-  戻すのをやめるときは、`/tmp/go-routes.conf.bak` を書き戻して reload する
-- **ずっと戻すとき**：`juken-map-go-routes.conf` から location を消して main に入れる。
-  Go のコンテナは動き続けるが、誰からも呼ばれなくなる
+Go に問題が出たときは、Node に戻すより Go を直して出し直すほうが早い。
 
 ## 手元（開発・E2E）でも同じ振り分けを通す（2026-10-01 追加、JUK-96）
 
