@@ -22,6 +22,7 @@
     "db:logs": "docker compose logs -f db",
     "db:migrate": "pnpm --filter @juken-map/api migrate",
     "admin:grant": "pnpm --filter @juken-map/api admin:grant",
+    "incident": "pnpm --filter @juken-map/api incident",
     "db:shell": "bash scripts/db-shell.sh",
     "obs:start": "docker compose up -d prometheus grafana loki alloy tempo mailpit",
     "obs:stop": "docker compose stop prometheus grafana loki alloy tempo mailpit",
