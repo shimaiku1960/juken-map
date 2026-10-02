@@ -8,11 +8,18 @@ COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
 
 # ---- SPAをビルドする（型検査も含む） ----
+# ブログの記事もここで microCMS から取って SSG する（JUK-110）。本番のデプロイは
+# SSG_ARTICLES=required を渡し、記事を取れなければビルドを止める。API キーは BuildKit の secret で渡し、
+# イメージの層にも履歴にも残さない（サービスのドメインは秘密ではないので build-arg）。
 FROM base AS web-builder
+ARG MICROCMS_SERVICE_DOMAIN
+ARG SSG_ARTICLES
 RUN pnpm install --frozen-lockfile
 COPY src/shared ./src/shared
 COPY apps/web ./apps/web
-RUN pnpm --filter @juken-map/web build
+RUN --mount=type=secret,id=microcms_api_key \
+  MICROCMS_API_KEY="$(cat /run/secrets/microcms_api_key 2>/dev/null || true)" \
+  pnpm --filter @juken-map/web build
 
 # ---- APIと共有コードが使う依存だけをインストールする ----
 FROM base AS api-deps
@@ -38,9 +45,6 @@ COPY --chown=app:nodejs db/migrations ./db/migrations
 COPY --chown=app:nodejs apps/api ./apps/api
 COPY --chown=app:nodejs src/shared ./src/shared
 COPY --from=web-builder --chown=app:nodejs /app/apps/web/dist ./web
-# 記事の SSR で、リクエストのたびに読み込んで描く部品（apps/web の entry-server.tsx）。
-# apps/api/src/spa.ts は配信元（./web）の隣の dist-server から読む。
-COPY --from=web-builder --chown=app:nodejs /app/apps/web/dist-server ./dist-server
 COPY --chown=app:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 # イメージを作ったコミット（git の SHA）。/api/health が返し、デプロイ後の E2E が本番で新しい版が

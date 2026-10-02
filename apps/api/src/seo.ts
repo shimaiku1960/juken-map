@@ -1,27 +1,13 @@
 import { createHash } from "node:crypto";
-import { listBlogs, type Blog } from "@/api/infra/microcms";
+import { OG_IMAGE, SITE_NAME, type PageMeta } from "@/shared/pageMeta";
 import { SITE_URL } from "@/shared/site";
 
 // Next.js では generateMetadata と app/sitemap.ts がこれを担っていた。SPA は誰が来ても
 // 同じ index.html を返すため、クローラーと SNS が読む head をサーバー側で作り直す。
 // 内容は切り替え前の本番が返していたものに合わせてある。
 
-const SITE_NAME = "受験マップ";
 const DEFAULT_DESCRIPTION =
   "学習の開始から時間記録、予定と実績の確認、科目別の振り返りまでをひとつにつなぐ、大学受験生向け学習管理アプリです。";
-const OG_IMAGE = `${SITE_URL}/opengraph-image.png`;
-
-export type PageMeta = {
-  title: string;
-  description: string;
-  canonical?: string;
-  ogTitle: string;
-  ogType: "website" | "article";
-  ogImage: string;
-  noindex: boolean;
-  publishedTime?: string;
-  modifiedTime?: string;
-};
 
 // 検索結果に出さないページ。Next.js 版では各ページが NOINDEX を上書きしていた。
 // robots.txt では止めない（クロールさせて noindex を読ませる方針。app/robots.ts のコメント参照）。
@@ -64,23 +50,6 @@ function escapeAttribute(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-// 記事本文から説明文を作る。app/articles/[id]/page.tsx の createDescription と同じ処理。
-function createDescription(blog: Blog) {
-  if (blog.description?.trim()) return blog.description.trim();
-
-  return blog.content
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 120);
-}
-
 /** 記事以外のページの head の中身。 */
 export function defaultMeta(pathname: string): PageMeta {
   const preset = STATIC_META[pathname];
@@ -102,21 +71,6 @@ export function defaultMeta(pathname: string): PageMeta {
 /** 記事のページ（/articles/:id）なら記事の ID を返す。 */
 export function articleIdFromPath(pathname: string) {
   return /^\/articles\/([^/]+)$/.exec(pathname)?.[1];
-}
-
-/** 記事のページの head の中身。記事は spa.ts が SSR で描くときに取ってくる。 */
-export function articleMeta(blog: Blog, pathname: string): PageMeta {
-  return {
-    title: `${blog.title}｜${SITE_NAME}`,
-    description: createDescription(blog),
-    canonical: `${SITE_URL}${pathname}`,
-    ogTitle: blog.title,
-    ogType: "article",
-    ogImage: blog.eyecatch?.url ?? OG_IMAGE,
-    noindex: false,
-    publishedTime: blog.createdAt,
-    modifiedTime: blog.updatedAt,
-  };
 }
 
 // Google Analytics のタグ。Next.js では layout.tsx が GA_MEASUREMENT_ID を読んで
@@ -198,8 +152,12 @@ export function injectMeta(html: string, meta: PageMeta) {
     .replace("</head>", `  ${tags}\n  </head>`);
 }
 
-// sitemap.xml。app/sitemap.ts と同じ構成（固定ページ＋microCMS の記事）。
-export async function buildSitemap() {
+/** sitemap に載せる記事。ビルドで SSG した記事の meta（dist/ssg/meta.json）から作る。 */
+export type SitemapArticle = { pathname: string; lastModified?: string };
+
+// sitemap.xml。app/sitemap.ts と同じ構成（固定ページ＋記事）。
+// 記事は SSG した分だけを載せる（JUK-110）。microCMS には問い合わせないので、表示のたびに待たない。
+export function buildSitemap(articles: SitemapArticle[]) {
   const entries: {
     url: string;
     lastModified?: string;
@@ -212,19 +170,13 @@ export async function buildSitemap() {
     { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.3 },
   ];
 
-  try {
-    const data = await listBlogs({ fields: "id,updatedAt", limit: 100 });
-    for (const blog of data.contents) {
-      entries.push({
-        url: `${SITE_URL}/articles/${blog.id}`,
-        lastModified: new Date(blog.updatedAt).toISOString(),
-        changeFrequency: "monthly",
-        priority: 0.5,
-      });
-    }
-  } catch {
-    // microCMS が落ちていても固定ページ分は返す。ここで throw すると
-    // sitemap.xml 全体が 500 になり、クローラーが何も読めなくなる。
+  for (const article of articles) {
+    entries.push({
+      url: `${SITE_URL}${article.pathname}`,
+      lastModified: article.lastModified && new Date(article.lastModified).toISOString(),
+      changeFrequency: "monthly",
+      priority: 0.5,
+    });
   }
 
   const body = entries

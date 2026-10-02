@@ -1,6 +1,7 @@
 // Node の上で React を動かして HTML を作る入口。ブラウザには配らない。
-// - SSG：ビルドの最後に scripts/prerender.mjs が呼び、ファイルに書き出す
-// - SSR：apps/api/src/spa.ts がリクエストのたびに呼ぶ
+// ビルドの最後に scripts/prerender.mjs が呼び、規約などのページと記事を SSG でファイルに書き出す。
+// 記事も以前はリクエストのたびにサーバーで描いていた（SSR）が、本番のサーバーを Go だけにするため、
+// 記事の更新時に作り直す SSG に変えた（JUK-110）。Go では React を描けない。
 import "@/web/lib/zod-jitless";
 import { prerender } from "react-dom/static";
 import { StaticRouter } from "react-router";
@@ -8,6 +9,9 @@ import { dehydrate, QueryClient, type QueryKey } from "@tanstack/react-query";
 import Root from "@/web/Root";
 import { blogDetailKey, type Blog } from "@/web/hooks/useBlog";
 import { QUERY_STATE_ELEMENT_ID } from "@/web/lib/query-state";
+
+// 記事の meta はビルドで作って dist/ssg/meta.json に書き出す（scripts/prerender.mjs から使う）。
+export { articleMeta } from "@/shared/pageMeta";
 
 // 誰が見ても同じ中身で、ビルドのたびに作り直せば足りるページだけを並べる。
 // ログインで中身が変わるページ（トップ・ログイン後の画面）は入れない。
@@ -60,7 +64,7 @@ export async function renderPage(template: string, url: string, initialData: Ini
   return template.replace(ROOT_MARKER, `<div id="root">${appHtml}</div>${stateTag}`);
 }
 
-/** 記事のページを描く（SSR。apps/api/src/spa.ts がリクエストのたびに呼ぶ）。 */
+/** 記事のページを描く（SSG。scripts/prerender.mjs が記事ごとに呼ぶ）。 */
 export function renderArticlePage(template: string, blog: Blog) {
   const pathname = `/articles/${blog.id}`;
   return renderPage(template, pathname, [[blogDetailKey(blog.id), blog]]);

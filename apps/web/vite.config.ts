@@ -31,13 +31,13 @@ export default defineConfig(({ isSsrBuild }) => ({
   },
   ssr: {
     // `vite build --ssr`（entry-server.tsx）の出力に、react-dom などの依存も同梱する。
-    // SSR では本番のサーバーがこの出力を読み込むが、本番のイメージには apps/web の
-    // node_modules が入っていないため、外に出したままだと読み込みで失敗する。
+    // ビルドの最後に scripts/prerender.mjs がこの出力を読み込んで SSG する。依存を外に出したままだと、
+    // 読み込むときに node_modules の解決に頼ることになる。
     noExternal: true,
   },
-  // SSR の出力（dist-server）はサーバーが読み込むだけなので、public/ の画像などは複製しない。
-  // 拡張子は .mjs にする。.js のままだと、本番の /app/package.json に "type": "module" が
-  // 無いため、Node が読み込むたびに ESM かどうかを判定し直して警告を出す。
+  // SSR の出力（dist-server）は SSG のときに読み込むだけなので、public/ の画像などは複製しない。
+  // 拡張子は .mjs にし、置き場所の package.json の "type" に関係なく ESM として読ませる
+  // （以前は本番のサーバーが "type" の無い /app から読み込んでいた。今は SSG のときだけ読む）。
   build: isSsrBuild
     ? {
         copyPublicDir: false,

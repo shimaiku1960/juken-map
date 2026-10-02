@@ -13,9 +13,8 @@ const client = createClient({
 // createClient には fetch の設定を渡せないので、呼び出しごとに signal を添える。
 // client をそのまま公開せず下の2つだけを出すのは、呼び出し側が上限を付け忘れないようにするため。
 //
-// 既定（5秒）より短くしているのは、記事の取得が HTML を返す途中で走るため
-// （apps/api/src/spa.ts の記事の SSR）。ここで長く待つと、利用者は真っ白な画面を
-// その間ずっと見ることになる。記事が取れなくても画面は SPA が描けるので、早く諦めてよい。
+// 既定（5秒）より短くしているのは、画面（SPA）が記事を取るときに長く待たせないため。
+// 記事のページの HTML はビルドで作り置くので（JUK-110）、ここは画面からの /api/blog だけが使う。
 const MICROCMS_TIMEOUT_MS = 3_000;
 
 function requestInit() {

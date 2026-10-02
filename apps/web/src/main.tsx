@@ -11,7 +11,7 @@ import "@/web/index.css";
 const container = document.getElementById("root")!;
 const root = <Root queryClient={queryClient} router={BrowserRouter} />;
 
-// SSG・SSR したページ（entry-server.tsx）は、HTML の時点で本文が入っている。
+// SSG したページ（entry-server.tsx。規約と記事）は、HTML の時点で本文が入っている。
 // それを捨てて描き直さず、今ある DOM にイベントや状態を結びつける（ハイドレーション）。
 // 描く前に、サーバーが使ったデータもキャッシュへ戻す（無いと「読み込み中」を描いて食い違う）。
 // それ以外のページは中身が空なので、今までどおりブラウザで一から描く。
