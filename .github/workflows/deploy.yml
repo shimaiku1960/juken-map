@@ -1,6 +1,7 @@
 name: Deploy to EC2
 
 on:
+  # 手で動かす。ブログの記事を microCMS で更新したときも、これで作り直す（JUK-110。自動化は次の Issue）。
   workflow_dispatch:
   push:
     branches:
@@ -27,13 +28,21 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
 
+      # ブログの記事はビルドで SSG する（JUK-110）。記事を取れなければビルドを止める（SSG_ARTICLES=required）。
+      # 同じコミットで作り直すと同じタグを上書きする（ECR のタグは MUTABLE。デプロイは pull し直して入れ替える）。
       - name: Build and push
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: juken-map
           IMAGE_TAG: ${{ github.sha }}
+          MICROCMS_SERVICE_DOMAIN: ${{ secrets.MICROCMS_SERVICE_DOMAIN }}
+          MICROCMS_API_KEY: ${{ secrets.MICROCMS_API_KEY }}
         run: |
-          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker build \
+            --secret id=microcms_api_key,env=MICROCMS_API_KEY \
+            --build-arg MICROCMS_SERVICE_DOMAIN \
+            --build-arg SSG_ARTICLES=required \
+            -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
       # Go の API（apps/api-go、JUK-72）。Node と同じタグにして、同じコミットの組で並べて動かす。

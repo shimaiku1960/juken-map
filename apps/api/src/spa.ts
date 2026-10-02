@@ -1,16 +1,11 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { errorBody } from "./error-handling.ts";
-import { getBlog, isBlogNotFound, type Blog } from "./infra/microcms.ts";
-import { articleIdFromPath, articleMeta, buildSitemap, defaultMeta, injectMeta } from "./seo.ts";
+import { articleIdFromPath, buildSitemap, defaultMeta, injectMeta } from "./seo.ts";
+import type { PageMeta } from "@/shared/pageMeta";
 import { isKnownSpaRoute } from "@/shared/routes";
-
-// apps/web の entry-server.tsx のうち、ここで使うもの。
-type SsrEntry = {
-  renderArticlePage: (template: string, blog: Blog) => Promise<string>;
-};
 
 // 本番では SPA のビルド成果物を API と同じプロセスから配る。nginx は :3000 へ丸ごと
 // 流すだけなので、本番ホストの設定を触らずに Next.js と入れ替えられる（切り戻しも
@@ -49,17 +44,20 @@ export function registerSpa(app: FastifyInstance, root: string) {
   // index.html は毎リクエスト読まずに一度だけ読む。meta だけ差し替えて返す。
   const indexHtml = readFileSync(path.join(root, "index.html"), "utf-8");
   const prerendered = readPrerenderedPages(path.join(root, "ssg"));
-  // SSR で描く部品。apps/web の `vite build --ssr` の出力で、dist の隣に置かれる。
-  // 初めて使うときに一度だけ読み込む。
-  let ssrEntry: Promise<SsrEntry> | undefined;
-  const loadSsrEntry = () =>
-    (ssrEntry ??= import(path.join(root, "..", "dist-server", "entry-server.mjs")));
+  // SSG したページの meta（記事のタイトル・説明・OGP など）。ビルドが記事と一緒に書き出す。
+  const prerenderedMeta = readPrerenderedMeta(path.join(root, "ssg", "meta.json"));
+  const metaOf = (pathname: string) => prerenderedMeta.get(pathname) ?? defaultMeta(pathname);
 
-  // sitemap.xml は記事一覧から作るので静的ファイルにできない。
+  // sitemap.xml は SSG した記事から、起動時に一度だけ作る。
   // robots.txt と OGP 画像は apps/web/public に置いた実ファイルが配られる。
+  const sitemap = buildSitemap(
+    [...prerenderedMeta]
+      .filter(([pathname]) => articleIdFromPath(pathname))
+      .map(([pathname, meta]) => ({ pathname, lastModified: meta.modifiedTime }))
+  );
   app.get("/sitemap.xml", { config: { access: "public" } }, async (_request, reply) => {
     reply.type("application/xml; charset=utf-8");
-    return buildSitemap();
+    return sitemap;
   });
 
   app.setNotFoundHandler(async (request, reply) => {
@@ -82,63 +80,19 @@ export function registerSpa(app: FastifyInstance, root: string) {
     reply.type("text/html; charset=utf-8");
     reply.header("Cache-Control", "no-cache");
 
-    // 記事は内容を microCMS で書き換えるので、ビルド時に作り置く（SSG）と古いまま残る。
-    // リクエストのたびにここで描く（SSR）。
-    const articleId = articleIdFromPath(pathname);
-    if (articleId) return renderArticle(request, reply, articleId, pathname);
+    // 記事はビルドで SSG する（JUK-110）。microCMS で記事を更新したら、デプロイで作り直す。
+    // SSG に無い記事（存在しない・下書き・公開してまだ作り直していない）は 404 にする。
+    // 本文は SPA が /api/blog から取って描くので、公開直後の記事も画面には出る。
+    if (articleIdFromPath(pathname) && !prerendered.has(pathname)) {
+      reply.code(404);
+      return injectMeta(indexHtml, defaultMeta(pathname));
+    }
 
     // SSG したページは本文入りの HTML を、それ以外は中身が空の index.html を返す。
     // SPA なのでクローラーと SNS は JS 実行前の HTML しか読まない。Next.js の
     // generateMetadata が担っていた分を、ここで head に差し込む。
-    return injectMeta(prerendered.get(pathname) ?? indexHtml, defaultMeta(pathname));
+    return injectMeta(prerendered.get(pathname) ?? indexHtml, metaOf(pathname));
   });
-
-  // SSR：microCMS から記事を1回だけ取り、その記事で head（meta）と本文の両方を作る。
-  // CSR のときは、head のためにサーバーが1回、本文のためにブラウザがもう1回取っていた。
-  async function renderArticle(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    articleId: string,
-    pathname: string
-  ) {
-    const startedAt = performance.now();
-    let blog: Blog;
-    try {
-      blog = await getBlog(articleId);
-    } catch (error) {
-      reply.header("Server-Timing", serverTiming(startedAt));
-      if (isBlogNotFound(error)) {
-        // 記事が無いと分かっているので 404 を返す（soft 404 にしない）。
-        // 画面は SPA の NotFoundPage が描く。
-        reply.code(404);
-      } else {
-        // microCMS の障害・タイムアウト。本文無しの HTML を返し、画面側にもう一度取らせる。
-        // ここで失敗させるとページごと開けなくなる。
-        request.log.warn({ err: error }, "[ssr] microCMS request failed.");
-      }
-      return injectMeta(indexHtml, defaultMeta(pathname));
-    }
-
-    const fetchedAt = performance.now();
-    const meta = articleMeta(blog, pathname);
-    try {
-      const html = await (await loadSsrEntry()).renderArticlePage(indexHtml, blog);
-      reply.header("Server-Timing", serverTiming(startedAt, fetchedAt));
-      return injectMeta(html, meta);
-    } catch (error) {
-      // 描けないのはこちらの不具合なので、エラーとして残す。利用者には本文無しの HTML を
-      // 返し、今までどおりブラウザで描かせる。
-      request.log.error({ err: error }, "[ssr] Failed to render the article.");
-      return injectMeta(indexHtml, meta);
-    }
-  }
-}
-
-// ブラウザの開発者ツール（Network → Timing）で、microCMS 待ちと描画にかかった時間を見られる。
-function serverTiming(startedAt: number, fetchedAt?: number) {
-  const now = performance.now();
-  if (fetchedAt === undefined) return `cms;dur=${(now - startedAt).toFixed(1)}`;
-  return `cms;dur=${(fetchedAt - startedAt).toFixed(1)}, render;dur=${(now - fetchedAt).toFixed(1)}`;
 }
 
 // apps/web のビルドが SSG で書き出した HTML（apps/web/scripts/prerender.mjs）を、
@@ -152,4 +106,10 @@ function readPrerenderedPages(dir: string) {
     pages.set(pathname, readFileSync(path.join(dir, file), "utf-8"));
   }
   return pages;
+}
+
+// SSG したページの meta（パス → PageMeta）を、起動時に一度だけ読む。無ければ空（記事を SSG していないビルド）。
+function readPrerenderedMeta(file: string) {
+  if (!existsSync(file)) return new Map<string, PageMeta>();
+  return new Map(Object.entries(JSON.parse(readFileSync(file, "utf-8")) as Record<string, PageMeta>));
 }

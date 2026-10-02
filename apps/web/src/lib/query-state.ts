@@ -1,6 +1,6 @@
 import { hydrate, type QueryClient } from "@tanstack/react-query";
 
-// サーバー（SSR・SSG）が HTML を作るときに使ったデータを、ブラウザへ渡すための要素の id。
+// ビルド（SSG）で HTML を作るときに使ったデータを、ブラウザへ渡すための要素の id。
 // 書き込むのは entry-server.tsx、読むのは main.tsx。
 export const QUERY_STATE_ELEMENT_ID = "query-state";
 

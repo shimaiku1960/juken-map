@@ -1,12 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { injectMeta, type PageMeta } from "./seo.ts";
-
-// seo.ts は microCMS のクライアントを読み込み時に作る（CI には接続情報が無い）。
-// ここでは head の組み立てだけを試すので、記事の取得は使わない。
-vi.mock("@/api/infra/microcms", () => ({
-  getBlog: vi.fn(),
-  listBlogs: vi.fn(),
-}));
+import type { PageMeta } from "@/shared/pageMeta";
+import { injectMeta } from "./seo.ts";
 
 const html = "<html><head><title>x</title></head><body></body></html>";
 const meta: PageMeta = {

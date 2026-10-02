@@ -103,9 +103,12 @@ SPA は誰が来ても同じ `index.html` を返す。JS を実行する前の H
 SNS には、中身が空に見える。Next.js が黙って担っていた分を `apps/api/src/seo.ts` で作り直した。
 
 - `robots.txt` と OGP 画像は `apps/web/public` の実ファイル
-- `sitemap.xml` は記事一覧から作るので Fastify のルート（microCMS 障害時も固定ページ分は返す）
-- `index.html` を返すときに head を差し込む。`/articles/:id` は microCMS からタイトル・説明・
-  アイキャッチを引く。ログイン後ページと認証フローには `noindex` を付ける
+- `sitemap.xml` は SSG した記事から起動時に作るので Fastify のルート
+- `index.html` を返すときに head を差し込む。ログイン後ページと認証フローには `noindex` を付ける
+- 記事（`/articles/:id`）はビルドで microCMS から全件取り、本文入りの HTML と meta（`dist/ssg/meta.json`）を
+  作り置く（JUK-110）。記事を更新したら、デプロイ（`deploy.yml`）をやり直して作り直す。
+  以前は表示のたびにサーバーで描いていた（SSR）が、本番のサーバーを Go だけにするため（JUK-109）、
+  Go では描けない React の描画をビルドへ移した。規約・プライバシーポリシーも同じ仕組みで SSG している
 
 **放置すると `/robots.txt` が 200 で HTML を返す**という、404 より質の悪い状態になっていた。
 
