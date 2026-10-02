@@ -3,8 +3,8 @@ package main
 import "testing"
 
 func TestRegisteredRoutes(t *testing.T) {
-	// Go が受け持つルートと入口の種類。Node の同じルートの config.access と同じであること。
-	// ルートを移したらここに1行足す（parity_test.go の parityCases と nginx の振り分けも）。
+	// Go が受け持つルートと入口の種類。
+	// ルートを足したらここに1行足す（nginx の振り分けも）。
 	// 一覧が変わるとこのテストが落ちるので、入口の種類を取り違えたまま足すことはできない。
 	want := []routeEntry{
 		{"GET /api/health", accessPublic},

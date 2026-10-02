@@ -23,13 +23,11 @@ apps/api/               バックエンド一式（Fastify）
   ├ auth.ts               Better Auth の唯一の定義
   ├ context.ts            requireSession / denyDemoWrite（門番）
   ├ seo.ts                robots / sitemap / ページ別 meta の生成
-  ├ routes/               HTTP の入口（認証・検証・ステータスコードのみ）
-  ├ services/             ユースケース（goal / study-plan / textbook / university /
-  │                       user / admin / master）。Go へ移した分は消していく（JUK-84）
+  ├ routes/               HTTP の入口（ブログ・/line/settings）。業務の API は Go へ移して消した（JUK-84）
+  ├ services/             user（管理者を付ける CLI の grant-admin.ts が使う）
   ├ infra/                db（生 SQL の接続プール）, tables（テーブル1行の型）,
   │                       email, resend, microcms
   ├ test-db/              テスト用 MySQL の準備と、テストデータの作成
-  ├ domain/               参考書の範囲の確かめなど
   ├ observability/        サービスの所要時間計測
 
 src/shared/             2つのアプリが共有する、外部依存のない純粋関数・型のみ
@@ -211,8 +209,7 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移した�
 `updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
 
 `services/` はすべて移行済み（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）。
-そのうち study-log・notification・sendDailyNotifications・line-connection は、のちに Go へ移して Node から消した（JUK-84）。
-予定と実績で共通の列と、JOIN の結果を入れ子に戻す関数は `services/study-columns.ts` にある。
+そのうち user 以外は、のちに Go（`apps/api-go`）へ移して Node から消した（JUK-84）。
 Better Auth（`auth.ts`）も同じ mysql2 のプールを使う（内部の Kysely で読み書きする）。
 アプリの実行時も seed（`db/seed*.ts`）もマイグレーションの適用も Prisma を使っていない。
 seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使い、日時の扱い（UTC）もアプリと揃えている。

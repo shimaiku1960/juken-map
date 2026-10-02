@@ -1,7 +1,7 @@
-//go:build parity
+//go:build dbtest
 
 // LINE 連携の SQL（sqlLineStore）を本物の DB に流して確かめる。ふだんの go test では動かない
-// （Go の CI には DB が無い）。parity.sh が DATABASE_URL を読んで、TestParity と一緒に呼ぶ。
+// （dbtest タグ。`pnpm test:go-db` と CI の check のジョブが動かす）。
 // 利用者はテストごとに作り、最後に消す（LINE の表は user の削除で一緒に消える）。
 package main
 
@@ -10,18 +10,13 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"os"
 	"sync"
 	"testing"
 	"time"
 )
 
-func TestParityLineStore(t *testing.T) {
-	db, err := openDB(os.Getenv("DATABASE_URL"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+func TestLineStore(t *testing.T) {
+	db := openTestDB(t)
 	st := &sqlLineStore{db: db}
 	ctx := context.Background()
 

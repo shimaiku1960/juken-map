@@ -7,6 +7,10 @@ import type { RouteOptions } from "fastify";
 // 全ルートを登録して onRoute で集め、入口の種類（config.access）ごとに、断るべき相手が
 // 本当に断られるかを1本ずつ叩いて確かめる（セキュリティ基準 06 の A1・A2・A5・A6）。
 // ルートを足せば自動でここの対象に入るので、人が数えて漏らすことがない。
+//
+// 利用者と管理者の API はすべて Go へ移し、Node から消した（JUK-84）。Node に残るのは公開のルートだけだが、
+// 入口の判定（access-control.ts）は残っているので、利用者・管理者の種類はテスト用のルートを足して確かめる。
+// Go のルートの同じ確かめは router_test.go（TestRouterAccess）が行う。
 
 vi.mock("./auth.ts", () => ({
   auth: { api: { getSession: vi.fn() } },
@@ -40,6 +44,11 @@ const app = buildTestApp((app) => {
     }
   });
   registerRoutes(app);
+  // 利用者・管理者の種類ごとに、読み取りと書き込みを1本ずつ。
+  for (const access of ["user", "admin"] as const) {
+    app.get(`/test/${access}`, { config: { access } }, async () => ({ ok: true }));
+    app.post(`/test/${access}`, { config: { access } }, async () => ({ ok: true }));
+  }
 });
 
 const adminSession = adminSessionOf(loggedInSession.user);
@@ -71,7 +80,7 @@ beforeEach(() => {
 describe("A1 入口の一覧", () => {
   it("登録された全ルートに入口の種類が付いている", () => {
     // 0件のまま通る（何も確かめていない）状態を防ぐ。
-    expect(routes.length).toBeGreaterThan(30);
+    expect(routes.length).toBeGreaterThan(4);
     const known = Object.keys(ACCESS_ENTRY);
     expect(routes.filter((route) => !known.includes(route.access ?? "")).map(label)).toEqual([]);
   });
@@ -102,7 +111,7 @@ describe("A2 既定拒否", () => {
   it("利用者と管理者の API は、未ログインなら全件 401", async () => {
     getSession.mockResolvedValue(null);
     const targets = byAccess("user", "admin");
-    expect(targets.length).toBeGreaterThan(25);
+    expect(targets.length).toBe(4);
     expect(await mismatches(targets, (status) => status === 401)).toEqual([]);
   });
 
@@ -120,7 +129,7 @@ describe("A5 管理機能", () => {
   it("一般の利用者は管理者の API で全件 403", async () => {
     getSession.mockResolvedValue(loggedInSession);
     const targets = byAccess("admin");
-    expect(targets.length).toBeGreaterThan(10);
+    expect(targets.length).toBe(2);
     expect(await mismatches(targets, (status) => status === 403)).toEqual([]);
   });
 
@@ -141,7 +150,7 @@ describe("B7 管理者の2段階認証", () => {
         failed.push(`${label(route)} → ${res.statusCode} ${code}`);
       }
     }
-    expect(byAccess("admin").length).toBeGreaterThan(10);
+    expect(byAccess("admin").length).toBe(2);
     expect(failed).toEqual([]);
   });
 
@@ -157,7 +166,7 @@ describe("A6 読み取り専用（デモ）", () => {
   it("デモの利用者は、利用者の API の書き込みで全件 403", async () => {
     getSession.mockResolvedValue(demoSession);
     const targets = byAccess("user").filter(isWrite);
-    expect(targets.length).toBeGreaterThan(8);
+    expect(targets.length).toBe(1);
     expect(await mismatches(targets, (status) => status === 403)).toEqual([]);
   });
 

@@ -9,16 +9,8 @@ vi.mock("@/api/infra/email", () => ({
   sendPasswordChangedNotice: vi.fn(),
 }));
 
-// microCMS は読み込むだけで API キーを要求するので差し替える（管理 API の登録で読まれる）。
-vi.mock("@/api/infra/microcms", () => ({
-  getBlog: vi.fn(),
-  listBlogs: vi.fn(),
-  isBlogNotFound: vi.fn(() => false),
-}));
-
 const { auth } = await import("./auth.ts");
 const { execute, pool } = await import("@/api/infra/db");
-const { registerAdminRoutes } = await import("./routes/admin.ts");
 const { buildTestApp, request } = await import("./test-support.ts");
 const { TWO_FACTOR_REQUIRED } = await import("@/shared/admin");
 
@@ -26,10 +18,14 @@ const { TWO_FACTOR_REQUIRED } = await import("@/shared/admin");
 //   ログイン → 2段階認証を有効にしてコードを確かめる → ログインし直して予備コードを確かめる
 // と進め、印（session.twoFactorVerified）がコードを確かめたセッションにだけ付くこと、
 // 管理 API がその印で 403 と 200 に分かれることを確かめる。
+// 管理 API は Go へ移した（JUK-84）ので、入口の種類が admin のテスト用ルートで、Node の入口の判定を通す。
+// Go が同じ印で分けることは router_test.go が確かめる。
 
 const emails: string[] = [];
 const password = "correct-horse-battery-staple";
-const app = buildTestApp(registerAdminRoutes);
+const app = buildTestApp((app) => {
+  app.get("/api/admin/overview", { config: { access: "admin" } }, async () => ({ ok: true }));
+});
 
 afterAll(async () => {
   if (emails.length > 0) await execute("DELETE FROM `user` WHERE email IN (?)", [emails]);

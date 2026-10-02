@@ -83,7 +83,7 @@ func TestDateRangeWhere(t *testing.T) {
 }
 
 func TestStudyListQueryErrors(t *testing.T) {
-	// DB に届く前に返る場面だけを見る（store は nil のまま）。DB を使う場面は parity_test.go で Node と比べる。
+	// DB に届く前に返る場面だけを見る（store は nil のまま）。DB を使う場面は E2E（nginx を通して Go に届く、JUK-96）が通す。
 	rt := newRouter(fakeSessions(testSessions))
 	h := &studyHandlers{}
 	rt.user("GET /api/study-logs", h.listLogs)
