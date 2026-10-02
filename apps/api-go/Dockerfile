@@ -18,6 +18,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api-go 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/api-go /api-go
 ENV PORT=8080
+# イメージを作ったコミット（git の SHA）。/api/health が返し、デプロイ後の E2E が本番で新しい版が
+# 動いているかを見る（JUK-101）。値が毎回変わるので、ビルドのキャッシュを壊さないよう最後に置く。
+ARG APP_COMMIT=""
+ENV APP_COMMIT=$APP_COMMIT
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/api-go"]

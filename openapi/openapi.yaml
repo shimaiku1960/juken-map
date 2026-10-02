@@ -36,9 +36,13 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok]
+                required: [ok, commit]
                 properties:
                   ok: { type: boolean, enum: [true] }
+                  # 動いているイメージを作ったコミット（git の SHA）。本番で新しい版が動いているかを
+                  # デプロイ後の E2E が確かめる（JUK-101）。イメージを作るときに埋め込むので、
+                  # ローカルや CI のように埋め込まずに動かしたときは null
+                  commit: { type: string, nullable: true }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /api/dashboard:
