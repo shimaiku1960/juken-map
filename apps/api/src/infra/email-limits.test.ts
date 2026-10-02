@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { execute, pool, select } from "@/api/infra/db";
 import {
   EMAIL_GLOBAL_PER_DAY,
+  EMAIL_SEND_LOCK,
   EMAIL_PER_RECIPIENT_PER_HOUR,
   reserveEmailSend,
 } from "@/api/infra/email-limits";
@@ -106,7 +107,7 @@ describe("E1 宛先ごとの上限", () => {
     expect(results.every(Boolean)).toBe(true);
   });
 
-  it("同時に送らせても、上限を超えては送らない", async () => {
+  it("同時に送らせても、上限ちょうどまで送り、超えては送らない", async () => {
     const now = freshNow();
     const to = address();
 
@@ -114,8 +115,29 @@ describe("E1 宛先ごとの上限", () => {
       Array.from({ length: EMAIL_PER_RECIPIENT_PER_HOUR + 5 }, () => reserveEmailSend("password-reset", to, now))
     );
 
-    expect(results.filter(Boolean).length).toBeLessThanOrEqual(EMAIL_PER_RECIPIENT_PER_HOUR);
-    expect(results.filter(Boolean).length).toBeGreaterThan(0);
+    // 以前は先に入れてから数えていたので、同時に来ると互いの行を数えて全部断ることがあった（JUK-107）。
+    expect(results.filter(Boolean).length).toBe(EMAIL_PER_RECIPIENT_PER_HOUR);
+  });
+});
+
+describe("E1 別のプロセスとの順番", () => {
+  it("ほかの接続（デプロイ中のもう1つの Node）がロックを持つあいだは待ち、解けたら送る", async () => {
+    const other = await pool.getConnection();
+    try {
+      await select("SELECT GET_LOCK(?, 0)", [EMAIL_SEND_LOCK], other);
+      let settled = false;
+      const pending = reserveEmailSend("password-reset", address(), freshNow()).finally(() => {
+        settled = true;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(settled).toBe(false);
+
+      await select("SELECT RELEASE_LOCK(?)", [EMAIL_SEND_LOCK], other);
+      expect(await pending).toBe(true);
+    } finally {
+      other.release();
+    }
   });
 });
 
@@ -131,6 +153,17 @@ describe("E1 全体の上限", () => {
     // 運営者への通知も全体の数に入る。
     expect(await reserveEmailSend("admin-new-user", "owner@example.test", now)).toBe(false);
     expect(JSON.stringify(takeLogLines())).toContain('"reason":"global"');
+  });
+
+  it("違う宛先へ同時に送らせても、全体の上限ちょうどまで送る", async () => {
+    const now = freshNow();
+
+    const results = await Promise.all(
+      Array.from({ length: EMAIL_GLOBAL_PER_DAY + 10 }, () => reserveEmailSend("verification", address(), now))
+    );
+    takeLogLines();
+
+    expect(results.filter(Boolean).length).toBe(EMAIL_GLOBAL_PER_DAY);
   });
 
   it("24時間より前の分は数えず、送るときに消す", async () => {
