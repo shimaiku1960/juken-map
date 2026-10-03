@@ -23,7 +23,7 @@ import (
 // panic するので、断れていなければテストが落ちる。
 func TestAdminRoutesRejectNonAdmins(t *testing.T) {
 	rt := newRouter(fakeSessions(testSessions))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	tests := []struct {
 		as         string

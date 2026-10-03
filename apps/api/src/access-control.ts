@@ -16,7 +16,7 @@ export const ACCESS_ENTRY = {
   user: "E3",
   /** E4 管理者の API。ログイン＋role=admin。 */
   admin: "E4",
-  /** E5 外から呼ばれる機械の入口。署名はハンドラが確かめる（LINE Webhook）。 */
+  /** E5 外から呼ばれる機械の入口。署名はハンドラが確かめる（LINE・microCMS の Webhook。どちらも Go が受ける）。 */
   webhook: "E5",
   /** E6 自分のジョブの入口。トークンはハンドラが確かめる（cron・sim）。 */
   job: "E6",

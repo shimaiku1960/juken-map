@@ -154,6 +154,13 @@ grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|RESEND_API_KEY|LINE_CHAN
 for key in DATABASE_URL BETTER_AUTH_SECRET; do
   grep -q "^$key=" "$GO_ENV_FILE" || { echo "Go に渡す $key が見つからない" >&2; exit 1; }
 done
+# microCMS の Webhook（JUK-112）は Go だけが受けるので、署名の秘密と deploy.yml を動かす GitHub のトークンは
+# Go にだけ渡す（Node のコンテナには入れない）。シークレットに無ければ渡らず、Webhook は 401 か 502 のまま。
+for key in MICROCMS_WEBHOOK_SECRET GITHUB_DEPLOY_TOKEN; do
+  value="$(jq -r --arg k "$key" '.[$k] // empty' <<<"$secret_json")"
+  if [ -n "$value" ]; then printf '%s=%s\n' "$key" "$value" >> "$GO_ENV_FILE"; fi
+done
+unset value
 # NODE_ENV=production は reqId を UUID のまま出すため（Node と揃える）。
 # GOMEMLIMIT はコンテナの上限（下の --memory 128m）に近づいたら GC を早めさせる。
 printf 'NODE_ENV=production\nGOMEMLIMIT=96MiB\n' >> "$GO_ENV_FILE"

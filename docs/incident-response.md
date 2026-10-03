@@ -139,6 +139,8 @@
 | `RESEND_API_KEY` | EC2 の `.env` | Resend の API Keys で新しい鍵を作り、古い鍵を消す。`.env` を直して再デプロイ | Resend の Emails（送ったメールの一覧） |
 | `RESEND_READ_API_KEY` | GitHub Secrets | 同上（読み取りだけの鍵）。`gh secret set RESEND_READ_API_KEY` | 同上 |
 | `MICROCMS_API_KEY` | EC2 の `.env` と GitHub Secrets（ビルドで記事を SSG するため、JUK-110） | microCMS の API キーで作り直し、古いキーを消す。`.env` と `gh secret set MICROCMS_API_KEY` の両方を直して再デプロイ | microCMS の API キーの設定画面 |
+| `MICROCMS_WEBHOOK_SECRET` | Secrets Manager（Go にだけ渡す、JUK-112） | 新しい値を作り、microCMS の API の設定の Webhook のシークレットと Secrets Manager の両方を直して再デプロイ。漏れた値では、記事を作り直すデプロイを何度でも動かせる（記事の中身は変えられない） | microCMS の Webhook のログと、Actions の deploy.yml の実行（`workflow_dispatch`） |
+| `GITHUB_DEPLOY_TOKEN` | Secrets Manager（Go にだけ渡す、JUK-112） | GitHub の Fine-grained tokens で古いトークンを消し、同じ権限（このリポジトリの Actions: Read and write だけ）で作り直す。Secrets Manager を直して再デプロイ。漏れたトークンでは、ワークフローの実行・取り消し・再実行、実行の記録の削除、ワークフローの有効・無効の切り替えができる（コードと Secrets には触れない） | リポジトリの Actions の実行の一覧（`workflow_dispatch` で誰が動かしたか） |
 | `GRAFANA_CLOUD_TOKEN` | Secrets Manager | Grafana Cloud の Access Policies でトークンを作り直し、古いトークンを消す。Secrets Manager を直して再デプロイ | Grafana Cloud の使用量 |
 | Terraform 用の Grafana のトークン | 手元の `~/.zshrc`（`TF_VAR_grafana_auth`） | Grafana の Service accounts（`sa-1-terraform`）でトークンを作り直し、古いトークンを消す | Grafana の監査（アラートの設定が変わっていないかを `terraform plan` で） |
 | `DAILY_NOTIFICATION_SECRET`・`SIMULATION_SECRET` | EC2 の `.env` と GitHub Secrets | 下の「機械の入口のトークンを差し替える」 | 401 以外の応答をログで |
