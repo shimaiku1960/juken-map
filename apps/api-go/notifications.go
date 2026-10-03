@@ -280,6 +280,7 @@ func (st *sqlNotificationStore) findRecipients(ctx context.Context, slot Notific
 	}
 	args = append(args, start, end)
 
+	// #nosec G202 -- in は人数ぶん並べた ? だけ。値は args で渡す
 	planRows, err := st.db.QueryContext(ctx,
 		`SELECT p.userId, p.done, p.content, p.subject, t.name AS textbookName
 		 FROM StudyPlan AS p
@@ -306,6 +307,7 @@ func (st *sqlNotificationStore) findRecipients(ctx context.Context, slot Notific
 		return nil, err
 	}
 
+	// #nosec G202 -- in は人数ぶん並べた ? だけ。値は args で渡す
 	logRows, err := st.db.QueryContext(ctx,
 		`SELECT userId, minutes FROM StudyLog
 		 WHERE userId IN (`+in+`) AND date >= ? AND date < ?

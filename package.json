@@ -13,6 +13,7 @@
     "dev:go": "bash scripts/dev-go.sh",
     "dev:proxy": "bash scripts/local-proxy.sh",
     "lint": "eslint",
+    "lint:sql": "eslint --no-config-lookup -c eslint.sql.config.mjs \"apps/api/src/**/*.ts\" \"db/**/*.ts\"",
     "test": "vitest run",
     "check": "pnpm exec eslint --max-warnings 0 && pnpm exec tsc --noEmit && pnpm -r typecheck && pnpm test && pnpm -r test && pnpm --filter @juken-map/web build",
     "e2e": "playwright test",

@@ -142,6 +142,7 @@ async function insertMany(table: string, columns: string[], rows: Row[], chunkSi
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
     const result = await execute(
+      // eslint-disable-next-line no-restricted-syntax -- table と columns はこのファイルに書いた固定のテーブル名・列名（入力から来ない）。値は ? で渡す
       `INSERT INTO \`${table}\` (${columns.map((c) => `\`${c}\``).join(", ")})
        VALUES ${chunk.map(() => placeholders).join(", ")}`,
       chunk.flat()
@@ -154,6 +155,7 @@ async function insertMany(table: string, columns: string[], rows: Row[], chunkSi
 /** insertMany が返した先頭 id から count 件が本当に連続しているかを確かめる。 */
 async function assertContiguous(table: string, firstId: number, count: number) {
   if (count === 0) return;
+  // eslint-disable-next-line no-restricted-syntax -- table はこのファイルに書いた固定のテーブル名（入力から来ない）
   const [row] = await select<{ maxId: number }>(`SELECT MAX(id) AS maxId FROM \`${table}\``);
   if (Number(row.maxId) !== firstId + count - 1) {
     throw new Error(

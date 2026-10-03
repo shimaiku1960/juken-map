@@ -62,6 +62,7 @@ runSeed(async () => {
   for (let i = 0; i < values.length; i += 200) {
     const chunk = values.slice(i, i + 200);
     await execute(
+      // eslint-disable-next-line no-restricted-syntax -- 埋め込むのは件数ぶん並べた ? だけ。値は chunk.flat() で渡す
       `INSERT INTO session (id, userId, expiresAt, token, createdAt, updatedAt, ipAddress, userAgent)
        VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(", ")}`,
       chunk.flat()

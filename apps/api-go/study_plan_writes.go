@@ -182,6 +182,7 @@ func (st *studyPlanWriteStore) create(ctx context.Context, userID, date string, 
 		args = append(args, userID, day, item.content.ptr(), item.subject.ptr(), item.textbookID.ptr(),
 			item.rangeStart.ptr(), item.rangeEnd.ptr(), item.rangeUnit.ptr(), now, now)
 	}
+	// #nosec G202 -- 埋め込むのは行の数ぶん並べた (?, …) だけ。値は args で渡す
 	res, err := st.db.ExecContext(ctx,
 		`INSERT INTO StudyPlan
 		   (userId, date, content, subject, textbookId,
@@ -236,6 +237,7 @@ func (st *studyPlanWriteStore) update(ctx context.Context, id int64, v studyPlan
 	}
 	set("updatedAt", nowMillis())
 
+	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（set の1つ目）。値は args で ? として渡す
 	if _, err := st.db.ExecContext(ctx,
 		"UPDATE StudyPlan SET "+strings.Join(sets, ", ")+" WHERE id = ?", append(args, id)...); err != nil {
 		return StudyPlanRow{}, err

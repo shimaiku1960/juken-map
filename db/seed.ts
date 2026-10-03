@@ -128,6 +128,7 @@ async function main() {
   for (let i = 0; i < universities.length; i += CHUNK_SIZE) {
     const chunk = universities.slice(i, i + CHUNK_SIZE);
     await execute(
+      // eslint-disable-next-line no-restricted-syntax -- 埋め込むのは件数ぶん並べた ? だけ。値は chunk から ? で渡す
       `INSERT INTO University (name, prefecture, type, createdAt)
        VALUES ${chunk.map(() => "(?, ?, ?, ?)").join(", ")} AS new
        ON DUPLICATE KEY UPDATE prefecture = new.prefecture, type = new.type`,
@@ -138,6 +139,7 @@ async function main() {
 
   // 2. 系統タグ。既にあれば何もしない（name = name は「更新なし」の書き方）
   await execute(
+    // eslint-disable-next-line no-restricted-syntax -- 埋め込むのは TAG_NAMES の数ぶん並べた ? だけ。値は ? で渡す
     `INSERT INTO Tag (name, createdAt) VALUES ${TAG_NAMES.map(() => "(?, ?)").join(", ")} AS new
      ON DUPLICATE KEY UPDATE name = Tag.name`,
     TAG_NAMES.flatMap((name) => [name, now])

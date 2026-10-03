@@ -2,6 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import globals from "globals";
+import { sqlInjectionRules } from "./eslint.sql.config.mjs";
 
 // レイヤー境界（docs/architecture.md）を ESLint で強制する。
 //
@@ -51,6 +52,8 @@ export default defineConfig([
       "@typescript-eslint/no-explicit-any": "warn",
     },
   },
+  // SQL を文字列の連結・埋め込みで組み立てない（dev-standards 06 D1、JUK-104）。apps/api は pnpm lint:sql が見る。
+  { files: ["db/**/*.ts"], rules: sqlInjectionRules },
   globalIgnores([
     // apps/ は独自の tsconfig と依存を持つ別パッケージ。
     "apps/**",

@@ -191,6 +191,7 @@ func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateR
 // listDailyStudyMinutes は日ごとの合計学習時間を、新しい日付から返す。
 func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, r dateRange) ([]DailyStudyMinutes, error) {
 	where, args := r.where("l", userID)
+	// #nosec G202 -- where は dateRange.where が固定の列名と ? で作る。値は args で渡す
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT l.date, SUM(l.minutes) AS minutes
 		 FROM StudyLog AS l

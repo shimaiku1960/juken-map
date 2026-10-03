@@ -293,6 +293,7 @@ func (st *textbookStore) updateProgress(ctx context.Context, id int64, p textboo
 	}
 	columns, args = append(columns, "updatedAt = ?"), append(args, nowMillis())
 
+	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（columns）。値は args で ? として渡す
 	if _, err := st.db.ExecContext(ctx,
 		"UPDATE Textbook SET "+strings.Join(columns, ", ")+" WHERE id = ?", append(args, id)...); err != nil {
 		return nil, err
