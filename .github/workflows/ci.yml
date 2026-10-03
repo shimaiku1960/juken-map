@@ -123,7 +123,8 @@ jobs:
           pnpm --filter @juken-map/web test
 
       # Go の API を本物の MySQL に流すテスト（apps/api-go の dbtest タグ、JUK-97）。他人の ID を断ること（A3）と、
-      # 禁止項目を混ぜても書き換わらないこと（A4）を、本番で動いている Go のルートで確かめる。LINE 連携の SQL も流す。
+      # 禁止項目を混ぜても書き換わらないこと（A4）を、本番で動いている Go のルートで確かめる。LINE 連携の SQL と、
+      # 管理画面（利用者の管理・マスター編集）の SQL も流す（JUK-106）。
       # DB は Node のテストと同じ juken_map_test（本番と同じマイグレーションと、DML だけの権限）。
       # MySQL がこのジョブにしか無いので、go のジョブではなくここで動かす。
       - name: Setup Go
@@ -135,7 +136,7 @@ jobs:
       - name: Test Go with DB
         run: |
           pnpm --filter @juken-map/api test-db:prepare
-          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore' -count=1 ./...
+          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB' -count=1 ./...
 
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA

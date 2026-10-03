@@ -125,6 +125,11 @@ export const auth = betterAuth({
     },
   },
   advanced: {
+    // Cookie 付きの書き込みは、Origin（無ければ Referer）が trustedOrigins に無ければ 403 にする（セキュリティ基準 D3、CSRF）。
+    // Better Auth の既定は「NODE_ENV=test のときだけ確かめない」で、本番は確かめるがテストでは素通りになる。
+    // テストでも本番と同じ判定を通すため、どの環境でも確かめると明示する（auth.origin-check.test.ts）。
+    disableOriginCheck: false,
+    disableCSRFCheck: false,
     // 確認メール・再設定メールを送り終えるのを待たずに応答する（セキュリティ基準 B4）。
     // 待つと、登録済みのメールアドレスだけ Resend の分だけ遅く返り、応答時間で登録の有無が分かる。
     // 送れなかったときに画面へ伝えないのは今までと同じ（Better Auth は待っていたときも
