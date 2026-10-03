@@ -75,6 +75,11 @@ jobs:
       - name: Lint
         run: pnpm exec eslint --max-warnings 0
 
+      # SQL を文字列の連結・埋め込みで組み立てている箇所を落とす（dev-standards 06 D1、JUK-104）。
+      # apps/api と db/ が対象（設定は eslint.sql.config.mjs）。Go は go のジョブの gosec が見る。
+      - name: SQL injection lint
+        run: pnpm lint:sql
+
       # API の契約（openapi/openapi.yaml）から作った TypeScript の型が、コミットされているものと同じか（JUK-76）。
       # 契約だけ直して生成し忘れた、生成物を手で直した、を落とす。
       - name: OpenAPI types (TypeScript)
@@ -179,6 +184,11 @@ jobs:
       # pnpm audit の Go 版。実際に呼んでいる関数に既知の脆弱性があれば落とす（dev-standards 06 F3）。
       - name: Vulnerability check
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      # SQL を文字列の連結（G202）・fmt.Sprintf（G201）で組み立てている箇所を落とす（dev-standards 06 D1、JUK-104）。
+      # 固定の列名や ? の並びだけを埋め込む箇所には、その文の上に `// #nosec G202 -- <なぜ安全か>` を書いてある。
+      - name: SQL injection check
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -include=G201,G202 -quiet ./...
 
       # 本番のイメージ（deploy.yml が main で作る）が作れることを、マージの前に確かめる。
       - name: Docker build

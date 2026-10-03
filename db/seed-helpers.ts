@@ -57,6 +57,7 @@ export async function upsertVerifiedUser(
     }
     if (options.resetFirstStudyLog) changes.push(["firstStudyLogAt", null]);
     await execute(
+      // eslint-disable-next-line no-restricted-syntax -- 列名はこの関数に書いた固定の名前だけ（changes の1つ目）。値は ? で渡す
       `UPDATE \`user\` SET ${changes.map(([column]) => `${column} = ?`).join(", ")} WHERE id = ?`,
       [...changes.map(([, value]) => value), existing.id]
     );
@@ -122,6 +123,7 @@ export async function insertStudyPlans(
   if (plans.length === 0) return;
   const now = new Date();
   await execute(
+    // eslint-disable-next-line no-restricted-syntax -- 埋め込むのは件数ぶん並べた ? だけ。値は plans から ? で渡す
     `INSERT INTO StudyPlan (userId, date, content, subject, done, createdAt, updatedAt)
      VALUES ${plans.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ")}`,
     plans.flatMap((plan) => [
@@ -144,6 +146,7 @@ export async function insertStudyLogs(
   if (logs.length === 0) return;
   const now = new Date();
   await execute(
+    // eslint-disable-next-line no-restricted-syntax -- 埋め込むのは件数ぶん並べた ? だけ。値は logs から ? で渡す
     `INSERT INTO StudyLog (userId, date, subject, minutes, createdAt, updatedAt)
      VALUES ${logs.map(() => "(?, ?, ?, ?, ?, ?)").join(", ")}`,
     logs.flatMap((log) => [

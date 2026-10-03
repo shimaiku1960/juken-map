@@ -16,6 +16,7 @@ export function updateProfile(userId: string, data: { nickname: string }) {
     );
     // 更新後の行を返す（Prisma の update と同じ）。MySQL の UPDATE は行を返さない。
     const [user] = await select<UserRow>(
+      // eslint-disable-next-line no-restricted-syntax -- USER_COLUMNS は固定の列名の並び（定数）。id は ? で渡す
       `SELECT ${USER_COLUMNS} FROM \`user\` WHERE id = ?`,
       [userId]
     );
