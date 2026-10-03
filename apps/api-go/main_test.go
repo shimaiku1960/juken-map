@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
 
 func TestRegisteredRoutes(t *testing.T) {
 	// Go が受け持つルートと入口の種類。
@@ -77,5 +83,67 @@ func TestRegisteredRoutes(t *testing.T) {
 		if rt.routes[i] != want[i] {
 			t.Errorf("routes[%d] = %v, want %v", i, rt.routes[i], want[i])
 		}
+	}
+}
+
+func TestRegisteredWritesRejectCrossSite(t *testing.T) {
+	// CSRF 対策（セキュリティ基準 D3）を、本番と同じルートの一覧で確かめる。
+	// Cookie で認証する書き込み（入口が user・admin の GET 以外）は、別のサイトから送られたらハンドラまで来ずに 403。
+	// それ以外の入口は Cookie を読まないので CSRF の対象にならない。Cookie を読む入口（public・oauth）に
+	// 書き込みのルートを足したら、ここで落ちる（足すなら user・admin で登録する）。
+	// 仕組みそのもの（同じサイト・Origin と Host の比較・curl）は router_test.go の TestRouterCrossOrigin。
+	rt := newRouter(fakeSessions(testSessions))
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{})
+
+	checked := 0
+	for _, route := range rt.routes {
+		method, path, _ := strings.Cut(route.Pattern, " ")
+		if method == http.MethodGet {
+			continue
+		}
+		switch route.Access {
+		case accessUser, accessAdmin:
+		case accessWebhook, accessJob, accessAnonymousWrite:
+			// 署名・共有トークンで守るか、書き込めても害が無い入口。Cookie は読まない。
+			continue
+		default:
+			t.Errorf("%s: Cookie を読む入口（%s）に書き込みがある。user か admin で登録する", route.Pattern, route.Access)
+			continue
+		}
+		target := pathParam.ReplaceAllString(path, "1")
+		for _, header := range []map[string]string{
+			{"Sec-Fetch-Site": "cross-site"},
+			// Sec-Fetch-Site を送らない古いブラウザは、Origin と Host を比べて見分ける
+			{"Origin": "https://evil.example"},
+		} {
+			t.Run(route.Pattern+" "+fmt.Sprint(header), func(t *testing.T) {
+				req := httptest.NewRequest(method, target, strings.NewReader(`{}`))
+				req.Host = "juken-map.com"
+				req.Header.Set("Content-Type", "application/json")
+				req.AddCookie(&http.Cookie{Name: "test", Value: "admin"})
+				for k, v := range header {
+					req.Header.Set(k, v)
+				}
+				res := httptest.NewRecorder()
+				func() {
+					// DB は nil なので、ハンドラまで来たら panic になる。来たこと自体を失敗として出す。
+					defer func() {
+						if p := recover(); p != nil {
+							t.Fatalf("別のサイトからの書き込みがハンドラまで来た: %v", p)
+						}
+					}()
+					rt.ServeHTTP(res, req)
+				}()
+				if res.Code != http.StatusForbidden {
+					t.Fatalf("status = %d, want 403（本文 %s）", res.Code, res.Body)
+				}
+				assertJSONEqual(t, res.Body.String(), `{"error":"`+crossOriginMessage+`"}`)
+			})
+		}
+		checked++
+	}
+	// 一覧が空になって何も確かめずに通る、ということが無いように。
+	if checked < 20 {
+		t.Fatalf("確かめた書き込みのルートが %d 本しかない", checked)
 	}
 }
