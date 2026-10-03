@@ -94,7 +94,7 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	// 書き込みのルートを足したら、ここで落ちる（足すなら user・admin で登録する）。
 	// 仕組みそのもの（同じサイト・Origin と Host の比較・curl）は router_test.go の TestRouterCrossOrigin。
 	rt := newRouter(fakeSessions(testSessions))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	checked := 0
 	for _, route := range rt.routes {

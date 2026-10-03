@@ -42,7 +42,7 @@ func newDBAdminApp(t *testing.T, db *sql.DB) dbAdminApp {
 		}
 		return &session{UserID: c.Value, Email: c.Value + "@example.test", Role: "admin", TwoFactorVerified: true}, nil
 	})
-	registerRoutes(rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"})
+	registerRoutes(rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
 	return dbAdminApp{t: t, rt: rt}
 }
 
