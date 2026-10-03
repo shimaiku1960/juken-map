@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -547,6 +548,34 @@ func TestAdminMastersDB(t *testing.T) {
 		if n := fx.count("SELECT COUNT(*) FROM TextbookMasterMetric WHERE masterId = ?", created.ID); n != 0 {
 			t.Errorf("総量の候補が CASCADE で消えていない: %d", n)
 		}
+	})
+
+	t.Run("特殊文字を含む名前は、SQL として読まれず文字どおり保存・検索される", func(t *testing.T) {
+		// セキュリティ基準 D1（インジェクション）。値を ? で渡していれば、引用符・バックスラッシュ・コメントの記号・
+		// LIKE の % と _ を含んでも、そのままの文字列として扱われる。連結で組み立てていれば、構文エラー（500）か
+		// 別の SQL になる。
+		name := mark + `-x'); DROP TABLE University; -- \' " %_`
+		var created AdminUniversity
+		body, _ := json.Marshal(map[string]string{"name": name, "prefecture": "東京都", "type": "私立"})
+		app.expect(app.send("POST", "/api/admin/universities", string(body), adminID), 201, &created)
+		if created.Name != name {
+			t.Fatalf("name = %q, want %q", created.Name, name)
+		}
+		var stored string
+		if err := db.QueryRow("SELECT name FROM University WHERE id = ?", created.ID).Scan(&stored); err != nil || stored != name {
+			t.Fatalf("DB の name = %q（%v）, want %q", stored, err, name)
+		}
+
+		// 検索語にも同じ文字を入れる。LIKE の % と _ も文字として扱うので、ちょうどこの大学だけに当たる
+		var list AdminUniversityList
+		app.expect(app.send("GET", "/api/admin/universities?q="+url.QueryEscape(`'); DROP TABLE University; -- \' " %_`), "", adminID), 200, &list)
+		if list.Total != 1 || len(list.Universities) != 1 || list.Universities[0].ID != created.ID {
+			t.Errorf("検索: total=%d universities=%+v", list.Total, list.Universities)
+		}
+		if n := fx.count("SELECT COUNT(*) FROM University WHERE id = ?", created.ID); n != 1 {
+			t.Errorf("University の行が %d 件（表ごと消えていないか）", n)
+		}
+		app.expect(app.send("DELETE", fmt.Sprintf("/api/admin/universities/%d", created.ID), "", adminID), 204, nil)
 	})
 
 	t.Run("タグの一覧", func(t *testing.T) {
