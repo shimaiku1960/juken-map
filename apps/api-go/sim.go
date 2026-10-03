@@ -113,6 +113,7 @@ func (st *simStore) updateUser(ctx context.Context, seq int64, u simUpdate) (boo
 	if len(sets) == 0 {
 		return true, nil
 	}
+	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（sets）。値は args で ? として渡す
 	res, err := st.db.ExecContext(ctx,
 		"UPDATE `user` SET "+strings.Join(sets, ", ")+" WHERE simSeq = ? AND email LIKE ?",
 		append(args, seq, simEmailLike)...)

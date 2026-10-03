@@ -123,6 +123,7 @@ func (st *goalStore) applyPatch(ctx context.Context, userID string, id int64, p 
 	if len(columns) == 0 {
 		return nil
 	}
+	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（columns）。値は args で ? として渡す
 	update := "UPDATE FinalGoal SET " + strings.Join(columns, ", ") + " WHERE id = ?"
 	args = append(args, id)
 

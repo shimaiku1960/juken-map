@@ -716,6 +716,7 @@ func (st *sqlAdminMasterStore) listUniversities(ctx context.Context, q string, p
 	if err := st.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM University u "+where, params...).Scan(&list.Total); err != nil {
 		return list, err
 	}
+	// #nosec G202 -- adminUniversityColumns は固定の列の並び、where は固定の条件と ? だけ。値は params で渡す
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT "+adminUniversityColumns+" FROM University u "+where+" ORDER BY u.name ASC, u.id ASC LIMIT ? OFFSET ?",
 		append(params, adminUniversitiesPageSize, (page-1)*adminUniversitiesPageSize)...)
@@ -939,6 +940,7 @@ func replaceTags(ctx context.Context, tx *sql.Tx, facultyID int64, tagIDs []int6
 	for _, tagID := range tagIDs {
 		args = append(args, facultyID, tagID)
 	}
+	// #nosec G202 -- 埋め込むのは件数ぶん並べた (?, ?) だけ。値は args で渡す
 	_, err := tx.ExecContext(ctx, "INSERT INTO _FacultyToTag (A, B) VALUES "+placeholders(len(tagIDs), "(?, ?)"), args...)
 	return err
 }
@@ -1112,6 +1114,7 @@ func replaceMetrics(ctx context.Context, tx *sql.Tx, masterID int64, metrics []A
 	for _, m := range metrics {
 		args = append(args, masterID, m.Unit, m.TotalAmount, m.IsDefault, now, now)
 	}
+	// #nosec G202 -- 埋め込むのは件数ぶん並べた (?, …) だけ。値は args で渡す
 	_, err := tx.ExecContext(ctx,
 		`INSERT INTO TextbookMasterMetric (masterId, unit, totalAmount, isDefault, createdAt, updatedAt)
 		 VALUES `+placeholders(len(metrics), "(?, ?, ?, ?, ?, ?)"), args...)
