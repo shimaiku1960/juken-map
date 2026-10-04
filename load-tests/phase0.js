@@ -49,7 +49,7 @@ export const options = {
 
 function login() {
   const response = http.post(
-    `${baseUrl}/api/auth/sign-in/email`,
+    `${baseUrl}/api/auth/sign-in`,
     JSON.stringify({ email, password }),
     { headers: { "Content-Type": "application/json" }, redirects: 0 }
   );

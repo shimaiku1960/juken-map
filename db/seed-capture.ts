@@ -84,7 +84,7 @@ runSeed(async () => {
   await setCredentialPassword(userId, CAPTURE_PASSWORD);
 
   // 撮影を毎回同じ初期状態から始めるため、撮影ユーザーの可変データだけをリセットする。
-  await execute("DELETE FROM session WHERE userId = ?", [userId]);
+  await execute("DELETE FROM AuthSession WHERE userId = ?", [userId]);
   await execute("DELETE FROM StudyLog WHERE userId = ?", [userId]);
   await execute("DELETE FROM StudyPlan WHERE userId = ?", [userId]);
   await execute("DELETE FROM FinalGoal WHERE userId = ?", [userId]);

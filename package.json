@@ -17,7 +17,7 @@
     "test": "vitest run",
     "check": "pnpm exec eslint --max-warnings 0 && pnpm exec tsc --noEmit && pnpm -r typecheck && pnpm test && pnpm -r test && pnpm --filter @juken-map/web build",
     "e2e": "playwright test",
-    "test:go-db": "pnpm --filter @juken-map/api test-db:prepare && cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB' -count=1 ./...",
+    "test:go-db": "pnpm --filter @juken-map/api test-db:prepare && cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB' -count=1 ./...",
     "db:start": "docker compose up -d --wait db",
     "db:stop": "docker compose stop db",
     "db:logs": "docker compose logs -f db",
@@ -42,7 +42,6 @@
     "lock:fix": "pnpm install --lockfile-only && pnpm run lock:linux"
   },
   "dependencies": {
-    "better-auth": "^1.6.22",
     "zod": "^4.4.3"
   },
   "devDependencies": {

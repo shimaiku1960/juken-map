@@ -1,28 +1,23 @@
 // 負荷試験用に、ログイン済みのセッションを先に発行する。
 //
 // HTTPでログインさせると2つの理由で測りたいものが測れない。
-//   - Better Auth は同一IPからのサインインを制限する。k6 は1つのIPから来るので
+//   - ログイン（Go）は同一IPからのサインインを制限する。k6 は1つのIPから来るので
 //     本番では起きない 429 が出る。制限を外すのは本番の守りを弱めるので選ばない。
 //   - 実際の利用者は毎回ログインし直さない。セッションを持って来訪する。
-//     毎回ログインさせると、測っているのが scrypt の重さになる。
+//     毎回ログインさせると、測っているのがパスワードのハッシュ（Argon2id）の重さになる。
 //
-// Better Auth の session_token クッキーは「token.署名」の形。署名は Better Auth 自身の
-// makeSignature（BETTER_AUTH_SECRET の HMAC-SHA256）で作るので、ここでも同じ関数を使う。
-import { generateId } from "better-auth";
-import { makeSignature } from "better-auth/crypto";
+// セッションの Cookie は 256 ビットの乱数のトークンで、DB にはその SHA-256 を置く
+// （apps/api-go の auth_session.go・auth_token.go と同じ作り方）。
+import { createHash, randomBytes } from "node:crypto";
 import { SEED_EMAIL_DOMAIN } from "../src/shared/synthetic";
 import { execute, runSeed, select } from "./seed-helpers";
 
 const COUNT = Number(process.env.COUNT ?? 500);
 const ACTIVE_DAYS = Number(process.env.ACTIVE_DAYS ?? 7);
-// HTTPS で動く本番（と本番の AMI から複製した試験環境）では、Better Auth が
-// __Secure- を前に付けた名前で読む。手元の http では付かない。
-const COOKIE_NAME = `${process.env.SECURE_COOKIE === "on" ? "__Secure-" : ""}better-auth.session_token`;
+// Go の sessionCookieName と同じ。手元の http でも同じ名前（ブラウザは localhost を安全な場所として扱う）。
+const COOKIE_NAME = "__Host-jm_session";
 
 runSeed(async () => {
-  const secret = process.env.BETTER_AUTH_SECRET;
-  if (!secret) throw new Error("BETTER_AUTH_SECRET が要ります");
-
   // 毎日来ている層から選ぶ。直近30日まで広げると、登録したてで数件しか持っていない人が
   // 大半になり、一覧APIが実際より軽く見える。
   const rows = await select<{ id: string; email: string; logs: number }>(
@@ -44,7 +39,7 @@ runSeed(async () => {
 
   // 前回の試験で作ったセッションは消す（実利用者のセッションには触れない）。
   await execute(
-    "DELETE FROM session WHERE userAgent = 'juken-map-loadtest' AND userId IN (SELECT id FROM `user` WHERE email LIKE ?)",
+    "DELETE FROM AuthSession WHERE userAgent = 'juken-map-loadtest' AND userId IN (SELECT id FROM `user` WHERE email LIKE ?)",
     [`%${SEED_EMAIL_DOMAIN}`]
   );
 
@@ -53,17 +48,17 @@ runSeed(async () => {
   const cookies: string[] = [];
   const values: unknown[][] = [];
   for (const row of rows) {
-    const token = generateId(32);
-    const signature = await makeSignature(token, secret);
-    cookies.push(`${COOKIE_NAME}=${token}.${encodeURIComponent(signature)}`);
-    values.push([generateId(), row.id, expiresAt, token, now, now, "127.0.0.1", "juken-map-loadtest"]);
+    const token = randomBytes(32).toString("base64url");
+    cookies.push(`${COOKIE_NAME}=${token}`);
+    const tokenHash = createHash("sha256").update(token).digest();
+    values.push([randomBytes(16).toString("hex"), tokenHash, row.id, now, expiresAt, now, "127.0.0.1", "juken-map-loadtest"]);
   }
 
   for (let i = 0; i < values.length; i += 200) {
     const chunk = values.slice(i, i + 200);
     await execute(
       // eslint-disable-next-line no-restricted-syntax -- 埋め込むのは件数ぶん並べた ? だけ。値は chunk.flat() で渡す
-      `INSERT INTO session (id, userId, expiresAt, token, createdAt, updatedAt, ipAddress, userAgent)
+      `INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt, ipAddress, userAgent)
        VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(", ")}`,
       chunk.flat()
     );

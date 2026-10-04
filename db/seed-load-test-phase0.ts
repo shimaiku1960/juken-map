@@ -27,7 +27,7 @@ runSeed(async () => {
     [userId, PLAN_MARKER]
   );
   await execute("DELETE FROM StudyPlan WHERE userId = ? AND content = ?", [userId, PLAN_MARKER]);
-  await execute("DELETE FROM session WHERE userId = ?", [userId]);
+  await execute("DELETE FROM AuthSession WHERE userId = ?", [userId]);
 
   const now = new Date();
   const plan = await execute(

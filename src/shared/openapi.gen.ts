@@ -595,7 +595,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 利用者を停止する。今のセッションを消して画面を落とし、次のログインは Node（Better Auth）が断る */
+        /** 利用者を停止する。今のセッションを消して画面を落とし、次のログインも断る */
         post: operations["banUser"];
         delete?: never;
         options?: never;

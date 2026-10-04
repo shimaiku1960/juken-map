@@ -5,6 +5,7 @@
 //   pnpm incident ban <メールアドレス>         # 止めて、セッションをすべて消す（管理者も止められる）
 //   pnpm incident unban <メールアドレス>       # 止めたのを戻す
 //   pnpm incident revoke-admins               # 管理者全員のセッションを消す
+//   pnpm incident revoke-all                  # 全員のセッションを消す（全員がログインし直し）
 //   pnpm incident reset-2fa <メールアドレス>   # 2段階認証を設定前に戻し、セッションをすべて消す
 //
 // 本番は RDS に外から繋げないので、pnpm admin:grant と同じく EC2 の API のコンテナの中で実行する。
@@ -14,6 +15,7 @@ import {
   listSessionsByEmail,
   resetTwoFactorByEmail,
   revokeAdminSessions,
+  revokeAllSessions,
   revokeSessionsByEmail,
   unbanByEmail,
 } from "./services/incident-service.ts";
@@ -24,6 +26,7 @@ const USAGE = `使い方: pnpm incident <操作> [メールアドレス]
   ban <メール>        止めて、セッションをすべて消す
   unban <メール>      止めたのを戻す
   revoke-admins       管理者全員のセッションを消す
+  revoke-all          全員のセッションを消す（全員がログインし直し）
   reset-2fa <メール>  2段階認証を設定前に戻し、セッションをすべて消す`;
 
 const [command, email] = process.argv.slice(2);
@@ -38,6 +41,12 @@ async function run() {
     const { admins, sessionsRemoved } = await revokeAdminSessions();
     console.log(`管理者 ${admins.length} 人のセッションを ${sessionsRemoved} 件消しました`);
     for (const admin of admins) console.log(`  ${admin.email ?? admin.id}`);
+    return;
+  }
+
+  if (command === "revoke-all") {
+    const sessionsRemoved = await revokeAllSessions();
+    console.log(`全員のセッションを ${sessionsRemoved} 件消しました`);
     return;
   }
 
@@ -56,7 +65,7 @@ async function run() {
       for (const s of found.sessions) {
         const twoFactor = s.twoFactorVerified ? "2FA済み" : "2FAなし";
         console.log(
-          `  作成 ${s.createdAt.toISOString()}  期限 ${s.expiresAt.toISOString()}  ${twoFactor}  ${s.ipAddress ?? "-"}  ${s.userAgent ?? "-"}`
+          `  作成 ${s.createdAt.toISOString()}  最終 ${s.lastUsedAt.toISOString()}  期限 ${s.expiresAt.toISOString()}  ${twoFactor}  ${s.ipAddress ?? "-"}  ${s.userAgent ?? "-"}`
         );
       }
       return;

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { execute, pool, select } from "@/api/infra/db";
 import {
@@ -6,6 +6,7 @@ import {
   listSessionsByEmail,
   resetTwoFactorByEmail,
   revokeAdminSessions,
+  revokeAllSessions,
   revokeSessionsByEmail,
   unbanByEmail,
 } from "./incident-service.ts";
@@ -33,8 +34,9 @@ async function userWithSessions(sessions: number, role: "user" | "admin" = "user
   userIds.push(id);
   for (let i = 0; i < sessions; i++) {
     await execute(
-      "INSERT INTO session (id, userId, token, expiresAt, updatedAt, ipAddress) VALUES (?, ?, ?, ?, ?, ?)",
-      [randomUUID(), id, randomUUID(), new Date(now.getTime() + 86_400_000), now, `192.0.2.${i}`]
+      `INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt, ipAddress)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [randomBytes(16).toString("hex"), randomBytes(32), id, now, new Date(now.getTime() + 86_400_000), now, `192.0.2.${i}`]
     );
   }
   return { id, email };
@@ -42,7 +44,7 @@ async function userWithSessions(sessions: number, role: "user" | "admin" = "user
 
 async function sessionCount(userId: string) {
   const [row] = await select<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM session WHERE userId = ?",
+    "SELECT COUNT(*) AS n FROM AuthSession WHERE userId = ?",
     [userId]
   );
   return Number(row.n);
@@ -112,13 +114,27 @@ describe("pnpm incident", () => {
     expect(await sessionCount(user.id)).toBe(1);
   });
 
+  it("revoke-all は、全員のセッションを消す", async () => {
+    const a = await userWithSessions(1);
+    const b = await userWithSessions(2, "admin");
+
+    const removed = await revokeAllSessions();
+
+    expect(removed).toBeGreaterThanOrEqual(3);
+    expect(await sessionCount(a.id)).toBe(0);
+    expect(await sessionCount(b.id)).toBe(0);
+  });
+
   it("reset-2fa は、2段階認証を設定前に戻し、セッションを消す", async () => {
     const admin = await userWithSessions(1, "admin");
     await execute("UPDATE `user` SET twoFactorEnabled = true WHERE id = ?", [admin.id]);
-    await execute(
-      "INSERT INTO twoFactor (id, secret, backupCodes, userId) VALUES (?, 'secret', 'codes', ?)",
-      [randomUUID(), admin.id]
-    );
+    const now = new Date();
+    await execute("INSERT INTO AuthTotp (userId, secret, createdAt, enabledAt) VALUES (?, 'v0:secret', ?, ?)", [
+      admin.id,
+      now,
+      now,
+    ]);
+    await execute("INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", [admin.id, randomBytes(32)]);
 
     const done = await resetTwoFactorByEmail(admin.email);
 
@@ -126,9 +142,10 @@ describe("pnpm incident", () => {
       "SELECT twoFactorEnabled FROM `user` WHERE id = ?",
       [admin.id]
     );
-    const rows = await select<{ id: string }>("SELECT id FROM twoFactor WHERE userId = ?", [
-      admin.id,
-    ]);
+    const rows = await select<{ userId: string }>(
+      "SELECT userId FROM AuthTotp WHERE userId = ? UNION ALL SELECT userId FROM AuthBackupCode WHERE userId = ?",
+      [admin.id, admin.id]
+    );
     expect(done?.sessionsRemoved).toBe(1);
     expect(Boolean(user.twoFactorEnabled)).toBe(false);
     expect(rows).toHaveLength(0);

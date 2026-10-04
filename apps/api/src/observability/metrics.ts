@@ -29,79 +29,18 @@ const httpRequestDuration = new Histogram({
   registers: [registry],
 });
 
-// アプリが送ろうとしたメールの数（セキュリティ基準 H1）。送信量の急増と、上限（email-limits.ts）で
-// 止めたことをアラートで知らせる（terraform/grafana/alerting.tf）。カウンターなので、デプロイで
-// 0 に戻っても increase() が正しく数える（resend_quota_used のように値が消えて鳴らなくなることが無い）。
-const emailSendsTotal = new Counter({
-  name: "email_sends_total",
-  help: "アプリが送ろうとしたメールの数（result：sent・blocked＝上限で止めた・failed）",
-  labelNames: ["kind", "result"],
-  registers: [registry],
-});
-
-const EMAIL_SEND_RESULTS = ["sent", "blocked", "failed"] as const;
-export type EmailSendResult = (typeof EMAIL_SEND_RESULTS)[number];
-
-/**
- * 全部の組み合わせを 0 で作っておく。値の無い系列にいきなり 1 が現れると、Prometheus の
- * increase() は1点目を比べる相手が無くて数えられず、最初の「上限で止めた」を見落とす。
- */
-export function initEmailSendCounts(kinds: readonly string[]) {
-  for (const kind of kinds) {
-    for (const result of EMAIL_SEND_RESULTS) emailSendsTotal.inc({ kind, result }, 0);
-  }
-}
-
-export function countEmailSend(kind: string, result: EmailSendResult) {
-  emailSendsTotal.inc({ kind, result });
-}
-
-// Resend の送信枠をどれだけ使ったか（セキュリティ基準 E1）。メールを送ったときの応答ヘッダー
-// （x-resend-daily-quota・x-resend-monthly-quota。使った数）をそのまま写す。日の分は無料プランにだけ付く。
-// 送らないあいだは古い値が残り続けるので、いつ読んだかも出し、アラートは新しい値だけを見る
-// （terraform/grafana/alerting.tf）。
-const resendQuotaUsed = new Gauge({
-  name: "resend_quota_used",
-  help: "Resend の送信枠のうち使った数（最後に送ったときの応答ヘッダー）",
-  labelNames: ["period"],
-  registers: [registry],
-});
-
-const resendQuotaObservedAt = new Gauge({
-  name: "resend_quota_observed_timestamp_seconds",
-  help: "resend_quota_used を最後に読んだ時刻（UNIX 秒）",
-  labelNames: ["period"],
-  registers: [registry],
-});
-
-const RESEND_QUOTA_HEADERS = {
-  daily: "x-resend-daily-quota",
-  monthly: "x-resend-monthly-quota",
-} as const;
-
-/** Resend の応答ヘッダーから、送信枠を使った数を読んでメトリクスに写す。 */
-export function observeResendQuota(headers: Record<string, string> | null | undefined, now = new Date()) {
-  if (!headers) return;
-  for (const [period, name] of Object.entries(RESEND_QUOTA_HEADERS)) {
-    const raw = headers[name];
-    const used = Number(raw);
-    if (!raw || !Number.isFinite(used)) continue;
-    resendQuotaUsed.set({ period }, used);
-    resendQuotaObservedAt.set({ period }, now.getTime() / 1000);
-  }
-}
+// 認証のメールの数（email_sends_total）と Resend の送信枠（resend_quota_used）は、メールを送る Go が出す
+// （apps/api-go の metrics.go、JUK-115）。
 
 /**
  * メトリクスの route ラベルに入れる値。
  *
  * ラベルは値の組み合わせごとに別の時系列になるので、実際の URL（/api/study-logs/12）を
  * 入れると ID の数だけ増えて Prometheus が重くなる。ルートの型（/api/study-logs/:id）を使う。
- * 画面（SPA の HTML や assets）はファイル名にハッシュが入りデプロイごとに変わるので1つにまとめ、
- * Better Auth はルートを登録せず onRequest で横取りしているので、型が取れない分をまとめる。
+ * 画面（SPA の HTML や assets）はファイル名にハッシュが入りデプロイごとに変わるので1つにまとめる。
  */
 function routeLabel(request: FastifyRequest) {
   if (!request.url.startsWith("/api/")) return "(web)";
-  if (request.url.startsWith("/api/auth/")) return "/api/auth/*";
   return request.routeOptions.url ?? "(unmatched)";
 }
 

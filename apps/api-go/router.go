@@ -29,6 +29,9 @@ const (
 	// E7 ログイン不要の書き込み（CSP 違反の報告）。書き込めても害が無い設計にする（DB に書かない・大きさに上限）
 	accessAnonymousWrite access = "anonymous-write"
 	accessOAuth          access = "oauth" // E8 外部との連携（OAuth）。画面遷移なので、未ログインはハンドラがログインへ送る
+	// E2 認証の入口（/api/auth/*：ログイン・登録・再設定・2段階認証・外部ログイン）。ログインしていなくても呼べる。
+	// 書き込みは別のサイトから断る（ログインの CSRF。10 D2）。セッションがあれば読んで渡す（無ければ nil）。
+	accessAuth access = "auth"
 )
 
 // デモアカウント（面接官向け・閲覧専用）。Node の src/shared/demo.ts と同じ値。
@@ -37,14 +40,16 @@ const demoEmail = "demo@juken-map.com"
 // 管理者だが2段階認証を通していないときの 403 の印。Node の src/shared/admin.ts と同じ値。
 const twoFactorRequired = "TWO_FACTOR_REQUIRED"
 
-// session はログイン中の利用者。Better Auth が Node 側で発行したものを、auth.go が DB から読む。
+// session はログイン中の利用者。auth_session.go が Cookie のトークンで DB（AuthSession）から読む。
 type session struct {
+	// ID はセッションの番号（トークンではない）。ログアウトや「ほかの端末を消す」で、このセッションを指す。
+	ID     string
 	UserID string
 	Email  string
 	Role   string
 	Banned bool
-	// TwoFactorVerified は、そのセッションが2段階認証を通して作られたか。
-	// Node の auth.ts が session.twoFactorVerified に付ける。管理者のルートはこれを求める。
+	// TwoFactorVerified は、そのセッションが2段階認証を通して作られたか（AuthSession.mfaVerifiedAt、G3）。
+	// 管理者のルートはこれを求める。
 	TwoFactorVerified bool
 }
 
@@ -53,6 +58,10 @@ type sessionHandler func(w http.ResponseWriter, r *http.Request, s *session)
 
 // oauthHandler は OAuth の入口のハンドラ。s は未ログインなら nil（ハンドラが戻り先つきでログインへ送る）。
 type oauthHandler func(w http.ResponseWriter, r *http.Request, s *session)
+
+// authHandler は認証の入口のハンドラ。s は未ログインなら nil。停止中・デモの扱いはハンドラが決める
+// （停止中でもログアウトはできる、など入口ごとに違うため）。
+type authHandler func(w http.ResponseWriter, r *http.Request, s *session)
 
 // sessionLoader はリクエストからセッションを読む。ログインしていなければ (nil, nil) を返す。
 // 関数で受け取るのは、テストで DB の代わりに決まったセッションを返せるようにするため。
@@ -196,6 +205,23 @@ func (rt *router) oauth(pattern string, h oauthHandler) {
 				writeError(w, http.StatusForbidden, "デモアカウントは閲覧専用です")
 				return
 			}
+		}
+		h(w, r, s)
+	})
+}
+
+// auth は認証の入口を登録する。別のサイトからの書き込みは 403（ログイン・登録・ログアウト・2段階認証の確認も。
+// 攻撃者のアカウントで被害者をログインさせる「ログインの CSRF」を防ぐ。10 D2）。未ログインでも断らない。
+// 状態を変える処理は GET で受けない（GET は外部ログインの戻りとセッションの取得だけ）。
+func (rt *router) auth(pattern string, h authHandler) {
+	rt.handle(pattern, accessAuth, func(w http.ResponseWriter, r *http.Request) {
+		if !rt.sameOrigin(w, r) {
+			return
+		}
+		s, err := rt.loadSession(r)
+		if err != nil {
+			internalError(w, r, err)
+			return
 		}
 		h(w, r, s)
 	})

@@ -16,12 +16,9 @@ export default function ForgotPasswordPage() {
   const handleSubmit = async () => {
     setLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.requestPasswordReset({
-      email,
-      redirectTo: "/reset-password",
-    });
+    const { error } = await authClient.forgotPassword({ email });
     if (error) {
-      setErrorMessage(error.message ?? "送信に失敗しました");
+      setErrorMessage(error.message);
       setLoading(false);
       return;
     }
@@ -34,7 +31,7 @@ export default function ForgotPasswordPage() {
 
       {sent ? (
         <InlineFeedback variant="success">
-          入力されたメールアドレス宛に再設定用のリンクを送信しました。メールをご確認ください。
+          登録されているメールアドレスなら、再設定用のリンクを送りました（有効期限は1時間）。メールをご確認ください。
         </InlineFeedback>
       ) : (
         <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}>

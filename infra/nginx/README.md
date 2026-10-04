@@ -123,9 +123,9 @@ server {
 `juken-map-go-routes.conf` が正**で、デプロイのたびに本番の `/etc/nginx/juken-map/go-routes.conf` へ置かれる。
 
 ```
-                         ┌─ go-routes.conf のパス（業務の API すべてと /api/health/go）
+                         ┌─ go-routes.conf のパス（業務の API すべて・ログイン /api/auth/*・/api/health/go）
 [nginx] 443 の server ───┤      → upstream juken_map_go  → 127.0.0.1:8080 か 8081（juken-map-go）
-                         └─ location /（それ以外：ログイン /api/auth/*・ブログ・/api/health・画面）
+                         └─ location /（それ以外：ブログ・/api/health・/line/settings・画面）
                                 → upstream juken_map_app → 127.0.0.1:3000 か 3001（juken-map、Node）
 ```
 
@@ -199,8 +199,8 @@ E2E   ブラウザ → nginx :3000 ─┬─ go-routes.conf のパス → Go   :
 
 ## 注意
 
-- **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（Better Auth）はログインの回数制限を
-  接続元 IP ごとに数えるが、IP をこのヘッダーからしか読まない。無いと全員が1つの枠で数えられる。
+- **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（当時は Better Auth、今は Go の `auth_throttle.go`）は
+  ログインの回数制限を接続元 IP ごとに数えるが、IP をこのヘッダーからしか読まない。無いと全員が1つの枠で数えられる。
   `$proxy_add_x_forwarded_for`（届いた値に追記）ではなく `$remote_addr` で上書きし、
   利用者が送ってきた値をそのまま信用しないようにしている。変更前の設定は
   `/etc/nginx/sites-available/default.bak-20260918` に残してある

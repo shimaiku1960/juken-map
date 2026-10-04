@@ -76,11 +76,8 @@ stamp="$(date +%Y%m%d-%H%M%S)"
 result_file="$OUT_DIR/limit-$stamp.jsonl"
 
 # ログイン済みのセッションを先に発行する（HTTPでログインさせない理由は
-# db/issue-loadtest-sessions.ts に書いた）。
-# 試験環境は本番と同じ HTTPS なので、Cookie の名前に __Secure- が付く。
-secure_cookie=off
-[ "$LOADTEST_ENV" = aws ] && secure_cookie=on
-users_json="$(SECURE_COOKIE="$secure_cookie" pnpm exec tsx --env-file=.env db/issue-loadtest-sessions.ts | tail -1)"
+# db/issue-loadtest-sessions.ts に書いた）。Cookie の名前は手元も試験環境も同じ（__Host-jm_session）。
+users_json="$(pnpm exec tsx --env-file=.env db/issue-loadtest-sessions.ts | tail -1)"
 cookies="$(jq -er '.cookies | join(",")' <<<"$users_json")"
 jq -r '"ログインに使う利用者: \(.count)人（1人あたりの実績 中央値\(.logs_per_user.median)件 / 最大\(.logs_per_user.max)件）"' <<<"$users_json"
 jq -c '{picked_users: .count, logs_per_user: .logs_per_user}' <<<"$users_json" > "$OUT_DIR/population-$stamp.json"

@@ -51,8 +51,8 @@ export default defineConfig(({ isSsrBuild }) => ({
     : undefined,
   server: {
     port: webPort,
-    // 使用中なら別の番号へずらさずに止める。ずれると BETTER_AUTH_URL と食い違い、
-    // ログインが origin 不一致で失敗する。
+    // 使用中なら別の番号へずらさずに止める。ずれると Go の WEB_ORIGIN（メールのリンク・外部ログインの戻り先）と
+    // 食い違う。
     strictPort: true,
     // 開発中は API を別プロセス（nginx の :4200 → Node :4000・Go :4100）で動かす。同一オリジンに見せることで
     // 本番（nginx で /api を Node と Go へ振る構成）と同じ Cookie の扱いになる。

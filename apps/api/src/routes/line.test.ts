@@ -1,15 +1,13 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 // 差し替えるのは外部境界（認証）だけ。
-vi.mock("../auth.ts", () => ({
-  auth: { api: { getSession: vi.fn() } },
-}));
+vi.mock("../session-store.ts", () => ({ findSession: vi.fn() }));
 
-const { auth } = await import("../auth.ts");
+const { findSession } = await import("../session-store.ts");
 const { registerLineRoutes } = await import("./line.ts");
 const { buildTestApp, loggedInSession, request } = await import("../test-support.ts");
 
-const getSession = auth.api.getSession as unknown as Mock;
+const getSession = findSession as unknown as Mock;
 
 const app = buildTestApp(registerLineRoutes);
 

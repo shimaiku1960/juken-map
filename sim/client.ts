@@ -2,7 +2,7 @@
 //
 // ブラウザがやってくれていることを、ここで代わりにやる：
 //   - Cookie を覚えて次のリクエストに付ける（Node の fetch は覚えない）
-//   - Origin を付ける（Cookie 付きの /api/auth への POST は Origin が無いと 403）
+//   - Origin を付ける（画面と同じ。別のサイトからの書き込みとして断られないように）
 // シミュレータだけの約束事：
 //   - X-Sim-Run ヘッダー＝ API のログに sim:true が付き、Grafana で実ユーザーと分けて読める
 //   - ログイン・登録の間隔を空ける（Better Auth の組み込み制限が 10 秒 3 回）
@@ -71,13 +71,12 @@ export class Browser {
     });
     this.shared.count(response.status);
 
-    // Better Auth は Set-Cookie でセッションを渡す。名前（本番は __Secure- 付き）に
-    // 依存しないよう、返ってきたものを名前ごとそのまま覚える。
+    // ログインは Set-Cookie でセッションを渡す。名前に依存しないよう、返ってきたものを名前ごとそのまま覚える。
     const setCookies = response.headers.getSetCookie();
     if (setCookies.length > 0) this.cookie = mergeCookies(this.cookie, setCookies);
 
     if (response.status === 429 && !retried) {
-      const retryAfter = Number(response.headers.get("X-Retry-After") ?? "10");
+      const retryAfter = Number(response.headers.get("Retry-After") ?? "10");
       await response.body?.cancel();
       await sleep((retryAfter + 1) * 1000);
       return this.raw(method, path, body, true);

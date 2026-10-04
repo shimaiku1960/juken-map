@@ -13,6 +13,21 @@ func TestRegisteredRoutes(t *testing.T) {
 	// ルートを足したらここに1行足す（nginx の振り分けも）。
 	// 一覧が変わるとこのテストが落ちるので、入口の種類を取り違えたまま足すことはできない。
 	want := []routeEntry{
+		{"GET /api/auth/session", accessAuth},
+		{"POST /api/auth/sign-up", accessAuth},
+		{"POST /api/auth/sign-in", accessAuth},
+		{"POST /api/auth/sign-out", accessAuth},
+		{"POST /api/auth/verify-email", accessAuth},
+		{"POST /api/auth/verify-email/resend", accessAuth},
+		{"POST /api/auth/password/forgot", accessAuth},
+		{"POST /api/auth/password/reset", accessAuth},
+		{"POST /api/auth/password/change", accessAuth},
+		{"GET /api/auth/accounts", accessAuth},
+		{"POST /api/auth/mfa/setup", accessAuth},
+		{"POST /api/auth/mfa/confirm", accessAuth},
+		{"POST /api/auth/mfa/verify", accessAuth},
+		{"POST /api/auth/oauth/{provider}", accessAuth},
+		{"GET /api/auth/callback/{provider}", accessAuth},
 		{"GET /api/health", accessPublic},
 		{"GET /api/dashboard", accessUser},
 		{"GET /api/study-logs", accessUser},
@@ -75,6 +90,7 @@ func TestRegisteredRoutes(t *testing.T) {
 
 	// ハンドラは呼ばないので、DB は nil のままでよい。
 	rt := newRouter(fakeSessions(nil))
+	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	if len(rt.routes) != len(want) {
@@ -93,7 +109,11 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	// それ以外の入口は Cookie を読まないので CSRF の対象にならない。Cookie を読む入口（public・oauth）に
 	// 書き込みのルートを足したら、ここで落ちる（足すなら user・admin で登録する）。
 	// 仕組みそのもの（同じサイト・Origin と Host の比較・curl）は router_test.go の TestRouterCrossOrigin。
+	//
+	// 認証の入口（auth）はセッションが無くても呼べるが、書き込みは同じく断る。ログイン・登録・ログアウト・
+	// 2段階認証の確認を別のサイトから送らせない（ログインの CSRF。認証基準 10 の D2）。
 	rt := newRouter(fakeSessions(testSessions))
+	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	checked := 0
@@ -103,7 +123,7 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 			continue
 		}
 		switch route.Access {
-		case accessUser, accessAdmin:
+		case accessUser, accessAdmin, accessAuth:
 		case accessWebhook, accessJob, accessAnonymousWrite:
 			// 署名・共有トークンで守るか、書き込めても害が無い入口。Cookie は読まない。
 			continue

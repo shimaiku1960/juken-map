@@ -991,7 +991,7 @@ paths:
   /api/admin/users/{id}/ban:
     post:
       operationId: banUser
-      summary: 利用者を停止する。今のセッションを消して画面を落とし、次のログインは Node（Better Auth）が断る
+      summary: 利用者を停止する。今のセッションを消して画面を落とし、次のログインも断る
       parameters:
         - $ref: "#/components/parameters/AdminUserID"
       responses:
@@ -1334,8 +1334,8 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: better-auth.session_token
-      description: Better Auth（Node）が発行するセッション Cookie。本番は __Secure- が前に付く
+      name: __Host-jm_session
+      description: ログイン（Go の /api/auth/*、JUK-115）が発行するセッション Cookie。中身の無い 256 ビットの乱数のトークン
     cronBearer:
       type: http
       scheme: bearer

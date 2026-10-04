@@ -17,8 +17,9 @@ async function findByEmail(email: string) {
   return user;
 }
 
+// セッションの取り消し（認証基準 10 の C5）。3＝ある利用者の全端末は deleteSessions、4＝全員は revokeAllSessions。
 async function deleteSessions(userId: string) {
-  const result = await execute("DELETE FROM session WHERE userId = ?", [userId]);
+  const result = await execute("DELETE FROM AuthSession WHERE userId = ?", [userId]);
   return result.affectedRows;
 }
 
@@ -29,12 +30,13 @@ export async function listSessionsByEmail(email: string) {
   const sessions = await select<{
     createdAt: Date;
     expiresAt: Date;
+    lastUsedAt: Date;
     ipAddress: string | null;
     userAgent: string | null;
     twoFactorVerified: boolean;
   }>(
-    `SELECT createdAt, expiresAt, ipAddress, userAgent, twoFactorVerified
-     FROM session WHERE userId = ? ORDER BY createdAt ASC`,
+    `SELECT createdAt, expiresAt, lastUsedAt, ipAddress, userAgent, mfaVerifiedAt IS NOT NULL AS twoFactorVerified
+     FROM AuthSession WHERE userId = ? ORDER BY createdAt ASC`,
     [user.id]
   );
   return { user, sessions };
@@ -48,7 +50,7 @@ export async function revokeSessionsByEmail(email: string) {
 }
 
 /**
- * その人を止め、セッションをすべて消す。止めた人は次のログインで断られる（auth.ts）。
+ * その人を止め、セッションをすべて消す。止めた人は次のログインで断られる（apps/api-go の auth_handlers.go）。
  * bannedAt を先に書くので、消している間に新しく入られても、そのログインは断られる。
  * 止め直しても最初に止めた日時を保つ（管理画面の停止と同じ）。
  */
@@ -74,6 +76,15 @@ export async function unbanByEmail(email: string) {
   return { user };
 }
 
+/**
+ * 全員のセッションを消す（C5 の4）。ログインの不具合や、セッションを読める立場（DB）からの漏えいが
+ * 疑われるときに使う。全員がログインし直しになる。
+ */
+export async function revokeAllSessions() {
+  const result = await execute("DELETE FROM AuthSession");
+  return result.affectedRows;
+}
+
 /** 管理者全員のセッションを消す。管理者のアカウントが1つでも乗っ取られたかもしれないときに使う。 */
 export async function revokeAdminSessions() {
   const admins = await select<{ id: string; email: string | null }>(
@@ -91,7 +102,9 @@ export async function revokeAdminSessions() {
 export async function resetTwoFactorByEmail(email: string) {
   const user = await findByEmail(email);
   if (!user) return undefined;
-  await execute("DELETE FROM twoFactor WHERE userId = ?", [user.id]);
+  await execute("DELETE FROM AuthTotp WHERE userId = ?", [user.id]);
+  await execute("DELETE FROM AuthBackupCode WHERE userId = ?", [user.id]);
+  await execute("DELETE FROM AuthMfaChallenge WHERE userId = ?", [user.id]);
   await execute("UPDATE `user` SET twoFactorEnabled = false, updatedAt = ? WHERE id = ?", [
     new Date(),
     user.id,

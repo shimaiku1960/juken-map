@@ -5,9 +5,7 @@ import type { RouteOptions } from "fastify";
 // ルートは登録されたものを onRoute で集めるので、ルートを足せば自動でここの対象に入る。
 // 1本ずつのテストが「正しい入力で何が起きるか」を見るのに対し、こちらは「検証を書き忘れたルートが無いか」を見る。
 
-vi.mock("../auth.ts", () => ({
-  auth: { api: { getSession: vi.fn() } },
-}));
+vi.mock("../session-store.ts", () => ({ findSession: vi.fn() }));
 
 // microCMS は読み込むだけで API キーを要求し、呼べば外へ出ていくので差し替える。
 vi.mock("@/api/infra/microcms", () => ({
@@ -16,12 +14,12 @@ vi.mock("@/api/infra/microcms", () => ({
   isBlogNotFound: vi.fn(() => false),
 }));
 
-const { auth } = await import("../auth.ts");
+const { findSession } = await import("../session-store.ts");
 const { registerRoutes } = await import("./index.ts");
 const { buildTestApp, request, adminSessionOf } = await import("../test-support.ts");
 const { cleanup, createUser } = await import("../test-db/fixtures.ts");
 
-const getSession = auth.api.getSession as unknown as Mock;
+const getSession = findSession as unknown as Mock;
 
 const routes: { method: string; url: string }[] = [];
 const app = buildTestApp((app) => {

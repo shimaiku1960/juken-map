@@ -258,7 +258,7 @@ locals {
     auth_failures = {
       name        = "受験マップ：認証失敗（401）の急増"
       summary     = "15分間の 401 が20件を超えました"
-      description = "ログインの総当たりや、盗んだ Cookie の使い回しの兆候です。平常時は1時間に5件以下です。route 別の内訳と、ログの [Better Auth] を確かめてください。手順は docs/incident-response.md。"
+      description = "ログインの総当たりや、盗んだ Cookie の使い回しの兆候です。平常時は1時間に5件以下です。route 別の内訳と、ログの [auth] sign_in_failure（reason・ip）を確かめてください。手順は docs/incident-response.md。"
       datasource  = "grafanacloud-prom"
       expr        = "sum(increase(http_requests_total{env=\"production\",status_code=\"401\"}[15m]))"
       op          = "gt"

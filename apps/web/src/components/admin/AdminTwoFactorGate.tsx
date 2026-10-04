@@ -12,23 +12,17 @@ import { authClient, useSession } from "@/web/lib/auth-client";
 import { useHasPassword } from "@/web/hooks/useTwoFactor";
 
 // 管理画面の入口。管理 API は、2段階認証を通して作られたセッションでないと 403 を返す
-// （apps/api/src/context.ts の requireAdmin）。守るのは API で、ここはその手前で
+// （apps/api-go の router.go の admin）。守るのは API で、ここはその手前で
 // 「何をすれば入れるか」を案内するだけ。管理者でない人はそのまま中身を出し、API の 403 で
 // 「権限がありません」になる。
 //
 // 案内は3通り。
-//   - 2段階認証が有効：このセッションは通していない（Google / GitHub でのログインなど）→ ログインし直し
+//   - 2段階認証が有効：このセッションは通していない（有効にする前からのログインなど）→ ログインし直し
 //   - 未設定でパスワードが無い：有効にするにはパスワードが要る → 「パスワードを忘れた方」から作る
 //   - 未設定でパスワードがある：ここで設定する（QR を読み、コードを確かめる）
 
-type SessionData = {
-  user: { email: string; role?: string | null; twoFactorEnabled?: boolean | null };
-  session: { twoFactorVerified?: boolean | null };
-};
-
 export default function AdminTwoFactorGate({ children }: { children: ReactNode }) {
-  const { data } = useSession();
-  const session = data as SessionData | null;
+  const { data: session } = useSession();
 
   if (!session || session.user.role !== "admin" || session.session.twoFactorVerified) {
     return children;
@@ -55,10 +49,8 @@ function SignInAgain() {
   return (
     <Card>
       <CardContent className="space-y-4 py-6 text-sm">
-        <p>
-          このログインは2段階認証を通していません。Google・GitHub でのログインでは、管理画面は開けません。
-        </p>
-        <p>ログアウトして、メールアドレスとパスワードでログインし直し、認証アプリのコードを入力してください。</p>
+        <p>このログインは2段階認証を通していません（2段階認証を有効にする前からのログインなど）。</p>
+        <p>ログアウトしてログインし直し、認証アプリのコードを入力してください。</p>
         <Button onClick={() => void signOutTo("/login?callbackURL=%2Fadmin")}>ログアウトしてログインし直す</Button>
       </CardContent>
     </Card>
@@ -102,10 +94,10 @@ function TwoFactorSetup() {
   const handleEnable = async () => {
     setLoading(true);
     setErrorMessage(null);
-    const { data, error } = await authClient.twoFactor.enable({ password });
+    const { data, error } = await authClient.mfa.setup({ password });
     setLoading(false);
     if (error) {
-      setErrorMessage(error.message ?? "2段階認証を始められませんでした");
+      setErrorMessage(error.message);
       return;
     }
     setPassword("");
@@ -115,9 +107,9 @@ function TwoFactorSetup() {
   const handleVerify = async () => {
     setLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.twoFactor.verifyTotp({ code: code.trim() });
+    const { error } = await authClient.mfa.confirm({ code: code.trim() });
     if (error) {
-      setErrorMessage(error.message ?? "コードを確認できませんでした");
+      setErrorMessage(error.message);
       setLoading(false);
       return;
     }

@@ -35,8 +35,8 @@ export function registerOverloadProtection(
 ) {
   let inFlight = 0;
 
-  // Better Auth は後段の onRequest で hijack して自前で応答するため、onResponse が
-  // 呼ばれない。どの経路でも必ず1回だけ戻せるよう、Node の応答の close で数を戻す
+  // 後段の onRequest で hijack して自前で応答する経路では onResponse が呼ばれない
+  // （以前の Better Auth がそうだった）。どの経路でも必ず1回だけ戻せるよう、Node の応答の close で数を戻す
   // （close は返し終えたときにも、途中で切断されたときにも1回だけ来る）。
   app.addHook("onRequest", (request, reply, done) => {
     if (!request.url.startsWith("/api/") || request.url === "/api/health") return done();

@@ -12,6 +12,7 @@ import PageHeader from "@/web/components/layout/PageHeader";
 import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/web/hooks/useBrowserNavigation";
 import { isLineInAppBrowser } from "@/web/lib/browser";
 import { trackEvent } from "@/web/lib/analytics";
+import PasswordHint from "@/web/components/auth/PasswordHint";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -27,14 +28,9 @@ export default function SignUpPage() {
     trackEvent("signup_method_submit", { method: "email" });
     setLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.signUp.email({
-      email,
-      password,
-      name: email,
-      callbackURL,
-    });
+    const { error } = await authClient.signUp({ email, password, callbackURL });
     if (error) {
-      setErrorMessage(error.message ?? "登録に失敗しました");
+      setErrorMessage(error.message);
       setLoading(false);
       return;
     }
@@ -53,9 +49,9 @@ export default function SignUpPage() {
     trackEvent("signup_method_submit", { method: provider });
     setSocialLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.signIn.social({ provider, callbackURL });
+    const { error } = await authClient.signInSocial({ provider, callbackURL });
     if (error) {
-      setErrorMessage(error.message ?? "外部サービスでの登録に失敗しました");
+      setErrorMessage(error.message);
       setSocialLoading(false);
     }
   };
@@ -71,7 +67,8 @@ export default function SignUpPage() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="signup-password">パスワード</Label>
-          <PasswordInput id="signup-password" name="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput id="signup-password" name="password" autoComplete="new-password" required minLength={15} aria-describedby="signup-password-hint" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordHint id="signup-password-hint" />
         </div>
         <Button type="submit" size="lg" className="h-11 w-full" disabled={authLoading}>
           {loading ? "登録中…" : "新規登録"}

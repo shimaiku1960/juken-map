@@ -6,7 +6,7 @@ import { denyDemoWrite, getSession, requireAdmin, requireSession, type Session }
 // 誰でも呼べてしまい、テストも CI も気づけない。
 //
 // 種類は dev-standards の脅威プロファイル（targets/06_threat-profile.md）の入口 E1〜E8 に
-// 対応する。E2（認証）は Better Auth が server.ts で横取りする /api/auth/* で、Fastify の
+// 対応する。E2（認証）は Go が受ける /api/auth/*（JUK-115）で、Fastify の
 // ルートとしては登録されない。E9・E10 は HTTP の入口ではない。
 
 export const ACCESS_ENTRY = {
@@ -67,7 +67,7 @@ export function registerAccessControl(app: FastifyInstance) {
   });
 
   app.addHook("onRequest", async (request, reply) => {
-    // 存在しないパス（404）と Better Auth の /api/auth/* は access を持たない。
+    // 存在しないパス（404）は access を持たない。
     switch (request.routeOptions.config.access) {
       case "user": {
         const session = await requireSession(request, reply);

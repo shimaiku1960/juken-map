@@ -24,6 +24,7 @@ export const SPA_ROUTES = [
   "/forgot-password",
   "/reset-password",
   "/verify-email",
+  "/verify-email/confirm",
 
   // ログイン必須
   "/dashboard",

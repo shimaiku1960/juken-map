@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mergeCookies } from "./client";
 import { dayPlanFor, personaFor, signupHours, HOUR_WEIGHTS } from "./persona";
-import { extractVerificationPath } from "./resend-inbox";
+import { extractVerificationToken } from "./resend-inbox";
 import { dayNumber, dueVisitors, planDays, signupSlots, visitorsOn } from "./schedule";
 
 const SEED = 20260918;
@@ -39,17 +39,15 @@ describe("persona", () => {
   });
 });
 
-describe("extractVerificationPath", () => {
-  it("確認メールの本文からパスとクエリだけを取り出す（&amp; も戻す）", () => {
+describe("extractVerificationToken", () => {
+  it("確認メールの本文からトークンを取り出す（&amp; も戻す）", () => {
     const html =
-      '<p><a href="https://juken-map.com/api/auth/verify-email?token=abc.def&amp;callbackURL=%2Fdashboard">確認</a></p>';
-    expect(extractVerificationPath(html)).toBe(
-      "/api/auth/verify-email?token=abc.def&callbackURL=%2Fdashboard"
-    );
+      '<p><a href="https://juken-map.com/verify-email/confirm?token=abc_DEF-123&amp;callbackURL=%2Fgoals">確認</a></p>';
+    expect(extractVerificationToken(html)).toBe("abc_DEF-123");
   });
 
   it("リンクが無ければ例外", () => {
-    expect(() => extractVerificationPath("<p>no link</p>")).toThrow();
+    expect(() => extractVerificationToken("<p>no link</p>")).toThrow();
   });
 });
 

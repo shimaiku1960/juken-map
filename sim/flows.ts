@@ -35,7 +35,7 @@ type UniversityDetail = { university: { faculties: { id: number }[] } };
 
 /** 画面の「/」を開いたとき（ログイン直後の着地点）。 */
 async function openHome(browser: Browser) {
-  await browser.request("GET", "/api/auth/get-session");
+  await browser.request("GET", "/api/auth/session");
   await Promise.all([
     browser.request("GET", "/api/goals/first-choice"),
     browser.request("GET", "/api/study-plans"),
@@ -48,7 +48,7 @@ async function openHome(browser: Browser) {
  * 実績・予定・連続記録日数は1本の集約APIから来る（期間はサーバーが決める）。
  */
 async function openDashboard(browser: Browser) {
-  await browser.request("GET", "/api/auth/get-session");
+  await browser.request("GET", "/api/auth/session");
   const [, , dashboard] = await Promise.all([
     browser.request("POST", "/api/analytics/registration"),
     browser.request<Goal[]>("GET", "/api/goals"),
@@ -64,17 +64,17 @@ async function openDashboard(browser: Browser) {
 export async function signUp(browser: Browser, sim: SimApi, inbox: ResendInbox, persona: Persona) {
   const email = simEmailFor(persona.seq);
   const startedAt = new Date();
-  await browser.request("POST", "/api/auth/sign-up/email", {
+  await browser.request("POST", "/api/auth/sign-up", {
     email,
     password: PASSWORD,
-    name: email,
     callbackURL: "/dashboard",
   });
-  const verifyPath = await inbox.verificationPath(email, startedAt);
-  const verified = await browser.raw("GET", verifyPath);
+  // メールのリンクは確認の画面を開くだけで、画面のボタンが POST でトークンを使う（認証基準 10 の E2）。
+  const token = await inbox.verificationToken(email, startedAt);
+  const verified = await browser.raw("POST", "/api/auth/verify-email", { token });
   await verified.body?.cancel();
-  if (verified.status !== 302) {
-    throw new HttpError("GET", "/api/auth/verify-email", verified.status, "");
+  if (verified.status !== 200) {
+    throw new HttpError("POST", "/api/auth/verify-email", verified.status, "");
   }
   await sim.markUser(email, { seq: persona.seq, cohort: persona.cohort });
   await signIn(browser, persona.seq);
@@ -83,7 +83,7 @@ export async function signUp(browser: Browser, sim: SimApi, inbox: ResendInbox, 
 
 export async function signIn(browser: Browser, seq: number) {
   browser.cookie = undefined;
-  await browser.request("POST", "/api/auth/sign-in/email", {
+  await browser.request("POST", "/api/auth/sign-in", {
     email: simEmailFor(seq),
     password: PASSWORD,
   });
@@ -91,11 +91,11 @@ export async function signIn(browser: Browser, seq: number) {
 
 /**
  * Cookie が切れていたらログインし直す。
- * セッションは7日だが使うたびに延びるので、ほぼ毎日来る人はログインし直さない。
+ * セッションはログインから30日で切れ、使っても延びない（認証基準 10 の C3）。30日ごとにログインし直す。
  */
 export async function ensureSignedIn(browser: Browser, seq: number) {
   if (browser.cookie) {
-    const session = await browser.request<unknown>("GET", "/api/auth/get-session");
+    const session = await browser.request<unknown>("GET", "/api/auth/session");
     if (session) return false;
   }
   await signIn(browser, seq);

@@ -129,7 +129,8 @@ jobs:
 
       # Go の API を本物の MySQL に流すテスト（apps/api-go の dbtest タグ、JUK-97）。他人の ID を断ること（A3）と、
       # 禁止項目を混ぜても書き換わらないこと（A4）を、本番で動いている Go のルートで確かめる。LINE 連携の SQL と、
-      # 管理画面（利用者の管理・マスター編集）の SQL も流す（JUK-106）。
+      # 管理画面（利用者の管理・マスター編集）の SQL も流す（JUK-106）。ログインの流れ（登録・確認・期限・取り消し・
+      # 再設定・2段階認証・外部ログイン、TestAuthDB）も流す（JUK-115）。
       # DB は Node のテストと同じ juken_map_test（本番と同じマイグレーションと、DML だけの権限）。
       # MySQL がこのジョブにしか無いので、go のジョブではなくここで動かす。
       - name: Setup Go
@@ -141,7 +142,7 @@ jobs:
       - name: Test Go with DB
         run: |
           pnpm --filter @juken-map/api test-db:prepare
-          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB' -count=1 ./...
+          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB' -count=1 ./...
 
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA
@@ -218,7 +219,6 @@ jobs:
       # 使い捨て MySQL（ローカル Docker と同じ認証情報）へ接続する
       DATABASE_URL: mysql://juken:jukenpassword@127.0.0.1:3306/juken_map?allowPublicKeyRetrieval=true
       BETTER_AUTH_SECRET: ecPTNJXeffEkIMhtDiAKQI8X/dv0xZ5PWupA15w9rVU=
-      BETTER_AUTH_URL: http://localhost:3000
       MICROCMS_SERVICE_DOMAIN: dummy
       MICROCMS_API_KEY: dummy
     steps:

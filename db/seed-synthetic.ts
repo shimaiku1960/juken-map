@@ -14,8 +14,7 @@
 //   USERS=1000 MONTHS=12 pnpm db:seed:synthetic
 //
 // 同じ SEED なら何度流しても同じデータになる（毎回入れ直す）。
-import { generateId } from "better-auth";
-import { hashPassword } from "better-auth/crypto";
+import { hashPassword, newUserId } from "./auth-password";
 import { SEED_EMAIL_DOMAIN } from "../src/shared/synthetic";
 import { execute, runSeed, select } from "./seed-helpers";
 
@@ -192,7 +191,7 @@ runSeed(async () => {
     return;
   }
 
-  // パスワードのハッシュは意図的に重い（scrypt）。全員同じパスワードなので1回だけ計算して使い回す。
+  // パスワードのハッシュは意図的に重い（Argon2id）。全員同じパスワードなので1回だけ計算して使い回す。
   // 1人ずつ計算すると、ここだけで数分かかる。
   const passwordHash = await hashPassword(PASSWORD);
 
@@ -235,11 +234,7 @@ runSeed(async () => {
       ["id", "email", "name", "nickname", "emailVerified", "createdAt", "updatedAt"],
       users
     );
-    await insertMany(
-      "account",
-      ["id", "userId", "accountId", "providerId", "password", "createdAt", "updatedAt"],
-      accounts
-    );
+    await insertMany("AuthPassword", ["userId", "hash", "updatedAt"], accounts);
     await insertMany(
       "FinalGoal",
       ["userId", "facultyId", "isFirstChoice", "note", "status", "createdAt"],
@@ -313,7 +308,7 @@ runSeed(async () => {
   }
 
   for (let i = 0; i < USERS; i++) {
-    const userId = generateId();
+    const userId = newUserId();
     const cohort = pickCohort();
     // 登録日。全員が同時に始めるわけではないので散らす。
     // RECENCY が大きいほど今日寄りに偏る（random()**RECENCY は 0 に寄るため）
@@ -333,7 +328,7 @@ runSeed(async () => {
       joinedAt,
       now,
     ]);
-    accounts.push([generateId(), userId, userId, "credential", passwordHash, joinedAt, now]);
+    accounts.push([userId, passwordHash, now]);
 
     // 参考書（この人の主科目に寄せる）
     const bookCount = randInt(1, 4);

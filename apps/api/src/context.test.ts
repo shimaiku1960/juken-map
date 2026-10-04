@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
-// betterAuth の初期化を走らせないため、auth モジュールだけ差し替える。
-vi.mock("./auth.ts", () => ({ auth: { api: { getSession: vi.fn() } } }));
+// DB を引かないよう、セッションの読み出しだけ差し替える。
+vi.mock("./session-store.ts", () => ({ findSession: vi.fn() }));
 
 const { denyDemoWrite } = await import("./context.ts");
 const { DEMO_EMAIL } = await import("@/shared/demo");
