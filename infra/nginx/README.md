@@ -33,7 +33,7 @@
 
 ```nginx
 server {
-    server_name juken-map.com www.juken-map.com;
+    server_name juken-map.com;   # 2026-10-04、www を外した（JUK-23。www は juken-map-www-redirect.conf が受ける）
     root /var/www/html;
 
     location / {
@@ -64,10 +64,35 @@ server {
     if ($host = juken-map.com)     { return 301 https://$host$request_uri; }
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name juken-map.com www.juken-map.com;
+    server_name juken-map.com;   # 2026-10-04、www を外した（JUK-23）。上の www の if はもう通らない
     return 404;
 }
 ```
+
+## www を apex へ寄せる（2026-10-04 追加、JUK-23）
+
+`www.juken-map.com` は、HTTP でも HTTPS でも `https://juken-map.com` へ 301 で送る（パスとクエリはそのまま、転送は1回）。
+入口を1つにするのは、ログインの Cookie をホストごとに分けずに済ませるため。Cookie に `__Host-` を付けると
+Domain を指定できず、www と apex でログインを共有できない（JUK-115）。
+
+- 転送の server は **このリポジトリの `conf.d/juken-map-www-redirect.conf` が正**で、本番の
+  `/etc/nginx/conf.d/juken-map-www-redirect.conf` に手で置いた。デプロイ（`deploy-ec2.sh`）は触らない
+- サイト設定（`sites-available/default`）の `server_name` から www を外した（443 と 80 の2か所）。
+  外さないと同じ名前の server が2つになり、nginx は警告を出して先に読んだ方（`conf.d` が先）を使う
+- 証明書は apex と同じもの（SAN に www も入っている）を使う。www を証明書から外すと、
+  `https://www` に来た人に転送の前で証明書のエラーが出るので、**外さない**
+- HTTP の www の `return` は、server の直下ではなく `location /` に置いた。証明書の更新は
+  `authenticator = nginx` で、certbot が足す `/.well-known/acme-challenge/` の location を先に通す必要がある。
+  server の直下の `return` は location より先に効くので、www の確認が転送されて更新が失敗する
+- 入れたときは、まず 302 で入れて `curl` で確かめてから 301 にし、`certbot renew --dry-run` で更新が通ることを確かめた。
+  変える前のサイト設定は本番の `/etc/nginx/backup-juk23/` に残してある
+
+### 変えるとき・戻すとき
+
+このファイルを直したら、本番へ置き直して `nginx -t` → `systemctl reload nginx` する（SSM で入る）。
+戻すときは `/etc/nginx/backup-juk23/default` を `sites-available/default` へ戻し、
+`conf.d/juken-map-www-redirect.conf` を消して reload する。
+⚠️ 301 はブラウザが長く覚えるので、戻しても一度 www を開いたブラウザは apex へ行き続ける。
 
 ## 無停止デプロイ（2026-09-23 追加）
 
