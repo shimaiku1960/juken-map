@@ -9,7 +9,8 @@
 # - 片方だけなら、何も起動せずに止まる
 # あわせて、Go のコンテナ（JUK-72）には Go が読む値だけが渡ることも見る。毎日の通知（JUK-74）に使う
 # Resend のキー・LINE の送信用トークン・cron の共有トークンが渡る。LINE 連携（JUK-79）も Go が受けるので、
-# LINE の Webhook の署名用の秘密も渡る。
+# LINE の Webhook の署名用の秘密も渡る。microCMS の Webhook（JUK-112）の署名の秘密と GitHub のトークンは、
+# シークレットにあるときだけ Go にだけ渡る（Node には渡らない）。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,6 +51,7 @@ printf 'location / {\n    proxy_pass http://juken_map_app;\n}\n' > "$WORK/site"
 LINE='"LINE_CHANNEL_SECRET":"l","LINE_CHANNEL_ACCESS_TOKEN":"t"'
 APP='"DATABASE_URL":"mysql://juken_app:APP@rds/juken_map"'
 MIGRATE='"MIGRATION_DATABASE_URL":"mysql://juken_migrate:MIG@rds/juken_map"'
+MICROCMS='"MICROCMS_WEBHOOK_SECRET":"w","GITHUB_DEPLOY_TOKEN":"g"'
 
 fail=0
 check() {  # $1=見出し $2=シークレットの JSON $3=期待する記録
@@ -75,7 +77,7 @@ check() {  # $1=見出し $2=シークレットの JSON $3=期待する記録
 
 echo "deploy-ec2.sh の DB の資格情報の渡し方:"
 
-check "2つそろえば、マイグレーションを先に流し、アプリには .env の接続先を渡さない" "{$LINE,$APP,$MIGRATE}" "run:migrate
+check "2つそろえば、マイグレーションを先に流し、アプリには .env の接続先を渡さない" "{$LINE,$APP,$MIGRATE,$MICROCMS}" "run:migrate
 MIGRATION_DATABASE_URL=mysql://juken_migrate:MIG@rds/juken_map
 run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:dummy-tag
 BETTER_AUTH_SECRET=s
@@ -91,9 +93,11 @@ run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:dummy-tag
 BETTER_AUTH_SECRET=s
 DAILY_NOTIFICATION_SECRET=d
 DATABASE_URL=mysql://juken_app:APP@rds/juken_map
+GITHUB_DEPLOY_TOKEN=g
 GOMEMLIMIT=96MiB
 LINE_CHANNEL_ACCESS_TOKEN=t
 LINE_CHANNEL_SECRET=l
+MICROCMS_WEBHOOK_SECRET=w
 NODE_ENV=production
 RESEND_API_KEY=r
 SIMULATION_ENABLED=on

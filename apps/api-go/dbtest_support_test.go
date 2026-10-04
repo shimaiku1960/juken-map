@@ -186,7 +186,7 @@ func newDBTestApp(db *sql.DB) dbTestApp {
 		}
 		return &session{UserID: c.Value, Email: c.Value + "@example.test", Role: "user"}, nil
 	})
-	registerRoutes(rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"})
+	registerRoutes(rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
 	return dbTestApp{rt: rt}
 }
 

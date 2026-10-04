@@ -633,6 +633,27 @@ func (e ReceiveLineWebhook200JSONResponseBodyOk) Valid() bool {
 	}
 }
 
+// Defines values for ReceiveMicrocmsWebhook200JSONResponseBodyDeploy.
+const (
+	Dispatched ReceiveMicrocmsWebhook200JSONResponseBodyDeploy = "dispatched"
+	Queued     ReceiveMicrocmsWebhook200JSONResponseBodyDeploy = "queued"
+	Skipped    ReceiveMicrocmsWebhook200JSONResponseBodyDeploy = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the ReceiveMicrocmsWebhook200JSONResponseBodyDeploy enum.
+func (e ReceiveMicrocmsWebhook200JSONResponseBodyDeploy) Valid() bool {
+	switch e {
+	case Dispatched:
+		return true
+	case Queued:
+		return true
+	case Skipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // AdminBanResult defines model for AdminBanResult.
 type AdminBanResult struct {
 	// BannedAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
@@ -1671,6 +1692,17 @@ type ListUniversitiesParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
+// ReceiveMicrocmsWebhookJSONBody defines parameters for ReceiveMicrocmsWebhook.
+type ReceiveMicrocmsWebhookJSONBody = map[string]interface{}
+
+// ReceiveMicrocmsWebhookParams defines parameters for ReceiveMicrocmsWebhook.
+type ReceiveMicrocmsWebhookParams struct {
+	XMicrocmsSignature string `json:"x-microcms-signature"`
+}
+
+// ReceiveMicrocmsWebhook200JSONResponseBodyDeploy defines parameters for ReceiveMicrocmsWebhook.
+type ReceiveMicrocmsWebhook200JSONResponseBodyDeploy string
+
 // CreateFacultyJSONRequestBody defines body for CreateFaculty for application/json ContentType.
 type CreateFacultyJSONRequestBody = CreateFacultyInput
 
@@ -1745,3 +1777,6 @@ type CreateTextbookJSONRequestBody = TextbookInput
 
 // UpdateTextbookProgressJSONRequestBody defines body for UpdateTextbookProgress for application/json ContentType.
 type UpdateTextbookProgressJSONRequestBody = TextbookProgressInput
+
+// ReceiveMicrocmsWebhookJSONRequestBody defines body for ReceiveMicrocmsWebhook for application/json ContentType.
+type ReceiveMicrocmsWebhookJSONRequestBody = ReceiveMicrocmsWebhookJSONBody

@@ -1,11 +1,20 @@
 name: Deploy to EC2
 
 on:
-  # 手で動かす。ブログの記事を microCMS で更新したときも、これで作り直す（JUK-110。自動化は次の Issue）。
+  # 手で動かすときと、microCMS で記事を変えたとき（Go が Webhook を受けて GitHub の API で動かす、JUK-112）。
+  # どちらも main の最新のコミットで、記事を microCMS から取り直して作り直す。
   workflow_dispatch:
   push:
     branches:
       - main
+
+# 実行を丸ごと1本ずつにする。待てるのは1本だけで、新しく来たものが待っている古いものを置き換える（cancel-in-progress: false
+# なので、走っているものは止めない）。後から来たものは同じかより新しいコミット・記事を作るので、置き換えて困ることはない。
+# ビルドの段から1本ずつにするのは、記事の作り直しは同じコミット（同じイメージのタグ）で何度も走るため。並んでビルドすると、
+# 古い記事のイメージが後から push されてタグを上書きし、新しい記事が出ないことがある。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 permissions:
   id-token: write
@@ -59,9 +68,6 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    concurrency:
-      group: production-deploy
-      cancel-in-progress: false
     env:
       IMAGE_TAG: ${{ github.sha }}
       INSTANCE_ID: i-0eeb166295363e11d
@@ -136,8 +142,8 @@ jobs:
           fi
 
   # デプロイのあと、本番に E2E を流す（JUK-101）。中身は e2e-production/（書き込みはしない）。
-  # 最初に /api/health のコミットがこの実行の github.sha と一致するかを見るので、すぐ後に次のマージが
-  # デプロイされると、こちらは一致せずに落ちる。そのときは後の実行の結果を見る。
+  # 最初に /api/health のコミットがこの実行の github.sha と一致するかを見る。実行は1本ずつ（上の concurrency）なので、
+  # E2E が終わるまで次のデプロイは始まらない。
   # 落ちても本番は戻さない（壊れたことを知らせるだけ。戻すかは人が決める）。
   production-e2e:
     needs: deploy

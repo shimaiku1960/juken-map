@@ -56,6 +56,9 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 | `WEB_ORIGIN` | `https://juken-map.com` | 画面のオリジン。LINE Login の戻り先と、終わったあとのリダイレクト先。手元は Vite の URL |
 | `SIMULATION_ENABLED` | なし | `on` のときだけシミュレーションの API（`/api/sim/*`）を登録する。それ以外は 404 |
 | `SIMULATION_SECRET` | なし | シミュレーションの API の共有トークン（cron とは別）。空なら必ず 401 |
+| `MICROCMS_WEBHOOK_SECRET` | なし | microCMS の Webhook の署名を確かめる（JUK-112）。空なら Webhook は必ず 401 |
+| `GITHUB_DEPLOY_TOKEN` | なし | microCMS の Webhook で deploy.yml を動かす GitHub のトークン（fine-grained、このリポジトリの Actions: Read and write だけ）。空なら Webhook は 502 |
+| `GITHUB_API_BASE` | `https://api.github.com` | GitHub の API の根元。テスト用 |
 
 ## 本番
 
@@ -69,7 +72,8 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
        │  /api/universities・/{id}・
        │  /api/notification-preferences・/api/profile（全メソッド） ─▶ juken-map-go
        ├─ POST /api/analytics/registration・POST /api/csp-report・
-       │  POST /api/cron/daily-study-notifications     ─▶ juken-map-go
+       │  POST /api/cron/daily-study-notifications・
+       │  POST /api/webhooks/microcms                  ─▶ juken-map-go
        └─ それ以外（/api/auth/*・/api/blog・/api/health・画面） ─▶ juken-map（3000 か 3001、Node）
 ```
 

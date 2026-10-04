@@ -907,6 +907,42 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "413": { $ref: "#/components/responses/BadRequest" }
 
+  /api/webhooks/microcms:
+    post:
+      operationId: receiveMicrocmsWebhook
+      summary: microCMS の Webhook。署名（x-microcms-signature）を本文のまま確かめ、公開中の中身が変わったら記事を作り直すデプロイを動かす
+      description: |
+        続けて来た通知は1分に1回の作り直しにまとめる（間の中の通知は、間が明けたときの1回に予約する）。
+        下書きの保存だけなど、公開中の中身が変わらない通知では動かさない。
+      security: []
+      parameters:
+        - { name: x-microcms-signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: microCMS の Webhook の本文（使う項目は apps/api-go/microcms_webhook.go の microcmsPayload）
+      responses:
+        "200":
+          description: 受け取った。dispatched はすぐ動かした、queued は予約した、skipped は動かさなかった
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deploy]
+                properties:
+                  deploy: { type: string, enum: [dispatched, queued, skipped] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413": { $ref: "#/components/responses/BadRequest" }
+        "502":
+          description: GitHub の API でデプロイを動かせなかった
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/admin/overview:
     get:
       operationId: getAdminOverview

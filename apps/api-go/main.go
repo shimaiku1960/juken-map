@@ -73,6 +73,16 @@ func run() error {
 			loginChannelID: os.Getenv("LINE_LOGIN_CHANNEL_ID"),
 			loginSecret:    os.Getenv("LINE_LOGIN_CHANNEL_SECRET"),
 		},
+	}, microcmsWebhookConfig{
+		secret: os.Getenv("MICROCMS_WEBHOOK_SECRET"),
+		deployer: &githubWorkflowDispatcher{
+			client:   &http.Client{},
+			apiBase:  envOr("GITHUB_API_BASE", "https://api.github.com"),
+			repo:     "shimaiku1960/juken-map",
+			workflow: "deploy.yml",
+			ref:      "main",
+			token:    os.Getenv("GITHUB_DEPLOY_TOKEN"),
+		},
 	})
 
 	m := newMetrics()
@@ -131,7 +141,7 @@ func run() error {
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
-func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig) {
+func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig, microcms microcmsWebhookConfig) {
 	study := &studyStore{db: db}
 	studyHandlers := &studyHandlers{store: study}
 
@@ -189,6 +199,10 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig) {
 	rt.oauth("GET /api/line/oauth/start", lineRoutes.oauthStart)
 	rt.oauth("GET /api/line/oauth/callback", lineRoutes.oauthCallback)
 	rt.webhook("POST /api/line/webhook", lineRoutes.webhook)
+
+	// microCMS で記事を変えたら、記事を作り直すデプロイを動かす（JUK-112）。
+	microcmsWebhook := &microcmsWebhookHandler{secret: microcms.secret, trigger: newDeployTrigger(microcms.deployer)}
+	rt.webhook("POST /api/webhooks/microcms", microcmsWebhook.serve)
 
 	adminUsers := &adminUserHandlers{store: &sqlAdminUserStore{db: db}, now: time.Now}
 	rt.admin("GET /api/admin/overview", adminUsers.overview)
