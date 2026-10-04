@@ -16,10 +16,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -845,4 +848,179 @@ func TestAuthDBEmailLimitPerRecipient(t *testing.T) {
 	if got := e.mails.count(email, ""); got != emailPerRecipientPerHour {
 		t.Fatalf("送った数 = %d, want %d", got, emailPerRecipientPerHour)
 	}
+}
+
+func TestAuthDBThrottledEntries(t *testing.T) {
+	// H1：推測できる入口ごとに、回数を超えると断る。
+	e := newAuthEnv(t)
+
+	t.Run("ログインしていない入口（メールのトークンなど）は IP ごとに10分20回まで", func(t *testing.T) {
+		b := e.browser()
+		for range throttleAnonymousIP.max {
+			expectStatus(t, b.do("POST", "/api/auth/verify-email", map[string]string{"token": strings.Repeat("a", 43)}), 400, "INVALID_TOKEN")
+		}
+		expectStatus(t, b.do("POST", "/api/auth/verify-email", map[string]string{"token": strings.Repeat("a", 43)}), 429, "TOO_MANY_REQUESTS")
+		// 別の IP からは通る（IP ごとに数えている）。
+		expectStatus(t, e.browser().do("POST", "/api/auth/verify-email", map[string]string{"token": strings.Repeat("a", 43)}), 400, "INVALID_TOKEN")
+	})
+
+	t.Run("再認証（今のパスワードの入れ直し）はアカウントごとに15分10回まで", func(t *testing.T) {
+		email := e.newEmail()
+		e.signUpVerified(email, authTestPassword)
+		b := e.signedIn(email, authTestPassword)
+		for i := range throttleReauthAccount.max {
+			expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": fmt.Sprint("wrong passphrase ", i), "newPassword": "a brand new passphrase"}), 400, "INVALID_PASSWORD")
+		}
+		expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": authTestPassword, "newPassword": "a brand new passphrase"}), 429, "TOO_MANY_REQUESTS")
+		e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleReauthAccount, e.userID(email)))
+	})
+
+	t.Run("2段階認証のコードは、途中の状態を作り直してもアカウントごとに15分10回まで", func(t *testing.T) {
+		email := e.newEmail()
+		id := e.signUpVerified(email, authTestPassword)
+		secret, _ := e.enableMFA(e.signedIn(email, authTestPassword))
+		b := e.browser()
+		for range 2 {
+			b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
+			for range mfaChallengeMaxAttempts {
+				expectStatus(t, b.do("POST", "/api/auth/mfa/verify", map[string]string{"code": "000000"}), 401, "INVALID_CODE")
+			}
+		}
+		b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
+		e.clock.Advance(totpPeriod)
+		expectStatus(t, b.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 429, "TOO_MANY_MFA_ATTEMPTS")
+		e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
+	})
+}
+
+func TestAuthDBEventsAreLogged(t *testing.T) {
+	// I1：認証の出来事が、利用者 ID・IP・User-Agent と一緒に1行ずつ出て、パスワード・トークン・コードは出ない。
+	var buf bytes.Buffer
+	var mu sync.Mutex
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(lockedWriter{&buf, &mu}, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	e := newAuthEnv(t)
+	email := e.newEmail()
+	e.signUpVerified(email, authTestPassword)
+	e.browser().do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": "not the right passphrase"})
+	b := e.signedIn(email, authTestPassword)
+	b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": authTestPassword, "newPassword": "a brand new passphrase"})
+	b.do("POST", "/api/auth/password/forgot", map[string]string{"email": email})
+	resetToken := e.mails.last(t, email, "パスワードの再設定").token(t)
+	b.do("POST", "/api/auth/password/reset", map[string]string{"token": resetToken, "password": authTestPassword})
+	b = e.signedIn(email, authTestPassword)
+	sessionToken := b.cookies[sessionCookieName].Value
+	b.do("POST", "/api/auth/sign-out", map[string]any{})
+
+	mu.Lock()
+	out := buf.String()
+	mu.Unlock()
+	seen := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		var entry map[string]any
+		if json.Unmarshal([]byte(line), &entry) != nil || entry["event"] == nil {
+			continue
+		}
+		event := entry["event"].(string)
+		if event == "sign_in_failure" {
+			event += ":" + fmt.Sprint(entry["reason"])
+		}
+		seen[event] = true
+		for _, key := range []string{"userId", "ip", "userAgent", "time"} {
+			if _, ok := entry[key]; !ok {
+				t.Errorf("%s の行に %s が無い: %s", event, key, line)
+			}
+		}
+	}
+	for _, want := range []string{"sign_up", "email_verified", "sign_in_failure:bad_password", "session_created", "sign_in_success", "password_changed", "password_reset", "sign_out"} {
+		if !seen[want] {
+			t.Errorf("%s がログに無い（出たもの %v）", want, seen)
+		}
+	}
+	for _, secret := range []string{authTestPassword, "not the right passphrase", "a brand new passphrase", resetToken, sessionToken} {
+		if strings.Contains(out, secret) {
+			t.Errorf("ログに秘密が出ている: %q", secret)
+		}
+	}
+}
+
+type lockedWriter struct {
+	w  *bytes.Buffer
+	mu *sync.Mutex
+}
+
+func (l lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
+}
+
+func TestAuthDBTOTPKeyRotation(t *testing.T) {
+	// I2：TOTP の秘密を暗号化する鍵を作り直しても、今の利用者は2段階認証でログインでき、秘密は新しい鍵で書き直される。
+	e := newAuthEnv(t)
+	email := e.newEmail()
+	id := e.signUpVerified(email, authTestPassword)
+	secret, _ := e.enableMFA(e.signedIn(email, authTestPassword))
+
+	rotated, err := newTOTPKeyring("v1:"+base64.StdEncoding.EncodeToString(randomBytes(32)), "test-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.h.totpKeys = rotated
+	e.clock.Advance(totpPeriod)
+	b := e.browser()
+	b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
+	expectStatus(t, b.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 200, "")
+	var sealed string
+	e.db.QueryRow("SELECT secret FROM AuthTotp WHERE userId = ?", id).Scan(&sealed)
+	if !strings.HasPrefix(sealed, "v1:") {
+		t.Fatalf("新しい鍵で書き直されていない: %s", sealed[:3])
+	}
+}
+
+func TestAuthDBH2SignInTiming(t *testing.T) {
+	// H2 の測り方：存在するメールアドレス（パスワード違い）と、存在しないメールアドレスで、サインインの所要時間の
+	// 分布を比べる。時間は機械に左右されて CI では安定しないので、AUTH_TIMING=on のときだけ測って出す。
+	if os.Getenv("AUTH_TIMING") != "on" {
+		t.Skip("AUTH_TIMING=on のときだけ測る")
+	}
+	e := newAuthEnv(t)
+	email := e.newEmail()
+	e.signUpVerified(email, authTestPassword)
+	measure := func(target string) []time.Duration {
+		var out []time.Duration
+		for i := range 40 {
+			b := e.browser()
+			start := time.Now()
+			b.do("POST", "/api/auth/sign-in", map[string]string{"email": target, "password": fmt.Sprint("wrong passphrase ", i)})
+			out = append(out, time.Since(start))
+			e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleSignInAccount, target))
+		}
+		slices.Sort(out)
+		return out
+	}
+	existing, missing := measure(email), measure(e.newEmail())
+	pct := func(d []time.Duration, p int) time.Duration { return d[len(d)*p/100] }
+	t.Logf("サインイン 存在する   p10=%v p50=%v p90=%v", pct(existing, 10), pct(existing, 50), pct(existing, 90))
+	t.Logf("サインイン 存在しない p10=%v p50=%v p90=%v", pct(missing, 10), pct(missing, 50), pct(missing, 90))
+
+	// 登録：登録済みのメールアドレスと、新しいメールアドレス。
+	signUp := func(next func() string) []time.Duration {
+		var out []time.Duration
+		for range 40 {
+			b := e.browser()
+			target := next()
+			start := time.Now()
+			b.do("POST", "/api/auth/sign-up", map[string]string{"email": target, "password": "another long passphrase"})
+			out = append(out, time.Since(start))
+			e.db.Exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(target))
+		}
+		slices.Sort(out)
+		return out
+	}
+	registered, fresh := signUp(func() string { return email }), signUp(e.newEmail)
+	t.Logf("登録 登録済み p10=%v p50=%v p90=%v", pct(registered, 10), pct(registered, 50), pct(registered, 90))
+	t.Logf("登録 新しい   p10=%v p50=%v p90=%v", pct(fresh, 10), pct(fresh, 50), pct(fresh, 90))
 }
