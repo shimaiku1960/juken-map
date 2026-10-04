@@ -136,9 +136,9 @@
 | `AUTH_TOTP_KEYS` | EC2 の `.env`（置いたとき） | 新しい版を先頭に足して再デプロイ（古い版も残す）。秘密は次にコードを通したときに新しい版で書き直される。鍵と DB の両方が漏れていれば秘密が読めるので、`reset-2fa` で設定し直し、古い版を消す | 同上 |
 | `DATABASE_URL`（`juken_app`）・`MIGRATION_DATABASE_URL`（`juken_migrate`） | Secrets Manager `juken-map/production/runtime` | 下の「DB のパスワード」 | RDS には外から繋げないので、使えるのは EC2 の中からだけ。EC2 に入られていないかを 5 の手順 3 で見る |
 | RDS のマスター（`admin`） | EC2 の `.env`（JUK-86 で外す予定） | `aws rds modify-db-instance --db-instance-identifier juken-map-db --master-user-password <新しい値> --apply-immediately` | 同上 |
-| `AUTH_GOOGLE_SECRET`・`AUTH_GITHUB_SECRET` | EC2 の `.env` | Google Cloud・GitHub の OAuth アプリの設定で新しい秘密を作り、古い方を消す。`.env` を直して再デプロイ | 各 OAuth アプリの設定画面 |
+| `AUTH_GOOGLE_SECRET`・`AUTH_GITHUB_SECRET` | EC2 の `.env` | Google Cloud・GitHub の OAuth アプリの設定で新しい秘密を作り、古い方を消す。`.env` を直して再デプロイ。漏れた値だけでは利用者になりすませない（認可コードも要り、コードは PKCE の code_verifier が無いとトークンに替えられない）。受験マップを名乗る偽の OAuth アプリを作られうる。作り直すと、差し替えるまで Google・GitHub ログインが止まる（セッションとパスワードには影響しない） | 各 OAuth アプリの設定画面 |
 | `LINE_*` | Secrets Manager | LINE Developers でチャネルシークレット・アクセストークンを再発行する。Secrets Manager を直して再デプロイ | LINE 公式アカウントの送信履歴 |
-| `RESEND_API_KEY` | EC2 の `.env` | Resend の API Keys で新しい鍵を作り、古い鍵を消す。`.env` を直して再デプロイ | Resend の Emails（送ったメールの一覧） |
+| `RESEND_API_KEY` | EC2 の `.env` | Resend の API Keys で新しい鍵を作り、古い鍵を消す。`.env` を直して再デプロイ。漏れた値では受験マップの差出人でメールを送れる（なりすましのメール）、送信枠を使い切って確認・再設定のメールを止められる。作り直すと、差し替えるまでメールが送れない（ログインそのものは止まらない） | Resend の Emails（送ったメールの一覧） |
 | `RESEND_READ_API_KEY` | GitHub Secrets | 同上（読み取りだけの鍵）。`gh secret set RESEND_READ_API_KEY` | 同上 |
 | `MICROCMS_API_KEY` | EC2 の `.env` と GitHub Secrets（ビルドで記事を SSG するため、JUK-110） | microCMS の API キーで作り直し、古いキーを消す。`.env` と `gh secret set MICROCMS_API_KEY` の両方を直して再デプロイ | microCMS の API キーの設定画面 |
 | `MICROCMS_WEBHOOK_SECRET` | Secrets Manager（Go にだけ渡す、JUK-112） | 新しい値を作り、microCMS の API の設定の Webhook のシークレットと Secrets Manager の両方を直して再デプロイ。漏れた値では、記事を作り直すデプロイを何度でも動かせる（記事の中身は変えられない） | microCMS の Webhook のログと、Actions の deploy.yml の実行（`workflow_dispatch`） |
