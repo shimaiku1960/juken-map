@@ -206,7 +206,6 @@ export const auth = betterAuth({
   ],
   trustedOrigins: [
     "https://juken-map.com",
-    "https://www.juken-map.com",
     "http://localhost:5173",
     "http://localhost:4000",
   ],
