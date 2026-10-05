@@ -23,19 +23,6 @@ services:
       timeout: 5s
       retries: 10
 
-  app:
-    build: .
-    container_name: juken-map-app
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: "mysql://juken:jukenpassword@db:3306/juken_map?allowPublicKeyRetrieval=true"
-    depends_on:
-      db:
-        condition: service_healthy
-
   # ここから下は可観測性の学習用（pnpm run obs:start で起動）。profiles を付けているので、
   # db:start や docker compose up では起動しない。
   prometheus:
@@ -96,7 +83,7 @@ services:
     depends_on:
       - loki
 
-  # トレースの保存先。API（instrumentation.ts）が OTLP で 4318 番へ送る。
+  # トレースの保存先。API が OTLP で 4318 番へ送る作り（Go はまだ送っていない、JUK-126）。
   tempo:
     image: grafana/tempo:3.0.3
     container_name: juken-map-tempo

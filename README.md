@@ -187,10 +187,9 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    ```
 
    APIと画面のログは、実行したターミナルに実行元の名前付きで表示されます。
-   APIのログは手元では1リクエスト1行の読みやすい形、本番（`NODE_ENV=production`）では
-   1行1件のJSONで出ます（`apps/api/src/observability/logger.ts`）。
+   APIのログは1行1件のJSONで出ます（`apps/api-go/logger.go`）。
    Viteが`/api`を同一オリジンのままnginx（4200番、Docker）へ送り、nginxが本番と同じ振り分けファイル
-   （`infra/nginx/juken-map-go-routes.conf`）でGo（4100番）とNode（4000番）へ分けます。本番と同じ形で
+   （`infra/nginx/juken-map-go-routes.conf`）でGo（4100番）へ送ります。本番と同じ形で
    動かすためです。ブラウザで開くのは5173番です。Goは自動で再起動しないので、Goを書き換えたら
    `pnpm dev`を起動し直します。
 
@@ -220,17 +219,11 @@ pnpm wt:remove fix/JUK-40-foo   # マージ後に片付ける
 ```
 
 `wt:new`は、`.env`などgitignore済みのファイルを本体へのリンクにし、空いているポート
-（N番目なら画面5173+N、Node 4000+N、Go 4100+N、nginx 4200+N、E2E 3010+N。決め方は
+（N番目なら画面5173+N、Go 4100+N、nginx 4200+N、E2E 3010+N。決め方は
 `scripts/local-ports.sh`）を`.env.worktree`に書き、`pnpm install`まで
 行います。MySQLは`docker-compose.yml`のプロジェクト名を固定しているので、どのworktreeからも
 同じコンテナを使います。Google・GitHubログインはコールバックURLのポートが合わないため、
 worktreeではメールとパスワードでログインします。
-
-本番相当のDocker構成を確認する場合は、次のコマンドを使用します。
-
-```bash
-docker compose up --build
-```
 
 ### ローカルDBの中身を見る
 
@@ -287,6 +280,9 @@ SCENARIO=engaged ACTIVITY=1.5 pnpm run db:seed:synthetic
 
 APIのリクエスト数・エラー率・レスポンスタイム・CPU・メモリ（Prometheus）、APIのログ（Loki）、1回のリクエストの内訳（Tempo）を、手元のGrafanaで確認できます（本番はGrafana Cloudへ送ります。下の「本番の可観測性」を参照）。
 
+⚠️ ログのファイル出力（`LOG_FILE`）とトレース（`OTEL_EXPORTER_OTLP_ENDPOINT`）は Node のサーバーだけが持っていて、
+Node を消した今は Go が出していません（JUK-126）。手元で今見られるのはメトリクスだけです。
+
 1. `.env`に次の3行を足してから`pnpm dev`で起動する
    ```bash
    METRICS_PORT="9464"                                # APIが別ポートで/metricsを出す
@@ -298,7 +294,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 
 ログは、APIが`logs/api.log`に書いたものをAlloyが読んでLokiへ送ります（`http://localhost:12345`でAlloyの処理の流れを見られます）。ダッシュボードで時間の範囲を絞ると、その時間のエラーのログと5xxを返したリクエストが下に並びます。1つのリクエストの行をまとめて見るときは、Exploreで`{job="juken-map-api"} |= "<reqId>"`と検索します。
 
-トレースは、ダッシュボードの一番下の表でTrace IDを押すと、Fastifyのフック・ハンドラ・SQL 1本ずつに何msかかったかが開きます（Node が受ける API の分）。ログの行には`trace_id`が入るので、ログからトレースへ、トレースの画面から「そのトレースのログ」へ移れます。URLの`?`以降とパスワード再設定のトークンは、ログと同じくトレースにも残しません（`apps/api/src/observability/redact.ts`）。
+トレースは、ダッシュボードの一番下の表でTrace IDを押すと、1回のリクエストの内訳が開く作りです（Go がトレースを送るようになるまでは空、JUK-126）。
 
 5xxの割合が1%を超えた状態が1分続くとアラートのメールが送られ、`http://localhost:8025`（Mailpit）で受け取れます。設定は[observability/](observability/)にあります。
 
@@ -362,15 +358,14 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | `MICROCMS_API_KEY` / `MICROCMS_SERVICE_DOMAIN` | ブログ記事の取得。本番のビルドでも記事を SSG するため、GitHub Secrets にも置く |
 | `MICROCMS_WEBHOOK_SECRET` / `GITHUB_DEPLOY_TOKEN` | microCMS で記事を変えたら、Go が Webhook を受けて deploy.yml を動かし、記事を作り直す。本番は Secrets Manager に置き、Go にだけ渡す |
 | `METRICS_PORT` | 設定したときだけ、そのポートでPrometheus用の`/metrics`を出す（任意） |
-| `LOG_FILE` | 手元の開発で、JSONのログをこのファイル（リポジトリのルートからの相対パス）にも書く。Loki用（任意） |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 手元の開発で、設定したときだけOpenTelemetryのトレースをこの送り先（OTLP/HTTP）へ送る。Tempo用（任意） |
+| `LOG_FILE` | 手元の開発で、JSONのログをこのファイル（リポジトリのルートからの相対パス）にも書く。Loki用（任意。今の Go は読まない、JUK-126） |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 手元の開発で、設定したときだけOpenTelemetryのトレースをこの送り先（OTLP/HTTP）へ送る。Tempo用（任意。今の Go は読まない、JUK-126） |
 
 ## 開発コマンド
 
 | コマンド | 説明 |
 |---|---|
 | `pnpm dev` | MySQLとマイグレーションを準備し、Go・nginx・Viteを並列で起動する |
-| `pnpm run dev:api` | Node（Fastify）を4000番で起動する。本番では動かしておらず（JUK-109）、`pnpm dev` も起動しない |
 | `pnpm run dev:go` | Go（API・ログイン）を4100番で起動する |
 | `pnpm run dev:proxy` | nginx（Docker）を4200番で起動し、本番と同じ振り分けでGoへ送る |
 | `pnpm run dev:web` | Vite（画面）を5173番で起動する。`/api`はnginxへ送る |
@@ -467,12 +462,8 @@ apps/
 │   ├── src/components/    画面部品（ui/ は shadcn/ui）
 │   ├── src/hooks/         TanStack Query のサーバー状態フック
 │   └── public/            favicon、PWAアイコン、manifest、robots.txt
-└── api/                 # バックエンド一式（Fastify）
-    ├── src/routes/        HTTPの入口（認証・検証・ステータスコード）
-    ├── src/services/      ユースケース（DBアクセス・業務ルール）
-    ├── src/infra/         DB接続とマイグレーション、メール、LINE、microCMS
-    ├── src/context.ts     認証・デモガードの門番（セッションは Go が発行し、ここは読むだけ）
-    └── src/seo.ts         robots / sitemap / ページ別 meta
+├── api-go/              # バックエンド一式（Go）。API・ログイン・画面の配信・運用のコマンド
+└── api/                 # Node の CLI だけ。マイグレーションを当てる処理と、seed・テストが使う DB 接続
 
 src/
 └── shared/              # 外部依存のない純粋関数・型・Zodスキーマ（両方のアプリから使う）

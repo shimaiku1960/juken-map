@@ -1,5 +1,5 @@
-// seed スクリプトで共通に使う書き込み。アプリと同じ接続プール（apps/api/src/infra/db.ts）を
-// 使うので、日時は UTC で保存され、真偽値の扱いもアプリと揃う。
+// seed スクリプトで共通に使う書き込み。Node の接続プール（apps/api/src/infra/db.ts）を
+// 使う。日時は UTC で保存し、真偽値の扱いもアプリ（Go）と揃えてある。
 //
 // Prisma のときは各 seed が同じ「確認済みユーザー＋パスワード」の upsert を
 // それぞれ書いていたので、ここに1つにまとめた。
@@ -8,10 +8,6 @@ import { hashPassword, newUserId } from "./auth-password";
 import { ymdAfterDays } from "../src/shared/date";
 
 export { execute, select };
-
-// アプリの開発サーバーと違い、seed では流した SQL を表示しない（負荷試験用の seed は
-// 標準出力を JSON として読まれる）。見たいときは SQL_LOG=on を付けて実行する。
-process.env.SQL_LOG ??= "off";
 
 /**
  * seed の main を実行し、最後に接続プールを閉じる。閉じないとプロセスが終わらない。

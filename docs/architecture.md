@@ -1,7 +1,12 @@
 # アーキテクチャ
 
-受験マップは **React + Vite の SPA（`apps/web`）** と **Fastify の API（`apps/api`）** の
-2つのアプリからなる。共有するコードは `src/` に置き、責務で `backend` と `shared` に分かれる。
+受験マップは **React + Vite の SPA（`apps/web`）** と **Go の API（`apps/api-go`）** の
+2つのアプリからなる。本番では Go が API・ログイン・ビルド済みの画面のすべてを配る（JUK-70・JUK-111・JUK-115）。
+`apps/api`（Node）に残るのはマイグレーションを当てる処理と、seed・テストが使う DB 接続だけ
+（Fastify のサーバーは JUK-121 で消した）。画面と共有するコードは `src/shared` に置く。
+
+> ⚠️ 下の「判断とその理由」のうち、Fastify・Better Auth・`routes`/`services` を前提にした節は Node が
+> API を配っていた頃の記録で、今のコードとは合わない（直すのは JUK-55）。Go の構成は `apps/api-go/README.md`。
 
 もとは Next.js のモジュラーモノリスだった。2026-09-10 に分離へ切り替え、Next.js は削除した。
 経緯と手順は `docs/split-migration-plan.md`、性能まわりの計測は `docs/performance.md` にある。
@@ -17,18 +22,14 @@ apps/web/               画面（React + Vite の SPA）
 │                         prefectures, studySession, studyLog, studyPlan, examSchedule
 └ public/                 favicon, PWA アイコン, manifest, robots.txt, LP 素材
 
-apps/api/               バックエンド一式（Fastify）
+apps/api-go/            バックエンド一式（Go）。ファイルの分け方は apps/api-go/README.md
+
+apps/api/               Node の CLI だけ（JUK-121）
 └ src/
-  ├ server.ts             サーバー組み立て。圧縮・JSON 解析・SPA 配信もここ
-  ├ auth.ts               Better Auth の唯一の定義
-  ├ context.ts            requireSession / denyDemoWrite（門番）
-  ├ seo.ts                robots / sitemap / ページ別 meta の生成
-  ├ routes/               HTTP の入口（ブログ・/line/settings）。業務の API は Go へ移して消した（JUK-84）
-  ├ services/             user（プロフィール）。管理者の付け外しと乗っ取りの操作は Go の cli.go へ移した（JUK-122）
-  ├ infra/                db（生 SQL の接続プール）, tables（テーブル1行の型）,
-  │                       email, resend, microcms
-  ├ test-db/              テスト用 MySQL の準備と、テストデータの作成
-  ├ observability/        サービスの所要時間計測
+  ├ migrate.ts            マイグレーションを当てる（本番はデプロイのたびに1回きりのコンテナで動かす）
+  ├ infra/                migrations（当てる処理）, db（seed とテストが使う接続プール）,
+  │                       dbUsers（本番の DB ユーザーの権限）
+  └ test-db/              テスト用 MySQL の準備と、テストデータの作成
 
 src/shared/             2つのアプリが共有する、外部依存のない純粋関数・型のみ
 ├ date.ts, subjects.ts, studyStats.ts, site.ts, demo.ts

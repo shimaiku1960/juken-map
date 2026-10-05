@@ -20,8 +20,7 @@ export async function createUser() {
     [id, `${id}@example.test`, now, now]
   );
   createdUserIds.push(id);
-  // ルートが見るのは session.user.id と email だけ（test-support.ts と同じ形）。
-  return { id, session: { user: { id, email: `${id}@example.test` } } };
+  return { id };
 }
 
 /**

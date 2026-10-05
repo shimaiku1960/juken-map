@@ -2,6 +2,8 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2023"],
+    // TypeScript 6 からは @types を自動で読まない。以前は fastify の型定義が node の型を巻き込んでいた。
+    "types": ["node"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,

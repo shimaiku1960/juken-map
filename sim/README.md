@@ -53,18 +53,17 @@ GitHub Actions（`.github/workflows/simulation.yml`）が毎時 `sim/run-hour.ts
 ## 手元で動かす
 
 ```sh
-# 確認用の API を別ポートで立てる（シミュレーション用 API を有効にして）
-cd apps/api && SIMULATION_ENABLED=on SIMULATION_SECRET=local-sim-secret API_PORT=4100 \
-  pnpm exec tsx --env-file=../../.env src/server.ts
+# 確認用の API（Go）を別ポートで立てる（シミュレーション用 API を有効にして）
+SIMULATION_ENABLED=on SIMULATION_SECRET=local-sim-secret GO_PORT=4190 bash scripts/dev-go.sh
 
 # 別のターミナルで（リポジトリのルート）。.env に RESEND_READ_API_KEY が要る
-export SIM_BASE_URL=http://localhost:4100 SIM_ORIGIN=http://localhost:5173 SIMULATION_SECRET=local-sim-secret
+export SIM_BASE_URL=http://localhost:4190 SIMULATION_SECRET=local-sim-secret
 pnpm run sim:run --dry-run --hour 21 --signups 5   # 何もせず、動く予定の人だけ表示
 pnpm run sim:run --hour 21 --signups 5             # 実際に登録・記録する
 ```
 
-`SIM_ORIGIN` は画面の住所。ブラウザは Origin に画面の住所を付けるので、それに合わせる
-（Better Auth の `trustedOrigins` に無い住所だと 403）。本番は画面と API が同じ住所なので要らない。
+`SIM_ORIGIN`（リクエストに付ける Origin）は省くと `SIM_BASE_URL` と同じになる。Go は Origin と Host が
+違う書き込みを別のサイトからのものとして 403 で断るので、API に直接送るときは付けない。
 
 ## 予定を見る
 

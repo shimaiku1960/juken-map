@@ -2,8 +2,8 @@ import { z } from "zod";
 import { PREFECTURES } from "@/shared/prefectures";
 import { RANGE_UNIT_VALUES } from "@/shared/validations/studyPlan";
 
-// 管理者ページのマスター編集（/admin/masters）の入力。API（apps/api/src/routes/admin-masters.ts）と
-// 画面のフォームで同じものを使う。
+// 管理者ページのマスター編集（/admin/masters）の入力。画面のフォームで使う。
+// API（apps/api-go/admin_masters.go）は同じ規則を Go で持つ。
 
 export const UNIVERSITY_TYPES = ["国立", "公立", "私立"] as const;
 
