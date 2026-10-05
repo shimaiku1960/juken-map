@@ -62,7 +62,7 @@ check() {  # $1=見出し $2=シークレットの JSON $3=期待する記録
   # 本番と同じ配送（base64 → パイプ → bash -s）で流す。
   base64 < "$DEPLOY" | tr -d '\n' | base64 -d \
     | PATH="$WORK/bin:$PATH" LOG="$WORK/log" SECRET_FILE="$WORK/secret" ENV_FILE="$WORK/env" \
-      UPSTREAM_CONF="$WORK/upstream.conf" SITE_CONF="$WORK/site" \
+      UPSTREAM_CONF="$WORK/upstream.conf" SITE_CONF="$WORK/site" NGINX_LOGROTATE="$WORK/logrotate-nginx" \
       GO_UPSTREAM_CONF="$WORK/go-upstream.conf" GO_ROUTES_CONF="$WORK/go-routes.conf" \
       bash -s -- dummy-tag "" > "$WORK/out" 2>&1 || status=$?
   local got
