@@ -252,6 +252,7 @@ Go は5本同時に送るが、メールは Resend の上限（チーム全体�
 | `admin_masters.go` | 管理画面のマスター編集（大学・学部・タグ・参考書。使われている行は消さない、大学一覧のキャッシュを捨てる） | `routes/admin-masters.ts`・`services/master-service.ts` |
 | `ownership_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3）と禁止項目（A4）を本物の DB で確かめる（dbtest タグ） | `ownership.test.ts`・`forbidden-fields.test.ts` |
 | `line_db_test.go` | LINE 連携の SQL を本物の DB で確かめる（dbtest タグ） | — |
+| `list_limits_db_test.go` | 学習記録・予定の一覧が 1000 件で切り詰められることを本物の DB で確かめる（dbtest タグ、06 E2） | — |
 | `spa.go` | 画面の配信（dist を起動時にメモリへ読み、gzip を作り置く。SSG の HTML、知らないパスの 404、sitemap） | `spa.ts` |
 | `seo.go` | ページごとの meta・GA4・Faro の差し込み、画面の CSP、sitemap の中身、SPA のルートの一覧 | `seo.ts`・`security-headers.ts`・`src/shared/routes.ts` |
 | `blog.go` | ブログの記事の中継（microCMS、3秒で打ち切り、障害は 502） | `routes/blog.ts`・`infra/microcms.ts` |
