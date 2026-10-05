@@ -4,11 +4,9 @@
 # 開発（pnpm dev）
 #   画面   WEB_PORT   5173+N  Vite。/api は PROXY_PORT へ送る
 #   振分け PROXY_PORT 4200+N  nginx（本番と同じ振り分けファイル）。全部 GO_PORT へ（JUK-109）
-#   Node   API_PORT   4000+N  pnpm dev では起動しない。pnpm run dev:api で手で起動したときだけ使う
 #   Go     GO_PORT    4100+N
 # E2E（scripts/e2e-server.sh）
 #   振分け E2E_PORT      3000（本体）・3010+N（worktree）  ブラウザが開くのはここ
-#   Node   E2E_NODE_PORT 4300+N  使っていない（JUK-109 で E2E から Node を外した）
 #   Go     E2E_GO_PORT   4400+N
 #
 # 環境変数で渡した値と .env.worktree に書いた値は、そちらを優先する（古い worktree の .env.worktree には
@@ -24,14 +22,12 @@ _local_ports_get() {
 
 WT_SLOT=${WT_SLOT:-$(_local_ports_get WT_SLOT)}
 WT_SLOT=${WT_SLOT:-0}
-for _key in WEB_PORT API_PORT GO_PORT PROXY_PORT E2E_PORT E2E_NODE_PORT E2E_GO_PORT; do
+for _key in WEB_PORT GO_PORT PROXY_PORT E2E_PORT E2E_GO_PORT; do
   [ -n "${!_key:-}" ] || printf -v "$_key" '%s' "$(_local_ports_get "$_key")"
 done
 WEB_PORT=${WEB_PORT:-$((5173 + WT_SLOT))}
-API_PORT=${API_PORT:-$((4000 + WT_SLOT))}
 GO_PORT=${GO_PORT:-$((4100 + WT_SLOT))}
 PROXY_PORT=${PROXY_PORT:-$((4200 + WT_SLOT))}
 if [ "$WT_SLOT" = 0 ]; then E2E_PORT=${E2E_PORT:-3000}; else E2E_PORT=${E2E_PORT:-$((3010 + WT_SLOT))}; fi
-E2E_NODE_PORT=${E2E_NODE_PORT:-$((4300 + WT_SLOT))}
 E2E_GO_PORT=${E2E_GO_PORT:-$((4400 + WT_SLOT))}
 unset _key

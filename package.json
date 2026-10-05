@@ -8,7 +8,6 @@
   },
   "scripts": {
     "dev": "pnpm run db:start && pnpm run db:migrate && pnpm run \"/^dev:(web|go|proxy)$/\"",
-    "dev:api": "pnpm --filter @juken-map/api dev",
     "dev:web": "pnpm --filter @juken-map/web dev",
     "dev:go": "bash scripts/dev-go.sh",
     "dev:proxy": "bash scripts/local-proxy.sh",

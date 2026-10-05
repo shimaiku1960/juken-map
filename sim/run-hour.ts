@@ -10,7 +10,7 @@
 // 同じ時間に2回動いても二重にはならない。回が抜けても、同じ日のうちなら次の回で来訪・登録の遅れを取り戻す。
 //
 // 実行例（手元）:
-//   SIM_BASE_URL=http://localhost:4100 SIM_ORIGIN=http://localhost:5173 SIMULATION_SECRET=... \
+//   SIM_BASE_URL=http://localhost:4190 SIMULATION_SECRET=... \
 //     pnpm run sim:run --dry-run --hour 21 --signups 5
 // 手順の全体は sim/README.md
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -92,8 +92,8 @@ async function main() {
   const sim = new SimApi(baseUrl, env("SIMULATION_SECRET"));
   const pacer = new SharedPacer({
     baseUrl,
-    // 本番は画面と API が同じ住所。手元で API を別ポートに立てたときは、
-    // 画面（Vite, 5173）の住所を SIM_ORIGIN で渡す
+    // 本番は画面と API が同じ住所。Go は Origin と Host が違う書き込みを断るので、
+    // 手元で API に直接送るときも SIM_ORIGIN は付けない（sim/README.md）
     origin: env("SIM_ORIGIN", baseUrl).replace(/\/$/, ""),
     runId,
     // ログインの IP 単位の制限は 10 分 30 回（apps/api-go の auth_throttle.go）。同じ IP から出るので

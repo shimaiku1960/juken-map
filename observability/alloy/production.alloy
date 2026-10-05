@@ -138,7 +138,7 @@ prometheus.remote_write "cloud" {
 }
 
 // ---------------- Traces ----------------
-// アプリ（instrumentation.ts）が OTLP で送ってくるトレースを受け、まとめて転送する。
+// アプリが OTLP で送ってくるトレースを受け、まとめて転送する（Go はまだ送っていない、JUK-126）。
 // 受け口は Docker ネットワークの中だけに開く。
 
 otelcol.receiver.otlp "api" {

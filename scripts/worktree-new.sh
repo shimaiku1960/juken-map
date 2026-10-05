@@ -12,9 +12,9 @@
 #      リポジトリの外に置くのは、中に置くと本体の Vitest（**/*.test.ts）や git status が拾うため。
 #   2. gitignore 済みで worktree に来ないもの（.env など）を、本体の実体へのリンクにする
 #      ⚠️ リンクなので、worktree で .env を書き換えると本体も変わる。worktree だけの値は
-#      .env.worktree に書く（apps/api の dev が .env の後に読み、同じキーを上書きする）。
+#      .env.worktree に書く（scripts/dev-go.sh などが .env の後に読み、同じキーを上書きする）。
 #   3. 空いている番号 N を選び、.env.worktree にポートを書く
-#      Vite = 5173+N、API = 4000+N、E2E = 3010+N（3001 は Grafana なので避ける）
+#      Vite = 5173+N、E2E = 3010+N（3001 は Grafana なので避ける）。Go・nginx は scripts/local-ports.sh が N から決める
 #      DB は docker-compose.yml の name 固定により、本体と同じコンテナを共有する。
 #   4. pnpm install
 set -euo pipefail
@@ -74,7 +74,7 @@ slot=""
 for n in $(seq 1 89); do
   [[ "$used_slots" == *" $n "* ]] && continue
   # ポートの割り当ては scripts/local-ports.sh（Go・nginx・E2E の内側の分も N でずらす）。
-  if port_in_use $((5173 + n)) || port_in_use $((4000 + n)) || port_in_use $((3010 + n)) \
+  if port_in_use $((5173 + n)) || port_in_use $((3010 + n)) \
     || port_in_use $((4100 + n)) || port_in_use $((4200 + n)); then
     continue
   fi
@@ -92,7 +92,6 @@ cat > "$dir/.env.worktree" <<EOF
 # .env は本体へのリンクなので、ここに書いたキーが .env の値を上書きする。
 WT_SLOT=$slot
 WEB_PORT=$web_port
-API_PORT=$((4000 + slot))
 E2E_PORT=$((3010 + slot))
 EOF
 
@@ -103,7 +102,7 @@ cat <<EOF
 worktree を作りました。
   場所:     $dir
   ブランチ: $branch
-  画面:     http://localhost:$web_port （nginx $((4200 + slot)) → Node $((4000 + slot))・Go $((4100 + slot)) / E2E $((3010 + slot))）
+  画面:     http://localhost:$web_port （nginx $((4200 + slot)) → Go $((4100 + slot)) / E2E $((3010 + slot))）
 
 次の手順:
   cd $dir

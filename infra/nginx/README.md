@@ -157,14 +157,13 @@ Domain を指定できず、www と apex でログインを共有できない（
 [nginx] 443 の server ───┤  最後の location ~ ^/（それ以外の全部：画面・sitemap・/api/blog・/api/health・/line/settings）
                          │      → upstream juken_map_go  → 127.0.0.1:8080 か 8081（juken-map-go）
                          └─ location /（サイト設定。JUK-111 から何も届かない）
-                                → upstream juken_map_app → 127.0.0.1:3000 か 3001（juken-map、Node）
+                                → upstream juken_map_app → juken_map_go と同じ先（JUK-109）
 ```
 
 - **JUK-111（2026-10）で画面の配信も Go へ移した。** go-routes.conf の最後の `location ~ ^/`（正規表現）が、
   ほかのどの location にも当たらないものを全部 Go へ送る。正規表現の location は、サイト設定の `location /`
   （`^~` の付かない前方一致）より優先されるので、手で置いたサイト設定には触っていない。
   正規表現どうしは書いた順に試すので、この受け皿は必ずファイルの最後に置く。
-  戻すときは、この location を消してデプロイする（Node は画面の配信のコードをまだ持っている。消すのは JUK-109）
 
 - 毎日の通知の入口（`POST /api/cron/daily-study-notifications`、JUK-74）も Go が受ける。送り終えるまで時間がかかるので、
   `proxy_read_timeout` を60秒と明示している（Go は50秒で打ち切る）
@@ -190,14 +189,11 @@ Domain を指定できず、www と apex でログインを共有できない（
   2つの upstream（どちらも Go の新しいポート）と振り分けをまとめて書き換えて1回だけ reload する。
   `nginx -t` が通らなければ3つとも元に戻す（`scripts/test-deploy-go-routes.sh` で確かめている）
 
-### Node に戻す
+### Node には戻せない
 
-Go へ移したパスは、JUK-84 で2回に分けて（9/30 までの分は #317、10/1 の分はその次の PR）すべて Node から消した。
-振り分けを外しても Node は 404 を返すだけなので、振り分けだけでは戻らない。
-戻すには、JUK-84 のコミットを revert して main に入れ、Node のイメージをデプロイしてから
-`juken-map-go-routes.conf` から該当の location を消す。
-
-Go に問題が出たときは、Node に戻すより Go を直して出し直すほうが早い。
+Go へ移したパスは JUK-84 で Node から消し、JUK-109 で本番の Node のコンテナを外し、JUK-121 で Node の
+サーバーのコードも消した。Node のイメージ（`juken-map`）はマイグレーションと画面のビルド成果物の受け渡しにだけ使う。
+Go に問題が出たときは、Go を直すか、原因のコミットを revert して出し直す。
 
 ## 手元（開発・E2E）でも同じ振り分けを通す（2026-10-01 追加、JUK-96）
 
@@ -210,7 +206,7 @@ E2E が Go の API を一度も通っていなかった。
 E2E   ブラウザ → nginx :3000 → Go :4400（SPA も配る）
 ```
 
-JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送るので、手元でも Node（:4000・:4300）には何も届かない。
+JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送る。手元の Node のサーバーは JUK-121 で消した。
 
 - サイト設定は `local/default.conf.template`。本番のサイト設定と同じ形で、違うのは HTTP であることと転送先だけ
 - 起動は `scripts/local-proxy.sh`、ポートは `scripts/local-ports.sh`（worktree の N 番目は上の番号に N を足す）

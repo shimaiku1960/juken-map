@@ -106,7 +106,7 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
   Node のイメージはマイグレーションを当てる1回きりのコンテナにだけ使い、アプリとしては動かさない（JUK-109）。
   スモークテストが通ったときだけ、nginx を1回の reload で切り替える
 - 振り分けるパスは `infra/nginx/juken-map-go-routes.conf`。ルートを移したらここに足す。
-  Node に戻す手順は `infra/nginx/README.md` の「Node に戻す」（Node から消したので、振り分けを外すだけでは戻らない）
+  Node のサーバーのコードは消した（JUK-121）ので、振り分けを外しても戻る先は無い
 - 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない。
   例外は大学の一覧で、全員に同じ 80KB なので、Go が1回だけ gzip にした形を持って返す
 - 大学の一覧は Go のメモリに10分持つ。管理画面で大学・学部を編集したら（`admin_masters.go`）その場で捨てるので、
