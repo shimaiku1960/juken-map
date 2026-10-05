@@ -107,7 +107,7 @@ flowchart LR
 | サーバー状態 | TanStack Query |
 | カレンダー | FullCalendar / Schedule-X |
 | DB | MySQL 8.4（mysql2 で SQL を直接書く。ORM は使わない） |
-| 認証 | Go で自作（Argon2id・中身の無いセッション・TOTP・PKCE。`apps/api-go/auth_*.go`）。以前は Better Auth |
+| 認証 | Go で自作（Argon2id・中身の無いセッション・TOTP・PKCE。`apps/api/auth_*.go`）。以前は Better Auth |
 | メール | Resend |
 | CMS | microCMS |
 | テスト | Vitest / Playwright |
@@ -128,7 +128,7 @@ flowchart LR
 
 - Node.js 24
 - pnpm 12.3.4（`package.json`で固定）
-- Go（`apps/api-go/go.mod`の版。業務APIはGoが返すため、開発とE2Eでも起動する）
+- Go（`apps/api/go.mod`の版。業務APIはGoが返すため、開発とE2Eでも起動する）
 - Docker Desktopなど、Docker Composeを実行できる環境（MySQLと、Node・Goへ振り分けるnginxを動かす）
 
 OAuthログイン、メール送信、ブログまで確認する場合は、Google・GitHub OAuth、Resend、microCMSの資格情報も必要です。
@@ -187,7 +187,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    ```
 
    APIと画面のログは、実行したターミナルに実行元の名前付きで表示されます。
-   APIのログは1行1件のJSONで出ます（`apps/api-go/logger.go`）。
+   APIのログは1行1件のJSONで出ます（`apps/api/logger.go`）。
    Viteが`/api`を同一オリジンのままnginx（4200番、Docker）へ送り、nginxが本番と同じ振り分けファイル
    （`infra/nginx/juken-map-go-routes.conf`）でGo（4100番）へ送ります。本番と同じ形で
    動かすためです。ブラウザで開くのは5173番です。Goは自動で再起動しないので、Goを書き換えたら
@@ -405,7 +405,7 @@ Grafana Cloudを含め、外部のサービスへ何を送っているかは[doc
 pnpm run check
 ```
 
-ルートと`apps/web`・`db`はpnpm workspaceです（`apps/api-go`はGoのモジュールで、workspaceの外）。各アプリの依存はそれぞれの`package.json`に宣言し、解決結果はルートの`pnpm-lock.yaml`で共有します。依存追加は、例えば`pnpm --filter @juken-map/web add パッケージ名`、ルートの開発依存なら`pnpm add -Dw パッケージ名`を使います。
+ルートと`apps/web`・`db`はpnpm workspaceです（`apps/api`はGoのモジュールで、workspaceの外）。各アプリの依存はそれぞれの`package.json`に宣言し、解決結果はルートの`pnpm-lock.yaml`で共有します。依存追加は、例えば`pnpm --filter @juken-map/web add パッケージ名`、ルートの開発依存なら`pnpm add -Dw パッケージ名`を使います。
 
 manifest・`pnpm-workspace.yaml`・`pnpm-lock.yaml`を含むコミットでは、pre-commitフックがステージ済みの内容に対して非破壊のlockfile検証を実行します。依存変更後は`pnpm install`に続けて`pnpm run lock:linux`でLinux/amd64のインストール成功を確認し、manifestとlockfileを一緒にコミットしてください。CIでも`pnpm install --frozen-lockfile`を使います。
 
@@ -438,7 +438,7 @@ GitHub Actionsでは、次の3ジョブを実行します。
 
 ```bash
 aws ssm start-session --target <インスタンスID>
-sudo docker exec juken-map-go /api-go grant-admin <メールアドレス>   # 戻すときは --revoke
+sudo docker exec juken-map-go /api grant-admin <メールアドレス>   # 戻すときは --revoke
 ```
 
 付け替えは、そのユーザーが次にログインし直したときに画面へ反映されます
@@ -465,7 +465,7 @@ apps/
 │   ├── src/components/    画面部品（ui/ は shadcn/ui）
 │   ├── src/hooks/         TanStack Query のサーバー状態フック
 │   └── public/            favicon、PWAアイコン、manifest、robots.txt
-└── api-go/              # バックエンド一式（Go）。API・ログイン・画面の配信・運用のコマンド・マイグレーションの適用
+└── api/                 # バックエンド一式（Go）。API・ログイン・画面の配信・運用のコマンド・マイグレーションの適用
 
 src/
 └── shared/              # 外部依存のない純粋関数・型・Zodスキーマ（両方のアプリから使う）

@@ -1,10 +1,10 @@
 // フロントエンドとバックエンドの間で受け渡す形（DTO）の型定義。
 //
 // 形の正は API の契約（openapi/openapi.yaml）で、ここは生成した型（openapi.gen.ts）に名前を付けて
-// 並べているだけ（JUK-76）。Go（apps/api-go）も同じ契約から型を作るので、形を変えるときは
+// 並べているだけ（JUK-76）。Go（apps/api）も同じ契約から型を作るので、形を変えるときは
 // 契約を直して `pnpm openapi:generate` を流す。ここに型の中身を書き足さない。
 //
-// ここには型だけを置く。この形へ組み立てるのは apps/api のサービス
+// ここには型だけを置く。この形へ組み立てるのは apps/api（Go）の store
 // （listStudyPlans / listStudyLogs）で、戻り値の型がそのままこの型になっている。
 //
 // 日付が Date ではなく ISO 文字列なのは、画面へは JSON で届き、JSON には Date 型がないため。

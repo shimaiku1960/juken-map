@@ -169,7 +169,7 @@ resource "grafana_rule_group" "api_production" {
   }
 
   # Resend の送信枠（セキュリティ基準 E1、JUK-94）。枠を使い切ると、本物の利用者の確認メール・再設定メール・
-  # 毎日の通知が届かなくなる。アプリは宛先ごと・全体で上限をかけているが（apps/api-go/auth_email.go）、
+  # 毎日の通知が届かなくなる。アプリは宛先ごと・全体で上限をかけているが（apps/api/auth_email.go）、
   # 枠は毎日の通知（Go）・シミュレーションと分け合うので、残りが減ったら人が見る。
   #
   # 使った数は、Node がメールを送ったときの応答ヘッダーを写したもの（resend_quota_used）。送らないあいだは

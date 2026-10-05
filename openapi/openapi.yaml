@@ -1,5 +1,5 @@
 # 受験マップの API の契約（JUK-76）。このファイルが正で、型はここから生成する。
-#   - Go（apps/api-go/openapi.gen.go）：oapi-codegen（apps/api-go/oapi-codegen.yaml）
+#   - Go（apps/api/openapi.gen.go）：oapi-codegen（apps/api/oapi-codegen.yaml）
 #   - TypeScript（src/shared/openapi.gen.ts）：openapi-typescript
 # 形を変えるときはこのファイルを直し、`pnpm openapi:generate` を流す。CI は生成し直して差分が出たら落とす。
 #
@@ -7,7 +7,7 @@
 # 書き込みの API は Go へ移すとき（JUK-75）に足す。
 #
 # 書き込みのリクエストの本文には「形」（型・必須・enum・長さ・範囲）を書く。規則の正は Zod
-# （src/shared/validations/）で、Go は同じ規則を apps/api-go に手で書く（項目をまたぐ規則はスキーマに
+# （src/shared/validations/）で、Go は同じ規則を apps/api に手で書く（項目をまたぐ規則はスキーマに
 # 書けないため）。ここの制約は読む人と生成する型のためのもので、実行時にこのファイルで検証はしない。
 #
 # 書き方の決まり：
@@ -892,7 +892,7 @@ paths:
           application/json:
             schema:
               type: object
-              description: LINE の Webhook の本文（使う項目は apps/api-go/line.go の lineEvent）
+              description: LINE の Webhook の本文（使う項目は apps/api/line.go の lineEvent）
       responses:
         "200":
           description: 受け取った（イベントごとの失敗はログにだけ残す）
@@ -923,7 +923,7 @@ paths:
           application/json:
             schema:
               type: object
-              description: microCMS の Webhook の本文（使う項目は apps/api-go/microcms_webhook.go の microcmsPayload）
+              description: microCMS の Webhook の本文（使う項目は apps/api/microcms_webhook.go の microcmsPayload）
       responses:
         "200":
           description: 受け取った。dispatched はすぐ動かした、queued は予約した、skipped は動かさなかった

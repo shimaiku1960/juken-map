@@ -3,7 +3,7 @@
 #
 #   bash scripts/openapi-generate.sh           # 両方を作る（pnpm openapi:generate）
 #   bash scripts/openapi-generate.sh ts        # TypeScript だけ（src/shared/openapi.gen.ts）
-#   bash scripts/openapi-generate.sh go        # Go だけ（apps/api-go/openapi.gen.go）
+#   bash scripts/openapi-generate.sh go        # Go だけ（apps/api/openapi.gen.go）
 #   bash scripts/openapi-generate.sh --check   # 作り直して、コミット済みのものと違えば失敗する（CI 用）
 #   bash scripts/openapi-generate.sh --check ts
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SPEC="$ROOT/openapi/openapi.yaml"
 TS_OUT="$ROOT/src/shared/openapi.gen.ts"
-GO_OUT="$ROOT/apps/api-go/openapi.gen.go"
+GO_OUT="$ROOT/apps/api/openapi.gen.go"
 # 版はここで固定する（go.mod に道具の依存を足さないため、go run で呼ぶ）。
 OAPI_CODEGEN="github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0"
 
@@ -25,7 +25,7 @@ gen_ts() {
   (cd "$ROOT" && pnpm exec openapi-typescript "$SPEC" --output "$TS_OUT" >/dev/null)
 }
 gen_go() {
-  (cd "$ROOT/apps/api-go" && go run "$OAPI_CODEGEN" -config oapi-codegen.yaml "$SPEC")
+  (cd "$ROOT/apps/api" && go run "$OAPI_CODEGEN" -config oapi-codegen.yaml "$SPEC")
 }
 
 files=()

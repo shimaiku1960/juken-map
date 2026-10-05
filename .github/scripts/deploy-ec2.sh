@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# 本番で動かすアプリのコンテナは Go（apps/api-go）だけ（JUK-109）。Node のイメージ（juken-map）は、
+# 本番で動かすアプリのコンテナは Go（apps/api）だけ（JUK-109）。Node のイメージ（juken-map）は、
 # マイグレーションを当てる1回きりのコンテナと、画面のビルド成果物の受け渡し（deploy.yml）にだけ使う。
 IMAGE_TAG="${1:?IMAGE_TAG is required}"
 # observability/alloy/production.alloy を base64 にしたもの（deploy.yml が渡す）。
@@ -14,8 +14,8 @@ GO_ROUTES_B64="${3:-}"
 # infra/systemd/（毎日の通知のタイマー、JUK-85）を tar.gz にして base64 にしたもの（deploy.yml が渡す）。
 # 空のときはタイマーに触らない。
 SYSTEMD_UNITS_B64="${4:-}"
-# Go の API（apps/api-go、JUK-72）。本番で動くアプリのコンテナはこれだけ（JUK-109）。
-# マイグレーションも同じイメージの `/api-go migrate` で当てる（JUK-125）。
+# Go の API（apps/api、JUK-72）。本番で動くアプリのコンテナはこれだけ（JUK-109）。
+# マイグレーションも同じイメージの `/api migrate` で当てる（JUK-125）。
 REPO_GO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go"
 ENV_FILE="${ENV_FILE:-/home/ubuntu/juken-map/.env}"
 RUNTIME_SECRET_ID="juken-map/production/runtime"
@@ -145,7 +145,7 @@ if [ -n "$GRAFANA_CLOUD_TOKEN" ] && [ -n "$ALLOY_CONFIG_B64" ]; then
   printf 'METRICS_PORT=%s\n' "$METRICS_PORT" >> "$RUNTIME_ENV_FILE"
 fi
 
-# Go に渡すのは Go が読む値だけ（apps/api-go/README.md の環境変数の表）。
+# Go に渡すのは Go が読む値だけ（apps/api/README.md の環境変数の表）。
 # DATABASE_URL は Node と同じ接続先（シークレットがあればアプリ用＝DML だけのユーザー）。
 # 毎日の通知（JUK-74）を Go が送るので、送信に使う3つ（Resend のキー・LINE の送信用トークン・cron の共有トークン）も渡す。
 # シミュレーションの API（JUK-80）も Go が受けるので、有効にするかと共有トークンの2つも渡す（.env に無ければ渡らず、404 のまま）。
@@ -269,7 +269,7 @@ recover_next juken-map-go "$GO_CURRENT_PORT"
 # Node のアプリのコンテナはもう起こさない（JUK-109）。以前の付け替えの途中で残ったものがあれば消す。
 docker rm -f juken-map-next >/dev/null 2>&1 || true
 
-# マイグレーションを、新しいイメージの1回きりのコンテナ（/api-go migrate、JUK-125）で先に当てる。失敗したら set -e でここで
+# マイグレーションを、新しいイメージの1回きりのコンテナ（/api migrate、JUK-125）で先に当てる。失敗したら set -e でここで
 # 止まり、新しいコンテナは起動しない（nginx は古いコンテナを向いたままなので、本番は無傷）。
 echo "deploy: マイグレーションを当てる"
 docker run --rm \

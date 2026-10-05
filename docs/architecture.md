@@ -1,13 +1,13 @@
 # アーキテクチャ
 
-受験マップは **React + Vite の SPA（`apps/web`）** と **Go の API（`apps/api-go`）** の
+受験マップは **React + Vite の SPA（`apps/web`）** と **Go の API（`apps/api`）** の
 2つのアプリからなる。本番では Go が API・ログイン・ビルド済みの画面のすべてを配る（JUK-70・JUK-111・JUK-115）。
 開発でしか使わない DB の道具（seed・テスト用 DB の準備・Node の DB 接続）は `db/` に置く。以前の `apps/api`（Node）は、
 Fastify のサーバーを JUK-121 で、マイグレーションの適用を JUK-125 で Go へ移し、残りを JUK-130 で `db/` へ寄せて消した。
 画面と共有するコードは `src/shared` に置く。
 
 > ⚠️ 下の「判断とその理由」のうち、Fastify・Better Auth・`routes`/`services` を前提にした節は Node が
-> API を配っていた頃の記録で、今のコードとは合わない（直すのは JUK-55）。Go の構成は `apps/api-go/README.md`。
+> API を配っていた頃の記録で、今のコードとは合わない（直すのは JUK-55）。Go の構成は `apps/api/README.md`。
 
 もとは Next.js のモジュラーモノリスだった。2026-09-10 に分離へ切り替え、Next.js は削除した。
 経緯と手順は `docs/split-migration-plan.md`、性能まわりの計測は `docs/performance.md` にある。
@@ -23,7 +23,7 @@ apps/web/               画面（React + Vite の SPA）
 │                         prefectures, studySession, studyLog, studyPlan, examSchedule
 └ public/                 favicon, PWA アイコン, manifest, robots.txt, LP 素材
 
-apps/api-go/            バックエンド一式（Go）。ファイルの分け方は apps/api-go/README.md
+apps/api/            バックエンド一式（Go）。ファイルの分け方は apps/api/README.md
 
 db/                     DB の道具。開発でしか使わない Node の TS（workspace の @juken-map/db、JUK-130）
 ├ migrations/             マイグレーションの SQL（当てるのは Go の migrate、JUK-125）
@@ -40,7 +40,7 @@ src/shared/             2つのアプリが共有する、外部依存のない�
 
 ## パッケージ管理
 
-ルート・`apps/web`・`db` をpnpm workspaceとして管理する（`apps/api-go` は Go のモジュールで、workspace の外）。
+ルート・`apps/web`・`db` をpnpm workspaceとして管理する（`apps/api` は Go のモジュールで、workspace の外）。
 `pnpm-workspace.yaml`が参加パッケージを定義し、各`package.json`に依存を宣言する。
 解決結果はルートの`pnpm-lock.yaml`へ集約し、pnpmのバージョンもルートの
 `packageManager`で固定する。ルートの`pnpm install`で全パッケージを導入できる。
@@ -99,10 +99,10 @@ Fastify を 3000 番で待ち受けさせれば、nginx は
 代償は、静的配信を nginx ではなく Node が担うこと。この規模では実測で問題にならない。
 必要になれば nginx に `location /api` を足すだけで移せる（アプリ側は無変更）。
 
-**2026-10、JUK-111 で配る役目を Go（`apps/api-go`）へ移した。** 考え方は同じで、Go のコンテナが API と画面の
+**2026-10、JUK-111 で配る役目を Go（`apps/api`）へ移した。** 考え方は同じで、Go のコンテナが API と画面の
 両方を配る。画面のビルド成果物は Node のイメージから写して Go のイメージに入れるので、画面と API の版がずれない
 ことも、デプロイのスモークテストが両方を守ることも変わらない。dist は起動時にメモリへ読み、圧縮できるものは
-gzip を作り置く（`apps/api-go/spa.go`）。
+gzip を作り置く（`apps/api/spa.go`）。
 
 ### SPA 化で失う SEO を、サーバー側で作り直した
 
@@ -219,7 +219,7 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移した�
 `updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
 
 `services/` はすべて移行済み（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）。
-そのうち user 以外は、のちに Go（`apps/api-go`）へ移して Node から消した（JUK-84）。
+そのうち user 以外は、のちに Go（`apps/api`）へ移して Node から消した（JUK-84）。
 Better Auth（`auth.ts`）も同じ mysql2 のプールを使う（内部の Kysely で読み書きする）。
 アプリの実行時も seed（`db/seed*.ts`）もマイグレーションの適用も Prisma を使っていない。
 seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使い、日時の扱い（UTC）もアプリと揃えている。
@@ -228,8 +228,8 @@ seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使�
 
 ### マイグレーション（テーブル定義の変更）
 
-`prisma migrate deploy` の代わりに Go の `migrate` コマンド（`apps/api-go/migrate.go`、JUK-125）が当てる。
-本番はデプロイがアプリを起動する前に、Go のイメージの1回きりのコンテナ（`/api-go migrate`）で流す。
+`prisma migrate deploy` の代わりに Go の `migrate` コマンド（`apps/api/migrate.go`、JUK-125）が当てる。
+本番はデプロイがアプリを起動する前に、Go のイメージの1回きりのコンテナ（`/api migrate`）で流す。
 `db/migrations` はイメージの `/migrations` に入れてある（`deploy.yml` の `--build-context migrations=`）。
 ローカルは `pnpm dev` / `pnpm run db:migrate`、CI は E2E の前、テストは globalSetup で流す。
 
@@ -253,7 +253,7 @@ seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使�
   （`infra/tables.ts`）も合わせて直す。当てたあとの migration.sql は書き換えない（変えても DB には
   反映されず、警告だけが出る）。直すときは新しいマイグレーションを足す。
 
-ORM を外すと、次のことを自分で持つことになる。どれも Go の `apps/api-go/db.go`、seed とテスト用の `db/connection.ts` とテストで押さえている。
+ORM を外すと、次のことを自分で持つことになる。どれも Go の `apps/api/db.go`、seed とテスト用の `db/connection.ts` とテストで押さえている。
 
 - **日時の時間帯。** MySQL の `DATETIME` は時間帯を持たない。Prisma は UTC として読み書き
   していたが、ドライバの既定はプロセスのローカル時刻で、Mac（JST）では9時間ずれる。
@@ -296,7 +296,7 @@ infra という分担は、ORM の有無と関係なく同じだった。
 | 対象 | 実行 | 内容 |
 |---|---|---|
 | `src/shared` | ルートの vitest | 純粋関数、Zod スキーマ |
-| `apps/api-go` | `go test ./...`、DB に流すものは `pnpm test:go-db` | API の門番・SQL・ログイン（`apps/api-go/README.md`） |
+| `apps/api` | `go test ./...`、DB に流すものは `pnpm test:go-db` | API の門番・SQL・ログイン（`apps/api/README.md`） |
 | `db/` | `pnpm --filter @juken-map/db test` | 接続の設定（時間帯・真偽値）、本番の DB ユーザーの権限 |
 | `apps/web` | `pnpm --filter @juken-map/web test` | 画面まわりの純粋関数 |
 | 通し | Playwright | 記録→可視化の毎日ループ、デモ閲覧専用、モバイルナビ |
@@ -319,7 +319,7 @@ Node が API を配っていた頃（JUK-121 まで）の `apps/api` のテス�
 - ローカルでは `pnpm db:start` で DB コンテナを起動しておく必要がある。CI は `check` ジョブに
   MySQL サービスを持つ。
 - テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる
-  （`db/test-db/fixtures.ts`、Go は `apps/api-go/dbtest_support_test.go`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
+  （`db/test-db/fixtures.ts`、Go は `apps/api/dbtest_support_test.go`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
 - 往復（書いて読む）だけのテストでは時間帯の誤りが打ち消されて見えないので、
   `db/connection.test.ts` で DB 側の生の値と突き合わせている。CI（UTC）でもずれを検出できるよう、
   テストは `TZ=Asia/Tokyo` で動かす。
@@ -327,7 +327,7 @@ Node が API を配っていた頃（JUK-121 まで）の `apps/api` のテス�
 
 ## デプロイ
 
-`apps/web` のビルド成果物と Go の API（`apps/api-go`）を1つのイメージに入れ、EC2 上の Docker で動かす。
+`apps/web` のビルド成果物と Go の API（`apps/api`）を1つのイメージに入れ、EC2 上の Docker で動かす。
 nginx（EC2 ホスト上）が 443 を受けて 3000 番へ流す。設定の実物は `infra/nginx/README.md`。
 
 `src/shared` は `apps/*` の外にあるが、pnpm workspaceのルート依存からZodなどを解決できる。

@@ -1,4 +1,4 @@
-module github.com/shimaiku1960/juken-map/apps/api-go
+module github.com/shimaiku1960/juken-map/apps/api
 
 go 1.27.1
 

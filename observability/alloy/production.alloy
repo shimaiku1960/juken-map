@@ -19,7 +19,7 @@ discovery.relabel "api" {
   targets = discovery.docker.containers.targets
 
   // 集めるのはアプリのコンテナだけ（Alloy 自身のログを送り返して増やさない）。
-  // 本番で動くのは Go（apps/api-go）の juken-map-go だけ（JUK-109）。Node の juken-map は、戻したときのために残している。
+  // 本番で動くのは Go（apps/api）の juken-map-go だけ（JUK-109）。Node の juken-map は、戻したときのために残している。
   // 無停止デプロイの入れ替え中だけ、新しいコンテナが -next の付いた名前で動く。
   // ここを広げておかないと、切り替わるまでの起動ログが Loki に残らない。
   rule {
@@ -108,7 +108,7 @@ loki.write "cloud" {
 // deploy-ec2.sh が juken-map-go へ名前を戻すので、数十秒ぶんだけ間が空く。
 // 30秒間隔の粗い収集なので、1点欠けても率の監視には響かない。
 //
-// Go もメトリクスの名前とラベルを Node と揃えている（apps/api-go/metrics.go）。job を同じにして
+// Go もメトリクスの名前とラベルを Node と揃えている（apps/api/metrics.go）。job を同じにして
 // 今までのパネルとアラートにそのまま載せ、runtime で分けて見られるようにする。
 // Node（juken-map:9464）は JUK-109 でコンテナを外したので読まない（読みに行くと up=0 が出続ける）。
 prometheus.scrape "api" {

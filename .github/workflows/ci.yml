@@ -130,8 +130,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: apps/api-go/go.mod
-          cache-dependency-path: apps/api-go/go.sum
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
 
       # apps/web と db/ は独自の tsconfig を持つ別パッケージなので、
       # テストもそれぞれの vitest で実行する。
@@ -140,7 +140,7 @@ jobs:
           pnpm --filter @juken-map/web test
           pnpm --filter @juken-map/db test
 
-      # Go の API を本物の MySQL に流すテスト（apps/api-go の dbtest タグ、JUK-97）。他人の ID を断ること（A3）と、
+      # Go の API を本物の MySQL に流すテスト（apps/api の dbtest タグ、JUK-97）。他人の ID を断ること（A3）と、
       # 禁止項目を混ぜても書き換わらないこと（A4）を、本番で動いている Go のルートで確かめる。LINE 連携の SQL と、
       # 管理画面（利用者の管理・マスター編集）の SQL も流す（JUK-106）。ログインの流れ（登録・確認・期限・取り消し・
       # 再設定・2段階認証・外部ログイン、TestAuthDB）も流す（JUK-115）。マイグレーションの適用（TestMigrateDB）は、
@@ -150,20 +150,20 @@ jobs:
       - name: Test Go with DB
         run: |
           pnpm --filter @juken-map/db test-db:prepare
-          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB|TestE2|TestIncidentCommandDB|TestGrantAdminCommandDB|TestMigrateDB' -count=1 ./...
+          cd apps/api && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB|TestE2|TestIncidentCommandDB|TestGrantAdminCommandDB|TestMigrateDB' -count=1 ./...
 
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA
         run: pnpm --filter @juken-map/web build
 
-  # Go の API（apps/api-go、JUK-70）。pnpm workspace の外にあるので、ここで別に確かめる。
+  # Go の API（apps/api、JUK-70）。pnpm workspace の外にあるので、ここで別に確かめる。
   # テストは DB を使わない。DB に流すテスト（dbtest タグ）は MySQL のある check のジョブで回し、
   # ここではコンパイルが通ることだけ見る。
   go:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/api-go
+        working-directory: apps/api
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -171,8 +171,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: apps/api-go/go.mod
-          cache-dependency-path: apps/api-go/go.sum
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
 
       - name: Format
         run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt -w . で整形してください"; exit 1; }
@@ -253,8 +253,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: apps/api-go/go.mod
-          cache-dependency-path: apps/api-go/go.sum
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
 
       # 本番と同じ Go の migrate（JUK-125）。.env が無いので、上の DATABASE_URL に当てる。
       - name: Run migrations

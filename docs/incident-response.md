@@ -22,14 +22,17 @@
   aws ssm start-session --target i-0eeb166295363e11d --region ap-northeast-1
   ```
 
-- **アカウントの操作は Go の `incident` コマンドで行う**（`apps/api-go/cli.go`・`incident.go`、手元では `pnpm incident`）。
+- **アカウントの操作は Go の `incident` コマンドで行う**（`apps/api/cli.go`・`incident.go`、手元では `pnpm incident`）。
   本番の RDS には外から繋げないので、EC2 で動いている Go のコンテナの中で実行する（コンテナの DB の接続をそのまま使う。
   distroless でシェルが無いので、実行ファイルを直接呼ぶ）。管理画面の「停止」と違い、管理者も止められる
 
   ```sh
   # EC2 の中で。最後の2語を差し替える
-  sudo docker exec juken-map-go /api-go incident sessions <メールアドレス>
+  sudo docker exec juken-map-go /api incident sessions <メールアドレス>
   ```
+
+  実行ファイルは JUK-131 で `/api-go` から `/api` に名前を変えた。それより前のイメージへロールバックしているときは
+  `/api-go` で呼ぶ（コンテナ名 `juken-map-go` は変えていない）。
 
   | 操作 | すること |
   | --- | --- |
@@ -80,8 +83,8 @@ Grafana のアラートとは別に、AWS の GuardDuty の検出結果が「[Gu
 1. 止めて、セッションを全部消す。本人のパスワードが変わっていても、止めれば入れない
 
    ```sh
-   sudo docker exec juken-map-go /api-go incident sessions <メール>
-   sudo docker exec juken-map-go /api-go incident ban <メール>
+   sudo docker exec juken-map-go /api incident sessions <メール>
+   sudo docker exec juken-map-go /api incident ban <メール>
    ```
 
    止める前に `sessions` の結果（IP・ブラウザ・作成日時）を記録に写す。消すと残らない。
@@ -95,7 +98,7 @@ Grafana のアラートとは別に、AWS の GuardDuty の検出結果が「[Gu
 5. 本人と確かめが取れたら戻す。戻したあと、本人に再設定してもらう
 
    ```sh
-   sudo docker exec juken-map-go /api-go incident unban <メール>
+   sudo docker exec juken-map-go /api incident unban <メール>
    ```
 
 ## 2. 管理者のアカウントの乗っ取り
@@ -106,22 +109,22 @@ Grafana のアラートとは別に、AWS の GuardDuty の検出結果が「[Gu
 1. 管理者全員のセッションを消す。今の管理者は `grant-admin --list` で確かめる
 
    ```sh
-   sudo docker exec juken-map-go /api-go incident revoke-admins
-   sudo docker exec juken-map-go /api-go grant-admin --list
+   sudo docker exec juken-map-go /api incident revoke-admins
+   sudo docker exec juken-map-go /api grant-admin --list
    ```
 
 2. 乗っ取られた管理者を止めるか、管理者から外す。知らない管理者が増えていれば外す
 
    ```sh
-   sudo docker exec juken-map-go /api-go incident ban <メール>
-   sudo docker exec juken-map-go /api-go grant-admin <メール> --revoke
+   sudo docker exec juken-map-go /api incident ban <メール>
+   sudo docker exec juken-map-go /api grant-admin <メール> --revoke
    ```
 
 3. 2段階認証を設定し直す。認証アプリの秘密が漏れたかもしれないので、全員分を戻し、
    パスワードを再設定してから `/admin` で設定し直す（QR を読み、予備コードを保存し直す）
 
    ```sh
-   sudo docker exec juken-map-go /api-go incident reset-2fa <メール>
+   sudo docker exec juken-map-go /api incident reset-2fa <メール>
    ```
 
 4. 管理操作の記録を確かめる。ログの `admin user action` に、誰が（`adminId`）・誰に（`targetId`・`targetEmail`）・
@@ -333,7 +336,7 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
      docker buildx build --platform linux/amd64 --push --build-arg APP_COMMIT=$c \
        --build-context web=docker-image://961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:restore-$c \
        --build-context migrations=db/migrations \
-       -t 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:restore-$c apps/api-go
+       -t 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:restore-$c apps/api
      ```
 
    - CI を使わずに、手元から deploy.yml と同じコマンドを送る（信頼できるコミットのファイルを使う）
@@ -368,7 +371,7 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
 
 | 操作 | 試した日 | どこで・どう試したか |
 | --- | --- | --- |
-| `pnpm incident` の6つの操作 | 2026-10-02 | 手元の DB に使い捨ての管理者（2段階認証つき・セッション2件）を作り、6つを順に実行して DB の変化を確かめた。`apps/api/src/services/incident-service.test.ts` が CI で毎回確かめる（2026-10-05 に Go へ移し、今は `apps/api-go/incident_db_test.go`。JUK-122）（2026-10-04 に `revoke-all` を足し、表をログインの自作の表に替えた。JUK-115） |
+| `pnpm incident` の6つの操作 | 2026-10-02 | 手元の DB に使い捨ての管理者（2段階認証つき・セッション2件）を作り、6つを順に実行して DB の変化を確かめた。`apps/api/src/services/incident-service.test.ts` が CI で毎回確かめる（2026-10-05 に Go へ移し、今は `apps/api/incident_db_test.go`。JUK-122）（2026-10-04 に `revoke-all` を足し、表をログインの自作の表に替えた。JUK-115） |
 | コンテナの中から `tsx src/incident.ts` を実行する | 2026-10-02 | 本番と同じ Dockerfile で作ったイメージを手元の DB に繋ぎ、`docker exec` と同じ形で実行した。2026-10-05 に本番の Node のコンテナが無くなり（JUK-109）、この形は使えなくなった |
 | Go のコンテナの中から `/api-go incident`・`grant-admin` を実行する | 2026-10-05 | 本番と同じ Dockerfile（distroless）で作った Go のイメージを手元の DB に繋ぎ、`/api-go` を直接呼んだ。同日、本番の `juken-map-go` で `grant-admin --list` と、いない人への `incident sessions`（終了コード 1）を `docker exec` で実行した（JUK-122） |
 | `grant-admin.ts --list` | 2026-10-02 | 手元の DB（2026-10-05 から Go の `grant-admin --list`） |

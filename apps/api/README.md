@@ -1,6 +1,6 @@
-# api-go
+# apps/api（Go のサーバー）
 
-業務の API を受けるサーバー（JUK-70）。Node（`apps/api`）の API を1本ずつ移し、移し終えたものは
+業務の API を受けるサーバー（JUK-70）。Node の API（当時の `apps/api`。JUK-131 で Go がこの名前を引き継いだ）を1本ずつ移し、移し終えたものは
 Node から消した（JUK-84）。ダッシュボード・学習記録と予定・志望校・参考書・大学・通知設定・プロフィール・
 毎日の通知・LINE 連携・管理画面・登録の計測・CSP の報告・シミュレーションを、書き込みも含めて Go が返す。
 本番では nginx がこれらのパスを Go へ振り分ける（JUK-72、下の「本番」）。
@@ -31,7 +31,7 @@ Node から消した（JUK-84）。ダッシュボード・学習記録と予定
 Go だけを動かすときは次のとおり。
 
 ```sh
-cd apps/api-go
+cd apps/api
 set -a; source ../../.env; set +a   # DATABASE_URL と BETTER_AUTH_SECRET などを読む
 go run .                             # PORT を指定しなければ 8080
 go test ./...
@@ -203,7 +203,7 @@ LINE 連携の SQL（`line_db_test.go` の `TestLineStore`）も同じ仕組み�
 
 移すあいだは、Node と Go に同じリクエストを送ってステータス・本文・ヘッダーを比べていた（`parity.sh`、JUK-71）。
 比べる相手の Node の API をすべて消したので、`parity_test.go`・`parity_writes_test.go`・管理画面の比較
-（`admin_*_db_test.go`）・`servers.sh` と一緒に消した（JUK-84）。中身は `git log --diff-filter=D -- apps/api-go` で探せる。
+（`admin_*_db_test.go`）・`servers.sh` と一緒に消した（JUK-84）。中身は `git log --diff-filter=D -- apps/api` で探せる。
 
 ## 毎日の通知の送り方
 
@@ -228,7 +228,7 @@ Go は5本同時に送るが、メールは Resend の上限（チーム全体�
 | `auth.go` | セッション Cookie の署名確認と、session テーブルの照会 | Better Auth の `getSession` |
 | `middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 | `observability/logger.ts`・`requestContext.ts`・`security-headers.ts` |
 | `overload.go` | 同時処理数の上限を超えたら 503 | `overload.ts` |
-| `cli.go`・`incident.go` | 引数を付けて起動したときのコマンド：`incident`（乗っ取りの操作）と `grant-admin`（管理者の付け外し）。本番は `docker exec juken-map-go /api-go ...`、手元は `pnpm incident`・`pnpm admin:grant`。テストは `incident_db_test.go`（dbtest） | `incident.ts`・`grant-admin.ts`（JUK-122 で消した） |
+| `cli.go`・`incident.go` | 引数を付けて起動したときのコマンド：`incident`（乗っ取りの操作）と `grant-admin`（管理者の付け外し）。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`。テストは `incident_db_test.go`（dbtest） | `incident.ts`・`grant-admin.ts`（JUK-122 で消した） |
 | `user_rate_limit.go` | 利用者単位の回数制限（読み取り・書き込みの2種類、メモリのトークンバケット）。超えたら 429 と `Retry-After` | —（Node には無い。06 E2） |
 | `errors.go` | エラー応答の形、404、path の ID | `error-handling.ts`・`routes/params.ts` |
 | `logger.go` | pino と同じ形の JSON ログ | `observability/logger.ts` |

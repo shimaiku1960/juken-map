@@ -24,7 +24,7 @@ trap cleanup EXIT
 trap 'exit 143' TERM INT
 
 pnpm --dir "$ROOT" --filter @juken-map/web build
-(cd "$ROOT/apps/api-go" && go build -o "$WORK/api-go" .)
+(cd "$ROOT/apps/api" && go build -o "$WORK/api" .)
 
 # Go は .env を自分では読まないので、ここで読む（CI は .env が無く、ジョブの環境変数だけで動く）。
 # 先に決めた値が .env で上書きされないよう、読んだ後に改めて渡す。
@@ -35,7 +35,7 @@ pnpm --dir "$ROOT" --filter @juken-map/web build
   # （送れなかったことはログに残るだけ。トークンは db/e2e-auth.ts が発行する）。
   # WEB_DIST_DIR は画面のビルド成果物（JUK-111。Go が画面も配る）。
   PORT="$E2E_GO_PORT" WEB_ORIGIN="http://localhost:$E2E_PORT" RESEND_API_KEY="" WEB_DIST_DIR="$ROOT/apps/web/dist" \
-    exec "$WORK/api-go"
+    exec "$WORK/api"
 ) &
 pids+=($!)
 

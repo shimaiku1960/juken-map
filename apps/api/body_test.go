@@ -90,7 +90,7 @@ func TestReadBodyNumbers(t *testing.T) {
 	}
 }
 
-// 期待値は、Node（apps/api）に同じリクエストを送って返ってきたもの（2026-09-30 に手元で確かめた）。
+// 期待値は、Node の API（当時の apps/api）に同じリクエストを送って返ってきたもの（2026-09-30 に手元で確かめた）。
 
 // prefsHandler は PUT /api/notification-preferences の入力チェックまでを通す。保存の代わりに 200 で入力を返す。
 func prefsHandler(w http.ResponseWriter, r *http.Request) {

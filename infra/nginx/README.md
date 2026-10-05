@@ -149,7 +149,7 @@ Domain を指定できず、www と apex でログインを共有できない（
 
 ## Go の振り分け（2026-09-29 追加、JUK-72）
 
-一部のパスだけを Go（`apps/api-go`）が返す。どのパスかは **このリポジトリの
+一部のパスだけを Go（`apps/api`）が返す。どのパスかは **このリポジトリの
 `juken-map-go-routes.conf` が正**で、デプロイのたびに本番の `/etc/nginx/juken-map/go-routes.conf` へ置かれる。
 
 ```

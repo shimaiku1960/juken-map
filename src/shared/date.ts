@@ -45,7 +45,7 @@ export function todayYmdTokyo(): string {
 export const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 // "YYYY-MM-DD"（形は YMD_PATTERN で確かめ済み）が暦にある日付か。2026-02-30・2026-13-01 は false。
-// Date は使わない（Date.UTC は 0〜99 年を 1900 年代に読み替える）。Go 側（apps/api-go）も同じ算数で判定する。
+// Date は使わない（Date.UTC は 0〜99 年を 1900 年代に読み替える）。Go 側（apps/api）も同じ算数で判定する。
 export function isCalendarYmd(ymd: string): boolean {
   const [y, m, d] = ymd.split("-").map(Number);
   if (m < 1 || m > 12 || d < 1) return false;

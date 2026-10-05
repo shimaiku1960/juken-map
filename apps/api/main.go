@@ -1,6 +1,6 @@
-// api-go は、Node（apps/api）の業務 API を1本ずつ Go へ移すためのサーバー（JUK-70）。
-// 最初の1本の GET /api/dashboard（JUK-69）に続けて、読み取りの API（JUK-73）と書き込みの API（JUK-75）を移している。
-// 本番では nginx が移したパスだけを Go へ振り分ける（infra/nginx/juken-map-go-routes.conf、JUK-72）。
+// juken-map のサーバー。API・ログイン・画面の配信・運用のコマンド・マイグレーションの適用を受け持つ。
+// もとは Node の業務 API を1本ずつ Go へ移すために作った（JUK-70）。移し終えて Node を消したあと、
+// apps/api-go から apps/api へ名前を変えた（JUK-131）。本番では nginx が全部のパスを Go へ送る（infra/nginx/juken-map-go-routes.conf）。
 //
 // LINE 連携（JUK-79）と管理画面の API（JUK-78）も Go が受ける。ログイン（/api/auth/*）も Better Auth から移し、
 // Go で自作した（JUK-115、auth_*.go）。
@@ -30,7 +30,7 @@ func main() {
 	}
 	slog.SetDefault(newLogger(os.Stdout, parseLevel(os.Getenv("LOG_LEVEL"))))
 	if err := run(); err != nil {
-		slog.Error("api-go stopped", "err", err.Error())
+		slog.Error("api stopped", "err", err.Error())
 		os.Exit(1)
 	}
 }
@@ -130,7 +130,7 @@ func run() error {
 	}
 	if site != nil {
 		registerSPA(rt, site)
-		slog.Info("api-go serving web", "files", len(site.assets), "prerendered", len(site.pages))
+		slog.Info("api serving web", "files", len(site.assets), "prerendered", len(site.pages))
 	}
 
 	srv := &http.Server{
@@ -163,7 +163,7 @@ func run() error {
 	serveErr := make(chan error, len(servers))
 	for _, s := range servers {
 		go func() {
-			slog.Info("api-go listening", "addr", s.Addr)
+			slog.Info("api listening", "addr", s.Addr)
 			serveErr <- s.ListenAndServe()
 		}()
 	}
@@ -177,7 +177,7 @@ func run() error {
 	// 受け付け済みのリクエストは返し終えてから止める（新しい接続はもう受けない）。
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	slog.Info("api-go shutting down")
+	slog.Info("api shutting down")
 	var errs []error
 	for _, s := range servers {
 		errs = append(errs, s.Shutdown(shutdownCtx))

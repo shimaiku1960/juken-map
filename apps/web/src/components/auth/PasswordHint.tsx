@@ -1,4 +1,4 @@
-// 新しいパスワードを決める欄の下に出す規則の案内（認証基準 10 の A2、apps/api-go の checkNewPassword）。
+// 新しいパスワードを決める欄の下に出す規則の案内（認証基準 10 の A2、apps/api の checkNewPassword）。
 // 長さで強さを持たせ、記号や大文字は求めない。よく使われているパスワードはサーバーが断る。
 export default function PasswordHint({ id }: { id: string }) {
   return (

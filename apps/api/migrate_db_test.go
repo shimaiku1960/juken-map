@@ -29,7 +29,7 @@ import (
 
 const (
 	migrateTestDBName = "juken_map_migrate_test"
-	// go test はパッケージのディレクトリ（apps/api-go）で動く。
+	// go test はパッケージのディレクトリ（apps/api）で動く。
 	repoMigrationsDir = "../../db/migrations"
 )
 
