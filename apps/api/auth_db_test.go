@@ -547,7 +547,7 @@ func TestAuthDBPasswordReset(t *testing.T) {
 	token := e.mails.last(t, email, "パスワードの再設定").token(t)
 
 	// E1：用途の違うトークン（確認用）では再設定できない。
-	verifyToken, err := e.h.issueToken(context.Background(), e.userID(email), tokenPurposeVerifyEmail, time.Hour)
+	verifyToken, err := e.h.store.issueToken(context.Background(), e.userID(email), tokenPurposeVerifyEmail, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
