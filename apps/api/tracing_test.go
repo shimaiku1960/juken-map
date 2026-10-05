@@ -201,3 +201,33 @@ func TestLogOutput(t *testing.T) {
 		t.Errorf("標準出力 = %s", stdout.String())
 	}
 }
+
+func TestWebSpansAreNotSent(t *testing.T) {
+	buf := captureLogs(t)
+	sr := tracetest.NewSpanRecorder()
+	// 本番と同じく、送る手前に skipWebSpans を挟む。
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(skipWebSpans{sr}))
+	h := newServerHandler(newSPATestRouter(t, pageScripts{}), newMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
+
+	serve(h, "GET", "/", "")
+	serve(h, "GET", "/api/health", "")
+
+	spans := sr.Ended()
+	if len(spans) != 1 || spans[0].Name() != "GET /api/health" {
+		names := []string{}
+		for _, s := range spans {
+			names = append(names, s.Name())
+		}
+		t.Fatalf("送ったスパン = %v, want [GET /api/health] だけ", names)
+	}
+	// 送らないトレースの ID はログに書かない。送るほうには書く。
+	for _, line := range logLines(t, buf) {
+		if line["msg"] != "request completed" {
+			continue
+		}
+		url := line["req"].(map[string]any)["url"]
+		if hasID := line["trace_id"] != nil; hasID != (url == "/api/health") {
+			t.Errorf("%v の trace_id = %v", url, line["trace_id"])
+		}
+	}
+}
