@@ -23,6 +23,7 @@ func TestRegisteredRoutes(t *testing.T) {
 		{"POST /api/auth/password/reset", accessAuth},
 		{"POST /api/auth/password/change", accessAuth},
 		{"GET /api/auth/accounts", accessAuth},
+		{"POST /api/auth/delete-account", accessAuth},
 		{"POST /api/auth/mfa/setup", accessAuth},
 		{"POST /api/auth/mfa/confirm", accessAuth},
 		{"POST /api/auth/mfa/verify", accessAuth},

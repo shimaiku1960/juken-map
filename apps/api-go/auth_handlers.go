@@ -31,6 +31,7 @@ import (
 //	POST password/reset          メールのリンクのトークンでパスワードを決め直す
 //	POST password/change         ログイン中にパスワードを変える（今のパスワードを入れ直す）
 //	GET  accounts                ログインの手段（パスワードの有無・連携している外部サービス）
+//	POST delete-account          退会（本人の確認をし直してから、利用者とデータを消す。auth_delete_account.go）
 //	POST mfa/setup・mfa/confirm  2段階認証を設定する（auth_mfa.go）
 //	POST mfa/verify              ログインの途中で2段階認証のコードを確かめる（auth_mfa.go）
 //	POST oauth/{provider}        外部ログインを始める（auth_oauth.go）

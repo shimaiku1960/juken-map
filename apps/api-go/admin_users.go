@@ -574,8 +574,7 @@ func (st *sqlAdminUserStore) unban(ctx context.Context, id string, now time.Time
 	return err
 }
 
-// deleteUser は利用者を消す。ぶら下がっている行（StudyLog・StudyPlan・Textbook・FinalGoal・AuthSession・AuthPassword・
-// 通知・LINE 関連など）は外部キーの ON DELETE CASCADE で一緒に消える。
+// deleteUser は利用者を消す。消し方は本人の退会と同じ deleteUserAndData（auth_delete_account.go）。
 func (st *sqlAdminUserStore) deleteUser(ctx context.Context, id string) (removedCounts, error) {
 	var c removedCounts
 	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
@@ -588,8 +587,11 @@ func (st *sqlAdminUserStore) deleteUser(ctx context.Context, id string) (removed
 		).Scan(&c.StudyLogs, &c.StudyPlans, &c.Textbooks, &c.FinalGoals); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, "DELETE FROM `user` WHERE id = ?", id)
-		return err
+		var email string
+		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(email, '') FROM `user` WHERE id = ?", id).Scan(&email); err != nil {
+			return err
+		}
+		return deleteUserAndData(ctx, tx, id, email)
 	})
 	return c, err
 }

@@ -198,6 +198,7 @@ func registerAuthRoutes(rt *router, h *authHandlers) {
 	rt.auth("POST /api/auth/password/reset", h.resetPassword)
 	rt.auth("POST /api/auth/password/change", h.changePassword)
 	rt.auth("GET /api/auth/accounts", h.accounts)
+	rt.auth("POST /api/auth/delete-account", h.deleteAccount)
 	rt.auth("POST /api/auth/mfa/setup", h.mfaSetup)
 	rt.auth("POST /api/auth/mfa/confirm", h.mfaConfirm)
 	rt.auth("POST /api/auth/mfa/verify", h.mfaVerify)

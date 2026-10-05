@@ -1,6 +1,7 @@
 import { Link, useSearchParams } from "react-router";
 import ProfileEdit from "@/web/components/ProfileEdit";
 import NotificationPreferenceForm from "@/web/components/NotificationPreferenceForm";
+import DeleteAccountSection from "@/web/components/DeleteAccountSection";
 import { Card, CardContent } from "@/web/components/ui/card";
 import { DEMO_EMAIL } from "@/shared/demo";
 import { LINE_OFFICIAL_ACCOUNT_URL } from "@/shared/site";
@@ -103,6 +104,20 @@ export default function ProfilePage() {
                 readOnly={readOnly}
               />
             )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section id="delete-account" className="mt-10 scroll-mt-24">
+        <SectionHeader title="退会" />
+        <Card>
+          <CardContent className="py-5">
+            <DeleteAccountSection
+              email={user.email}
+              twoFactorEnabled={user.twoFactorEnabled}
+              isAdmin={user.role === "admin"}
+              readOnly={readOnly}
+            />
           </CardContent>
         </Card>
       </section>
