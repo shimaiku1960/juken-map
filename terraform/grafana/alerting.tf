@@ -374,6 +374,8 @@ resource "grafana_rule_group" "security_signals" {
       data {
         ref_id         = "A"
         datasource_uid = rule.value.datasource
+        # model の queryType から Grafana が付ける。書かないと plan に毎回消す差分が出る
+        query_type = "instant"
 
         relative_time_range {
           from = 3600
