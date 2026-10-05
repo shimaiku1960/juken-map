@@ -11,14 +11,14 @@ import (
 // プロフィールの更新（JUK-75）。Node の routes/profile.ts と services/user-service.ts の updateProfile にあたる。
 
 // 入力チェックは Zod の profileSchema（src/shared/validations/profile.ts）と同じ。
-// trim を長さの確かめより後に書いているので、空白だけのニックネームも通り、空文字で保存される（Node と同じ）。
+// 前後の空白を削ってから長さを確かめるので、空白だけのニックネームは「必須です」で弾く（JUK-64）。
 var nicknameRule = stringRule{
 	typeMessage: "ニックネームは文字列で入力してください",
+	trimFirst:   true,
 	min:         1,
 	minMessage:  "ニックネームは必須です",
 	max:         50,
 	maxMessage:  "50文字以内で入力してください",
-	trim:        true,
 }
 
 type userStore struct {
