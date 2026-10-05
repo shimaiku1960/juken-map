@@ -280,7 +280,7 @@ locals {
     rate_limited = {
       name        = "受験マップ：回数制限（429）の急増"
       summary     = "15分間の 429 が10件を超えました"
-      description = "ログインやメール送信の連打で、回数制限に当たっています。平常時は1時間に2件以下です。ログの TOO_MANY_SIGN_IN_ATTEMPTS と IP を確かめてください。手順は docs/incident-response.md。"
+      description = "ログインやメール送信の連打、またはログインした人の API の叩きすぎで、回数制限に当たっています。平常時は1時間に2件以下です。ログの TOO_MANY_SIGN_IN_ATTEMPTS と IP、request limited: per user の userId を確かめてください。手順は docs/incident-response.md。"
       datasource  = "grafanacloud-prom"
       expr        = "sum(increase(http_requests_total{env=\"production\",status_code=\"429\"}[15m]))"
       op          = "gt"
