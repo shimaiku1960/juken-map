@@ -51,24 +51,6 @@ describe("リクエストのメトリクス", () => {
     );
   });
 
-  it("onRequest で横取りする Better Auth のリクエストも数える", async () => {
-    const app = buildTestApp((app) => {
-      registerMetrics(app);
-      // server.ts と同じく、ルートを登録せずに生の応答へ直接書く。
-      app.addHook("onRequest", async (request, reply) => {
-        if (!request.url.startsWith("/api/auth/")) return;
-        reply.hijack();
-        reply.raw.writeHead(401).end();
-      });
-    });
-
-    await app.inject({ method: "POST", url: "/api/auth/sign-in/email" });
-
-    expect(
-      await requestCount('method="POST",route="/api/auth/*",status_code="401"')
-    ).toBe(1);
-  });
-
   it("画面と存在しない API は、それぞれ1つのラベルにまとめる", async () => {
     const app = buildTestApp((app) => {
       registerMetrics(app);

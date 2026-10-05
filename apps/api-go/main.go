@@ -2,8 +2,8 @@
 // 最初の1本の GET /api/dashboard（JUK-69）に続けて、読み取りの API（JUK-73）と書き込みの API（JUK-75）を移している。
 // 本番では nginx が移したパスだけを Go へ振り分ける（infra/nginx/juken-map-go-routes.conf、JUK-72）。
 //
-// LINE 連携（JUK-79）と管理画面の API（JUK-78）も Go が受ける。ログインの発行は Node に残す。セッションは Node 側（Better Auth）が
-// 発行したものを、同じ DB と同じ BETTER_AUTH_SECRET で確かめるだけ。
+// LINE 連携（JUK-79）と管理画面の API（JUK-78）も Go が受ける。ログイン（/api/auth/*）も Better Auth から移し、
+// Go で自作した（JUK-115、auth_*.go）。
 package main
 
 import (
@@ -48,8 +48,34 @@ func run() error {
 	}
 	defer db.Close()
 
-	auth := &sessionAuth{db: db, secret: []byte(secret)}
-	rt := newRouter(auth.load)
+	hashConcurrency, err := envInt("AUTH_HASH_CONCURRENCY", defaultHashConcurrency)
+	if err != nil {
+		return err
+	}
+	// TOTP の秘密を暗号化する鍵（auth_totp.go）。AUTH_TOTP_KEYS が無ければ BETTER_AUTH_SECRET から導く。
+	totpKeys, err := newTOTPKeyring(os.Getenv("AUTH_TOTP_KEYS"), secret)
+	if err != nil {
+		return err
+	}
+	m := newMetrics()
+	webOrigin := envOr("WEB_ORIGIN", siteURL)
+	authHandlers := newAuthHandlers(db, authConfig{
+		webOrigin:       webOrigin,
+		totpKeys:        totpKeys,
+		hashConcurrency: hashConcurrency,
+		metrics:         m,
+		adminTo:         os.Getenv("ADMIN_NOTIFICATION_EMAIL"),
+		sender: &resendSender{
+			client: &http.Client{},
+			base:   envOr("RESEND_BASE_URL", "https://api.resend.com"),
+			key:    os.Getenv("RESEND_API_KEY"),
+		},
+		oauth: newOAuthProviders(webOrigin, defaultOAuthEndpoints,
+			os.Getenv("AUTH_GOOGLE_ID"), os.Getenv("AUTH_GOOGLE_SECRET"),
+			os.Getenv("AUTH_GITHUB_ID"), os.Getenv("AUTH_GITHUB_SECRET")),
+	})
+	rt := newRouter((&sessionAuth{store: authHandlers.sessions}).load)
+	registerAuthRoutes(rt, authHandlers)
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
 		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
@@ -85,7 +111,6 @@ func run() error {
 		},
 	})
 
-	m := newMetrics()
 	srv := &http.Server{
 		Addr: ":" + envOr("PORT", "8080"),
 		Handler: newServerHandler(rt, m, serverOptions{
@@ -136,6 +161,26 @@ func run() error {
 		errs = append(errs, s.Shutdown(shutdownCtx))
 	}
 	return errors.Join(errs...)
+}
+
+// registerAuthRoutes はログインの入口（auth_handlers.go の一覧）を登録する。本番では /api/auth/ で始まるものを
+// すべて Go へ送る（infra/nginx/juken-map-go-routes.conf）。
+func registerAuthRoutes(rt *router, h *authHandlers) {
+	rt.auth("GET /api/auth/session", h.session)
+	rt.auth("POST /api/auth/sign-up", h.signUp)
+	rt.auth("POST /api/auth/sign-in", h.signIn)
+	rt.auth("POST /api/auth/sign-out", h.signOut)
+	rt.auth("POST /api/auth/verify-email", h.verifyEmail)
+	rt.auth("POST /api/auth/verify-email/resend", h.resendVerification)
+	rt.auth("POST /api/auth/password/forgot", h.forgotPassword)
+	rt.auth("POST /api/auth/password/reset", h.resetPassword)
+	rt.auth("POST /api/auth/password/change", h.changePassword)
+	rt.auth("GET /api/auth/accounts", h.accounts)
+	rt.auth("POST /api/auth/mfa/setup", h.mfaSetup)
+	rt.auth("POST /api/auth/mfa/confirm", h.mfaConfirm)
+	rt.auth("POST /api/auth/mfa/verify", h.mfaVerify)
+	rt.auth("POST /api/auth/oauth/{provider}", h.oauthStart)
+	rt.auth("GET /api/auth/callback/{provider}", h.oauthCallback)
 }
 
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち

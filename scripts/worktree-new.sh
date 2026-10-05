@@ -94,7 +94,6 @@ WT_SLOT=$slot
 WEB_PORT=$web_port
 API_PORT=$((4000 + slot))
 E2E_PORT=$((3010 + slot))
-BETTER_AUTH_URL=http://localhost:$web_port
 EOF
 
 pnpm --dir "$dir" install --frozen-lockfile

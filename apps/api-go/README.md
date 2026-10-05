@@ -5,10 +5,24 @@ Node から消した（JUK-84）。ダッシュボード・学習記録と予定
 毎日の通知・LINE 連携・管理画面・登録の計測・CSP の報告・シミュレーションを、書き込みも含めて Go が返す。
 本番では nginx がこれらのパスを Go へ振り分ける（JUK-72、下の「本番」）。
 
-Node に残っているのは、ログイン（Better Auth の `/api/auth/*`）・ブログ（`/api/blog`）・`/api/health`・
-`/line/settings`（画面への振り分け）と、画面（SPA）・sitemap の配信。
-ログインの発行は Node に残す。Go は Node（Better Auth）が発行した
-セッション Cookie を、同じ DB と同じ `BETTER_AUTH_SECRET` で確かめるだけ。
+ログイン（`/api/auth/*`）も Better Auth（Node）から移し、Go で自作した（JUK-115、`auth_*.go`）。
+判定の基準は dev-standards の `targets/10_authentication.md`（認証 基準）で、コメントの B1・C3 などはその項目。
+Node に残っているのは、ブログ（`/api/blog`）・`/api/health`・`/line/settings`（画面への振り分け）と、
+画面（SPA）・sitemap の配信。
+
+### ログインの作り（`auth_*.go`）
+
+| ファイル | 中身 |
+| --- | --- |
+| `auth_handlers.go` | 入口の一覧、登録・ログイン・ログアウト・セッションの取得 |
+| `auth_recovery.go` | メールの確認・確認メールの再送・再設定・パスワードの変更 |
+| `auth_mfa.go`・`auth_totp.go` | 2段階認証（TOTP・予備コード・秘密の暗号化） |
+| `auth_oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
+| `auth_session.go`・`auth_token.go` | セッション（期限・取り消し・Cookie）とトークンの作り方 |
+| `auth_password.go` | パスワードのハッシュ（Argon2id）と規則（15文字以上・よくあるものの拒否） |
+| `auth_throttle.go`・`auth_email.go` | 回数制限と、上限つきのメール送信 |
+
+テストは `auth_unit_test.go`（DB なし）と `auth_db_test.go`（本物の MySQL、`pnpm test:go-db`）。
 
 ## 動かし方
 
@@ -18,7 +32,7 @@ Go だけを動かすときは次のとおり。
 
 ```sh
 cd apps/api-go
-set -a; source ../../.env; set +a   # DATABASE_URL と BETTER_AUTH_SECRET を読む
+set -a; source ../../.env; set +a   # DATABASE_URL と BETTER_AUTH_SECRET などを読む
 go run .                             # PORT を指定しなければ 8080
 go test ./...
 ```
@@ -29,10 +43,11 @@ go test ./...
 go run . | pnpm exec pino-pretty
 ```
 
-ログインは Node 側で行い、そのセッション Cookie をそのまま使う。
+ログインした Cookie（`__Host-jm_session`）をそのまま付ければ、ほかの API も叩ける。
 
 ```sh
-curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
+curl -c jar -H "Content-Type: application/json" -d '{"email":"…","password":"…"}' localhost:8080/api/auth/sign-in
+curl -b jar localhost:8080/api/dashboard
 ```
 
 | 環境変数 | 既定 | 意味 |
@@ -43,9 +58,14 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 | `LOG_LEVEL` | info | pino と同じ名前（debug・info・warn・error） |
 | `NODE_ENV` | なし | `production` のとき reqId を UUID のまま出す（開発は8文字） |
 | `DATABASE_URL` | なし | 必須。Node と同じ形（`mysql://…`） |
-| `BETTER_AUTH_SECRET` | なし | 必須。Node と同じ値（Cookie の署名を確かめる） |
+| `BETTER_AUTH_SECRET` | なし | 必須。2段階認証の秘密を暗号化する鍵（版 v0）をここから導く（`AUTH_TOTP_KEYS` が無いとき）。名前は Better Auth の名残 |
+| `AUTH_TOTP_KEYS` | なし | 2段階認証の秘密を暗号化する鍵。`版:base64の32バイト` をカンマで並べ、先頭が今の版。鍵を作り直すときは新しい版を先頭に足す（古い版も残す） |
+| `AUTH_HASH_CONCURRENCY` | 2 | パスワードのハッシュ（Argon2id、1回 19MiB）を同時に計算する数 |
+| `AUTH_GOOGLE_ID`・`AUTH_GOOGLE_SECRET` | なし | Google ログイン。どちらか空なら Google ログインは無い（404） |
+| `AUTH_GITHUB_ID`・`AUTH_GITHUB_SECRET` | なし | GitHub ログイン。どちらか空なら GitHub ログインは無い（404） |
+| `ADMIN_NOTIFICATION_EMAIL` | なし | 新しい利用者を知らせる宛先。空ならログに残すだけ |
 | `DAILY_NOTIFICATION_SECRET` | なし | 毎日の通知の入口の共有トークン。空なら、その入口は必ず 401 |
-| `RESEND_API_KEY` | なし | 毎日の通知のメールを送る Resend のキー |
+| `RESEND_API_KEY` | なし | メール（毎日の通知・確認・再設定・本人への知らせ）を送る Resend のキー |
 | `RESEND_BASE_URL` | `https://api.resend.com` | Resend の送り先。手元の比較で偽のサーバーへ向けるときだけ変える（Node の SDK と同じ名前） |
 | `LINE_CHANNEL_ACCESS_TOKEN` | なし | 毎日の通知を LINE で送るトークン |
 | `LINE_API_BASE` | `https://api.line.me/v2/bot` | LINE の送り先（Messaging API）。テスト用 |
@@ -53,7 +73,7 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 | `LINE_LOGIN_CHANNEL_ID` | なし | LINE Login（プロフィールからの連携）のチャネル ID。空なら連携を始められない |
 | `LINE_LOGIN_CHANNEL_SECRET` | なし | LINE Login のチャネルシークレット |
 | `LINE_LOGIN_API_BASE` | `https://api.line.me` | LINE Login の API（トークン・ID トークンの確認・友だち状態）。テスト用 |
-| `WEB_ORIGIN` | `https://juken-map.com` | 画面のオリジン。LINE Login の戻り先と、終わったあとのリダイレクト先。手元は Vite の URL |
+| `WEB_ORIGIN` | `https://juken-map.com` | 画面のオリジン。メールのリンク、Google・GitHub・LINE Login の戻り先、終わったあとのリダイレクト先。手元は Vite の URL |
 | `SIMULATION_ENABLED` | なし | `on` のときだけシミュレーションの API（`/api/sim/*`）を登録する。それ以外は 404 |
 | `SIMULATION_SECRET` | なし | シミュレーションの API の共有トークン（cron とは別）。空なら必ず 401 |
 | `MICROCMS_WEBHOOK_SECRET` | なし | microCMS の Webhook の署名を確かめる（JUK-112）。空なら Webhook は必ず 401 |
@@ -64,7 +84,7 @@ curl -H "Cookie: better-auth.session_token=..." localhost:8080/api/dashboard
 
 ```
 nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go（127.0.0.1:8080 か 8081）
-       ├─ /api/line/*・/api/admin/*・/api/sim/*（全メソッド） ─▶ juken-map-go
+       ├─ /api/auth/*・/api/line/*・/api/admin/*・/api/sim/*（全メソッド） ─▶ juken-map-go
        ├─ /api/study-logs・/daily・/{id}・
        │  /api/study-plans・/{id}・/{id}/complete・
        │  /api/goals・/{id}・/first-choice・
@@ -74,7 +94,7 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
        ├─ POST /api/analytics/registration・POST /api/csp-report・
        │  POST /api/cron/daily-study-notifications・
        │  POST /api/webhooks/microcms                  ─▶ juken-map-go
-       └─ それ以外（/api/auth/*・/api/blog・/api/health・画面） ─▶ juken-map（3000 か 3001、Node）
+       └─ それ以外（/api/blog・/api/health・/line/settings・画面） ─▶ juken-map（3000 か 3001、Node）
 ```
 
 - イメージはこのディレクトリの `Dockerfile` で作り、ECR の `juken-map-go` に置く（`deploy.yml`）。

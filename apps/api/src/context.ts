@@ -1,19 +1,14 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { fromNodeHeaders } from "better-auth/node";
-import { auth } from "./auth.ts";
+import { findSession, type Session } from "./session-store.ts";
 import { DEMO_EMAIL } from "@/shared/demo";
 import { TWO_FACTOR_REQUIRED } from "@/shared/admin";
 
-// Next.js の Route Handler が毎回書いていた
-//   const session = await auth.api.getSession({ headers: await headers() });
-//   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-// を Fastify 向けに1か所へまとめる。
-// Next.js との違いは headers の取り方だけ（await headers() → fromNodeHeaders）。
+// ログインの判定を1か所へまとめる。セッションは Go が発行し、ここでは DB から読むだけ（session-store.ts）。
 
-export type Session = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
+export type { Session };
 
 export function getSession(request: FastifyRequest) {
-  return auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
+  return findSession(request.headers.cookie);
 }
 
 /**
@@ -29,9 +24,8 @@ export async function requireSession(
     reply.code(401).send({ error: "Unauthorized" });
     return null;
   }
-  // 停止された利用者。停止時にその人の session は消しているので普通はここに来ないが、
-  // 消す直前に始まっていたリクエストが残ることはある。bannedAt はセッションに載っている
-  // （auth.ts の additionalFields）ので、DB を引き直さずに断れる。
+  // 停止された利用者。停止時にその人のセッションは消しているので普通はここに来ないが、
+  // 消す直前に始まっていたリクエストが残ることはある。bannedAt はセッションと一緒に引いている。
   if (session.user.bannedAt) {
     reply.code(403).send({ error: "このアカウントは利用を停止されています。" });
     return null;
@@ -57,7 +51,7 @@ export function denyDemoWrite(
 
 /**
  * 未認証なら 401、管理者でないか2段階認証を通していなければ 403 を送って null を返す。access-control.ts のフックが使う。
- * role は user テーブルの列で、Better Auth がセッションに載せてくる（auth.ts の additionalFields）。
+ * role は user テーブルの列で、セッションと一緒に引いている（session-store.ts）。
  * 画面側でもメニューの出し分けに使うが、守るのはここ。
  */
 export async function requireAdmin(
@@ -70,7 +64,7 @@ export async function requireAdmin(
     reply.code(403).send({ error: "Forbidden" });
     return null;
   }
-  // 管理者は2段階認証を通したセッションでだけ通す（auth.ts の twoFactorVerified）。
+  // 管理者は2段階認証を通したセッションでだけ通す（AuthSession.mfaVerifiedAt）。
   // 画面は code を見て、設定の手順かログインし直しの案内を出す。
   if (!session.session.twoFactorVerified) {
     reply.code(403).send({

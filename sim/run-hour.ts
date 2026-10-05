@@ -93,11 +93,12 @@ async function main() {
   const pacer = new SharedPacer({
     baseUrl,
     // 本番は画面と API が同じ住所。手元で API を別ポートに立てたときは、
-    // 画面（Vite, 5173）の住所を SIM_ORIGIN で渡す（Better Auth の trustedOrigins に合わせる）
+    // 画面（Vite, 5173）の住所を SIM_ORIGIN で渡す
     origin: env("SIM_ORIGIN", baseUrl).replace(/\/$/, ""),
     runId,
-    // Better Auth の組み込み制限は 10 秒 3 回。同じ IP から出るので全員の合計に掛かる。
-    authIntervalMs: Number(env("AUTH_INTERVAL_MS", isLocal ? "0" : "4000")),
+    // ログインの IP 単位の制限は 10 分 30 回（apps/api-go の auth_throttle.go）。同じ IP から出るので
+    // 全員の合計に掛かる。20 秒に1回なら超えない（セッションは30日もつので、ログインし直しは少ない）。
+    authIntervalMs: Number(env("AUTH_INTERVAL_MS", isLocal ? "0" : "20000")),
     requestIntervalMs: Number(env("REQUEST_INTERVAL_MS", isLocal ? "0" : "200")),
   });
 

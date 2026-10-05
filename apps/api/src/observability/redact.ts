@@ -11,8 +11,8 @@ import type { tracing } from "@opentelemetry/sdk-node";
  *
  * メール確認・パスワード再設定のリンクや OAuth の戻り先は、URL の ? 以降に
  * トークンや code が乗る。そのまま残すと、ログやトレースを読める人がそのリンクを
- * 使えてしまう。パスワード再設定だけはトークンがパスに入る
- * （Better Auth の /api/auth/reset-password/:token）ので、そこも伏せる。
+ * 使えてしまう。以前の Better Auth のパスワード再設定はトークンがパスに入っていた
+ * （/api/auth/reset-password/:token）ので、古いリンクが開かれたときのために、そこも伏せる。
  */
 export function redactPath(url: string) {
   const [pathname] = url.split("?");

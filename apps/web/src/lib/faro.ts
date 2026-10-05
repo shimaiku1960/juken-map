@@ -9,9 +9,10 @@ import type { TransportItem } from "@grafana/faro-web-sdk";
 const COLLECTOR_META = "faro-collector-url";
 
 // URL に載る秘密の値。サーバー側のログ・トレースと同じく、外へ出す前に伏せる。
-// - /reset-password?token=…（パスワード再設定）、/api/auth/verify-email?token=…（メール確認）
+// - /reset-password?token=…（パスワード再設定）、/verify-email/confirm?token=…（メール確認）
+//   画面は読み込んだらすぐ URL からトークンを消すが（useTokenFromLink.ts）、その前に起きたエラーのため
 // - /line/link?linkToken=…（LINE 連携）
-// - /api/auth/reset-password/<token>（Better Auth がメールに載せるリンク。トークンがパスにある）
+// - /api/auth/reset-password/<token>（以前の Better Auth のリンク。トークンがパスにある）
 const SECRET_PATTERNS: [RegExp, string][] = [
   [/([?&#](?:token|linkToken)=)[^&#\s"'<>]+/gi, "$1[REDACTED]"],
   [/(\/api\/auth\/reset-password\/)[^/?#\s"'<>]+/g, "$1[REDACTED]"],

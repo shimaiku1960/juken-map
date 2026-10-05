@@ -3,9 +3,8 @@
 //
 // Prisma のときは各 seed が同じ「確認済みユーザー＋パスワード」の upsert を
 // それぞれ書いていたので、ここに1つにまとめた。
-import { generateId } from "better-auth";
-import { hashPassword } from "better-auth/crypto";
 import { execute, pool, select } from "../apps/api/src/infra/db";
+import { hashPassword, newUserId } from "./auth-password";
 import { ymdAfterDays } from "../src/shared/date";
 
 export { execute, select };
@@ -64,8 +63,8 @@ export async function upsertVerifiedUser(
     return existing.id;
   }
 
-  // id は Better Auth が登録時に作るのと同じ形式にする
-  const id = generateId();
+  // id はログイン（Go）が登録時に作るのと同じ形式にする
+  const id = newUserId();
   await execute(
     `INSERT INTO \`user\` (id, email, name, nickname, emailVerified, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, TRUE, ?, ?)`,
@@ -75,28 +74,15 @@ export async function upsertVerifiedUser(
 }
 
 /**
- * メールアドレスとパスワードでログインできるようにする（Better Auth の credential アカウント）。
- * パスワードは Better Auth と同じ関数でハッシュにする。再実行時は上書きする。
+ * メールアドレスとパスワードでログインできるようにする（AuthPassword）。
+ * パスワードはログイン（Go）と同じ方式でハッシュにする（auth-password.ts）。再実行時は上書きする。
  */
 export async function setCredentialPassword(userId: string, password: string) {
   const passwordHash = await hashPassword(password);
-  const now = new Date();
-  const [existing] = await select<{ id: string }>(
-    "SELECT id FROM account WHERE userId = ? AND providerId = 'credential' LIMIT 1",
-    [userId]
-  );
-  if (existing) {
-    await execute("UPDATE account SET password = ?, updatedAt = ? WHERE id = ?", [
-      passwordHash,
-      now,
-      existing.id,
-    ]);
-    return;
-  }
   await execute(
-    `INSERT INTO account (id, userId, accountId, providerId, password, createdAt, updatedAt)
-     VALUES (?, ?, ?, 'credential', ?, ?, ?)`,
-    [generateId(), userId, userId, passwordHash, now, now]
+    `INSERT INTO AuthPassword (userId, hash, updatedAt) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE hash = VALUES(hash), updatedAt = VALUES(updatedAt)`,
+    [userId, passwordHash, new Date()]
   );
 }
 

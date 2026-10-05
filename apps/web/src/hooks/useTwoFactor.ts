@@ -12,8 +12,8 @@ export function useHasPassword() {
     queryKey: linkedAccountsKey,
     queryFn: async () => {
       const { data, error } = await authClient.listAccounts();
-      if (error) throw new Error(error.message ?? "ログイン方法を読み込めませんでした");
-      return data.some((account) => account.providerId === "credential");
+      if (error) throw new Error(error.message);
+      return data.hasPassword;
     },
   });
 }

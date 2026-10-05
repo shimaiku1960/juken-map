@@ -31,12 +31,14 @@ func (st *analyticsStore) markSignUpTracked(ctx context.Context, userID string) 
 	return n > 0, err
 }
 
-// findSignUpMethod は登録に使われた認証方法を、最初に作られたアカウントから判定する。
-// account は Better Auth が作るテーブルで、メール登録なら providerId は "credential"。
+// findSignUpMethod は登録に使われた認証方法を判定する。登録と同時（1分以内）に作られた外部ログインの結びつきが
+// あれば、そのプロバイダー（Google・GitHub で登録した人）。無ければメールでの登録。あとから外部ログインを
+// 連携したメールの利用者を、外部ログインで登録したと数えないため。
 func (st *analyticsStore) findSignUpMethod(ctx context.Context, userID string) (RegistrationTrackingMethod, error) {
 	var provider string
 	err := st.db.QueryRowContext(ctx,
-		"SELECT providerId FROM account WHERE userId = ? ORDER BY createdAt ASC LIMIT 1", userID,
+		"SELECT i.provider FROM AuthIdentity AS i JOIN `user` AS u ON u.id = i.userId"+
+			" WHERE i.userId = ? AND i.createdAt <= DATE_ADD(u.createdAt, INTERVAL 1 MINUTE) ORDER BY i.createdAt ASC LIMIT 1", userID,
 	).Scan(&provider)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err

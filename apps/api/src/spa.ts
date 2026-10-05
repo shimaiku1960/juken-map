@@ -7,6 +7,9 @@ import { articleIdFromPath, buildSitemap, defaultMeta, injectMeta } from "./seo.
 import type { PageMeta } from "@/shared/pageMeta";
 import { isKnownSpaRoute } from "@/shared/routes";
 
+/** メールのリンクで開く、URL にトークンが載る画面。 */
+const TOKEN_LINK_PAGES = new Set(["/verify-email/confirm", "/reset-password"]);
+
 // 本番では SPA のビルド成果物を API と同じプロセスから配る。nginx は :3000 へ丸ごと
 // 流すだけなので、本番ホストの設定を触らずに Next.js と入れ替えられる（切り戻しも
 // 既存のイメージ単位の自動ロールバックがそのまま効く）。
@@ -75,6 +78,12 @@ export function registerSpa(app: FastifyInstance, root: string) {
     // 本文は変えない（SPA が読み込まれて NotFoundPage を描く）。
     if (!isKnownSpaRoute(pathname)) {
       reply.code(404);
+    }
+
+    // メールのリンク（?token=…）で開く画面は、ほかのサイトへ移ったときに Referer で URL を送らない
+    // （認証基準 10 の D3。画面も読み込んだらすぐ URL からトークンを消す：useTokenFromLink.ts）。
+    if (TOKEN_LINK_PAGES.has(pathname)) {
+      reply.header("Referrer-Policy", "no-referrer");
     }
 
     reply.type("text/html; charset=utf-8");

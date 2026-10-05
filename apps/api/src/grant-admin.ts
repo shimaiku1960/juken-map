@@ -5,7 +5,7 @@
 //   pnpm admin:grant --list                     # 管理者の一覧（2段階認証・パスワードの有無つき）
 //
 // 本番は RDS に外から繋げないので、EC2 で動いている API のコンテナの中で実行する（README 参照）。
-// 付け替えは次にセッションを読み直したときに効く（ログインし直すか、セッションの取り直し）。
+// 付け替えたらその人のセッションを消すので、ログインし直したときから新しい権限になる。
 import { pool } from "./infra/db.ts";
 import { listAdmins, setUserRoleByEmail } from "./services/user-service.ts";
 
@@ -13,7 +13,7 @@ const args = process.argv.slice(2);
 const revoke = args.includes("--revoke");
 const email = args.find((arg) => !arg.startsWith("--"));
 
-// 管理画面に入るには、パスワードでログインして2段階認証を通す必要がある（context.ts の requireAdmin）。
+// 管理画面に入るには、ログインして2段階認証を通す必要がある（apps/api-go の router.go の admin）。
 if (args.includes("--list")) {
   try {
     const admins = await listAdmins();
@@ -45,7 +45,9 @@ try {
     console.error(`${email} はメール確認が済んでいないため、管理者にしません`);
     process.exitCode = 1;
   } else {
-    console.log(`${email} の role を ${outcome.previous} → ${role} にしました`);
+    console.log(
+      `${email} の role を ${outcome.previous} → ${role} にし、セッションを ${outcome.sessionsRemoved} 件消しました（ログインし直してください）`
+    );
   }
 } finally {
   await pool.end();

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { authClient } from "@/web/lib/auth-client";
 import { Button } from "@/web/components/ui/button";
 import { Input } from "@/web/components/ui/input";
@@ -12,7 +13,16 @@ import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/web/hooks/useBrowse
 import { isLineInAppBrowser } from "@/web/lib/browser";
 import TwoFactorCodeForm from "@/web/components/auth/TwoFactorCodeForm";
 
+// 外部ログインから戻ってきたときの理由（apps/api-go の auth_oauth.go が付ける ?error=）。
+const OAUTH_ERRORS: Record<string, string> = {
+  oauth: "外部サービスでのログインに失敗しました。もう一度お試しください",
+  oauth_email:
+    "外部サービスのメールアドレスが確認済みではないため、ログインできませんでした。メールアドレスとパスワードで登録してください",
+  banned: "このアカウントは利用を停止されています。",
+};
+
 export default function LoginPage() {
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [demoLoading, setDemoLoading] = useState(false);
@@ -20,9 +30,12 @@ export default function LoginPage() {
   const [socialLoading, setSocialLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
-  // 2段階認証を有効にしている人は、パスワードのあとに認証コードを求める（セッションはまだ無い）。
-  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 2段階認証を有効にしている人は、パスワード（か外部ログイン）のあとに認証コードを求める（セッションはまだ無い）。
+  // 外部ログインのあとは、サーバーが ?mfa=required を付けてこの画面へ戻す。
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(searchParams.get("mfa") === "required");
+  const [errorMessage, setErrorMessage] = useState<string | null>(
+    OAUTH_ERRORS[searchParams.get("error") ?? ""] ?? null
+  );
   const isLineBrowser = useIsLineInAppBrowser();
   const callbackURL = useSafeCallbackURL("/");
   const authLoading =
@@ -34,7 +47,7 @@ export default function LoginPage() {
     }
     setSocialLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.signIn.social({ provider, callbackURL });
+    const { error } = await authClient.signInSocial({ provider, callbackURL });
     if (error) {
       setErrorMessage(error.message ?? "外部サービスでのログインに失敗しました");
       setSocialLoading(false);
@@ -45,10 +58,7 @@ export default function LoginPage() {
     setSignInLoading(true);
     setErrorMessage(null);
     setNeedsVerification(false);
-    const { data, error } = await authClient.signIn.email({
-      email,
-      password,
-    });
+    const { data, error } = await authClient.signIn({ email, password });
     if (error) {
       if (error.code === "EMAIL_NOT_VERIFIED") {
         setNeedsVerification(true);
@@ -56,15 +66,15 @@ export default function LoginPage() {
           "メールアドレスの確認が完了していません。確認メールをご確認ください。"
         );
       } else if (error.status === 429) {
-        // IP 単位（Better Auth）とアカウント単位（auth.ts）の回数制限。IP 単位の文言は英語なのでここで出し分ける。
+        // IP 単位とアカウント単位の回数制限（apps/api-go の auth_throttle.go）。
         setErrorMessage("ログインの試行が多すぎます。しばらく待ってから、もう一度お試しください。");
       } else {
-        setErrorMessage(error.message ?? "ログインに失敗しました");
+        setErrorMessage(error.message);
       }
       setSignInLoading(false);
       return;
     }
-    if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+    if (data.mfaRequired) {
       setNeedsTwoFactor(true);
       setSignInLoading(false);
       return;
@@ -75,12 +85,9 @@ export default function LoginPage() {
   const handleResendVerification = async () => {
     setResendLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.sendVerificationEmail({
-      email,
-      callbackURL,
-    });
+    const { error } = await authClient.resendVerification({ email, callbackURL });
     if (error) {
-      setErrorMessage(error.message ?? "確認メールの再送に失敗しました");
+      setErrorMessage(error.message);
       setResendLoading(false);
       return;
     }
@@ -96,12 +103,12 @@ export default function LoginPage() {
   const handleDemoSignIn = async () => {
     setDemoLoading(true);
     setErrorMessage(null);
-    const { error } = await authClient.signIn.email({
+    const { error } = await authClient.signIn({
       email: "demo@juken-map.com",
       password: "demodemo1234",
     });
     if (error) {
-      setErrorMessage(error.message ?? "デモログインに失敗しました");
+      setErrorMessage(error.message);
       setDemoLoading(false);
       return;
     }

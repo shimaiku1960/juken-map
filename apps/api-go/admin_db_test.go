@@ -108,15 +108,20 @@ func (fx dbFixture) adminUser(email, role string, createdAt time.Time, simSeq an
 }
 
 func (fx dbFixture) session(userID string, createdAt time.Time) {
-	token := testHex(16)
-	fx.exec("INSERT INTO session (id, userId, expiresAt, token, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
-		"test-"+token, userID, createdAt.Add(time.Hour), token, createdAt, createdAt)
+	_, hash := newToken()
+	fx.exec("INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt) VALUES (?, ?, ?, ?, ?, ?)",
+		testHex(16), hash, userID, createdAt, createdAt.Add(time.Hour), createdAt)
 }
 
+// account はログインの手段を足す。credential はパスワード、それ以外は外部ログインの結びつき。
 func (fx dbFixture) account(userID, providerID string) {
 	now := time.Now()
-	fx.exec("INSERT INTO account (id, userId, accountId, providerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
-		"test-"+testHex(8), userID, testHex(8), providerID, now, now)
+	if providerID == "credential" {
+		fx.exec("INSERT INTO AuthPassword (userId, hash, updatedAt) VALUES (?, ?, ?)", userID, "$argon2id$test", now)
+		return
+	}
+	fx.exec("INSERT INTO AuthIdentity (provider, providerUserId, userId, createdAt) VALUES (?, ?, ?, ?)",
+		providerID, testHex(8), userID, now)
 }
 
 // tag はタグを1つ作る（テスト用の DB にはタグが入っていない）。
@@ -291,7 +296,7 @@ func TestAdminUsersDB(t *testing.T) {
 			t.Fatalf("停止の応答: %+v", ban)
 		}
 		first := bannedAt()
-		if first == nil || fx.count("SELECT COUNT(*) FROM session WHERE userId = ?", id) != 0 {
+		if first == nil || fx.count("SELECT COUNT(*) FROM AuthSession WHERE userId = ?", id) != 0 {
 			t.Fatalf("停止の印か session の削除が DB に無い: bannedAt=%v", first)
 		}
 

@@ -31,10 +31,10 @@ export class ResendInbox {
   }
 
   /**
-   * email 宛てに since 以降に送られた確認メールを探し、確認リンクのパス（/api/auth/verify-email?...）を返す。
-   * リンクのホストはサーバーの BETTER_AUTH_URL なので、パスだけ返して接続先はシミュレータが決める。
+   * email 宛てに since 以降に送られた確認メールを探し、確認リンク（/verify-email/confirm?token=...）の
+   * トークンを返す。リンクは確認の画面を開くだけなので、トークンはシミュレータが POST で使う。
    */
-  async verificationPath(email: string, since: Date): Promise<string> {
+  async verificationToken(email: string, since: Date): Promise<string> {
     const deadline = Date.now() + TIMEOUT_MS;
     while (Date.now() < deadline) {
       const { data } = await this.get<{ data: ListedEmail[] }>("/emails?limit=50");
@@ -46,7 +46,7 @@ export class ResendInbox {
       );
       if (found) {
         const { html } = await this.get<{ html: string | null }>(`/emails/${found.id}`);
-        return extractVerificationPath(html ?? "");
+        return extractVerificationToken(html ?? "");
       }
       await sleep(POLL_INTERVAL_MS);
     }
@@ -54,11 +54,11 @@ export class ResendInbox {
   }
 }
 
-/** メール本文の HTML から確認リンクを取り出し、パスとクエリだけにする。 */
-export function extractVerificationPath(html: string): string {
-  const match = html.match(/href="([^"]*\/api\/auth\/verify-email\?[^"]*)"/);
+/** メール本文の HTML から確認リンクを取り出し、トークンを返す。 */
+export function extractVerificationToken(html: string): string {
+  const match = html.match(/href="([^"]*\/verify-email\/confirm\?[^"]*)"/);
   if (!match) throw new Error("確認メールの本文に確認リンクがありません");
-  const href = match[1].replaceAll("&amp;", "&");
-  const url = new URL(href);
-  return url.pathname + url.search;
+  const token = new URL(match[1].replaceAll("&amp;", "&")).searchParams.get("token");
+  if (!token) throw new Error("確認リンクにトークンがありません");
+  return token;
 }

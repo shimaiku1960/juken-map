@@ -20,8 +20,8 @@ import (
 // どれも rt.admin（管理者＋2段階認証を通したセッションだけ）で登録する。守るのはルーターで、
 // 画面がメニューを出し分けているのは見た目のためだけ。
 //
-// 停止の分担：Go は bannedAt を書き、その人の session を消して今の画面を落とすだけ。次のログインを断るのは
-// Node（Better Auth の auth.ts、session.create.before が bannedAt を見る）で、ログインは Node に残っている。
+// 停止：bannedAt を書き、その人のセッション（AuthSession）を消して今の画面を落とす。次のログインは、
+// ログインの入口（auth_handlers.go など）が bannedAt を見て断る。
 
 const (
 	adminUsersPageSize = 50
@@ -491,9 +491,10 @@ func (st *sqlAdminUserStore) listUsers(ctx context.Context, kind UserKind, q str
 	params = append(params, adminUsersPageSize, (page-1)*adminUsersPageSize)
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT u.id, u.email, u.nickname, u.name, u.kind, u.role, u.emailVerified, u.bannedAt, u.createdAt,
-		        (SELECT GROUP_CONCAT(DISTINCT a.providerId ORDER BY a.providerId)
-		           FROM account a WHERE a.userId = u.id),
-		        (SELECT MAX(s.createdAt) FROM session s WHERE s.userId = u.id),
+		        NULLIF(CONCAT_WS(',',
+		          IF(EXISTS(SELECT 1 FROM AuthPassword p WHERE p.userId = u.id), 'credential', NULL),
+		          (SELECT GROUP_CONCAT(i.provider ORDER BY i.provider) FROM AuthIdentity i WHERE i.userId = u.id)), ''),
+		        (SELECT MAX(s.createdAt) FROM AuthSession s WHERE s.userId = u.id),
 		        (SELECT COUNT(*) FROM StudyLog l WHERE l.userId = u.id),
 		        (SELECT MAX(l.createdAt) FROM StudyLog l WHERE l.userId = u.id)
 		 FROM (
@@ -548,8 +549,9 @@ func (st *sqlAdminUserStore) findTarget(ctx context.Context, id string) (*adminT
 	return &t, nil
 }
 
-// ban は停止の印と、今つながっている画面を落とすための session の削除を1つのトランザクションで行う。
-// 両方そろって初めて「止まった」と言える（次のログインは Node の auth.ts が bannedAt を見て断る）。
+// ban は停止の印と、今つながっている画面を落とすためのセッションの削除を1つのトランザクションで行う。
+// 両方そろって初めて「止まった」と言える（次のログインは auth_handlers.go・auth_mfa.go・auth_oauth.go が
+// bannedAt を見て断る）。認証基準 10 の C5 の「ある利用者の全端末」にあたる。
 func (st *sqlAdminUserStore) ban(ctx context.Context, id string, now time.Time) (int, error) {
 	var removed int64
 	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
@@ -557,7 +559,7 @@ func (st *sqlAdminUserStore) ban(ctx context.Context, id string, now time.Time) 
 			"UPDATE `user` SET bannedAt = COALESCE(bannedAt, ?), updatedAt = ? WHERE id = ?", now, now, id); err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, "DELETE FROM session WHERE userId = ?", id)
+		res, err := tx.ExecContext(ctx, "DELETE FROM AuthSession WHERE userId = ?", id)
 		if err != nil {
 			return err
 		}
@@ -572,7 +574,7 @@ func (st *sqlAdminUserStore) unban(ctx context.Context, id string, now time.Time
 	return err
 }
 
-// deleteUser は利用者を消す。ぶら下がっている行（StudyLog・StudyPlan・Textbook・FinalGoal・session・account・
+// deleteUser は利用者を消す。ぶら下がっている行（StudyLog・StudyPlan・Textbook・FinalGoal・AuthSession・AuthPassword・
 // 通知・LINE 関連など）は外部キーの ON DELETE CASCADE で一緒に消える。
 func (st *sqlAdminUserStore) deleteUser(ctx context.Context, id string) (removedCounts, error) {
 	var c removedCounts

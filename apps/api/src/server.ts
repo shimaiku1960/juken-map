@@ -2,9 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyCompress from "@fastify/compress";
-import { toNodeHandler } from "better-auth/node";
 import { registerAccessControl } from "./access-control.ts";
-import { auth } from "./auth.ts";
 import { BODY_LIMIT, registerErrorHandling } from "./error-handling.ts";
 import { select, setQueryLogger } from "./infra/db.ts";
 import { logger } from "./observability/logger.ts";
@@ -26,14 +24,13 @@ export async function buildServer() {
   // （実際に書き出すかは db.ts 側の shouldLogQueries が開発中だけに絞る）。
   setQueryLogger((entry) => logger.info({ reqId: currentReqId(), sim: currentSim(), ...entry }));
 
-  // 件数と所要時間は、下で横取りする Better Auth の分も含めて全リクエストで数える。
+  // 件数と所要時間は全リクエストで数える。
   registerMetrics(app);
 
   // エラー応答の形と reqId のヘッダー。圧縮プラグインより前に積んで onSend を先に走らせる。
   registerErrorHandling(app);
 
-  // 混雑時に上限を超えた API を 503 で断る。断った分も件数に数えるよう metrics の後、
-  // Better Auth のサインインも対象に含めるよう、下の横取りより前に積む。
+  // 混雑時に上限を超えた API を 503 で断る。断った分も件数に数えるよう metrics の後に積む。
   registerOverloadProtection(
     app,
     Number(process.env.OVERLOAD_MAX_IN_FLIGHT ?? DEFAULT_MAX_IN_FLIGHT)
@@ -51,10 +48,10 @@ export async function buildServer() {
     encodings: ["br", "gzip", "deflate"],
   });
 
-  // ここから先の処理（下の better-auth の横取りも含む）を、リクエストごとの文脈に入れる。
+  // ここから先の処理を、リクエストごとの文脈に入れる。
   // done() を runWithRequestContext の中で呼ぶと、そこから続く処理すべてが同じ文脈に入り、
   // measured() と db.ts が引数を受け取らずに reqId を読めるようになる。
-  // 一番先に登録するのは、フックが登録順に走るため（better-auth が投げる SQL にも付く）。
+  // 一番先に登録するのは、フックが登録順に走るため。
   app.addHook("onRequest", (request, reply, done) => {
     // シミュレーションからのリクエストは、リクエストの行（request completed）にも印を付ける。
     const sim = request.headers["x-sim-run"] !== undefined;
@@ -62,21 +59,8 @@ export async function buildServer() {
     runWithRequestContext({ reqId: String(request.id), sim }, done);
   });
 
-  // セキュリティヘッダーは、下で横取りする Better Auth の応答にも付くよう、その前に積む。
+  // ログイン（/api/auth/*）は Go が受ける（JUK-115。nginx が振り分ける）。
   registerSecurityHeaders(app);
-
-  // better-auth は Node のリクエストストリームを自分で読む。
-  // Fastify は既定で application/json を先に読み切ってしまうため、そのままだと
-  // better-auth 側が空のボディを見て 400 になる（Phase 0 で実際に踏んだ）。
-  // addContentTypeParser を parseAs: "string" で挟んでも同じくストリームが枯れる。
-  //
-  // onRequest はボディ解析より前に走るので、ここで hijack すればストリームは
-  // 手つかずのまま better-auth へ渡る。
-  app.addHook("onRequest", async (request, reply) => {
-    if (!request.url.startsWith("/api/auth/")) return;
-    reply.hijack();
-    await toNodeHandler(auth)(request.raw, reply.raw);
-  });
 
   // Fastify はハンドラに入る前にボディを解析するので、既定のままだと不正な JSON が
   // 認証チェックより先に 400 になる（Next.js は request.json() がハンドラ内なので

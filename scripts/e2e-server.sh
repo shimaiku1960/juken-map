@@ -29,10 +29,6 @@ trap 'exit 143' TERM INT
 pnpm --dir "$ROOT" --filter @juken-map/web build
 (cd "$ROOT/apps/api-go" && go build -o "$WORK/api-go" .)
 
-# Better Auth は自分の URL を BETTER_AUTH_URL から読む。.env は開発用に Vite を指しているので、
-# ブラウザが開く nginx の番号に合わせて上書きする（--env-file は、すでにある環境変数を上書きしない）。
-export BETTER_AUTH_URL="http://localhost:$E2E_PORT"
-
 # apps/api は cwd が apps/api になるので、配信元は絶対パスで渡す。
 WEB_DIST_DIR="$ROOT/apps/web/dist" API_PORT="$E2E_NODE_PORT" \
   pnpm --dir "$ROOT" --filter @juken-map/api start &
@@ -42,7 +38,10 @@ pids+=($!)
 # 先に決めた値が .env で上書きされないよう、読んだ後に改めて渡す。
 (
   if [ -f "$ROOT/.env" ]; then set -a; source "$ROOT/.env"; set +a; fi
-  BETTER_AUTH_URL="http://localhost:$E2E_PORT" PORT="$E2E_GO_PORT" WEB_ORIGIN="http://localhost:$E2E_PORT" \
+  # WEB_ORIGIN はメールのリンクと外部ログインの戻り先に使う画面のオリジン。ブラウザが開く nginx の番号に合わせる。
+  # E2E は登録・再設定でメールを送る操作をするので、Resend のキーを空にして本物のメールを送らない
+  # （送れなかったことはログに残るだけ。トークンは db/e2e-auth.ts が発行する）。
+  PORT="$E2E_GO_PORT" WEB_ORIGIN="http://localhost:$E2E_PORT" RESEND_API_KEY="" \
     exec "$WORK/api-go"
 ) &
 pids+=($!)

@@ -12,9 +12,7 @@ import type { RouteOptions } from "fastify";
 // 入口の判定（access-control.ts）は残っているので、利用者・管理者の種類はテスト用のルートを足して確かめる。
 // Go のルートの同じ確かめは router_test.go（TestRouterAccess）が行う。
 
-vi.mock("./auth.ts", () => ({
-  auth: { api: { getSession: vi.fn() } },
-}));
+vi.mock("./session-store.ts", () => ({ findSession: vi.fn() }));
 
 // microCMS は読み込むだけで API キーを要求し、呼べば外へ出ていくので差し替える。
 vi.mock("@/api/infra/microcms", () => ({
@@ -23,14 +21,14 @@ vi.mock("@/api/infra/microcms", () => ({
   isBlogNotFound: vi.fn(() => false),
 }));
 
-const { auth } = await import("./auth.ts");
+const { findSession } = await import("./session-store.ts");
 const { ACCESS_ENTRY } = await import("./access-control.ts");
 const { TWO_FACTOR_REQUIRED } = await import("@/shared/admin");
 const { registerRoutes } = await import("./routes/index.ts");
 const { registerSpa } = await import("./spa.ts");
 const { buildTestApp, request, loggedInSession, demoSession, adminSessionOf } = await import("./test-support.ts");
 
-const getSession = auth.api.getSession as unknown as Mock;
+const getSession = findSession as unknown as Mock;
 
 type Method = Parameters<typeof request>[1];
 type Route = { method: Method; url: string; access: string | undefined };

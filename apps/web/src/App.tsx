@@ -11,6 +11,7 @@ import LoginPage from "@/web/pages/auth/login";
 import ResetPasswordPage from "@/web/pages/auth/reset-password";
 import SignUpPage from "@/web/pages/auth/signup";
 import VerifyEmailPage from "@/web/pages/auth/verify-email";
+import VerifyEmailConfirmPage from "@/web/pages/auth/verify-email-confirm";
 
 // それ以外のページは開いたときに読み込む。
 // 最初の1本に全ページを入れると、LPだけ見る人にもダッシュボード等を配ってしまう。
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/verify-email/confirm" element={<VerifyEmailConfirmPage />} />
 
           {/* ログイン必須 */}
           <Route path="/dashboard" element={protectedRoute(<DashboardPage />)} />

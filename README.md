@@ -107,7 +107,7 @@ flowchart LR
 | サーバー状態 | TanStack Query |
 | カレンダー | FullCalendar / Schedule-X |
 | DB | MySQL 8.4（mysql2 で SQL を直接書く。ORM は使わない） |
-| 認証 | Better Auth |
+| 認証 | Go で自作（Argon2id・中身の無いセッション・TOTP・PKCE。`apps/api-go/auth_*.go`）。以前は Better Auth |
 | メール | Resend |
 | CMS | microCMS |
 | テスト | Vitest / Playwright |
@@ -298,7 +298,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 
 ログは、APIが`logs/api.log`に書いたものをAlloyが読んでLokiへ送ります（`http://localhost:12345`でAlloyの処理の流れを見られます）。ダッシュボードで時間の範囲を絞ると、その時間のエラーのログと5xxを返したリクエストが下に並びます。1つのリクエストの行をまとめて見るときは、Exploreで`{job="juken-map-api"} |= "<reqId>"`と検索します。
 
-トレースは、ダッシュボードの一番下の表でTrace IDを押すと、Fastifyのフック・ハンドラ・SQL 1本ずつに何msかかったかが開きます（Better Authの認証とSQLも含む）。ログの行には`trace_id`が入るので、ログからトレースへ、トレースの画面から「そのトレースのログ」へ移れます。URLの`?`以降とパスワード再設定のトークンは、ログと同じくトレースにも残しません（`apps/api/src/observability/redact.ts`）。
+トレースは、ダッシュボードの一番下の表でTrace IDを押すと、Fastifyのフック・ハンドラ・SQL 1本ずつに何msかかったかが開きます（Node が受ける API の分）。ログの行には`trace_id`が入るので、ログからトレースへ、トレースの画面から「そのトレースのログ」へ移れます。URLの`?`以降とパスワード再設定のトークンは、ログと同じくトレースにも残しません（`apps/api/src/observability/redact.ts`）。
 
 5xxの割合が1%を超えた状態が1分続くとアラートのメールが送られ、`http://localhost:8025`（Mailpit）で受け取れます。設定は[observability/](observability/)にあります。
 
@@ -347,8 +347,7 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 | 変数 | 用途 |
 |---|---|
 | `DATABASE_URL` | MySQLへの接続 |
-| `BETTER_AUTH_SECRET` | セッションなどの署名 |
-| `BETTER_AUTH_URL` | Better AuthのベースURL |
+| `BETTER_AUTH_SECRET` | 2段階認証の秘密を暗号化する鍵の元（名前は Better Auth の名残。`AUTH_TOTP_KEYS` があればそちら） |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | GitHub OAuth |
 | `RESEND_API_KEY` | メール確認・パスワード再設定・各種メール通知 |
@@ -473,8 +472,7 @@ apps/
     ├── src/routes/        HTTPの入口（認証・検証・ステータスコード）
     ├── src/services/      ユースケース（DBアクセス・業務ルール）
     ├── src/infra/         DB接続とマイグレーション、メール、LINE、microCMS
-    ├── src/auth.ts        Better Auth の定義
-    ├── src/context.ts     認証・デモガードの門番
+    ├── src/context.ts     認証・デモガードの門番（セッションは Go が発行し、ここは読むだけ）
     └── src/seo.ts         robots / sitemap / ページ別 meta
 
 src/
@@ -489,7 +487,7 @@ terraform/               # AWSインフラ定義（grafana/ は Grafana Cloud �
 
 ## 主要なデータモデル
 
-- **User / Account / Session / Verification** — Better Authの認証データ
+- **User / AuthSession / AuthPassword / AuthIdentity / AuthToken / AuthTotp** — ログインのデータ（Go の `auth_*.go` が読み書きする）
 - **FinalGoal** — 志望校、第一志望、候補・受験校の状態
 - **StudyPlan** — 日ごとの学習予定、科目、参考書、学習範囲
 - **StudyLog** — 学習時間、到達範囲、メモ

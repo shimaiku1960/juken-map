@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { authClient } from "@/web/lib/auth-client";
 import { Button } from "@/web/components/ui/button";
 import { Input } from "@/web/components/ui/input";
 import { Label } from "@/web/components/ui/label";
 import InlineFeedback from "@/web/components/feedback/InlineFeedback";
 
-// ログインでメール＋パスワードが通ったあと、2段階認証を有効にしている人に認証コードを求める。
+// ログインでメール＋パスワード（か Google・GitHub）が通ったあと、2段階認証を有効にしている人に認証コードを求める。
+// 途中の状態は5分で切れ、コードは5回まで（apps/api-go の auth_mfa.go）。切れたら最初からログインし直す。
 // 認証アプリの6桁のコードか、スマホを無くしたとき用の予備コード（1回ずつ使い捨て）で通れる。
 // 通るとセッションが作られるので、呼び出し側が行き先へ移る。
 
@@ -24,14 +26,17 @@ export default function TwoFactorCodeForm({ onVerified, onCancel }: Props) {
     setLoading(true);
     setErrorMessage(null);
     const trimmed = code.trim();
-    const { error } = useBackupCode
-      ? await authClient.twoFactor.verifyBackupCode({ code: trimmed })
-      : await authClient.twoFactor.verifyTotp({ code: trimmed });
+    const { data, error } = await authClient.mfa.verify({
+      code: trimmed,
+      method: useBackupCode ? "backup" : "totp",
+    });
     if (error) {
-      setErrorMessage(error.message ?? "コードを確認できませんでした");
+      setErrorMessage(error.message);
       setLoading(false);
       return;
     }
+    // 予備コードを使ったら、残りの数を知らせる（無くなる前に作り直せるように）。
+    if (useBackupCode) toast.info(`予備コードの残りは ${data.backupCodesRemaining} 個です`);
     onVerified();
   };
 

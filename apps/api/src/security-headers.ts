@@ -73,9 +73,9 @@ export function securityHeaders(env: NodeJS.ProcessEnv = process.env): Record<st
 /**
  * すべての応答にセキュリティヘッダーを付ける。
  *
- * onSend ではなく onRequest で生の応答（reply.raw）に積むのは、/api/auth/* が Better Auth へ
- * hijack されて Fastify の応答処理を通らないため。Node は setHeader した値と、あとで
- * writeHead に渡される値をまとめて送るので、静的ファイル・SPA・API・Better Auth のどれにも付く。
+ * onSend ではなく onRequest で生の応答（reply.raw）に積むのは、hijack して Fastify の応答処理を
+ * 通らない経路（以前の Better Auth）にも付けるため。Node は setHeader した値と、あとで
+ * writeHead に渡される値をまとめて送るので、静的ファイル・SPA・API のどれにも付く。
  */
 export function registerSecurityHeaders(app: FastifyInstance) {
   const headers = Object.entries(securityHeaders());

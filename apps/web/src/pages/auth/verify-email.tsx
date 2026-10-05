@@ -31,12 +31,9 @@ export default function VerifyEmailPage() {
     setLoading(true);
     setMessage(null);
     setErrorMessage(null);
-    const { error } = await authClient.sendVerificationEmail({
-      email: verificationEmail,
-      callbackURL,
-    });
+    const { error } = await authClient.resendVerification({ email: verificationEmail, callbackURL });
     if (error) {
-      setErrorMessage(error.message ?? "確認メールの再送に失敗しました");
+      setErrorMessage(error.message);
       setLoading(false);
       return;
     }
@@ -49,7 +46,7 @@ export default function VerifyEmailPage() {
     <PageShell className="max-w-md">
       <PageHeader
         title="メールをご確認ください"
-        description="確認メール内のリンクを開くと登録が完了し、受験マップへ移動します。"
+        description="確認メール内のリンクを開き、画面のボタンを押すと登録が完了します。"
       />
 
       <InlineFeedback variant="info" className="mb-4">

@@ -73,6 +73,24 @@ describe("registerSpa の SSG ページ", () => {
   });
 });
 
+describe("registerSpa のメールのリンクで開く画面（認証基準 10 の D3）", () => {
+  it.each(["/verify-email/confirm?token=abc", "/reset-password?token=abc"])(
+    "%s は Referrer-Policy: no-referrer で返す",
+    async (url) => {
+      const res = await app.inject({ method: "GET", url });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["referrer-policy"]).toBe("no-referrer");
+    }
+  );
+
+  it("ほかの画面には付けない", async () => {
+    const res = await app.inject({ method: "GET", url: "/login" });
+
+    expect(res.headers["referrer-policy"]).toBeUndefined();
+  });
+});
+
 describe("registerSpa の記事（ビルドで SSG、JUK-110）", () => {
   it("作り置いた本文入りの HTML に、ビルドが書き出した記事の meta を入れて返す", async () => {
     const res = await app.inject({ method: "GET", url: "/articles/abc" });
