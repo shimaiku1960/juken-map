@@ -273,7 +273,8 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig, mic
 	rt.user("PATCH /api/goals/{id}", goals.update)
 	rt.user("DELETE /api/goals/{id}", goals.delete)
 
-	textbooks := &textbookHandlers{store: &textbookStore{db: db}}
+	textbookStore := newTextbookStore(db)
+	textbooks := &textbookHandlers{store: textbookStore}
 	rt.user("GET /api/textbooks", textbooks.list)
 	rt.user("GET /api/textbook-masters", textbooks.listMasters)
 	rt.user("POST /api/textbooks", textbooks.create)
@@ -315,8 +316,13 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig, mic
 	rt.admin("POST /api/admin/users/{id}/unban", adminUsers.unban)
 	rt.admin("DELETE /api/admin/users/{id}", adminUsers.deleteUser)
 
-	// マスター編集。大学・学部を変えたら、大学を探す画面の一覧（上の universities）のキャッシュを捨てる。
-	masters := &adminMasterHandlers{store: &sqlAdminMasterStore{db: db, universitiesChanged: universityStore.invalidate}}
+	// マスター編集。大学・学部を変えたら大学を探す画面の一覧（上の universities）の、参考書マスターを
+	// 変えたら GET /api/textbook-masters（上の textbooks）のキャッシュを捨てる。
+	masters := &adminMasterHandlers{store: &sqlAdminMasterStore{
+		db:                     db,
+		universitiesChanged:    universityStore.explore.invalidate,
+		textbookMastersChanged: textbookStore.masters.invalidate,
+	}}
 	rt.admin("GET /api/admin/universities", masters.listUniversities)
 	rt.admin("POST /api/admin/universities", masters.createUniversity)
 	rt.admin("GET /api/admin/universities/{id}", masters.universityDetail)

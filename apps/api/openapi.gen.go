@@ -1690,6 +1690,11 @@ type ListStudyPlansParams struct {
 	To *To `form:"to,omitempty" json:"to,omitempty"`
 }
 
+// ListTextbookMastersParams defines parameters for ListTextbookMasters.
+type ListTextbookMastersParams struct {
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
 // ListUniversitiesParams defines parameters for ListUniversities.
 type ListUniversitiesParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`

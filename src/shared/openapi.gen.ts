@@ -255,7 +255,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 参考書マスターの一覧（総量の候補つき。全員に同じもの） */
+        /**
+         * 参考書マスターの一覧（総量の候補つき。全員に同じもの）
+         * @description サーバーは JSON をメモリに持ち、ETag を付ける。If-None-Match が合えば 304 で本文を省く。 Accept-Encoding が gzip を受け付けるなら、圧縮済みの形を返す。
+         */
         get: operations["listTextbookMasters"];
         put?: never;
         post?: never;
@@ -2345,7 +2348,9 @@ export interface operations {
     listTextbookMasters: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2354,11 +2359,22 @@ export interface operations {
             /** @description 参考書マスターの一覧 */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
+                    "Cache-Control": components["headers"]["CacheControl"];
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["TextbookMaster"][];
                 };
+            };
+            /** @description 変わっていない */
+            304: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    "Cache-Control": components["headers"]["CacheControl"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

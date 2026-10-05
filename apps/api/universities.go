@@ -1,22 +1,11 @@
 package main
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"crypto/sha1"
 	"database/sql"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
-
-	"golang.org/x/sync/singleflight"
 )
 
 // 大学の読み取り（JUK-73）。Node の routes/universities.ts と services/university-service.ts にあたる。
@@ -44,118 +33,21 @@ type exploreTagDTO struct {
 }
 
 // 大学一覧は全員に同じもので、変わるのは管理画面でマスターを編集したときだけ。毎回 DB を引くと
-// 一番重い API（大学 823 件 × LEFT JOIN 3本）になるので、JSON にした状態でメモリに持つ。
-//
-// 管理画面の編集（admin_universities.go・admin_faculties.go）は invalidate で捨てるので、編集はすぐ一覧に出る。期限は、
-// DB を直接書き換えたとき（seed など）の保険で、Node と同じ10分。
+// 一番重い API（大学 823 件 × LEFT JOIN 3本）になるので、JSON にした状態でメモリに持つ（json_snapshot.go）。
+// 管理画面の編集（admin_universities.go・admin_faculties.go）は explore.invalidate で捨てる。
 const exploreCacheTTL = 10 * time.Minute
 
-// exploreSnapshot は一覧の JSON と、その gzip 版・ETag。
-// 圧縮は読み込みのときの1回だけなので、圧縮率を最大にしてよい。リクエストのたびに nginx が
-// 80KB を圧縮し直すのを避ける。Node は br も持つが、Go の標準ライブラリに br は無いので gzip だけ。
-type exploreSnapshot struct {
-	json      []byte
-	gzip      []byte
-	etag      string
-	expiresAt time.Time
-}
-
 type universityStore struct {
-	db  *sql.DB
-	now func() time.Time
-
-	snapshot atomic.Pointer[exploreSnapshot]
-	// 期限切れの直後に同時に来たリクエストは、1回の読み込みを待ち合わせる（Node の exploreLoading）。
-	loading singleflight.Group
-	// generation は invalidate のたびに増える。読み込みの途中で捨てられたら、その結果は編集の前の
-	// DB から作ったかもしれないので置かない（Node の exploreGeneration）。
-	// 「世代を比べて置く」と「世代を進めて捨てる」の間に割り込まれないよう、両方を mu の中で行う
-	// （Node は1本のスレッドで動くので、この順番の心配が無い）。
-	mu         sync.Mutex
-	generation uint64
+	db      *sql.DB
+	explore *jsonSnapshotCache
 }
 
 func newUniversityStore(db *sql.DB) *universityStore {
-	return &universityStore{db: db, now: time.Now}
-}
-
-// explore は一覧のスナップショットを返す。期限内なら DB を引かない。
-func (st *universityStore) explore(ctx context.Context) (*exploreSnapshot, error) {
-	if s := st.snapshot.Load(); s != nil && st.now().Before(s.expiresAt) {
-		return s, nil
-	}
-	v, err, _ := st.loading.Do("explore", func() (any, error) {
-		st.mu.Lock()
-		generation := st.generation
-		st.mu.Unlock()
-		// 待ち合わせている全員のための読み込みなので、最初に来たリクエストが切断しても止めない。
-		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		s, err := st.loadExplore(loadCtx)
-		if err != nil {
-			return nil, err
-		}
-		st.mu.Lock()
-		if st.generation == generation {
-			st.snapshot.Store(s)
-		}
-		st.mu.Unlock()
-		return s, nil
+	st := &universityStore{db: db}
+	st.explore = newJSONSnapshotCache(exploreCacheTTL, func(ctx context.Context) (any, error) {
+		return st.listForExplore(ctx)
 	})
-	if err != nil {
-		return nil, err
-	}
-	return v.(*exploreSnapshot), nil
-}
-
-// invalidate は大学・学部・タグのつながりを変えたら呼ぶ（Node の invalidateUniversitiesForExplore）。
-// 次のリクエストで DB から作り直す。読み込みの途中なら、その待ち合わせには加わらせず、新しく読み込ませる。
-// 確定（commit）してから呼ぶこと。確定前に呼ぶと、別のリクエストが古い DB を読んで置き直せる。
-func (st *universityStore) invalidate() {
-	st.mu.Lock()
-	st.generation++
-	st.snapshot.Store(nil)
-	st.mu.Unlock()
-	st.loading.Forget("explore")
-}
-
-func (st *universityStore) loadExplore(ctx context.Context) (*exploreSnapshot, error) {
-	universities, err := st.listForExplore(ctx)
-	if err != nil {
-		return nil, err
-	}
-	body, err := marshalLikeJS(universities)
-	if err != nil {
-		return nil, err
-	}
-	var gz bytes.Buffer
-	w, _ := gzip.NewWriterLevel(&gz, gzip.BestCompression)
-	if _, err := w.Write(body); err != nil {
-		return nil, err
-	}
-	if err := w.Close(); err != nil {
-		return nil, err
-	}
-	// ETag は JSON の SHA-1 を base64url にしたもの（Node と同じ作り方）。JSON が同じなら値も同じなので、
-	// nginx の振り分けで Node と Go を行き来しても、ブラウザが持っている ETag で 304 が返る。
-	sum := sha1.Sum(body)
-	return &exploreSnapshot{
-		json:      body,
-		gzip:      gz.Bytes(),
-		etag:      `"` + base64.RawURLEncoding.EncodeToString(sum[:]) + `"`,
-		expiresAt: st.now().Add(exploreCacheTTL),
-	}, nil
-}
-
-// marshalLikeJS は JSON.stringify と同じバイト列にする。< > & を書き換えず、末尾に改行を付けない。
-func marshalLikeJS(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+	return st
 }
 
 // listForExplore は大学 → 学部 → タグを LEFT JOIN 1本で取り、入れ子へ詰め直す。
@@ -297,32 +189,14 @@ type universityHandlers struct {
 	store *universityStore
 }
 
-// list は GET /api/universities。ブラウザには毎回確かめさせ（no-cache）、変わっていなければ 304 で
-// 本文を省く。ログインが要る応答なので共有キャッシュには置かせない（private）。
+// list は GET /api/universities。
 func (h *universityHandlers) list(w http.ResponseWriter, r *http.Request, _ *session) {
-	snap, err := h.store.explore(r.Context())
+	snap, err := h.store.explore.get(r.Context())
 	if err != nil {
 		internalError(w, r, fmt.Errorf("universities: %w", err))
 		return
 	}
-	hdr := w.Header()
-	hdr.Set("Cache-Control", "private, no-cache")
-	hdr.Set("ETag", snap.etag)
-	// 同じ URL でも Accept-Encoding で本文の形が変わる、と途中のキャッシュに伝える。
-	hdr.Set("Vary", "Accept-Encoding")
-	if matchesETag(r.Header.Get("If-None-Match"), snap.etag) {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	hdr.Set("Content-Type", "application/json; charset=utf-8")
-	body := snap.json
-	// Content-Encoding を付けて返すと、nginx の gzip は圧縮し直さない。
-	if acceptsGzip(r.Header.Get("Accept-Encoding")) {
-		hdr.Set("Content-Encoding", "gzip")
-		body = snap.gzip
-	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	writeJSONSnapshot(w, r, snap)
 }
 
 // detail は GET /api/universities/{id}。無い大学は 404（Node と同じ文言）。
@@ -347,50 +221,4 @@ func (h *universityHandlers) detail(w http.ResponseWriter, r *http.Request, s *s
 		return
 	}
 	writeJSON(w, http.StatusOK, UniversityDetailResponse{University: *university, RegisteredFacultyIds: registered})
-}
-
-// matchesETag は If-None-Match（カンマ区切りで複数並べられる）に etag が含まれるか。
-// 途中で圧縮し直されると ETag は弱い形（W/"..."）で戻ってくるので、W/ を外して比べる（Node と同じ）。
-func matchesETag(ifNoneMatch, etag string) bool {
-	if ifNoneMatch == "" {
-		return false
-	}
-	for _, v := range strings.Split(ifNoneMatch, ",") {
-		if strings.TrimPrefix(strings.TrimSpace(v), "W/") == etag {
-			return true
-		}
-	}
-	return false
-}
-
-// acceptsGzip は Accept-Encoding が gzip（または *）を受け付けるか。"gzip;q=0" は「受け付けない」。
-// Node の pickEncoding から br を除いたもの。
-func acceptsGzip(acceptEncoding string) bool {
-	for _, part := range strings.Split(acceptEncoding, ",") {
-		name, params, _ := strings.Cut(strings.ToLower(strings.TrimSpace(part)), ";")
-		name = strings.TrimSpace(name)
-		if name != "gzip" && name != "*" {
-			continue
-		}
-		rejected := false
-		for _, p := range strings.Split(params, ";") {
-			if q, ok := strings.CutPrefix(strings.TrimSpace(p), "q="); ok && isZeroQ(q) {
-				rejected = true
-			}
-		}
-		if !rejected {
-			return true
-		}
-	}
-	return false
-}
-
-// isZeroQ は q の値が 0 か。Node は Number(q) === 0 で見ていて、空文字（"q="）も 0 になる。
-func isZeroQ(q string) bool {
-	q = strings.TrimSpace(q)
-	if q == "" {
-		return true
-	}
-	f, err := strconv.ParseFloat(q, 64)
-	return err == nil && f == 0
 }
