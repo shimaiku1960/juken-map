@@ -61,6 +61,8 @@
 ## アラートが鳴ったら
 
 アラートの本文にある「確かめること」を見て、下の手順のどれに当たるかを決める。
+Grafana のアラートとは別に、AWS の GuardDuty の検出結果が「[GuardDuty] …」の件名でメールに届く（JUK-37、`terraform/detection.tf`）。
+アプリや Grafana が止まっていても届く。試験用に作ったものは、題名や種類に `[SAMPLE]`・`i-99999999` が入る。
 
 | アラート | まず見るもの | 当たりそうな手順 |
 | --- | --- | --- |
@@ -71,6 +73,7 @@
 | メール送信の急増・上限で止めた | `email_sends_total` を `kind` 別に。ログの `[email-limits]` | 登録や再設定の連打。続くなら送信元の IP を nginx で止める |
 | 監視の途絶（メトリクス・ログ） | EC2 で `sudo docker ps`。`juken-map` と `juken-map-alloy` が動いているか | 止められていれば、誰が止めたかを 5 の手順 3 で調べる |
 | API（Go）：停止 | EC2 で `sudo docker ps`、`sudo docker logs juken-map-go` | 障害なら直す。侵害の疑いがあれば 5 |
+| GuardDuty の検出結果（メール） | メールのリンクから検出結果を開き、「リソース」（どの EC2・IAM の鍵・ロールか）と「アクター」（どこの IP から何をしたか）を見る。同じ時刻の操作を CloudTrail で引く（5 の手順 3） | IAM の鍵なら 3 の「手元の AWS の鍵」、CI のロールなら 5。EC2 なら乗っ取りとみなして 3（EC2 の中の秘密情報）と 5。ルートでのログイン（`RootCredentialUsage`）や CloudTrail の停止は、自分でなければすぐルートのパスワードと MFA を見直す |
 
 ## 1. 利用者のアカウントの乗っ取り
 
@@ -246,7 +249,7 @@ ALTER USER 'juken_app'@'%' IDENTIFIED BY '<新しい値>';
      `AuthSession`（IP・ブラウザ）、学習のデータ（志望校・記録・予定・参考書）、LINE の連携（LINE のユーザー ID）。
      Better Auth の表（`account`・`session` など）も JUK-115 の切り替えの後に消すまでは残っている
    - 経路ごとの記録：アプリのログとメトリクス（Grafana Cloud、プランの保存期間まで）、nginx のアクセスログ（EC2）、
-     AWS の操作（CloudTrail、90日。5 の手順 3）、送ったメール（Resend）
+     AWS の操作（CloudTrail。90日より前は S3 に1年。5 の手順 3）、送ったメール（Resend）
    - 他人のデータを読まれた疑いなら、403・404 が多い route と時間帯から、どの ID が試されたかを見る
 2. 漏れ続けていれば止める。入口がアプリなら、その route を nginx で止めるか、直してデプロイする。
    資格情報が漏れていれば 3 を、配布経路なら 5 を並行して行う
@@ -283,10 +286,16 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
 3. 何をされたかを見る
 
    ```sh
-   # CI のロールが引き受けられた記録。sub が main 以外なら怪しい（CloudTrail は90日分）
+   # CI のロールが引き受けられた記録。sub が main 以外なら怪しい（lookup-events で引けるのは90日分）
    aws cloudtrail lookup-events --region ap-northeast-1 \
      --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
      --query 'Events[].{t:EventTime,sub:Username}' --output text
+   # 90日より前は S3 から（1年残る。JUK-37）。日付のフォルダごとに取って開く。
+   # IAM の操作やルートのログインのような全体の操作は us-east-1 のフォルダに入る
+   A=$(aws sts get-caller-identity --query Account --output text)
+   aws s3 cp --recursive s3://juken-map-cloudtrail-$A/AWSLogs/$A/CloudTrail/ap-northeast-1/<年>/<月>/<日>/ ./ct
+   gunzip -c ./ct/*.json.gz | jq -r '.Records[] | select(.eventName=="AssumeRoleWithWebIdentity")
+     | [.eventTime, .userIdentity.userName] | @tsv'
    # EC2 で実行されたコマンド。日付で絞らないと古いものから返る
    aws ssm list-commands --region ap-northeast-1 --filters key=InvokedAfter,value=<UTC の日時> \
      --query 'Commands[].[RequestedDateTime,Status,Comment]' --output text
@@ -364,6 +373,8 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
 | Grafana の問い合わせ（メトリクス・ログ） | 2026-10-02 | 本番を読み取りだけ |
 | アラートが鳴って受け口に届く | 2026-10-01・10-02 | 本番で実際に起こした（JUK-98）。H3 は Alloy を止めて、3本が約8〜20分で届いた |
 | CloudTrail・SSM・ECR の記録を引く | 2026-10-02 | 本番を読み取りだけ |
+| S3 に残した CloudTrail のログを引く | 2026-10-05 | 本番を読み取りだけ。5 の手順 3 のとおりにその日のフォルダを取り、jq で読めた（JUK-37） |
+| GuardDuty の検出結果がメールに届く | 2026-10-05 | 本番で試験用の検出結果を1種類（`Recon:EC2/PortProbeUnprotectedPort`）作り、数秒で届いた（JUK-37） |
 | CI のロールに付ける拒否のポリシー | 2026-10-02 | IAM のシミュレーションで、`ecr:PutImage`・`ssm:SendCommand` が `explicitDeny` になることを確かめた。実際に付けて外したのは下の行（2026-10-05） |
 | Secrets Manager の1項目の差し替え | 2026-10-02（一部）・10-04 | jq の置き換えは偽の JSON で、`file:///dev/stdin` から値を渡せることは読み取りの API（`validate-resource-policy`）で確かめた。10-04 に本番で、上の手順のまま1項目を足した（JUK-112）。ほかの項目が残ることをキー名で、再デプロイで値が Go に渡ることを確かめた |
 | `ALTER USER` で DB のパスワードを変える | 2026-10-02 | 手元の MySQL に `mysql:8.4` のコンテナから入り、使い捨てのユーザーで実行した。古い値は 1045 で断られ、新しい値で入れた |
