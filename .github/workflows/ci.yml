@@ -105,6 +105,11 @@ jobs:
       - name: Deploy script notification timers
         run: bash scripts/test-deploy-timers.sh
 
+      # デプロイスクリプトが nginx のログの回し方をどう直すか（JUK-128）。空の日も回し14日で消す形に
+      # なること、2回流しても重ならないこと、logrotate が読めなければ元に戻すことを見る。
+      - name: Deploy script nginx log retention
+        run: bash scripts/test-deploy-logrotate.sh
+
       # 本体のチェックアウトを main 以外へ動かすコマンドを止める Claude Code のフック（JUK-42）。
       - name: Main checkout guard hook
         run: bash scripts/test-guard-main-checkout.sh
@@ -120,6 +125,14 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # apps/api のテストの準備（test-db/global-setup.ts）は、マイグレーションを Go の migrate で当てる（JUK-125）。
+      # 下の Go の DB テストも使うので、ここで用意する。
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/api-go/go.mod
+          cache-dependency-path: apps/api-go/go.sum
+
       # apps/api と apps/web は独自の tsconfig を持つ別パッケージなので、
       # テストもそれぞれの vitest で実行する。
       - name: Test apps
@@ -130,19 +143,14 @@ jobs:
       # Go の API を本物の MySQL に流すテスト（apps/api-go の dbtest タグ、JUK-97）。他人の ID を断ること（A3）と、
       # 禁止項目を混ぜても書き換わらないこと（A4）を、本番で動いている Go のルートで確かめる。LINE 連携の SQL と、
       # 管理画面（利用者の管理・マスター編集）の SQL も流す（JUK-106）。ログインの流れ（登録・確認・期限・取り消し・
-      # 再設定・2段階認証・外部ログイン、TestAuthDB）も流す（JUK-115）。
+      # 再設定・2段階認証・外部ログイン、TestAuthDB）も流す（JUK-115）。マイグレーションの適用（TestMigrateDB）は、
+      # 空の DB に migrate の権限で db/migrations を全部当てられることも確かめる（JUK-125）。
       # DB は Node のテストと同じ juken_map_test（本番と同じマイグレーションと、DML だけの権限）。
       # MySQL がこのジョブにしか無いので、go のジョブではなくここで動かす。
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: apps/api-go/go.mod
-          cache-dependency-path: apps/api-go/go.sum
-
       - name: Test Go with DB
         run: |
           pnpm --filter @juken-map/api test-db:prepare
-          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB|TestE2|TestIncidentCommandDB|TestGrantAdminCommandDB' -count=1 ./...
+          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB|TestE2|TestIncidentCommandDB|TestGrantAdminCommandDB|TestMigrateDB' -count=1 ./...
 
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA
@@ -193,7 +201,7 @@ jobs:
 
       # 本番のイメージ（deploy.yml が main で作る）が作れることを、マージの前に確かめる。
       - name: Docker build
-        run: docker build -t juken-map-go:ci .
+        run: docker build --build-context migrations=../../db/migrations -t juken-map-go:ci .
 
   # E2E（Playwright）。使い捨ての MySQL 8.4 を立て、マイグレーション→seed→
   # SPA のビルド→Fastify 起動で本番相当の構成を立ち上げ、実ブラウザで主要導線を検証する。
@@ -248,6 +256,7 @@ jobs:
           go-version-file: apps/api-go/go.mod
           cache-dependency-path: apps/api-go/go.sum
 
+      # 本番と同じ Go の migrate（JUK-125）。.env が無いので、上の DATABASE_URL に当てる。
       - name: Run migrations
         run: pnpm run db:migrate
 

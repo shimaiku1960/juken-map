@@ -18,6 +18,7 @@ import (
 //	sudo docker exec juken-map-go /api-go grant-admin --list
 //
 // 手元では pnpm incident・pnpm admin:grant（scripts/go-cli.sh）が .env を読んで同じものを呼ぶ。手順は docs/incident-response.md。
+// migrate（migrate.go）だけは本番でもデプロイが1回きりのコンテナで流し、手元では pnpm db:migrate が呼ぶ。
 
 const incidentUsage = `使い方: incident <操作> [メールアドレス]
   sessions <メール>   ログイン中のセッションを見る
@@ -35,6 +36,10 @@ const cliTimeout = 30 * time.Second
 
 // runCommand は args（os.Args[1:]）の操作をして、終了コードを返す。
 func runCommand(args []string, stdout, stderr io.Writer) int {
+	// migrate（migrate.go）は繋ぐユーザー・接続の設定・かけてよい時間がほかと違うので、DB を開く前に分ける。
+	if args[0] == "migrate" {
+		return runMigrate(stdout, stderr)
+	}
 	db, err := openDB(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -55,7 +60,7 @@ func dispatchCommand(ctx context.Context, st incidentStore, args []string, stdou
 	case "grant-admin":
 		err = runGrantAdmin(ctx, st, args[1:], stdout)
 	default:
-		err = usageError(fmt.Sprintf("知らないコマンドです: %s（incident か grant-admin）", args[0]))
+		err = usageError(fmt.Sprintf("知らないコマンドです: %s（incident・grant-admin・migrate）", args[0]))
 	}
 	if err == nil {
 		return 0

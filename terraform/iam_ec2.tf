@@ -16,10 +16,32 @@ resource "aws_iam_role" "ec2_ecr" {
   })
 }
 
-# ロールにECR読み取り権限（AWS管理ポリシー）を付与
-resource "aws_iam_role_policy_attachment" "ec2_ecr_read" {
-  role       = aws_iam_role.ec2_ecr.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+# デプロイ（deploy-ec2.sh）で juken-map・juken-map-go の2つを pull するだけの権限。
+# AWS 管理ポリシー AmazonEC2ContainerRegistryReadOnly は全リポジトリの一覧・読み取りまで含むので使わない（JUK-82）。
+resource "aws_iam_role_policy" "ec2_ecr_pull" {
+  name = "juken-map-ecr-pull"
+  role = aws_iam_role.ec2_ecr.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # ログイン用のトークンはリポジトリ単位に絞れない。
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken"
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+        ]
+        Resource = [aws_ecr_repository.juken_map.arn, aws_ecr_repository.juken_map_go.arn]
+      }
+    ]
+  })
 }
 
 # EC2にロールを貼るための「インスタンスプロファイル」でロールを包む

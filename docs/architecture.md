@@ -2,8 +2,8 @@
 
 受験マップは **React + Vite の SPA（`apps/web`）** と **Go の API（`apps/api-go`）** の
 2つのアプリからなる。本番では Go が API・ログイン・ビルド済みの画面のすべてを配る（JUK-70・JUK-111・JUK-115）。
-`apps/api`（Node）に残るのはマイグレーションを当てる処理と、seed・テストが使う DB 接続だけ
-（Fastify のサーバーは JUK-121 で消した）。画面と共有するコードは `src/shared` に置く。
+`apps/api`（Node）に残るのは seed・テストが使う DB 接続だけ（Fastify のサーバーは JUK-121 で、
+マイグレーションの適用は JUK-125 で Go へ移して消した）。画面と共有するコードは `src/shared` に置く。
 
 > ⚠️ 下の「判断とその理由」のうち、Fastify・Better Auth・`routes`/`services` を前提にした節は Node が
 > API を配っていた頃の記録で、今のコードとは合わない（直すのは JUK-55）。Go の構成は `apps/api-go/README.md`。
@@ -227,8 +227,9 @@ seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使�
 
 ### マイグレーション（テーブル定義の変更）
 
-`prisma migrate deploy` の代わりに `apps/api/src/infra/migrations.ts` が当てる。
-本番はデプロイがアプリを起動する前に、同じイメージの1回きりのコンテナ（`docker-entrypoint.sh migrate`）で流す。
+`prisma migrate deploy` の代わりに Go の `migrate` コマンド（`apps/api-go/migrate.go`、JUK-125）が当てる。
+本番はデプロイがアプリを起動する前に、Go のイメージの1回きりのコンテナ（`/api-go migrate`）で流す。
+`db/migrations` はイメージの `/migrations` に入れてある（`deploy.yml` の `--build-context migrations=`）。
 ローカルは `pnpm dev` / `pnpm run db:migrate`、CI は E2E の前、テストは globalSetup で流す。
 
 - 本番の DB ユーザーは役割ごとに分けてある（`apps/api/src/infra/dbUsers.ts`）。アプリは DML だけの

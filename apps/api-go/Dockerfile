@@ -21,14 +21,22 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api-go 
 FROM build AS web
 RUN mkdir -p /app/web
 
+# ---- マイグレーション ----
+# `/api-go migrate`（migrate.go、JUK-125）が当てる db/migrations。ビルドの文脈（apps/api-go）の外にあるので、
+# 本番のデプロイは --build-context migrations=db/migrations でこの空のステージを差し替える。差し替えずに作ると
+# 中身が空で、migrate は「マイグレーションがありません」と止まる（古い表のままアプリを起こさない）。
+FROM scratch AS migrations
+
 # ---- 実行 ----
 # distroless の static は、シェルもパッケージ管理も無い最小のイメージ（CA 証明書と時間帯のデータだけ入っている）。
 # 攻撃に使える道具が中に無い。nonroot は UID 65532 で動く。
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/api-go /api-go
 COPY --from=web /app/web /web
+COPY --from=migrations / /migrations
 ENV PORT=8080
 ENV WEB_DIST_DIR=/web
+ENV MIGRATIONS_DIR=/migrations
 # イメージを作ったコミット（git の SHA）。/api/health が返し、デプロイ後の E2E が本番で新しい版が
 # 動いているかを見る（JUK-101）。値が毎回変わるので、ビルドのキャッシュを壊さないよう最後に置く。
 ARG APP_COMMIT=""

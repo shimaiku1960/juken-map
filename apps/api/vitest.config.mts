@@ -4,11 +4,6 @@ import { testDatabaseUrl } from "./src/test-db/config.ts";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
-// マイグレーションを空の DB に全部当てるテストは、他のテストファイルと同時に走ると
-// 同じ MySQL を取り合って数倍遅くなり、CI で制限時間（5秒）を超えることがあった。
-// このファイルだけ別のプロジェクトに分け、他が全部終わってから単独で走らせる。
-const MIGRATIONS_TEST = "src/infra/migrations.test.ts";
-
 export default defineConfig({
   resolve: {
     // tsconfig の paths と同じ対応。テストからも @/backend などで辿れるようにする。
@@ -20,44 +15,12 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    // include / exclude は各プロジェクトに書く（ここに書くと extends で配列が足し合わされる）。
-    projects: [
-      {
-        extends: true,
-        test: {
-          name: "api",
-          include: ["src/**/*.test.ts"],
-          exclude: ["**/node_modules/**", "src/generated/**", MIGRATIONS_TEST],
-          // ファイルを同時に走らせない。
-          //
-          // これらのテストは本物の MySQL を共有しており、別々のファイルが同じ親
-          // （user・Faculty）を参照する行を同時に INSERT すると、InnoDB のロックが
-          // ぶつかって `ER_LOCK_DEADLOCK` で落ちる。2026-09-20 の CI では 2 回連続で、
-          // しかも別のファイル（goals.test.ts の FinalGoal、study-plans.test.ts の
-          // StudyPlan）が落ちた。落ちる場所が毎回変わるので、個別のテストの書き方の
-          // 問題ではなく同時実行そのものが原因。
-          //
-          // 代わりに each INSERT を再試行する手もあるが、それは本番コードに無い
-          // 挙動をテストだけに足すことになり、本番で起きるデッドロックを隠す。
-          // 手元で 3.2 秒 → 10.5 秒になるだけなので、確定性を取る。
-          fileParallelism: false,
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "migrations",
-          include: [MIGRATIONS_TEST],
-          // 番号の小さいグループから順に走る。api（0）が終わってから始まる。
-          sequence: { groupOrder: 1 },
-          // 単独で走らせても、23本（SQL 約90文）を当てるのに手元の Docker で 5〜7秒かかり、
-          // 既定の5秒をまたいで結果が揺れた。マイグレーションが増えるほど長くなるので余裕を持たせる。
-          testTimeout: 30_000,
-        },
-      },
-    ],
+    include: ["src/**/*.test.ts"],
+    // ファイルを同時に走らせない。本物の MySQL を共有しており、別々のファイルが同じ親を参照する行を
+    // 同時に INSERT すると、InnoDB のロックがぶつかって `ER_LOCK_DEADLOCK` で落ちた（2026-09-20 の CI）。
+    fileParallelism: false,
     // SQL は本物の MySQL に流して確かめる（モックでは SQL の誤りを検出できない）。
-    // テスト用 DB の作成とマイグレーションは globalSetup が1回だけ行う。
+    // テスト用 DB の作成とマイグレーション（Go の migrate、JUK-125）は globalSetup が1回だけ行う。
     globalSetup: ["src/test-db/global-setup.ts"],
     env: {
       DATABASE_URL: testDatabaseUrl,

@@ -61,7 +61,7 @@ run_deploy() {
   base64 < "$DEPLOY" | tr -d '\n' | base64 -d \
     | PATH="$WORK/bin:$PATH" LOG="$WORK/log" ENV_FILE="$WORK/env" \
       UPSTREAM_CONF="$WORK/upstream.conf" GO_UPSTREAM_CONF="$WORK/go-upstream.conf" \
-      GO_ROUTES_CONF="$WORK/routes/go-routes.conf" SITE_CONF="$WORK/site" \
+      GO_ROUTES_CONF="$WORK/routes/go-routes.conf" SITE_CONF="$WORK/site" NGINX_LOGROTATE="$WORK/logrotate-nginx" \
       SYSTEMD_DIR="$WORK/systemd" NOTIFY_ENV_FILE="$WORK/etc/juken-map/daily-notification.env" \
       bash -s -- dummy-tag "" "" "${2:-}" > "$WORK/out" 2>&1 || status=$?
 }

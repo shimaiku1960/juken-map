@@ -54,8 +54,9 @@ jobs:
             -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-      # Go の API（apps/api-go、JUK-72）。本番で動くアプリはこれだけ。マイグレーション用の Node のイメージと同じタグにする。
-      # 画面（JUK-111）も Go が配るので、上で作った Node のイメージから画面のビルド成果物（/app/web）を写す。
+      # Go の API（apps/api-go、JUK-72）。本番で動くアプリはこれだけ。上の画面のイメージと同じタグにする。
+      # 画面（JUK-111）も Go が配るので、上で作ったイメージから画面のビルド成果物（/app/web）を写す。
+      # デプロイが流す migrate（JUK-125）の db/migrations も入れる。
       - name: Build and push (Go)
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -64,6 +65,7 @@ jobs:
         run: |
           docker build --build-arg APP_COMMIT=$IMAGE_TAG \
             --build-context web=docker-image://$REGISTRY/juken-map:$IMAGE_TAG \
+            --build-context migrations=db/migrations \
             -t $REGISTRY/$REPOSITORY:$IMAGE_TAG apps/api-go
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 

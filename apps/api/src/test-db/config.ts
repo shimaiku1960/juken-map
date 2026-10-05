@@ -15,6 +15,16 @@ export const testMigrateDatabaseUrl =
   process.env.TEST_MIGRATE_DATABASE_URL ??
   "mysql://juken_migrate_test:juken_migrate_test@127.0.0.1:3306/juken_map_test";
 
+// マイグレーションのテスト（apps/api-go/migrate_db_test.go）が毎回作り直す DB に、migrate の権限で繋ぐユーザー。
+// juken_map_test とは別の DB なので、ここで作っておく。
+export const testMigrationsTestDatabaseUrl = (() => {
+  const url = new URL(testDatabaseUrl);
+  url.username = "juken_migrations_test";
+  url.password = "juken_migrations_test";
+  url.pathname = "/juken_map_migrate_test";
+  return url.toString();
+})();
+
 // テスト用 DB とユーザーを作るための管理者接続。
 export const testDatabaseAdminUrl =
   process.env.TEST_DATABASE_ADMIN_URL ?? "mysql://root:rootpassword@127.0.0.1:3306";

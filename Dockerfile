@@ -1,6 +1,5 @@
-# 本番で動くアプリは Go（apps/api-go）だけで、このイメージはサーバーを持たない（JUK-121）。役目は2つ。
-#   - 画面のビルド成果物を /app/web に置く。Go のイメージが --build-context web= でここから写す（deploy.yml）
-#   - デプロイのたびにマイグレーションを当てる1回きりのコンテナ（docker-entrypoint.sh）
+# 画面（apps/web）をビルドするだけのイメージ（JUK-121・JUK-125）。本番で動くのは Go（apps/api-go）だけで、
+# Go のイメージが --build-context web= で、ここの /app/web を写す（deploy.yml）。このイメージは実行しない。
 FROM node:24-slim AS base
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -23,26 +22,7 @@ RUN --mount=type=secret,id=microcms_api_key \
   MICROCMS_API_KEY="$(cat /run/secrets/microcms_api_key 2>/dev/null || true)" \
   pnpm --filter @juken-map/web build
 
-# ---- マイグレーションが使う依存だけをインストールする ----
-FROM base AS api-deps
-# tsxを実行時にも使うため、devDependenciesは維持する。
-RUN pnpm --filter @juken-map/api install --frozen-lockfile
-
-# ---- 実行 ----
-FROM node:24-slim AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-RUN groupadd --system --gid 1001 nodejs \
-  && useradd --system --uid 1001 --gid nodejs app
-
-# pnpmの実体（.pnpm）と各パッケージの相対リンクを同じ配置でコピーする。
-COPY --from=api-deps --chown=app:nodejs /app/node_modules ./node_modules
-COPY --from=api-deps --chown=app:nodejs /app/apps/api/node_modules ./apps/api/node_modules
-COPY --chown=app:nodejs package.json ./package.json
-COPY --chown=app:nodejs db/migrations ./db/migrations
-COPY --chown=app:nodejs apps/api ./apps/api
-COPY --from=web-builder --chown=app:nodejs /app/apps/web/dist ./web
-COPY --chown=app:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
-USER app
-ENTRYPOINT ["./docker-entrypoint.sh"]
+# ---- 画面のビルド成果物だけを残す ----
+# 実行するものが無いので、中身は /app/web だけにする（ECR に置く量も減る）。
+FROM scratch AS web
+COPY --from=web-builder /app/apps/web/dist /app/web
