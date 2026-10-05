@@ -319,6 +319,9 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 `docker logs juken-map`は今まで通り使えます。`/metrics`とAlloyの画面（12345番）はDockerネットワークの
 中だけに開くので、nginx越しには届きません。
 
+Grafana Cloudを含め、外部のサービスへ何を送っているかは[docs/third-party-data.md](docs/third-party-data.md)に
+送信先ごとにまとめています。送るものを足すときは、先にこの表を書き換えます。
+
 接続情報はSecrets Managerの`juken-map/production/runtime`に次のキーで入れます。
 **このキーが入っていない間は、Alloyもアプリの送信も起動しません**（本番は今まで通り動きます）。
 

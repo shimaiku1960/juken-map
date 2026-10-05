@@ -12,6 +12,19 @@ describe("redactSecrets", () => {
     expect(redactSecrets("/profile?line=linked")).toBe("/profile?line=linked");
   });
 
+  it("別の URL のクエリにエンコードされて入ったトークンも伏せる（GA4 への送信の URL など）", () => {
+    expect(
+      redactSecrets(
+        "https://www.google-analytics.com/g/collect?v=2&dl=https%3A%2F%2Fjuken-map.com%2Fline%2Flink%3FlinkToken%3Dabc123%26x%3D1&dt=t"
+      )
+    ).toBe(
+      "https://www.google-analytics.com/g/collect?v=2&dl=https%3A%2F%2Fjuken-map.com%2Fline%2Flink%3FlinkToken%3D[REDACTED]%26x%3D1&dt=t"
+    );
+    expect(redactSecrets("/login?callbackURL=%2Freset-password%3Ftoken%3Dabc.def")).toBe(
+      "/login?callbackURL=%2Freset-password%3Ftoken%3D[REDACTED]"
+    );
+  });
+
   it("パスに載った Better Auth の再設定トークンも伏せる", () => {
     expect(
       redactSecrets("https://juken-map.com/api/auth/reset-password/tok123?callbackURL=%2Freset-password")

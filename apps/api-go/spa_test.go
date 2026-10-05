@@ -123,8 +123,8 @@ func TestSPAPrerenderedPages(t *testing.T) {
 
 func TestSPATokenLinkPages(t *testing.T) {
 	rt := newSPATestRouter(t, pageScripts{})
-	// メールのリンクで開く画面は Referrer-Policy: no-referrer（認証基準 10 の D3）
-	for _, target := range []string{"/verify-email/confirm?token=abc", "/reset-password?token=abc"} {
+	// メールや LINE のリンクで開く画面は Referrer-Policy: no-referrer（認証基準 10 の D3）
+	for _, target := range []string{"/verify-email/confirm?token=abc", "/reset-password?token=abc", "/line/link?linkToken=abc"} {
 		rec := spaGet(rt, target, nil)
 		if rec.Code != http.StatusOK || rec.Header().Get("Referrer-Policy") != "no-referrer" {
 			t.Fatalf("%s: status = %d, Referrer-Policy = %q", target, rec.Code, rec.Header().Get("Referrer-Policy"))
@@ -362,6 +362,7 @@ func TestInjectMetaFaro(t *testing.T) {
 
 func TestInjectMetaMatchesNode(t *testing.T) {
 	// Node の injectMeta（apps/api/src/seo.ts）が返していた形をそのまま固定する。差し込む順番・字下げも同じ。
+	// GA4 の config だけは、トークンが載る画面で最初の page_view を送らないよう変えた（JUK-124）。
 	got := pageScripts{gaMeasurementID: "G-1"}.injectMeta(
 		"<html><head><title>x</title></head><body></body></html>", defaultMeta("/terms"))
 	want := `<html><head><title>利用規約｜受験マップ</title>  <meta name="description" content="受験マップをご利用いただく際の条件を定めています。"/>
@@ -383,7 +384,7 @@ func TestInjectMetaMatchesNode(t *testing.T) {
       function gtag(){dataLayer.push(arguments);}
       window.gtag = gtag;
       gtag('js', new Date());
-      gtag('config', 'G-1');
+      gtag('config', 'G-1', /[?&](token|linkToken)=/.test(location.search) ? { send_page_view: false } : {});
     </script>
   </head><body></body></html>`
 	if got != want {

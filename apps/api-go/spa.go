@@ -26,8 +26,8 @@ import (
 // 圧縮できる種類は gzip 版も起動時に作っておく。Node は br（品質4）で圧縮していたが、Go の標準ライブラリに
 // br は無いので gzip の最高圧縮にした（大きさは br の品質4とほぼ同じ）。
 
-// tokenLinkPages はメールのリンクで開く、URL にトークンが載る画面。
-var tokenLinkPages = map[string]bool{"/verify-email/confirm": true, "/reset-password": true}
+// tokenLinkPages はメールや LINE のリンクで開く、URL にトークンが載る画面（?token=…・?linkToken=…）。
+var tokenLinkPages = map[string]bool{"/verify-email/confirm": true, "/reset-password": true, "/line/link": true}
 
 // gzipMinSize より小さい応答は圧縮しない（Node の @fastify/compress の既定の下限と同じ）。
 const gzipMinSize = 1024
@@ -229,8 +229,8 @@ func (s *spaSite) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h := w.Header()
-	// メールのリンク（?token=…）で開く画面は、ほかのサイトへ移ったときに Referer で URL を送らない
-	// （認証基準 10 の D3。画面も読み込んだらすぐ URL からトークンを消す：useTokenFromLink.ts）。
+	// メールや LINE のリンク（?token=…・?linkToken=…）で開く画面は、ほかのサイトへ移ったときに Referer で
+	// URL を送らない（認証基準 10 の D3。画面も読み込んだらすぐ URL からトークンを消す：useTokenFromLink.ts）。
 	if tokenLinkPages[pathname] {
 		h.Set("Referrer-Policy", "no-referrer")
 	}

@@ -10,6 +10,7 @@ type LegalDocumentProps = {
   title: string;
   description: string;
   effectiveDate: string;
+  revisedDate?: string;
   sections: LegalSection[];
 };
 
@@ -17,6 +18,7 @@ export default function LegalDocument({
   title,
   description,
   effectiveDate,
+  revisedDate,
   sections,
 }: LegalDocumentProps) {
   return (
@@ -31,6 +33,7 @@ export default function LegalDocument({
         </p>
         <p className="mt-4 text-sm text-muted-foreground">
           制定日：{effectiveDate}
+          {revisedDate ? <>　最終改定日：{revisedDate}</> : null}
         </p>
       </header>
 

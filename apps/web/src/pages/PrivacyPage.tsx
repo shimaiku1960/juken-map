@@ -6,6 +6,7 @@ export default function PrivacyPage() {
       title="プライバシーポリシー"
       description="受験マップがお預かりする情報と、その使い方を分かりやすくご説明します。"
       effectiveDate="2026年9月3日"
+      revisedDate="2026年10月5日"
       sections={[
         {
           title: "基本方針",
@@ -64,9 +65,10 @@ export default function PrivacyPage() {
               <p>本サービスは、運営に必要な範囲で次の外部サービスを利用します。</p>
               <ul>
                 <li><strong>Google・GitHub：</strong>外部アカウントによる登録とログイン</li>
-                <li><strong>Resend：</strong>メールアドレスの確認やパスワード再設定メールの送信</li>
+                <li><strong>Resend：</strong>メールの送信（メールアドレスの確認、パスワードの再設定、アカウントの変更のお知らせ、利用者が選んだ場合の学習通知）</li>
                 <li><strong>LINEヤフー株式会社：</strong>利用者が希望した場合のLINEアカウント連携と学習通知の送信</li>
                 <li><strong>Amazon Web Services：</strong>本サービスとデータベースの運用</li>
+                <li><strong>Grafana Labs：</strong>障害の検知と調査。サーバーの記録（IPアドレス、ブラウザや端末に関する情報、利用者ごとの識別子、アクセス日時）と、画面で起きたエラーや表示速度の記録を送ります。URLに含まれるトークンは伏せて送ります。</li>
                 <li><strong>Google Analytics：</strong>アクセス状況や登録・学習記録に至る利用動向の分析。メールアドレス、学習内容、教材名、志望校など、利用者を直接特定する情報や学習内容そのものは送信しません。</li>
               </ul>
               <p>
