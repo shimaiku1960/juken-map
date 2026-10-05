@@ -4,13 +4,14 @@
 # aws・docker・nginx などを偽物に差し替えて deploy-ec2.sh を最後まで流し、
 # docker run に渡った env ファイルの中身を見る。確かめたいのは次の3つ。
 # - シークレットに2つそろっていれば、マイグレーション用はアプリより先の1回きりのコンテナにだけ渡り、
-#   アプリのコンテナには .env の接続先ではなくアプリ用の DATABASE_URL が渡る
-# - 2つとも無ければ、これまで通り .env の DATABASE_URL で起動する
+#   アプリのコンテナ（Go）には .env の接続先ではなくアプリ用の DATABASE_URL が渡る
+# - 2つとも無ければ、.env の DATABASE_URL でマイグレーションを先に当て、アプリも同じ接続先で起動する
+#   （JUK-109 で Node のアプリのコンテナを外したので、起動時に当てる役がいなくなった）
 # - 片方だけなら、何も起動せずに止まる
 # あわせて、Go のコンテナ（JUK-72）には Go が読む値だけが渡ることも見る。毎日の通知（JUK-74）に使う
 # Resend のキー・LINE の送信用トークン・cron の共有トークンが渡る。LINE 連携（JUK-79）も Go が受けるので、
 # LINE の Webhook の署名用の秘密も渡る。microCMS の Webhook（JUK-112）の署名の秘密と GitHub のトークンは、
-# シークレットにあるときだけ Go にだけ渡る（Node には渡らない）。
+# シークレットにあるときだけ Go に渡る。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -79,16 +80,6 @@ echo "deploy-ec2.sh の DB の資格情報の渡し方:"
 
 check "2つそろえば、マイグレーションを先に流し、アプリには .env の接続先を渡さない" "{$LINE,$APP,$MIGRATE,$MICROCMS}" "run:migrate
 MIGRATION_DATABASE_URL=mysql://juken_migrate:MIG@rds/juken_map
-run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:dummy-tag
-BETTER_AUTH_SECRET=s
-DAILY_NOTIFICATION_SECRET=d
-DATABASE_URL=mysql://juken_app:APP@rds/juken_map
-LINE_CHANNEL_ACCESS_TOKEN=t
-LINE_CHANNEL_SECRET=l
-RESEND_API_KEY=r
-SIMULATION_ENABLED=on
-SIMULATION_SECRET=m
-SKIP_MIGRATIONS=1
 run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:dummy-tag
 BETTER_AUTH_SECRET=s
 DAILY_NOTIFICATION_SECRET=d
@@ -104,15 +95,8 @@ SIMULATION_ENABLED=on
 SIMULATION_SECRET=m
 exit=0"
 
-check "2つとも無ければ、これまで通り .env の接続先で起動時に当てる" "{$LINE}" "run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:dummy-tag
-BETTER_AUTH_SECRET=s
-DAILY_NOTIFICATION_SECRET=d
-DATABASE_URL=mysql://admin:ADMIN@rds/juken_map
-LINE_CHANNEL_ACCESS_TOKEN=t
-LINE_CHANNEL_SECRET=l
-RESEND_API_KEY=r
-SIMULATION_ENABLED=on
-SIMULATION_SECRET=m
+check "2つとも無ければ、.env の接続先でマイグレーションを先に当て、アプリも同じ接続先で起動する" "{$LINE}" "run:migrate
+MIGRATION_DATABASE_URL=mysql://admin:ADMIN@rds/juken_map
 run:961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:dummy-tag
 BETTER_AUTH_SECRET=s
 DAILY_NOTIFICATION_SECRET=d

@@ -42,7 +42,7 @@ export default defineConfig({
   webServer: externalBaseURL
     ? undefined
     : {
-        // 本番と同じ構成（nginx が go-routes.conf で振り分け、Go が API と SPA を配る）を e2ePort（既定 3000）で起動する。
+        // 本番と同じ構成（nginx の後ろに Go だけ。Go が API と SPA を配る）を e2ePort（既定 3000）で起動する。
         // apps/web のビルドを含むので、初回は少し時間がかかる。
         command: "bash scripts/e2e-server.sh",
         // nginx はここで待ち受け、内側の Node・Go のポートは scripts/local-ports.sh が決める。

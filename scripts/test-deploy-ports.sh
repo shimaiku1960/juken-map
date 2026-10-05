@@ -12,7 +12,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 fail=0
-check() {  # $1=見出し $2=期待する出力 $3=Node の upstream ファイルの中身 $4=Go の中身（空文字＝ファイルを作らない）
+check() {  # $1=見出し $2=期待する出力 $3=サイト設定の upstream（juken_map_app）の中身 $4=Go の中身（空文字＝ファイルを作らない）
   local conf="$WORK/upstream.conf" go_conf="$WORK/go-upstream.conf"
   rm -f "$conf" "$go_conf"
   [ -n "${3:-}" ] && printf '%s\n' "$3" > "$conf"
@@ -29,23 +29,23 @@ check() {  # $1=見出し $2=期待する出力 $3=Node の upstream ファイ�
   fi
 }
 
-NODE_3000="upstream juken_map_app {
-    server 127.0.0.1:3000;
-}"
 NODE_3001="upstream juken_map_app {
     server 127.0.0.1:3001;
+}"
+GO_8080="upstream juken_map_go {
+    server 127.0.0.1:8080;
 }"
 GO_8081="upstream juken_map_go {
     server 127.0.0.1:8081;
 }"
 
+# JUK-109 から Node のアプリのコンテナは起こさないので、判断するのは Go のポートだけ。
 echo "デプロイのポート判断"
-check "初回（upstream ファイルがまだ無い）" "CURRENT_PORT=3000 NEW_PORT=3001 GO_CURRENT_PORT=8080 GO_NEW_PORT=8081"
-check "3000を向いている → 3001へ" "CURRENT_PORT=3000 NEW_PORT=3001 GO_CURRENT_PORT=8080 GO_NEW_PORT=8081" "$NODE_3000"
-check "3001を向いている → 3000へ" "CURRENT_PORT=3001 NEW_PORT=3000 GO_CURRENT_PORT=8080 GO_NEW_PORT=8081" "$NODE_3001"
-check "中身が壊れている → 3000とみなす" "CURRENT_PORT=3000 NEW_PORT=3001 GO_CURRENT_PORT=8080 GO_NEW_PORT=8081" "# 空っぽ"
-# Go を足した最初のデプロイ：Node の upstream はあるが Go のはまだ無い。
-check "Go だけ初回 → Go は8080とみなして8081へ" "CURRENT_PORT=3001 NEW_PORT=3000 GO_CURRENT_PORT=8080 GO_NEW_PORT=8081" "$NODE_3001"
-check "Go が8081を向いている → 8080へ（Node とは別に決まる）" "CURRENT_PORT=3001 NEW_PORT=3000 GO_CURRENT_PORT=8081 GO_NEW_PORT=8080" "$NODE_3001" "$GO_8081"
+check "初回（upstream ファイルがまだ無い）→ Go は8080とみなして8081へ" "GO_CURRENT_PORT=8080 GO_NEW_PORT=8081"
+check "Go が8080を向いている → 8081へ" "GO_CURRENT_PORT=8080 GO_NEW_PORT=8081" "" "$GO_8080"
+check "Go が8081を向いている → 8080へ" "GO_CURRENT_PORT=8081 GO_NEW_PORT=8080" "" "$GO_8081"
+check "中身が壊れている → 8080とみなす" "GO_CURRENT_PORT=8080 GO_NEW_PORT=8081" "" "# 空っぽ"
+# Node のコンテナを外す最初のデプロイ：サイト設定の upstream はまだ Node（3001）を向いている。判断には使わない。
+check "Node の upstream が残っていても、Go の向き先だけで決まる" "GO_CURRENT_PORT=8081 GO_NEW_PORT=8080" "$NODE_3001" "$GO_8081"
 
 exit "$fail"

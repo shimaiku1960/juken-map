@@ -4,9 +4,10 @@
 # aws・docker・nginx などを偽物に差し替えて deploy-ec2.sh を最後まで流し、
 # nginx の設定ファイルがどうなったかと、docker に何をさせたかを見る。確かめたいのは次のこと。
 # - 初回はサイト設定の location / の直前に include を1行だけ差し込み、2回目は足さない
-# - 振り分けファイルは deploy.yml が渡した中身になり、upstream は Node と Go が別々に入れ替わる
+# - 振り分けファイルは deploy.yml が渡した中身になり、サイト設定の upstream（juken_map_app）も Go と同じ先へ向く（JUK-109）
+# - 動いている Node のアプリのコンテナ（juken-map）は、切り替えたあとに止めて消す（JUK-109）
 # - location / が1つでないサイト設定には手を出さず、何も起動せずに止まる
-# - Go のスモークテストが落ちたら、Node も含めて切り替えない（画面を配れない Go のイメージも、JUK-111）
+# - Go のスモークテストが落ちたら切り替えない（画面を配れない Go のイメージも、JUK-111）
 # - nginx -t が通らなければ、向き先と振り分けを元に戻す
 set -euo pipefail
 
@@ -22,15 +23,16 @@ if [ "$1 $2" = "secretsmanager get-secret-value" ]; then
   echo '{"LINE_CHANNEL_SECRET":"l","LINE_CHANNEL_ACCESS_TOKEN":"t"}'
 fi
 EOF
-# docker は run・rm・rename だけを記録する（run は --name の値）。
+# docker は run・rm・rename だけを記録する（run は --name の値）。NODE_RUNNING=1 なら、
+# Node のアプリのコンテナ（juken-map）が動いている（inspect が成功する）ことにする。
 cat > "$WORK/bin/docker" <<'EOF'
 #!/usr/bin/env bash
 case "$1" in
-  inspect) exit 1 ;;
+  inspect) [ "${NODE_RUNNING:-}" = "1" ] && [ "$2" = "juken-map" ] && exit 0; exit 1 ;;
   run)
     prev=""
     for arg in "$@"; do [ "$prev" = "--name" ] && echo "run $arg" >> "$LOG"; prev="$arg"; done ;;
-  rm) [ "$2" = "-f" ] && echo "rm -f ${*:3}" >> "$LOG" ;;
+  rm) if [ "$2" = "-f" ]; then echo "rm -f ${*:3}" >> "$LOG"; else echo "rm $2" >> "$LOG"; fi ;;
   rename) echo "rename $2 $3" >> "$LOG" ;;
 esac
 exit 0
@@ -88,7 +90,7 @@ run_deploy() {
       bash -s -- dummy-tag "" "${1:-}" > "$WORK/out" 2>&1 || status=$?
 }
 
-# fresh → Go を足す前の本番（Node は3000、Go の upstream と振り分けはまだ無い）。
+# fresh → Go を足す前の本番（サイト設定の upstream は Node の3000、Go の upstream と振り分けはまだ無い）。
 fresh() {
   rm -rf "$WORK/routes" "$WORK/go-upstream.conf" "$WORK"/site.bak-*
   printf '%s\n' "$SITE" > "$WORK/site"
@@ -119,24 +121,25 @@ else
 $(cat "$WORK/site")"
 fi
 if [ "$(cat "$WORK/routes/go-routes.conf")" = "$ROUTES" ] \
-  && [ "$(port_of "$WORK/upstream.conf")" = 3001 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ]; then
-  ok "振り分けは渡した中身になり、Node は3001・Go は8081へ切り替わる"
+  && [ "$(port_of "$WORK/upstream.conf")" = 8081 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ]; then
+  ok "振り分けは渡した中身になり、Go は8081へ切り替わる。サイト設定の upstream も Node から Go の8081へ"
 else
   ng "振り分けと向き先" "$(cat "$WORK/routes/go-routes.conf"; cat "$WORK/upstream.conf" "$WORK/go-upstream.conf")"
 fi
-if [ "$(cat "$WORK/log")" = "run juken-map-next
+if [ "$(cat "$WORK/log")" = "rm -f juken-map-next
 run juken-map-go-next
-rename juken-map-next juken-map
-rename juken-map-go-next juken-map-go" ]; then
-  ok "Node と Go の新しいコンテナを起こし、切り替え後に名前を戻す"
+rm juken-map-go
+rename juken-map-go-next juken-map-go
+rm juken-map-alloy" ]; then
+  ok "Go の新しいコンテナだけを起こし、切り替え後に名前を戻す（Node のアプリのコンテナは起こさない。可観測性の設定が無いので Alloy は消す）"
 else
   ng "コンテナの操作" "$(cat "$WORK/log")"
 fi
 
 run_deploy "$ROUTES_B64"
 if [ "$status" = 0 ] && [ "$(grep -c 'include ' "$WORK/site")" = 1 ] \
-  && [ "$(port_of "$WORK/upstream.conf")" = 3000 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8080 ]; then
-  ok "2回目は include を足さず、Node は3000・Go は8080へ戻る"
+  && [ "$(port_of "$WORK/upstream.conf")" = 8080 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8080 ]; then
+  ok "2回目は include を足さず、Go は8080へ戻る（サイト設定の upstream も一緒に）"
 else
   ng "2回目のデプロイ" "exit=$status
 $(cat "$WORK/site" "$WORK/upstream.conf" "$WORK/go-upstream.conf")"
@@ -144,7 +147,7 @@ fi
 
 run_deploy ""
 if [ "$status" = 0 ] && [ ! -s "$WORK/routes/go-routes.conf" ]; then
-  ok "振り分けを渡さなければ空になる（全部 Node が返す）"
+  ok "振り分けを渡さなければ空になる（サイト設定の upstream が Go を向くので、全部 Go が返す）"
 else
   ng "振り分け無し" "exit=$status"
 fi
@@ -165,10 +168,10 @@ run_deploy "$ROUTES_B64"
 printf '%s\n' "$ROUTES" "# 前回の振り分け" > "$WORK/routes/go-routes.conf"
 before="$(cat "$WORK/routes/go-routes.conf")"
 GO_HEALTH=500 run_deploy "$ROUTES_B64"
-if [ "$status" != 0 ] && [ "$(port_of "$WORK/upstream.conf")" = 3001 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ] \
+if [ "$status" != 0 ] && [ "$(port_of "$WORK/upstream.conf")" = 8081 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ] \
   && [ "$(cat "$WORK/routes/go-routes.conf")" = "$before" ] \
-  && grep -q '^rm -f juken-map-next juken-map-go-next$' "$WORK/log"; then
-  ok "Go のスモークテストが落ちたら、Node も含めて切り替えず、新しいコンテナを両方捨てる"
+  && grep -q '^rm -f juken-map-go-next$' "$WORK/log"; then
+  ok "Go のスモークテストが落ちたら、切り替えずに新しいコンテナを捨てる"
 else
   ng "Go のスモークテストの失敗" "exit=$status
 $(cat "$WORK/log" "$WORK/upstream.conf" "$WORK/go-upstream.conf")"
@@ -177,9 +180,9 @@ fi
 fresh
 run_deploy "$ROUTES_B64"
 GO_LOGIN=404 run_deploy "$ROUTES_B64"
-if [ "$status" != 0 ] && [ "$(port_of "$WORK/upstream.conf")" = 3001 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ] \
-  && grep -q '^rm -f juken-map-next juken-map-go-next$' "$WORK/log"; then
-  ok "Go が画面を配れなければ（画面の無いイメージ）、切り替えずに新しいコンテナを両方捨てる"
+if [ "$status" != 0 ] && [ "$(port_of "$WORK/upstream.conf")" = 8081 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ] \
+  && grep -q '^rm -f juken-map-go-next$' "$WORK/log"; then
+  ok "Go が画面を配れなければ（画面の無いイメージ）、切り替えずに新しいコンテナを捨てる"
 else
   ng "Go の /login の失敗" "exit=$status
 $(cat "$WORK/log" "$WORK/upstream.conf" "$WORK/go-upstream.conf")"
@@ -189,12 +192,22 @@ fresh
 run_deploy ""
 NGINX_BROKEN_ROUTES=1 run_deploy "$ROUTES_B64"
 if [ "$status" != 0 ] && [ ! -s "$WORK/routes/go-routes.conf" ] \
-  && [ "$(port_of "$WORK/upstream.conf")" = 3001 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ] \
-  && grep -q '^rm -f juken-map-next juken-map-go-next$' "$WORK/log"; then
-  ok "nginx -t が通らなければ、向き先と振り分けを元に戻し、新しいコンテナを捨てる"
+  && [ "$(port_of "$WORK/upstream.conf")" = 8081 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ] \
+  && grep -q '^rm -f juken-map-go-next$' "$WORK/log"; then
+  ok "nginx -t が通らなければ、向き先（サイト設定の upstream も）と振り分けを元に戻し、新しいコンテナを捨てる"
 else
   ng "nginx -t の失敗" "exit=$status
 $(cat "$WORK/log" "$WORK/routes/go-routes.conf" "$WORK/upstream.conf" "$WORK/go-upstream.conf")"
+fi
+
+fresh
+NODE_RUNNING=1 run_deploy "$ROUTES_B64"
+if [ "$status" = 0 ] && grep -q '^rm juken-map$' "$WORK/log" && grep -q 'Node のアプリのコンテナ（juken-map）を止めて消した' "$WORK/out" \
+  && [ "$(grep -n '^rm juken-map$' "$WORK/log" | cut -d: -f1)" -gt "$(grep -n '^rename juken-map-go-next' "$WORK/log" | cut -d: -f1)" ]; then
+  ok "動いている Node のアプリのコンテナは、Go へ切り替えたあとに止めて消す"
+else
+  ng "Node のコンテナの片付け" "exit=$status
+$(cat "$WORK/log")"
 fi
 
 exit "$fail"

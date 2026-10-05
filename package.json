@@ -7,7 +7,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "pnpm run db:start && pnpm run db:migrate && pnpm run \"/^dev:(api|web|go|proxy)$/\"",
+    "dev": "pnpm run db:start && pnpm run db:migrate && pnpm run \"/^dev:(web|go|proxy)$/\"",
     "dev:api": "pnpm --filter @juken-map/api dev",
     "dev:web": "pnpm --filter @juken-map/web dev",
     "dev:go": "bash scripts/dev-go.sh",
