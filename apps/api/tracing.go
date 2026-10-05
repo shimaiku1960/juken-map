@@ -49,7 +49,7 @@ func setupTracing(ctx context.Context) (trace.TracerProvider, func(context.Conte
 	}
 	tp := sdktrace.NewTracerProvider(
 		// まとめて送る。送り先が落ちていてもリクエストは待たされない（溢れた分は捨てる）。
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithSpanProcessor(skipWebSpans{sdktrace.NewBatchSpanProcessor(exporter)}),
 		sdktrace.WithResource(resource.NewSchemaless(attribute.String("service.name", serviceName))),
 	)
 	// openDB の otelsql は、指定が無ければこの全体の設定を使う。
@@ -74,6 +74,29 @@ var tracedDBOptions = otelsql.WithSpanOptions(otelsql.SpanOptions{
 		return trace.SpanContextFromContext(ctx).IsValid()
 	},
 })
+
+// webRoute は API 以外（画面の HTML・JS・CSS・画像）をまとめたルート（spa.go）。
+const webRoute = "(web)"
+
+// tracedRoute は、そのルートのトレースを送るか。画面のファイル配信は SQL も外部 API も呼ばず、
+// 1枚のスパンで終わるので見るものが無い。画面を1回開くだけで十数件になり、Tempo の一覧を埋める
+// （本番で、デプロイ後の168件のうち135件がこれだった）。
+func tracedRoute(route string) bool {
+	return route != webRoute
+}
+
+// skipWebSpans は、送らないルートのスパンを送る前に捨てる。ルートは返し終えるまで決まらないので、
+// スパンを作らずに済ませることはできない（間引き＝Sampler は始める時点で決める）。
+type skipWebSpans struct{ sdktrace.SpanProcessor }
+
+func (p skipWebSpans) OnEnd(s sdktrace.ReadOnlySpan) {
+	for _, kv := range s.Attributes() {
+		if kv.Key == "http.route" && !tracedRoute(kv.Value.AsString()) {
+			return
+		}
+	}
+	p.SpanProcessor.OnEnd(s)
+}
 
 // startRequestSpan は1リクエスト全体のスパンを始める。名前はルートが決まってから付け直す（endRequestSpan）。
 //

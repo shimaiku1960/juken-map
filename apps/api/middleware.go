@@ -112,10 +112,15 @@ func observe(m *metrics, tracer trace.Tracer, shortIDs bool, next http.Handler) 
 		}
 		m.observe(r.Method, route, rec.status, elapsed)
 		endRequestSpan(span, r.Method, route, rec.status, info)
+		logCtx := r.Context()
+		if !tracedRoute(route) {
+			// 送らないトレースの ID をログに書くと、Grafana で開いても見つからないリンクになる。
+			logCtx = trace.ContextWithSpanContext(logCtx, trace.SpanContext{})
+		}
 
 		// Node の「request completed」と同じ形。URL はパスだけにして、? 以降は残さない
 		// （クエリにトークンが載る入口があるため。Node の redactPath）。
-		slog.LogAttrs(r.Context(), slog.LevelInfo, "request completed",
+		slog.LogAttrs(logCtx, slog.LevelInfo, "request completed",
 			slog.Group("req", slog.String("method", r.Method), slog.String("url", r.URL.Path)),
 			slog.Group("res", slog.Int("statusCode", rec.status)),
 			slog.Float64("responseTime", math.Round(float64(elapsed.Microseconds())/100)/10),

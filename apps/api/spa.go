@@ -212,7 +212,7 @@ func (s *spaSite) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	// メトリクスの route は Node と同じく、API 以外をまとめて "(web)" にする（ファイルごとに分けると種類が増えすぎる）。
 	if info != nil {
-		info.route = "(web)"
+		info.route = webRoute
 	}
 
 	if a, ok := s.assets[pathname]; ok {
