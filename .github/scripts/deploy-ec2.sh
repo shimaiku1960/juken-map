@@ -2,23 +2,26 @@
 
 set -euo pipefail
 
+# 本番で動かすアプリのコンテナは Go（apps/api-go）だけ（JUK-109）。Node のイメージ（juken-map）は、
+# マイグレーションを当てる1回きりのコンテナと、画面のビルド成果物の受け渡し（deploy.yml）にだけ使う。
 IMAGE_TAG="${1:?IMAGE_TAG is required}"
 # observability/alloy/production.alloy を base64 にしたもの（deploy.yml が渡す）。
 # 空のときは可観測性の送信を丸ごと省く。
 ALLOY_CONFIG_B64="${2:-}"
 # infra/nginx/juken-map-go-routes.conf（Go へ振り分けるパス）を base64 にしたもの（deploy.yml が渡す）。
-# 空のときは Go へ振り分けない＝全部 Node が返す。
+# 空でも、サイト設定の location / が見る upstream juken_map_app も Go へ向けるので、全部 Go が返す。
 GO_ROUTES_B64="${3:-}"
 # infra/systemd/（毎日の通知のタイマー、JUK-85）を tar.gz にして base64 にしたもの（deploy.yml が渡す）。
 # 空のときはタイマーに触らない。
 SYSTEMD_UNITS_B64="${4:-}"
+# Node のイメージ。マイグレーション（docker-entrypoint.sh の migrate）にだけ使う。
 REPO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map"
-# Go の API（apps/api-go、JUK-72）。Node と同じコミットから作ったイメージを並べて動かす。
+# Go の API（apps/api-go、JUK-72）。本番で動くアプリのコンテナはこれだけ（JUK-109）。
 REPO_GO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go"
 ENV_FILE="${ENV_FILE:-/home/ubuntu/juken-map/.env}"
 RUNTIME_SECRET_ID="juken-map/production/runtime"
 # アプリと Alloy を同じネットワークに置き、コンテナ名で呼び合えるようにする
-# （Alloy → juken-map:9464 のスクレイプ、アプリ → juken-map-alloy:4318 のトレース送信）。
+# （Alloy → juken-map-go:9464 のスクレイプ）。
 NETWORK="juken-map"
 ALLOY_IMAGE="grafana/alloy:v1.19.2"
 ALLOY_DIR="/home/ubuntu/juken-map/alloy"
@@ -27,6 +30,7 @@ METRICS_PORT="9464"
 # ---- 転送先のポートを決める（AWS も Docker も触る前に済ませる）----
 # ここだけを手元で試せるよう、パスは環境変数で差し替えられるようにし、
 # DEPLOY_PORTS_ONLY=1 なら判断結果だけ出して終わる（scripts/test-deploy-ports.sh）。
+# サイト設定の location / が見る upstream（juken_map_app）。以前は Node へ向けていたが、JUK-109 からは Go と同じ先へ向ける。
 UPSTREAM_CONF="${UPSTREAM_CONF:-/etc/nginx/conf.d/juken-map-upstream.conf}"
 GO_UPSTREAM_CONF="${GO_UPSTREAM_CONF:-/etc/nginx/conf.d/juken-map-go-upstream.conf}"
 # Go へ振り分けるパスの置き場。サイト設定（443 の server）がこれを include する。
@@ -36,13 +40,11 @@ SITE_CONF="${SITE_CONF:-/etc/nginx/sites-available/default}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 NOTIFY_ENV_FILE="${NOTIFY_ENV_FILE:-/etc/juken-map/daily-notification.env}"
 NOTIFY_TIMERS="juken-map-daily-notification-morning.timer juken-map-daily-notification-evening.timer"
-PORT_A=3000
-PORT_B=3001
 GO_PORT_A=8080
 GO_PORT_B=8081
 
 # current_port upstreamファイル 既定のポート → いま nginx が向いている先。
-# ファイルがまだ無い初回は既定のポート（Node はこれまで通り3000）とみなす。
+# ファイルがまだ無い初回は既定のポートとみなす。
 #
 # ⚠️ ここで `sed ... "$1" | head -1` と書くと、ファイルが無い初回に sed が
 # exit 2 を返し、pipefail と set -e でスクリプトが無言で死ぬ（2026-09-23に本番で踏んだ）。
@@ -56,13 +58,11 @@ current_port() {
   echo "$port"
 }
 
-CURRENT_PORT="$(current_port "$UPSTREAM_CONF" "$PORT_A")"
-if [ "$CURRENT_PORT" = "$PORT_A" ]; then NEW_PORT="$PORT_B"; else NEW_PORT="$PORT_A"; fi
 GO_CURRENT_PORT="$(current_port "$GO_UPSTREAM_CONF" "$GO_PORT_A")"
 if [ "$GO_CURRENT_PORT" = "$GO_PORT_A" ]; then GO_NEW_PORT="$GO_PORT_B"; else GO_NEW_PORT="$GO_PORT_A"; fi
 
 if [ "${DEPLOY_PORTS_ONLY:-}" = "1" ]; then
-  echo "CURRENT_PORT=$CURRENT_PORT NEW_PORT=$NEW_PORT GO_CURRENT_PORT=$GO_CURRENT_PORT GO_NEW_PORT=$GO_NEW_PORT"
+  echo "GO_CURRENT_PORT=$GO_CURRENT_PORT GO_NEW_PORT=$GO_NEW_PORT"
   exit 0
 fi
 
@@ -84,7 +84,7 @@ secret_json="$(aws secretsmanager get-secret-value \
 # DB の接続先。アプリ用（DML だけ）とマイグレーション用（テーブル定義も変えられる）の2つを
 # シークレットに置く（権限は apps/api/src/infra/dbUsers.ts）。マイグレーション用はアプリの
 # コンテナに渡さず、起動前に1回きりのコンテナで使うだけにする。
-# 2つともまだ無い間は、これまで通り .env の DATABASE_URL で繋ぎ、起動時にマイグレーションを当てる。
+# 2つともまだ無い間は、.env の DATABASE_URL でアプリもマイグレーションも繋ぐ。
 APP_DATABASE_URL="$(jq -r '.DATABASE_URL // empty' <<<"$secret_json")"
 MIGRATION_DATABASE_URL="$(jq -r '.MIGRATION_DATABASE_URL // empty' <<<"$secret_json")"
 if [ -n "$APP_DATABASE_URL" ] && [ -n "$MIGRATION_DATABASE_URL" ]; then
@@ -105,9 +105,11 @@ grep -Ev "^($EXCLUDED_KEYS)=" "$ENV_FILE" > "$RUNTIME_ENV_FILE"
 
 if [ "$SEPARATE_DB_USERS" = true ]; then
   printf 'DATABASE_URL=%s\n' "$APP_DATABASE_URL" >> "$RUNTIME_ENV_FILE"
-  # アプリのユーザーはテーブルを作れないので、起動時のマイグレーションを飛ばす（docker-entrypoint.sh）。
-  printf 'SKIP_MIGRATIONS=1\n' >> "$RUNTIME_ENV_FILE"
   printf 'MIGRATION_DATABASE_URL=%s\n' "$MIGRATION_DATABASE_URL" >> "$MIGRATE_ENV_FILE"
+else
+  # 以前は Node のアプリのコンテナが起動時に当てていた。Node のコンテナはもう起こさないので、
+  # 1回きりのコンテナで .env の接続先を使って当てる（JUK-109）。
+  printf 'MIGRATION_DATABASE_URL=%s\n' "$(sed -n 's/^DATABASE_URL=//p' "$ENV_FILE" | tail -1)" >> "$MIGRATE_ENV_FILE"
 fi
 
 LINE_CHANNEL_SECRET="$(jq -er '.LINE_CHANNEL_SECRET | strings | select(length > 0)' <<<"$secret_json")"
@@ -138,10 +140,8 @@ printf 'GRAFANA_CLOUD_TOKEN=%s\n' "$GRAFANA_CLOUD_TOKEN" >> "$ALLOY_ENV_FILE"
 OBSERVABILITY=false
 if [ -n "$GRAFANA_CLOUD_TOKEN" ] && [ -n "$ALLOY_CONFIG_B64" ]; then
   OBSERVABILITY=true
-  # /metrics はアプリ本体（3000番）とは別ポートに出すので、nginx 越しには届かない。
-  # トレースの送り先は同じネットワークの Alloy。
+  # /metrics はアプリ本体とは別ポートに出すので、nginx 越しには届かない（下で Go に渡す）。
   printf 'METRICS_PORT=%s\n' "$METRICS_PORT" >> "$RUNTIME_ENV_FILE"
-  printf 'OTEL_EXPORTER_OTLP_ENDPOINT=http://juken-map-alloy:4318\n' >> "$RUNTIME_ENV_FILE"
 fi
 
 # Go に渡すのは Go が読む値だけ（apps/api-go/README.md の環境変数の表）。
@@ -183,7 +183,7 @@ df -h / | tail -1
 # 既定の bridge は名前で引けないので、自分で作ったネットワークに載せる。
 docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK"
 
-docker pull "$REPO:$IMAGE_TAG"
+docker pull "$REPO:$IMAGE_TAG"   # マイグレーションだけに使う
 docker pull "$REPO_GO:$IMAGE_TAG"
 
 # ---------------- 無停止デプロイ ----------------
@@ -208,8 +208,8 @@ host_port_of() {
   docker inspect --format '{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{.HostPort}}{{"\n"}}{{end}}{{end}}' "$1" 2>/dev/null | head -1
 }
 
-# 初回だけ: nginx を upstream 経由にする。中身は今のポートのままなので挙動は変わらない。
-[ -f "$UPSTREAM_CONF" ] || write_upstream "$UPSTREAM_CONF" juken_map_app "$CURRENT_PORT"
+# 初回だけ: nginx を upstream 経由にする。
+[ -f "$UPSTREAM_CONF" ] || write_upstream "$UPSTREAM_CONF" juken_map_app "$GO_CURRENT_PORT"
 if grep -q 'proxy_pass http://localhost:3000;' "$SITE_CONF"; then
   cp "$SITE_CONF" "$SITE_CONF.bak-$(date +%Y%m%d%H%M%S)"
   sed -i 's|proxy_pass http://localhost:3000;|proxy_pass http://juken_map_app;|' "$SITE_CONF"
@@ -265,31 +265,22 @@ recover_next() {  # $1=コンテナ名 $2=nginx が向いているポート
     docker rm -f "$1-next" >/dev/null 2>&1 || true
   fi
 }
-recover_next juken-map "$CURRENT_PORT"
 recover_next juken-map-go "$GO_CURRENT_PORT"
+# Node のアプリのコンテナはもう起こさない（JUK-109）。以前の付け替えの途中で残ったものがあれば消す。
+docker rm -f juken-map-next >/dev/null 2>&1 || true
 
-# マイグレーションを、新しいイメージの1回きりのコンテナで先に当てる。失敗したら set -e でここで
+# マイグレーションを、新しいイメージ（Node）の1回きりのコンテナで先に当てる。失敗したら set -e でここで
 # 止まり、新しいコンテナは起動しない（nginx は古いコンテナを向いたままなので、本番は無傷）。
-if [ "$SEPARATE_DB_USERS" = true ]; then
-  echo "deploy: マイグレーションを当てる"
-  docker run --rm \
-    --network "$NETWORK" \
-    --env-file "$MIGRATE_ENV_FILE" \
-    "$REPO:$IMAGE_TAG" \
-    migrate
-fi
-
-echo "deploy: nginx は Node ${CURRENT_PORT}・Go $GO_CURRENT_PORT を向いている -> 新しいコンテナを Node ${NEW_PORT}・Go $GO_NEW_PORT で起こす"
-
-docker run -d \
-  --name juken-map-next \
-  --restart always \
+echo "deploy: マイグレーションを当てる"
+docker run --rm \
   --network "$NETWORK" \
-  --env-file "$RUNTIME_ENV_FILE" \
-  -p "$NEW_PORT":3000 \
-  "$REPO:$IMAGE_TAG"
+  --env-file "$MIGRATE_ENV_FILE" \
+  "$REPO:$IMAGE_TAG" \
+  migrate
 
-# Go はメモリを数十MB しか使わないが、t3.micro（1GB）で Node と同居するので上限を付ける。
+echo "deploy: nginx は Go $GO_CURRENT_PORT を向いている -> 新しいコンテナを Go $GO_NEW_PORT で起こす"
+
+# Go はメモリを数十MB しか使わないが、t3.micro（1GB）で Alloy と同居するので上限を付ける。
 # ポートはホストの中（nginx）からだけ届けばよいので 127.0.0.1 に開く。
 docker run -d \
   --name juken-map-go-next \
@@ -301,19 +292,16 @@ docker run -d \
   "$REPO_GO:$IMAGE_TAG"
 
 # スモークテスト: 最大45秒待つ。見るのは新しいコンテナのポート。この間ずっと、利用者には古いコンテナが応えている。
-# - Node: 画面（/login）と DB 接続（/api/health）。/login は静的な SPA なので DB に繋がらなくても 200 になる
-# - Go: DB 接続（/api/health）と、ダッシュボードのルートがあること（Cookie 無しなので 401）、
-#   画面（/login）を配れること（JUK-111。イメージに画面のビルドが入っていなければ 404 になる）
+# DB 接続（/api/health）と、ダッシュボードのルートがあること（Cookie 無しなので 401）、
+# 画面（/login）を配れること（JUK-111。イメージに画面のビルドが入っていなければ 404 になる）。
 ok=false
 code="not-requested"
 for _ in $(seq 1 15); do
-  login="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$NEW_PORT/login" || true)"
-  health="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$NEW_PORT/api/health" || true)"
   go_health="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$GO_NEW_PORT/api/health" || true)"
   go_dashboard="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$GO_NEW_PORT/api/dashboard" || true)"
   go_login="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$GO_NEW_PORT/login" || true)"
-  code="login=$login health=$health go_health=$go_health go_dashboard=$go_dashboard go_login=$go_login"
-  if [ "$login" = "200" ] && [ "$health" = "200" ] && [ "$go_health" = "200" ] && [ "$go_dashboard" = "401" ] && [ "$go_login" = "200" ]; then
+  code="go_health=$go_health go_dashboard=$go_dashboard go_login=$go_login"
+  if [ "$go_health" = "200" ] && [ "$go_dashboard" = "401" ] && [ "$go_login" = "200" ]; then
     ok=true
     break
   fi
@@ -321,33 +309,34 @@ for _ in $(seq 1 15); do
 done
 
 discard_next() {
-  docker rm -f juken-map-next juken-map-go-next >/dev/null 2>&1 || true
+  docker rm -f juken-map-go-next >/dev/null 2>&1 || true
 }
 
 # 失敗なら新しい方を捨てるだけ。nginx は古いコンテナを向いたままなので、本番は無傷。
-# Node と Go のどちらかが駄目なら、両方とも切り替えない（同じコミットの組でしか動かさない）。
 if [ "$ok" != "true" ]; then
   echo "smoke test failed (last code: $code) -> 新しいコンテナを捨てる（本番は古い方が応え続ける）" >&2
-  docker logs --tail 50 juken-map-next 2>&1 || true
   docker logs --tail 50 juken-map-go-next 2>&1 || true
   discard_next
   exit 1
 fi
 
-echo "smoke test passed -> nginx を Node ${NEW_PORT}・Go $GO_NEW_PORT へ向け、Go の振り分けを置く"
+# サイト設定の location /（upstream juken_map_app）も Go の新しいポートへ向ける。go-routes.conf の最後の受け皿が
+# 先に当たるので普段は通らないが、振り分けが空になっても Node（もう居ない）へ送らないようにする。
+echo "smoke test passed -> nginx を Go $GO_NEW_PORT へ向け、Go の振り分けを置く"
 cp "$GO_ROUTES_CONF" "$GO_ROUTES_CONF.prev"
-write_upstream "$UPSTREAM_CONF" juken_map_app "$NEW_PORT"
+cp "$UPSTREAM_CONF" "$UPSTREAM_CONF.prev"
+write_upstream "$UPSTREAM_CONF" juken_map_app "$GO_NEW_PORT"
 write_upstream "$GO_UPSTREAM_CONF" juken_map_go "$GO_NEW_PORT"
 printf '%s' "$GO_ROUTES_B64" | base64 -d > "$GO_ROUTES_CONF"
 if ! nginx -t; then
   echo "nginx -t が通らない。向き先と振り分けを元に戻す" >&2
-  write_upstream "$UPSTREAM_CONF" juken_map_app "$CURRENT_PORT"
+  mv "$UPSTREAM_CONF.prev" "$UPSTREAM_CONF"
   write_upstream "$GO_UPSTREAM_CONF" juken_map_go "$GO_CURRENT_PORT"
   mv "$GO_ROUTES_CONF.prev" "$GO_ROUTES_CONF"
   discard_next
   exit 1
 fi
-rm -f "$GO_ROUTES_CONF.prev"
+rm -f "$GO_ROUTES_CONF.prev" "$UPSTREAM_CONF.prev"
 # reload は既存の接続を処理し終えてから古いワーカーを終わらせる（接続は切れない）。
 systemctl reload nginx
 
@@ -356,15 +345,19 @@ systemctl reload nginx
 # 手元のリハーサル（scripts/rehearse-zero-downtime.sh）で実際に1件出たので待つ。
 sleep 5
 
-# 切り替わったので古い方を片付け、名前を juken-map・juken-map-go に戻す。
-# Alloy はコンテナ名でメトリクス（juken-map:9464・juken-map-go:9464）とログを拾うので、
+# 切り替わったので古い方を片付け、名前を juken-map-go に戻す。
+# Alloy はコンテナ名でメトリクス（juken-map-go:9464）とログを拾うので、
 # 名前を元に戻しておかないと監視が止まる。docker rename は Docker の DNS も追随する。
-for name in juken-map juken-map-go; do
-  docker stop "$name" >/dev/null 2>&1 || true
-  docker rm "$name" >/dev/null 2>&1 || true
-  docker rename "$name-next" "$name"
-done
-echo "deploy: Node ${NEW_PORT}・Go $GO_NEW_PORT へ切り替え完了（旧コンテナを停止）"
+docker stop juken-map-go >/dev/null 2>&1 || true
+docker rm juken-map-go >/dev/null 2>&1 || true
+docker rename juken-map-go-next juken-map-go
+# Node のアプリのコンテナ（juken-map）は JUK-111 から何も受けていないので止めて消す（JUK-109）。2回目からは何もしない。
+if docker inspect juken-map >/dev/null 2>&1; then
+  docker stop juken-map >/dev/null 2>&1 || true
+  docker rm juken-map >/dev/null 2>&1 || true
+  echo "deploy: Node のアプリのコンテナ（juken-map）を止めて消した"
+fi
+echo "deploy: Go $GO_NEW_PORT へ切り替え完了（旧コンテナを停止）"
 
 # アプリが健全になってから Alloy を入れ替える。ここで失敗してもアプリは動き続け、
 # デプロイだけが失敗になるので、監視が壊れたことに気づける。

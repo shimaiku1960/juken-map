@@ -104,6 +104,11 @@ Domain を指定できず、www と apex でログインを共有できない（
 [nginx] ──▶ upstream juken_map_app ──▶ 127.0.0.1:3000 か 3001（入れ替わる）
 ```
 
+**2026-10、JUK-109 で Node のアプリのコンテナを外した。** 今は `juken_map_app` も Go と同じ
+127.0.0.1:8080 か 8081 を向く（go-routes.conf の最後の受け皿が先に当たるので、普段は通らない）。
+下の流れは、今は Go のコンテナ（`juken-map-go-next` → `juken-map-go`）で行う。最初の1回のデプロイで、
+動いていた Node のコンテナ（`juken-map`）を止めて消した。
+
 デプロイの流れ：
 
 1. 空いている方のポートで新しいコンテナ（`juken-map-next`）を起こす
@@ -132,8 +137,8 @@ Domain を指定できず、www と apex でログインを共有できない（
   **切り替え前に落ちたので本番は無傷**（コンテナも nginx 設定もそのまま）＝設計の意図どおり。
   ポートの判断だけを手元で試せるようにし（`scripts/test-deploy-ports.sh`、CIでも実行）、
   初回の状態を含めて確かめている
-- 名前を `juken-map` に戻すのは Alloy のため。メトリクス（`juken-map:9464`）もログの
-  絞り込み（`/juken-map`）もコンテナ名で引いている。`docker rename` は Docker の DNS も追随する
+- 名前を `juken-map-go` に戻すのは Alloy のため。メトリクス（`juken-map-go:9464`）もログの
+  絞り込み（`/juken-map-go`）もコンテナ名で引いている。`docker rename` は Docker の DNS も追随する
 
 リハーサルの結果（起動待ち5秒で比較）：
 
@@ -181,8 +186,8 @@ Domain を指定できず、www と apex でログインを共有できない（
 - 読み取りだけのパス（`/api/textbook-masters`・`/api/universities`・`/api/universities/{id}`、JUK-73）も、
   メソッドで分けずに Go へ送る。GET・HEAD 以外は Go が 404 を返す。
   JUK-84 までは GET・HEAD 以外を `error_page 418 = @node` で Node へ回していたが、Node から消したので外した
-- デプロイは Node と Go の新しいコンテナを両方起こし、両方のスモークテストが通ったときだけ、
-  2つの upstream と振り分けをまとめて書き換えて1回だけ reload する。
+- デプロイは Go の新しいコンテナを起こし（JUK-109 から Node のアプリのコンテナは起こさない）、スモークテストが通ったときだけ、
+  2つの upstream（どちらも Go の新しいポート）と振り分けをまとめて書き換えて1回だけ reload する。
   `nginx -t` が通らなければ3つとも元に戻す（`scripts/test-deploy-go-routes.sh` で確かめている）
 
 ### Node に戻す
@@ -209,7 +214,7 @@ JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送�
 
 - サイト設定は `local/default.conf.template`。本番のサイト設定と同じ形で、違うのは HTTP であることと転送先だけ
 - 起動は `scripts/local-proxy.sh`、ポートは `scripts/local-ports.sh`（worktree の N 番目は上の番号に N を足す）
-- コンテナから手元の Node・Go へは `host.docker.internal` で届く（Linux の CI では `--add-host` で作る）
+- コンテナから手元の Go へは `host.docker.internal` で届く（Linux の CI では `--add-host` で作る）
 - 振り分けファイルを書き換えたら、開発中は `pnpm dev`（の dev:proxy）を起動し直す
 
 ## Step 3 で必要になる変更

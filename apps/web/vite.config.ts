@@ -16,7 +16,7 @@ const worktreeEnv = existsSync(worktreeEnvPath)
   : {};
 const webPort = Number(process.env.WEB_PORT ?? worktreeEnv.WEB_PORT ?? 5173);
 const slot = Number(worktreeEnv.WT_SLOT ?? 0);
-// /api の送り先は nginx（pnpm dev の dev:proxy）。本番と同じ振り分けで Node と Go へ分ける（JUK-96）。
+// /api の送り先は nginx（pnpm dev の dev:proxy）。本番と同じ振り分けで Go へ送る（JUK-96・JUK-109）。
 const proxyPort = Number(process.env.PROXY_PORT ?? worktreeEnv.PROXY_PORT ?? 4200 + slot);
 
 export default defineConfig(({ isSsrBuild }) => ({
@@ -55,7 +55,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     // 食い違う。
     strictPort: true,
     // 開発中は API を別プロセス（nginx の :4200 → Node :4000・Go :4100）で動かす。同一オリジンに見せることで
-    // 本番（nginx で /api を Node と Go へ振る構成）と同じ Cookie の扱いになる。
+    // 本番（nginx の後ろに Go）と同じ Cookie の扱いになる。
     // 別オリジンにすると SameSite=None; Secure が必要になり、本番と条件がずれる。
     proxy: {
       "/api": {

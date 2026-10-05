@@ -3,7 +3,7 @@
 このリポジトリは pnpm workspace のモノレポで、`apps/web` が React 19 + Vite の
 SPA、`apps/api-go` が Go の API サーバーである。本番は Go が API・ログイン・ビルド済み SPA の
 すべてを配る（JUK-70・JUK-115・JUK-111）。`apps/api`（Fastify 5、Node.js 24）に残るのは
-マイグレーションと管理用の CLI で、本番のコンテナは JUK-109 で外す。Next.js は使っていない（2026-09に削除済み）ため、
+マイグレーションと管理用の CLI で、本番ではマイグレーションを当てる1回きりのコンテナにだけ使う（JUK-109）。Next.js は使っていない（2026-09に削除済み）ため、
 App Router・Server Components・Server Actions・`next/*` の作法を持ち込まないこと。
 
 DBは MySQL 8.4 で、ORM は使わず SQL を直接書く（Go は `database/sql`、Node の CLI は `mysql2`）。

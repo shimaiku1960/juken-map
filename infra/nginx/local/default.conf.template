@@ -2,12 +2,12 @@
 # 振り分けは本番と同じ ../juken-map-go-routes.conf をそのまま読む。JUK-111 からは go-routes.conf の最後の受け皿が
 # 残りを全部 Go へ送るので、下の location /（Node）には本番と同じく何も届かない。違うのは次だけ。
 #   - HTTPS ではなく 8080 番の HTTP（コンテナの外へは scripts/local-proxy.sh が好きな番号で出す）
-#   - 転送先が手元の Node と Go（NODE_PORT・GO_PORT は起動時に nginx の公式イメージが埋める）
+#   - 転送先が手元の Go（GO_PORT は起動時に nginx の公式イメージが埋める）。本番と同じく juken_map_app も Go を向く（JUK-109）
 #
 # nginx の変数（$host など）は埋められない。公式イメージは、環境変数として渡した名前だけを置き換える。
 
 upstream juken_map_app {
-    server host.docker.internal:${NODE_PORT};
+    server host.docker.internal:${GO_PORT};
 }
 
 upstream juken_map_go {

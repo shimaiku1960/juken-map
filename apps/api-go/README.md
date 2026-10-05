@@ -8,7 +8,7 @@ Node から消した（JUK-84）。ダッシュボード・学習記録と予定
 ログイン（`/api/auth/*`）も Better Auth（Node）から移し、Go で自作した（JUK-115、`auth_*.go`）。
 判定の基準は dev-standards の `targets/10_authentication.md`（認証 基準）で、コメントの B1・C3 などはその項目。
 画面（SPA・SSG の HTML・静的ファイル）・sitemap・ブログの中継（`/api/blog`）・`/line/settings` も Node から移した
-（JUK-111、`spa.go`・`seo.go`・`blog.go`）。本番の Node は何も受けていない（コンテナを外すのは JUK-109）。
+（JUK-111、`spa.go`・`seo.go`・`blog.go`）。本番で動くアプリのコンテナは Go だけ（JUK-109 で Node のコンテナを外した）。
 
 ### ログインの作り（`auth_*.go`）
 
@@ -98,12 +98,13 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
        ├─ POST /api/analytics/registration・POST /api/csp-report・
        │  POST /api/cron/daily-study-notifications・
        │  POST /api/webhooks/microcms                  ─▶ juken-map-go
-       └─ それ以外（/api/blog・/api/health・/line/settings・画面） ─▶ juken-map（3000 か 3001、Node）
+       └─ それ以外（location ~ ^/：画面・/api/blog・/api/health・/line/settings） ─▶ juken-map-go
 ```
 
 - イメージはこのディレクトリの `Dockerfile` で作り、ECR の `juken-map-go` に置く（`deploy.yml`）。
-  Node と同じコミットのタグで、同じデプロイ（`.github/scripts/deploy-ec2.sh`）の中で入れ替える。
-  Node と Go の両方のスモークテストが通ったときだけ、nginx を1回の reload で両方とも切り替える
+  Node のイメージと同じコミットのタグで、同じデプロイ（`.github/scripts/deploy-ec2.sh`）の中で入れ替える。
+  Node のイメージはマイグレーションを当てる1回きりのコンテナにだけ使い、アプリとしては動かさない（JUK-109）。
+  スモークテストが通ったときだけ、nginx を1回の reload で切り替える
 - 振り分けるパスは `infra/nginx/juken-map-go-routes.conf`。ルートを移したらここに足す。
   Node に戻す手順は `infra/nginx/README.md` の「Node に戻す」（Node から消したので、振り分けを外すだけでは戻らない）
 - 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない。

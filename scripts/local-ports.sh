@@ -3,12 +3,12 @@
 #
 # 開発（pnpm dev）
 #   画面   WEB_PORT   5173+N  Vite。/api は PROXY_PORT へ送る
-#   振分け PROXY_PORT 4200+N  nginx（本番と同じ振り分けファイル）。Go のパスは GO_PORT、それ以外は API_PORT へ
-#   Node   API_PORT   4000+N
+#   振分け PROXY_PORT 4200+N  nginx（本番と同じ振り分けファイル）。全部 GO_PORT へ（JUK-109）
+#   Node   API_PORT   4000+N  pnpm dev では起動しない。pnpm run dev:api で手で起動したときだけ使う
 #   Go     GO_PORT    4100+N
 # E2E（scripts/e2e-server.sh）
 #   振分け E2E_PORT      3000（本体）・3010+N（worktree）  ブラウザが開くのはここ
-#   Node   E2E_NODE_PORT 4300+N
+#   Node   E2E_NODE_PORT 4300+N  使っていない（JUK-109 で E2E から Node を外した）
 #   Go     E2E_GO_PORT   4400+N
 #
 # 環境変数で渡した値と .env.worktree に書いた値は、そちらを優先する（古い worktree の .env.worktree には

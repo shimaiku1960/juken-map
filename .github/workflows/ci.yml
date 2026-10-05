@@ -240,7 +240,7 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
-      # E2E は本番と同じく nginx（Docker）が Node と Go へ振り分ける（JUK-96、scripts/e2e-server.sh）。
+      # E2E は本番と同じく nginx（Docker）の後ろに Go を立てる（JUK-96・JUK-109、scripts/e2e-server.sh）。
       # Go は webServer の起動の中でビルドする。
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

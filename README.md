@@ -369,14 +369,14 @@ APIのリクエスト数・エラー率・レスポンスタイム・CPU・メ�
 
 | コマンド | 説明 |
 |---|---|
-| `pnpm dev` | MySQLとマイグレーションを準備し、Node・Go・nginx・Viteを並列で起動する |
-| `pnpm run dev:api` | Node（Fastify。ログイン・ブログ・SPA配信）を4000番で起動する |
-| `pnpm run dev:go` | Go（業務API）を4100番で起動する |
-| `pnpm run dev:proxy` | nginx（Docker）を4200番で起動し、本番と同じ振り分けでNodeとGoへ送る |
+| `pnpm dev` | MySQLとマイグレーションを準備し、Go・nginx・Viteを並列で起動する |
+| `pnpm run dev:api` | Node（Fastify）を4000番で起動する。本番では動かしておらず（JUK-109）、`pnpm dev` も起動しない |
+| `pnpm run dev:go` | Go（API・ログイン）を4100番で起動する |
+| `pnpm run dev:proxy` | nginx（Docker）を4200番で起動し、本番と同じ振り分けでGoへ送る |
 | `pnpm run dev:web` | Vite（画面）を5173番で起動する。`/api`はnginxへ送る |
 | `pnpm run lint` | ESLintを実行する |
 | `pnpm run test` | ルート（`src/`）のVitestを実行する |
-| `pnpm run e2e` | PlaywrightのE2Eテストを実行する（本番と同じくnginxがNodeとGoへ振り分ける構成を立てる） |
+| `pnpm run e2e` | PlaywrightのE2Eテストを実行する（本番と同じくnginxの後ろにGoを立てる） |
 | `pnpm run check` | Lint、型チェック、3種のVitest、SPAビルドをまとめて実行する |
 | `pnpm run db:start` | MySQLコンテナを起動する |
 | `pnpm run db:stop` | MySQLコンテナを停止する |
