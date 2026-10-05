@@ -93,7 +93,7 @@ flowchart LR
 
 本番のLINE API秘密情報はAWS Secrets Managerの`juken-map/production/runtime`で管理します。デプロイスクリプトがEC2のIAMインスタンスロールで取得し、コンテナ起動時だけ一時的な環境変数ファイルとして渡します。秘密値はTerraform stateやGitHub Actionsへ保存しません。
 
-本番のDBユーザーは役割ごとに分けています。アプリはSELECT・INSERT・UPDATE・DELETEだけを許したユーザーで接続し、テーブル定義を変えられるユーザーはデプロイ時のマイグレーションにだけ使います（権限の定義は[apps/api/src/infra/dbUsers.ts](apps/api/src/infra/dbUsers.ts)）。
+本番のDBユーザーは役割ごとに分けています。アプリはSELECT・INSERT・UPDATE・DELETEだけを許したユーザーで接続し、テーブル定義を変えられるユーザーはデプロイ時のマイグレーションにだけ使います（権限の定義は[db/db-users.ts](db/db-users.ts)）。
 
 ## テックスタック
 
@@ -394,8 +394,8 @@ Grafana Cloudを含め、外部のサービスへ何を送っているかは[doc
 | `pnpm run lock:linux` | DockerのLinux/amd64環境でfrozen installとtsx・Viteの起動を検証する |
 | `pnpm run lock:fix` | lockfileを更新し、Linuxで検証する |
 
-`apps/api`と`apps/web`のテストは、それぞれ`pnpm --filter @juken-map/api test`と
-`pnpm --filter @juken-map/web test`で個別に実行できます（`pnpm run check`には含まれます）。
+`apps/web`と`db/`のテストは、それぞれ`pnpm --filter @juken-map/web test`と
+`pnpm --filter @juken-map/db test`で個別に実行できます（`pnpm run check`には含まれます）。
 
 ## テストとCI
 
@@ -405,7 +405,7 @@ Grafana Cloudを含め、外部のサービスへ何を送っているかは[doc
 pnpm run check
 ```
 
-ルートと`apps/*`はpnpm workspaceです。各アプリの依存はそれぞれの`package.json`に宣言し、解決結果はルートの`pnpm-lock.yaml`で共有します。依存追加は、例えば`pnpm --filter @juken-map/web add パッケージ名`、ルートの開発依存なら`pnpm add -Dw パッケージ名`を使います。
+ルートと`apps/web`・`db`はpnpm workspaceです（`apps/api-go`はGoのモジュールで、workspaceの外）。各アプリの依存はそれぞれの`package.json`に宣言し、解決結果はルートの`pnpm-lock.yaml`で共有します。依存追加は、例えば`pnpm --filter @juken-map/web add パッケージ名`、ルートの開発依存なら`pnpm add -Dw パッケージ名`を使います。
 
 manifest・`pnpm-workspace.yaml`・`pnpm-lock.yaml`を含むコミットでは、pre-commitフックがステージ済みの内容に対して非破壊のlockfile検証を実行します。依存変更後は`pnpm install`に続けて`pnpm run lock:linux`でLinux/amd64のインストール成功を確認し、manifestとlockfileを一緒にコミットしてください。CIでも`pnpm install --frozen-lockfile`を使います。
 
@@ -465,13 +465,17 @@ apps/
 │   ├── src/components/    画面部品（ui/ は shadcn/ui）
 │   ├── src/hooks/         TanStack Query のサーバー状態フック
 │   └── public/            favicon、PWAアイコン、manifest、robots.txt
-├── api-go/              # バックエンド一式（Go）。API・ログイン・画面の配信・運用のコマンド
-└── api/                 # seed・テストが使う Node の DB 接続だけ（本番では使わない）
+└── api-go/              # バックエンド一式（Go）。API・ログイン・画面の配信・運用のコマンド・マイグレーションの適用
 
 src/
 └── shared/              # 外部依存のない純粋関数・型・Zodスキーマ（両方のアプリから使う）
 
-db/                      # マイグレーション（SQL）と seed
+db/                      # DB の道具（開発でしか使わない Node の TS）
+├── migrations/            マイグレーションの SQL（当てるのは Go の migrate）
+├── seed*.ts               seed（`pnpm db:seed` など）
+├── connection.ts          seed とテストが使う接続プール（mysql2）
+├── db-users.ts            本番の DB ユーザーの権限の定義
+└── test-db/               テスト用 DB の作成・権限つきユーザー・マイグレーション（Go の DB テストも使う）
 e2e/                     # Playwright E2Eテスト
 infra/nginx/             # 本番リバースプロキシ設定の記録
 scripts/                 # 補助スクリプト

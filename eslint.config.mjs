@@ -7,13 +7,13 @@ import { sqlInjectionRules } from "./eslint.sql.config.mjs";
 // レイヤー境界（docs/architecture.md）を ESLint で強制する。
 //
 //   apps/web  ──→  shared
-//   apps/api  ──→  shared
+//   db        ──→  shared（seed が日付の関数を使う）
 //
-// shared は 2 つのアプリが共有する最下層で、何にも依存しない。ここが崩れると、
+// shared は画面と seed が共有する最下層で、何にも依存しない。ここが崩れると、
 // 画面と API が同じものを別々に持つ状態へ戻る。
 //
 // 注意: apps/ は独自の tsconfig を持つ別パッケージなので lint 対象から外している。
-// アプリ同士（apps/web → apps/api の中身など）を直接参照する経路は、そもそも
+// アプリ同士（apps/web → apps/api-go の中身など）を直接参照する経路は、そもそも
 // tsconfig の paths に無いので物理的に解決できない。ここで守るのは shared の純度だけ。
 const layerBoundaries = [
   {
@@ -52,7 +52,7 @@ export default defineConfig([
       "@typescript-eslint/no-explicit-any": "warn",
     },
   },
-  // SQL を文字列の連結・埋め込みで組み立てない（dev-standards 06 D1、JUK-104）。apps/api は pnpm lint:sql が見る。
+  // SQL を文字列の連結・埋め込みで組み立てない（dev-standards 06 D1、JUK-104）。
   { files: ["db/**/*.ts"], rules: sqlInjectionRules },
   globalIgnores([
     // apps/ は独自の tsconfig と依存を持つ別パッケージ。

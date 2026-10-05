@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { cleanup, createUser } from "../test-db/fixtures.ts";
-import { select } from "./db.ts";
+import { cleanup, createUser } from "./test-db/fixtures";
+import { select } from "./connection";
 
 // ドライバの設定そのものを確かめる。
 //
@@ -10,7 +10,7 @@ import { select } from "./db.ts";
 
 afterAll(cleanup);
 
-describe("infra/db の接続設定", () => {
+describe("db/connection の接続設定", () => {
   it("Date は UTC の日時として DB へ渡る", async () => {
     const [row] = await select<{ sent: string }>(
       "SELECT DATE_FORMAT(CAST(? AS DATETIME(3)), '%Y-%m-%d %H:%i:%s.%f') AS sent",

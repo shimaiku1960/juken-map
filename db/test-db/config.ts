@@ -4,7 +4,7 @@
 // 開発中のデータ（juken_map）とは別の DB を使い、テストが消したり足したりしても困らないようにする。
 
 //
-// テストのアプリは、本番と同じ権限（infra/dbUsers.ts の app＝DML だけ）のユーザーで繋ぐ。
+// テストのアプリは、本番と同じ権限（db/db-users.ts の app＝DML だけ）のユーザーで繋ぐ。
 // アプリがテーブルの作成・変更のような権限の要る SQL を使い始めたら、テストが落ちて気づける。
 // マイグレーションは本番と同じく migrate のユーザーで当てる。どちらも globalSetup が作る。
 export const testDatabaseUrl =

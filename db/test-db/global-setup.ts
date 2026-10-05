@@ -7,8 +7,8 @@ import {
   testDatabaseUrl,
   testMigrateDatabaseUrl,
   testMigrationsTestDatabaseUrl,
-} from "./config.ts";
-import { ensureTestDbUser } from "./users.ts";
+} from "./config";
+import { ensureTestDbUser } from "./users";
 
 // テストの前に1回だけ動く（vitest の globalSetup）。
 // テスト用 DB が無ければ作り、本番と同じ権限のユーザーを用意して、マイグレーションを最新まで当てる。
@@ -36,11 +36,11 @@ export default async function setup() {
   // 本番と同じマイグレーションを、本番と同じ Go の migrate コマンド（apps/api-go/migrate.go、JUK-125）で当てるので、
   // テストの DB は本番と同じ形になる。
   execFileSync("go", ["run", ".", "migrate"], {
-    cwd: fileURLToPath(new URL("../../../api-go", import.meta.url)),
+    cwd: fileURLToPath(new URL("../../apps/api-go", import.meta.url)),
     env: {
       ...process.env,
       MIGRATION_DATABASE_URL: testMigrateDatabaseUrl,
-      MIGRATIONS_DIR: fileURLToPath(new URL("../../../../db/migrations", import.meta.url)),
+      MIGRATIONS_DIR: fileURLToPath(new URL("../migrations", import.meta.url)),
     },
     stdio: ["ignore", "ignore", "inherit"],
   });

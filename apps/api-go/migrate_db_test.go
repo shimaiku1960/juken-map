@@ -4,7 +4,7 @@
 // Node の apps/api/src/infra/migrations.test.ts から移した。
 //
 // テスト用 DB（juken_map_test）は他のテストが使っているので、別の DB（juken_map_migrate_test）を毎回作り直す。
-// 当てるのは本番と同じ migrate の権限（apps/api/src/infra/dbUsers.ts）のユーザー juken_migrations_test で、
+// 当てるのは本番と同じ migrate の権限（db/db-users.ts）のユーザー juken_migrations_test で、
 // その権限で db/migrations を全部当てられることも、ここで確かめる。ユーザーは test-db:prepare が作る。
 package main
 
@@ -62,7 +62,7 @@ func newMigrateFixture(t *testing.T) migrateFixture {
 		}
 	}
 
-	// 接続先は TEST_DATABASE_URL と同じ MySQL の、別の DB・別のユーザー（Node の test-db/config.ts と同じ作り方）。
+	// 接続先は TEST_DATABASE_URL と同じ MySQL の、別の DB・別のユーザー（db/test-db/config.ts と同じ作り方）。
 	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
 		base = defaultTestDatabaseURL

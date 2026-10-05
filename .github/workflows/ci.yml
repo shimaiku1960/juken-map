@@ -40,7 +40,7 @@ jobs:
 
   check:
     runs-on: ubuntu-latest
-    # apps/api のテストは SQL を本物の MySQL に流す。テスト用 DB（juken_map_test）の
+    # db/ のテストは SQL を本物の MySQL に流す。テスト用 DB（juken_map_test）の
     # 作成とマイグレーションは vitest の globalSetup が行うので、ここでは起動するだけ。
     services:
       mysql:
@@ -76,7 +76,7 @@ jobs:
         run: pnpm exec eslint --max-warnings 0
 
       # SQL を文字列の連結・埋め込みで組み立てている箇所を落とす（dev-standards 06 D1、JUK-104）。
-      # apps/api と db/ が対象（設定は eslint.sql.config.mjs）。Go は go のジョブの gosec が見る。
+      # db/ が対象（設定は eslint.sql.config.mjs）。Go は go のジョブの gosec が見る。
       - name: SQL injection lint
         run: pnpm lint:sql
 
@@ -119,13 +119,13 @@ jobs:
 
       - name: Type check apps
         run: |
-          pnpm --filter @juken-map/api typecheck
           pnpm --filter @juken-map/web typecheck
+          pnpm --filter @juken-map/db typecheck
 
       - name: Test
         run: pnpm test
 
-      # apps/api のテストの準備（test-db/global-setup.ts）は、マイグレーションを Go の migrate で当てる（JUK-125）。
+      # db/ のテストの準備（db/test-db/global-setup.ts）は、マイグレーションを Go の migrate で当てる（JUK-125）。
       # 下の Go の DB テストも使うので、ここで用意する。
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -133,12 +133,12 @@ jobs:
           go-version-file: apps/api-go/go.mod
           cache-dependency-path: apps/api-go/go.sum
 
-      # apps/api と apps/web は独自の tsconfig を持つ別パッケージなので、
+      # apps/web と db/ は独自の tsconfig を持つ別パッケージなので、
       # テストもそれぞれの vitest で実行する。
       - name: Test apps
         run: |
-          pnpm --filter @juken-map/api test
           pnpm --filter @juken-map/web test
+          pnpm --filter @juken-map/db test
 
       # Go の API を本物の MySQL に流すテスト（apps/api-go の dbtest タグ、JUK-97）。他人の ID を断ること（A3）と、
       # 禁止項目を混ぜても書き換わらないこと（A4）を、本番で動いている Go のルートで確かめる。LINE 連携の SQL と、
@@ -149,7 +149,7 @@ jobs:
       # MySQL がこのジョブにしか無いので、go のジョブではなくここで動かす。
       - name: Test Go with DB
         run: |
-          pnpm --filter @juken-map/api test-db:prepare
+          pnpm --filter @juken-map/db test-db:prepare
           cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB|TestE2|TestIncidentCommandDB|TestGrantAdminCommandDB|TestMigrateDB' -count=1 ./...
 
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
