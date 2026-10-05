@@ -24,6 +24,10 @@ import (
 const requestTimeout = 10 * time.Second
 
 func main() {
+	// 引数があれば、サーバーではなくコマンド（incident・grant-admin）として動く（cli.go）。
+	if len(os.Args) > 1 {
+		os.Exit(runCommand(os.Args[1:], os.Stdout, os.Stderr))
+	}
 	slog.SetDefault(newLogger(os.Stdout, parseLevel(os.Getenv("LOG_LEVEL"))))
 	if err := run(); err != nil {
 		slog.Error("api-go stopped", "err", err.Error())

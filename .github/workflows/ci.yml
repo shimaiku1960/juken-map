@@ -142,7 +142,7 @@ jobs:
       - name: Test Go with DB
         run: |
           pnpm --filter @juken-map/api test-db:prepare
-          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB|TestE2' -count=1 ./...
+          cd apps/api-go && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB|TestE2|TestIncidentCommandDB|TestGrantAdminCommandDB' -count=1 ./...
 
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA

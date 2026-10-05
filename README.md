@@ -436,12 +436,11 @@ GitHub Actionsでは、次の3ジョブを実行します。
 ### 本番で管理者を付ける
 
 管理者ページ（`/admin`）の権限は`user.role`列で決まり、画面からは付けられません。
-本番のRDSには外から繋げないので、SSMでEC2に入り、動いているAPIのコンテナの中で実行します。
+本番のRDSには外から繋げないので、SSMでEC2に入り、動いているGoのコンテナの中で実行します。
 
 ```bash
 aws ssm start-session --target <インスタンスID>
-sudo docker exec -w /app/apps/api juken-map \
-  ./node_modules/.bin/tsx src/grant-admin.ts <メールアドレス>          # 戻すときは --revoke
+sudo docker exec juken-map-go /api-go grant-admin <メールアドレス>   # 戻すときは --revoke
 ```
 
 付け替えは、そのユーザーが次にログインし直したときに画面へ反映されます
