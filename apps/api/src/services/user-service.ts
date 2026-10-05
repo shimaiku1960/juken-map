@@ -1,5 +1,5 @@
 import { execute, select } from "@/api/infra/db";
-import type { UserRole, UserRow } from "@/api/infra/tables";
+import type { UserRow } from "@/api/infra/tables";
 import { measured } from "@/api/observability/measured";
 
 const USER_COLUMNS = `
@@ -42,50 +42,5 @@ export function markSignUpTracked(userId: string) {
       [now, now, userId]
     );
     return result.affectedRows > 0;
-  });
-}
-
-/**
- * 管理者の一覧（pnpm admin:grant --list が使う）。2段階認証を有効にしたか、パスワードで
- * ログインできるか（無ければ管理画面に入れない）も並べ、誰が管理者なのかを把握できるようにする。
- */
-export function listAdmins() {
-  return measured("user.listAdmins", () =>
-    select<{ email: string | null; twoFactorEnabled: boolean; hasPassword: boolean }>(
-      `SELECT u.email,
-              EXISTS (SELECT 1 FROM AuthTotp AS t WHERE t.userId = u.id AND t.enabledAt IS NOT NULL) AS twoFactorEnabled,
-              EXISTS (SELECT 1 FROM AuthPassword AS p WHERE p.userId = u.id) AS hasPassword
-       FROM \`user\` AS u
-       WHERE u.role = 'admin'
-       ORDER BY u.email ASC`
-    )
-  );
-}
-
-/**
- * メールアドレスでユーザーを探して role を付け替える（pnpm admin:grant が使う）。
- * メール確認前のユーザーには admin を付けない。他人のアドレスで登録されただけの
- * アカウントを、確認前に管理者にしてしまわないため。
- *
- * 付け替えたら、その人のセッションをすべて消す（認証基準 10 の C4：権限の変更のたびに作り直す）。
- * セッションの期限は role で決まる（一般30日・管理者24時間、apps/api-go の auth_session.go）ので、
- * ログインし直して新しい期限のセッションにしてもらう。
- */
-export function setUserRoleByEmail(email: string, role: UserRole) {
-  return measured("user.setRoleByEmail", async () => {
-    const [user] = await select<Pick<UserRow, "id" | "emailVerified" | "role">>(
-      "SELECT id, emailVerified, role FROM `user` WHERE email = ?",
-      [email]
-    );
-    if (!user) return { result: "not_found" as const };
-    if (role === "admin" && !user.emailVerified) return { result: "unverified" as const };
-
-    await execute("UPDATE `user` SET role = ?, updatedAt = ? WHERE id = ?", [
-      role,
-      new Date(),
-      user.id,
-    ]);
-    const removed = await execute("DELETE FROM AuthSession WHERE userId = ?", [user.id]);
-    return { result: "updated" as const, previous: user.role, sessionsRemoved: removed.affectedRows };
   });
 }

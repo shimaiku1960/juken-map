@@ -24,7 +24,7 @@ apps/api/               バックエンド一式（Fastify）
   ├ context.ts            requireSession / denyDemoWrite（門番）
   ├ seo.ts                robots / sitemap / ページ別 meta の生成
   ├ routes/               HTTP の入口（ブログ・/line/settings）。業務の API は Go へ移して消した（JUK-84）
-  ├ services/             user（管理者を付ける CLI の grant-admin.ts が使う）
+  ├ services/             user（プロフィール）。管理者の付け外しと乗っ取りの操作は Go の cli.go へ移した（JUK-122）
   ├ infra/                db（生 SQL の接続プール）, tables（テーブル1行の型）,
   │                       email, resend, microcms
   ├ test-db/              テスト用 MySQL の準備と、テストデータの作成

@@ -22,12 +22,13 @@
   aws ssm start-session --target i-0eeb166295363e11d --region ap-northeast-1
   ```
 
-- **アカウントの操作は `pnpm incident` で行う**（`apps/api/src/incident.ts`）。本番の RDS には外から
-  繋げないので、EC2 で動いている API のコンテナの中で実行する。管理画面の「停止」と違い、管理者も止められる
+- **アカウントの操作は Go の `incident` コマンドで行う**（`apps/api-go/cli.go`・`incident.go`、手元では `pnpm incident`）。
+  本番の RDS には外から繋げないので、EC2 で動いている Go のコンテナの中で実行する（コンテナの DB の接続をそのまま使う。
+  distroless でシェルが無いので、実行ファイルを直接呼ぶ）。管理画面の「停止」と違い、管理者も止められる
 
   ```sh
   # EC2 の中で。最後の2語を差し替える
-  sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/incident.ts sessions <メールアドレス>
+  sudo docker exec juken-map-go /api-go incident sessions <メールアドレス>
   ```
 
   | 操作 | すること |
@@ -76,8 +77,8 @@
 1. 止めて、セッションを全部消す。本人のパスワードが変わっていても、止めれば入れない
 
    ```sh
-   sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/incident.ts sessions <メール>
-   sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/incident.ts ban <メール>
+   sudo docker exec juken-map-go /api-go incident sessions <メール>
+   sudo docker exec juken-map-go /api-go incident ban <メール>
    ```
 
    止める前に `sessions` の結果（IP・ブラウザ・作成日時）を記録に写す。消すと残らない。
@@ -91,7 +92,7 @@
 5. 本人と確かめが取れたら戻す。戻したあと、本人に再設定してもらう
 
    ```sh
-   sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/incident.ts unban <メール>
+   sudo docker exec juken-map-go /api-go incident unban <メール>
    ```
 
 ## 2. 管理者のアカウントの乗っ取り
@@ -99,25 +100,25 @@
 管理 API は、2段階認証を通したセッションだけを通す（B7）。それでも入られたなら、パスワードと
 認証アプリの両方か、セッションそのものを取られている。
 
-1. 管理者全員のセッションを消す。今の管理者は `admin:grant --list` で確かめる
+1. 管理者全員のセッションを消す。今の管理者は `grant-admin --list` で確かめる
 
    ```sh
-   sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/incident.ts revoke-admins
-   sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/grant-admin.ts --list
+   sudo docker exec juken-map-go /api-go incident revoke-admins
+   sudo docker exec juken-map-go /api-go grant-admin --list
    ```
 
 2. 乗っ取られた管理者を止めるか、管理者から外す。知らない管理者が増えていれば外す
 
    ```sh
-   sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/incident.ts ban <メール>
-   sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/grant-admin.ts <メール> --revoke
+   sudo docker exec juken-map-go /api-go incident ban <メール>
+   sudo docker exec juken-map-go /api-go grant-admin <メール> --revoke
    ```
 
 3. 2段階認証を設定し直す。認証アプリの秘密が漏れたかもしれないので、全員分を戻し、
    パスワードを再設定してから `/admin` で設定し直す（QR を読み、予備コードを保存し直す）
 
    ```sh
-   sudo docker exec -w /app/apps/api juken-map ./node_modules/.bin/tsx src/incident.ts reset-2fa <メール>
+   sudo docker exec juken-map-go /api-go incident reset-2fa <メール>
    ```
 
 4. 管理操作の記録を確かめる。ログの `admin user action` に、誰が（`adminId`）・誰に（`targetId`・`targetEmail`）・
@@ -356,9 +357,10 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
 
 | 操作 | 試した日 | どこで・どう試したか |
 | --- | --- | --- |
-| `pnpm incident` の6つの操作 | 2026-10-02 | 手元の DB に使い捨ての管理者（2段階認証つき・セッション2件）を作り、6つを順に実行して DB の変化を確かめた。`apps/api/src/services/incident-service.test.ts` が CI で毎回確かめる（2026-10-04 に `revoke-all` を足し、表をログインの自作の表に替えた。JUK-115） |
-| コンテナの中から `tsx src/incident.ts` を実行する | 2026-10-02 | 本番と同じ Dockerfile で作ったイメージを手元の DB に繋ぎ、`docker exec` と同じ形で実行した |
-| `grant-admin.ts --list` | 2026-10-02 | 手元の DB |
+| `pnpm incident` の6つの操作 | 2026-10-02 | 手元の DB に使い捨ての管理者（2段階認証つき・セッション2件）を作り、6つを順に実行して DB の変化を確かめた。`apps/api/src/services/incident-service.test.ts` が CI で毎回確かめる（2026-10-05 に Go へ移し、今は `apps/api-go/incident_db_test.go`。JUK-122）（2026-10-04 に `revoke-all` を足し、表をログインの自作の表に替えた。JUK-115） |
+| コンテナの中から `tsx src/incident.ts` を実行する | 2026-10-02 | 本番と同じ Dockerfile で作ったイメージを手元の DB に繋ぎ、`docker exec` と同じ形で実行した。2026-10-05 に本番の Node のコンテナが無くなり（JUK-109）、この形は使えなくなった |
+| Go のコンテナの中から `/api-go incident`・`grant-admin` を実行する | 2026-10-05 | 本番と同じ Dockerfile（distroless）で作った Go のイメージを手元の DB に繋ぎ、`/api-go` を直接呼んだ（JUK-122） |
+| `grant-admin.ts --list` | 2026-10-02 | 手元の DB（2026-10-05 から Go の `grant-admin --list`） |
 | Grafana の問い合わせ（メトリクス・ログ） | 2026-10-02 | 本番を読み取りだけ |
 | アラートが鳴って受け口に届く | 2026-10-01・10-02 | 本番で実際に起こした（JUK-98）。H3 は Alloy を止めて、3本が約8〜20分で届いた |
 | CloudTrail・SSM・ECR の記録を引く | 2026-10-02 | 本番を読み取りだけ |

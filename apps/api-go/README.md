@@ -226,6 +226,7 @@ Go は5本同時に送るが、メールは Resend の上限（チーム全体�
 | `auth.go` | セッション Cookie の署名確認と、session テーブルの照会 | Better Auth の `getSession` |
 | `middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 | `observability/logger.ts`・`requestContext.ts`・`security-headers.ts` |
 | `overload.go` | 同時処理数の上限を超えたら 503 | `overload.ts` |
+| `cli.go`・`incident.go` | 引数を付けて起動したときのコマンド：`incident`（乗っ取りの操作）と `grant-admin`（管理者の付け外し）。本番は `docker exec juken-map-go /api-go ...`、手元は `pnpm incident`・`pnpm admin:grant`。テストは `incident_db_test.go`（dbtest） | `incident.ts`・`grant-admin.ts`（JUK-122 で消した） |
 | `user_rate_limit.go` | 利用者単位の回数制限（読み取り・書き込みの2種類、メモリのトークンバケット）。超えたら 429 と `Retry-After` | —（Node には無い。06 E2） |
 | `errors.go` | エラー応答の形、404、path の ID | `error-handling.ts`・`routes/params.ts` |
 | `logger.go` | pino と同じ形の JSON ログ | `observability/logger.ts` |
