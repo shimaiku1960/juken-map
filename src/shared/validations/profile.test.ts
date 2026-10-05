@@ -32,6 +32,16 @@ describe("profileSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("空白だけなら弾く（全角スペースも）", () => {
+    expect(profileSchema.safeParse({ nickname: "   " }).success).toBe(false);
+    expect(profileSchema.safeParse({ nickname: "\u3000" }).success).toBe(false);
+  });
+
+  it("長さは trim した後で数える", () => {
+    const result = profileSchema.safeParse({ nickname: ` ${"あ".repeat(50)}  ` });
+    expect(result.success).toBe(true);
+  });
+
   it("前後の空白は trim される", () => {
     const result = profileSchema.safeParse({ nickname: "  デモ太郎  " });
     expect(result.success).toBe(true);

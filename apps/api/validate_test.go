@@ -20,6 +20,7 @@ func TestNicknameRule(t *testing.T) {
 	)
 	typeError := `{"error":"ニックネームは文字列で入力してください","code":"invalid_type","field":"nickname"}`
 	tooBig := `{"error":"50文字以内で入力してください","code":"too_big","field":"nickname"}`
+	tooSmall := `{"error":"ニックネームは必須です","code":"too_small","field":"nickname"}`
 
 	tests := []struct {
 		name  string
@@ -30,8 +31,9 @@ func TestNicknameRule(t *testing.T) {
 		{"無い", map[string]any{}, "", typeError},
 		{"数", map[string]any{"nickname": 1.0}, "", typeError},
 		{"null", map[string]any{"nickname": nil}, "", typeError},
-		{"空文字", map[string]any{"nickname": ""}, "", `{"error":"ニックネームは必須です","code":"too_small","field":"nickname"}`},
-		{"空白だけは通り、削って空文字になる", map[string]any{"nickname": "   "}, "", ""},
+		{"空文字", map[string]any{"nickname": ""}, "", tooSmall},
+		{"空白だけは弾く（削ってから min）", map[string]any{"nickname": "   "}, "", tooSmall},
+		{"全角スペースだけも弾く", map[string]any{"nickname": fullwidthSpace}, "", tooSmall},
 		{"全角スペースを削る", map[string]any{"nickname": fullwidthSpace + "山田" + fullwidthSpace}, "山田", ""},
 		{"BOM を削る", map[string]any{"nickname": bom + "山田"}, "山田", ""},
 		{"NBSP を削る", map[string]any{"nickname": nbsp + "山田"}, "山田", ""},
@@ -43,8 +45,9 @@ func TestNicknameRule(t *testing.T) {
 		// 長さはコードポイントで数える。絵文字は UTF-16 では 2 だが 1 と数える
 		{"絵文字50個は通る", map[string]any{"nickname": strings.Repeat(emoji, 50)}, strings.Repeat(emoji, 50), ""},
 		{"絵文字51個は弾く", map[string]any{"nickname": strings.Repeat(emoji, 51)}, "", tooBig},
-		// 長さは削る前に確かめる
-		{"削ると50文字でも、前後の空白込みで53文字なら弾く", map[string]any{"nickname": " " + strings.Repeat("a", 49) + "  "}, "", tooBig},
+		// 長さは削った後に確かめる
+		{"前後の空白込みで53文字でも、削って50文字なら通る", map[string]any{"nickname": " " + strings.Repeat("a", 50) + "  "}, strings.Repeat("a", 50), ""},
+		{"削っても51文字なら弾く", map[string]any{"nickname": " " + strings.Repeat("a", 51) + " "}, "", tooBig},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
