@@ -226,6 +226,7 @@ func newLineTestEnv() *lineTestEnv {
 	env.rt.oauth("GET /api/line/oauth/start", h.oauthStart)
 	env.rt.oauth("GET /api/line/oauth/callback", h.oauthCallback)
 	env.rt.webhook("POST /api/line/webhook", h.webhook)
+	env.rt.publicWithSession("GET /line/settings", h.settings)
 	return env
 }
 
@@ -466,6 +467,19 @@ func TestLineAccountLink(t *testing.T) {
 	// 古い nonce は捨て、新しい nonce をこの利用者に1つだけ持たせる
 	if len(env.store.nonces) != 1 || env.store.nonces[nonce].userID != "u1" {
 		t.Fatalf("nonces = %v", env.store.nonces)
+	}
+}
+
+func TestLineSettings(t *testing.T) {
+	env := newLineTestEnv()
+
+	// ログイン済みならプロフィールの通知設定へ
+	assertRedirect(t, env.do("GET", "/line/settings", "alice", "", nil), "https://juken-map.com/profile#notification-settings")
+	// 未ログインなら通知設定を戻り先にしてログインへ（Node の URLSearchParams と同じく / と # も符号にする）
+	assertRedirect(t, env.do("GET", "/line/settings", "", "", nil), "https://juken-map.com/login?callbackURL=%2Fprofile%23notification-settings")
+	// セッションを読めないときは 500（ログインへ送って入り直させない）
+	if rec := env.do("GET", "/line/settings", "db-down", "", nil); rec.Code != http.StatusInternalServerError {
+		t.Errorf("db-down: status = %d, want 500", rec.Code)
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 // defaultMaxInFlight は同時に処理するリクエストの上限。Node の DEFAULT_MAX_IN_FLIGHT と同じ値から始める。
@@ -19,10 +20,12 @@ const defaultMaxInFlight = 160
 //
 // 死活監視とデプロイ後の確認が叩く /api/health は数えない。混んでいるだけで
 // 「落ちている」と判定されると、正常なサーバーまで戻されてしまう。
+// 画面と静的ファイル（/api/ の外、JUK-111）も Node と同じく数えない。メモリから返すだけで軽く、
+// 画面を1回開くと JS などを何十本も同時に読むので、ここで断ると画面が壊れる。
 func limitInFlight(max int, next http.Handler) http.Handler {
 	slots := make(chan struct{}, max)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/health" {
+		if r.URL.Path == "/api/health" || !strings.HasPrefix(r.URL.Path, "/api/") {
 			next.ServeHTTP(w, r)
 			return
 		}

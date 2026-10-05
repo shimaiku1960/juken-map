@@ -110,6 +110,19 @@ func (rt *router) public(pattern string, h http.HandlerFunc) {
 	rt.handle(pattern, accessPublic, h)
 }
 
+// publicWithSession は誰でも開ける GET のルートを登録する。ログインしていればセッションを渡す（無ければ nil）。
+// ログイン状態で行き先を変えるだけの入口（/line/settings）に使う。断るかどうかはハンドラが決める。
+func (rt *router) publicWithSession(pattern string, h authHandler) {
+	rt.handle(pattern, accessPublic, func(w http.ResponseWriter, r *http.Request) {
+		s, err := rt.loadSession(r)
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		h(w, r, s)
+	})
+}
+
 // anonymousWrite はログインせずに書き込めるルートを登録する。セッションは読まない。
 // 誰が送ってきても困らないことは、ハンドラの側で保つ（DB に書かない・読む大きさに上限を置く）。
 // Cookie で認証しないので、別のサイトからの書き込みも断らない（CSP の報告はブラウザが送る）。

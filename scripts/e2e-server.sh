@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # E2E 用に、本番と同じ構成を起動する。Playwright の webServer から呼ばれる（E2E_BASE_URL を指定した場合は使われない）。
 #
-#   ブラウザ → nginx（E2E_PORT）─┬─ infra/nginx/juken-map-go-routes.conf のパス → Go（E2E_GO_PORT）
-#                                └─ それ以外（ログイン・ページ配信など）     → Node（E2E_NODE_PORT、SPA も配る）
+#   ブラウザ → nginx（E2E_PORT）─┬─ infra/nginx/juken-map-go-routes.conf のパス → Go（E2E_GO_PORT、SPA も配る）
+#                                └─ それ以外                                 → Node（E2E_NODE_PORT）
+# JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送るので、Node には何も届かない（消すのは JUK-109）。
 #
 # 本番と同じ振り分けを通すので、E2E は Go が返す API を確かめる（JUK-96。それまでは Node だけを立てていて、
 # Go へ移した API を E2E が一度も通っていなかった）。ポートの決め方は scripts/local-ports.sh。
@@ -41,7 +42,8 @@ pids+=($!)
   # WEB_ORIGIN はメールのリンクと外部ログインの戻り先に使う画面のオリジン。ブラウザが開く nginx の番号に合わせる。
   # E2E は登録・再設定でメールを送る操作をするので、Resend のキーを空にして本物のメールを送らない
   # （送れなかったことはログに残るだけ。トークンは db/e2e-auth.ts が発行する）。
-  PORT="$E2E_GO_PORT" WEB_ORIGIN="http://localhost:$E2E_PORT" RESEND_API_KEY="" \
+  # WEB_DIST_DIR は画面のビルド成果物（JUK-111。Go が画面も配る）。
+  PORT="$E2E_GO_PORT" WEB_ORIGIN="http://localhost:$E2E_PORT" RESEND_API_KEY="" WEB_DIST_DIR="$ROOT/apps/web/dist" \
     exec "$WORK/api-go"
 ) &
 pids+=($!)

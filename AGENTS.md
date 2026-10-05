@@ -1,12 +1,13 @@
 ## 構成の前提
 
 このリポジトリは pnpm workspace のモノレポで、`apps/web` が React 19 + Vite の
-SPA、`apps/api` が Fastify 5（Node.js 24）のAPIサーバーである。本番は Fastify が
-APIとビルド済みSPAの両方を配る。Next.js は使っていない（2026-09に削除済み）ため、
+SPA、`apps/api-go` が Go の API サーバーである。本番は Go が API・ログイン・ビルド済み SPA の
+すべてを配る（JUK-70・JUK-115・JUK-111）。`apps/api`（Fastify 5、Node.js 24）に残るのは
+マイグレーションと管理用の CLI で、本番のコンテナは JUK-109 で外す。Next.js は使っていない（2026-09に削除済み）ため、
 App Router・Server Components・Server Actions・`next/*` の作法を持ち込まないこと。
 
-DBは MySQL 8.4 で、ORM は使わず `mysql2` で SQL を直接書く。ルーティングは
-`apps/api/src/routes/`、業務ルールとSQLは `apps/api/src/services/` にある。
+DBは MySQL 8.4 で、ORM は使わず SQL を直接書く（Go は `database/sql`、Node の CLI は `mysql2`）。
+ルートの一覧は `apps/api-go/main.go` の `registerRoutes`、入口の種類ごとの拒否は `apps/api-go/router.go` にある。
 
 ## 依存関係とlockfile
 

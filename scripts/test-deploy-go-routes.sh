@@ -6,7 +6,7 @@
 # - 初回はサイト設定の location / の直前に include を1行だけ差し込み、2回目は足さない
 # - 振り分けファイルは deploy.yml が渡した中身になり、upstream は Node と Go が別々に入れ替わる
 # - location / が1つでないサイト設定には手を出さず、何も起動せずに止まる
-# - Go のスモークテストが落ちたら、Node も含めて切り替えない
+# - Go のスモークテストが落ちたら、Node も含めて切り替えない（画面を配れない Go のイメージも、JUK-111）
 # - nginx -t が通らなければ、向き先と振り分けを元に戻す
 set -euo pipefail
 
@@ -35,11 +35,12 @@ case "$1" in
 esac
 exit 0
 EOF
-# GO_HEALTH で Go の /api/health の応答を変えられる。Go のダッシュボードは Cookie 無しなので 401。
+# GO_HEALTH・GO_LOGIN で Go の /api/health・/login の応答を変えられる。Go のダッシュボードは Cookie 無しなので 401。
 cat > "$WORK/bin/curl" <<'EOF'
 #!/usr/bin/env bash
 case "${*: -1}" in
   *:808[01]/api/health) echo "${GO_HEALTH:-200}" ;;
+  *:808[01]/login) echo "${GO_LOGIN:-200}" ;;
   */api/dashboard) echo 401 ;;
   *) echo 200 ;;
 esac
@@ -170,6 +171,17 @@ if [ "$status" != 0 ] && [ "$(port_of "$WORK/upstream.conf")" = 3001 ] && [ "$(p
   ok "Go のスモークテストが落ちたら、Node も含めて切り替えず、新しいコンテナを両方捨てる"
 else
   ng "Go のスモークテストの失敗" "exit=$status
+$(cat "$WORK/log" "$WORK/upstream.conf" "$WORK/go-upstream.conf")"
+fi
+
+fresh
+run_deploy "$ROUTES_B64"
+GO_LOGIN=404 run_deploy "$ROUTES_B64"
+if [ "$status" != 0 ] && [ "$(port_of "$WORK/upstream.conf")" = 3001 ] && [ "$(port_of "$WORK/go-upstream.conf")" = 8081 ] \
+  && grep -q '^rm -f juken-map-next juken-map-go-next$' "$WORK/log"; then
+  ok "Go が画面を配れなければ（画面の無いイメージ）、切り替えずに新しいコンテナを両方捨てる"
+else
+  ng "Go の /login の失敗" "exit=$status
 $(cat "$WORK/log" "$WORK/upstream.conf" "$WORK/go-upstream.conf")"
 fi
 

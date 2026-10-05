@@ -136,6 +136,19 @@ func (h *lineHandlers) accountLink(w http.ResponseWriter, r *http.Request, s *se
 	writeJSON(w, http.StatusOK, map[string]string{"redirectUrl": redirect.String()})
 }
 
+// notificationSettingsPath はプロフィールの通知設定の場所。
+const notificationSettingsPath = "/profile#notification-settings"
+
+// settings は GET /line/settings。LINE のメッセージ本文が案内する入口で、画面を持たずにログイン状態で行き先を変えるだけ
+// （JUK-111 で Node の routes/line.ts から移した）。SPA のルートにしないのは、描画が要らず、画面で判定すると一瞬ちらつくため。
+func (h *lineHandlers) settings(w http.ResponseWriter, r *http.Request, s *session) {
+	if s != nil {
+		http.Redirect(w, r, h.webOrigin+notificationSettingsPath, http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, h.webOrigin+"/login?"+url.Values{"callbackURL": {notificationSettingsPath}}.Encode(), http.StatusFound)
+}
+
 // oauthStart は GET /api/line/oauth/start。プロフィールの「LINE と連携する」から画面遷移で来る。
 func (h *lineHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *session) {
 	if s == nil {

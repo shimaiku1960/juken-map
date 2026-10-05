@@ -148,11 +148,18 @@ Domain を指定できず、www と apex でログインを共有できない（
 `juken-map-go-routes.conf` が正**で、デプロイのたびに本番の `/etc/nginx/juken-map/go-routes.conf` へ置かれる。
 
 ```
-                         ┌─ go-routes.conf のパス（業務の API すべて・ログイン /api/auth/*・/api/health/go）
-[nginx] 443 の server ───┤      → upstream juken_map_go  → 127.0.0.1:8080 か 8081（juken-map-go）
-                         └─ location /（それ以外：ブログ・/api/health・/line/settings・画面）
+                         ┌─ go-routes.conf のパス（業務の API・ログイン・/api/health/go）と、
+[nginx] 443 の server ───┤  最後の location ~ ^/（それ以外の全部：画面・sitemap・/api/blog・/api/health・/line/settings）
+                         │      → upstream juken_map_go  → 127.0.0.1:8080 か 8081（juken-map-go）
+                         └─ location /（サイト設定。JUK-111 から何も届かない）
                                 → upstream juken_map_app → 127.0.0.1:3000 か 3001（juken-map、Node）
 ```
+
+- **JUK-111（2026-10）で画面の配信も Go へ移した。** go-routes.conf の最後の `location ~ ^/`（正規表現）が、
+  ほかのどの location にも当たらないものを全部 Go へ送る。正規表現の location は、サイト設定の `location /`
+  （`^~` の付かない前方一致）より優先されるので、手で置いたサイト設定には触っていない。
+  正規表現どうしは書いた順に試すので、この受け皿は必ずファイルの最後に置く。
+  戻すときは、この location を消してデプロイする（Node は画面の配信のコードをまだ持っている。消すのは JUK-109）
 
 - 毎日の通知の入口（`POST /api/cron/daily-study-notifications`、JUK-74）も Go が受ける。送り終えるまで時間がかかるので、
   `proxy_read_timeout` を60秒と明示している（Go は50秒で打ち切る）
@@ -194,11 +201,11 @@ Go に問題が出たときは、Node に戻すより Go を直して出し直�
 E2E が Go の API を一度も通っていなかった。
 
 ```
-開発  ブラウザ → Vite :5173 → nginx :4200 ─┬─ go-routes.conf のパス → Go   :4100
-                                          └─ それ以外             → Node :4000
-E2E   ブラウザ → nginx :3000 ─┬─ go-routes.conf のパス → Go   :4400
-                             └─ それ以外             → Node :4300（SPA も配る）
+開発  ブラウザ → Vite :5173（画面）→ nginx :4200（/api）→ Go :4100
+E2E   ブラウザ → nginx :3000 → Go :4400（SPA も配る）
 ```
+
+JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送るので、手元でも Node（:4000・:4300）には何も届かない。
 
 - サイト設定は `local/default.conf.template`。本番のサイト設定と同じ形で、違うのは HTTP であることと転送先だけ
 - 起動は `scripts/local-proxy.sh`、ポートは `scripts/local-ports.sh`（worktree の N 番目は上の番号に N を足す）

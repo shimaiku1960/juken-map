@@ -323,10 +323,10 @@ locals {
     }
     metrics_gap = {
       name        = "受験マップ：監視の途絶（メトリクスが届かない）"
-      summary     = "Node の API のメトリクスが10分間届いていません"
-      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map と alloy が動いているかを確かめてください。"
+      summary     = "Go の API のメトリクスが10分間届いていません"
+      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map-go と alloy が動いているかを確かめてください。"
       datasource  = "grafanacloud-prom"
-      expr        = "sum(increase(http_requests_total{env=\"production\",runtime=\"node\"}[10m]))"
+      expr        = "sum(increase(http_requests_total{env=\"production\",runtime=\"go\"}[10m]))"
       op          = "lt"
       threshold   = 1
       for         = "5m"
@@ -334,10 +334,10 @@ locals {
     }
     logs_gap = {
       name        = "受験マップ：監視の途絶（ログが届かない）"
-      summary     = "Node の API のログが15分間届いていません"
-      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map と alloy が動いているかを確かめてください。"
+      summary     = "Go の API のログが15分間届いていません"
+      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map-go と alloy が動いているかを確かめてください。"
       datasource  = "grafanacloud-logs"
-      expr        = "sum(count_over_time({job=\"juken-map-api\", env=\"production\", runtime=\"node\"}[15m]))"
+      expr        = "sum(count_over_time({job=\"juken-map-api\", env=\"production\", runtime=\"go\"}[15m]))"
       op          = "lt"
       threshold   = 1
       for         = "5m"

@@ -7,8 +7,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 const expectedCommit = process.env.EXPECTED_COMMIT;
 
-test("Node と Go の /api/health が、今回デプロイしたコミットを返す", async ({ request }) => {
-  // /api/health は Node、/api/health/go は nginx が Go の /api/health へ渡す。
+test("/api/health と /api/health/go が、今回デプロイしたコミットを返す", async ({ request }) => {
+  // どちらも Go が返す（/api/health は JUK-111 で Node から移した。/api/health/go は nginx が Go の /api/health へ渡す）。
   for (const path of ["/api/health", "/api/health/go"]) {
     const response = await request.get(path);
     expect(response.status(), path).toBe(200);
@@ -16,6 +16,21 @@ test("Node と Go の /api/health が、今回デプロイしたコミットを�
     expect(body.ok, path).toBe(true);
     if (expectedCommit) expect(body.commit, path).toBe(expectedCommit);
   }
+});
+
+test("画面の HTML に meta と CSP を付け、sitemap を返す", async ({ request }) => {
+  // 画面の配信は Go（JUK-111）。クローラーと SNS は JS を実行する前の HTML しか読まないので、head の中身を見る。
+  const terms = await request.get("/terms");
+  expect(terms.status()).toBe(200);
+  expect(await terms.text()).toContain('<link rel="canonical" href="https://juken-map.com/terms"/>');
+  expect(terms.headers()["content-security-policy"]).toContain("default-src 'self'");
+
+  // App.tsx に無いパスは同じ HTML を 404 で返す（soft 404 にしない）
+  expect((await request.get("/e2e-production-unknown-path")).status()).toBe(404);
+
+  const sitemap = await request.get("/sitemap.xml");
+  expect(sitemap.status()).toBe(200);
+  expect(await sitemap.text()).toContain("<loc>https://juken-map.com/terms</loc>");
 });
 
 const pages = [
