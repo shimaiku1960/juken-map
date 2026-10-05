@@ -280,9 +280,6 @@ SCENARIO=engaged ACTIVITY=1.5 pnpm run db:seed:synthetic
 
 APIのリクエスト数・エラー率・レスポンスタイム・CPU・メモリ（Prometheus）、APIのログ（Loki）、1回のリクエストの内訳（Tempo）を、手元のGrafanaで確認できます（本番はGrafana Cloudへ送ります。下の「本番の可観測性」を参照）。
 
-⚠️ ログのファイル出力（`LOG_FILE`）とトレース（`OTEL_EXPORTER_OTLP_ENDPOINT`）は Node のサーバーだけが持っていて、
-Node を消した今は Go が出していません（JUK-126）。手元で今見られるのはメトリクスだけです。
-
 1. `.env`に次の3行を足してから`pnpm dev`で起動する
    ```bash
    METRICS_PORT="9464"                                # APIが別ポートで/metricsを出す
@@ -294,7 +291,7 @@ Node を消した今は Go が出していません（JUK-126）。手元で今�
 
 ログは、APIが`logs/api.log`に書いたものをAlloyが読んでLokiへ送ります（`http://localhost:12345`でAlloyの処理の流れを見られます）。ダッシュボードで時間の範囲を絞ると、その時間のエラーのログと5xxを返したリクエストが下に並びます。1つのリクエストの行をまとめて見るときは、Exploreで`{job="juken-map-api"} |= "<reqId>"`と検索します。
 
-トレースは、ダッシュボードの一番下の表でTrace IDを押すと、1回のリクエストの内訳が開く作りです（Go がトレースを送るようになるまでは空、JUK-126）。
+トレースは、ダッシュボードの一番下の表でTrace IDを押すと、1回のリクエストの内訳が開く作りです。ログの行の`trace_id`からも同じトレースを開けます。
 
 5xxの割合が1%を超えた状態が1分続くとアラートのメールが送られ、`http://localhost:8025`（Mailpit）で受け取れます。設定は[observability/](observability/)にあります。
 
@@ -361,8 +358,8 @@ Grafana Cloudを含め、外部のサービスへ何を送っているかは[doc
 | `MICROCMS_API_KEY` / `MICROCMS_SERVICE_DOMAIN` | ブログ記事の取得。本番のビルドでも記事を SSG するため、GitHub Secrets にも置く |
 | `MICROCMS_WEBHOOK_SECRET` / `GITHUB_DEPLOY_TOKEN` | microCMS で記事を変えたら、Go が Webhook を受けて deploy.yml を動かし、記事を作り直す。本番は Secrets Manager に置き、Go にだけ渡す |
 | `METRICS_PORT` | 設定したときだけ、そのポートでPrometheus用の`/metrics`を出す（任意） |
-| `LOG_FILE` | 手元の開発で、JSONのログをこのファイル（リポジトリのルートからの相対パス）にも書く。Loki用（任意。今の Go は読まない、JUK-126） |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 手元の開発で、設定したときだけOpenTelemetryのトレースをこの送り先（OTLP/HTTP）へ送る。Tempo用（任意。今の Go は読まない、JUK-126） |
+| `LOG_FILE` | 手元の開発で、JSONのログをこのファイル（リポジトリのルートからの相対パス）にも書く。Loki用（任意） |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 手元の開発で、設定したときだけOpenTelemetryのトレースをこの送り先（OTLP/HTTP）へ送る。Tempo用（任意）。本番はデプロイが Alloy の宛先を渡す |
 
 ## 開発コマンド
 

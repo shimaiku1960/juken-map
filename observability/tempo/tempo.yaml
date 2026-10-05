@@ -6,7 +6,7 @@ distributor:
   receivers:
     otlp:
       protocols:
-        # API の OTLPTraceExporter（HTTP + protobuf）が送ってくる。
+        # API の otlptracehttp（HTTP + protobuf、apps/api/tracing.go）が送ってくる。
         http:
           endpoint: 0.0.0.0:4318
 

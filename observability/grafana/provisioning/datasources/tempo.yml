@@ -8,7 +8,7 @@ datasources:
     url: http://tempo:3200
     jsonData:
       # トレースの画面から「このトレースのログ」を Loki で開く。
-      # ログの行には instrumentation.ts（pino の計測）が trace_id を足している。
+      # ログの行には apps/api/logger.go が trace_id を足している。
       tracesToLogsV2:
         datasourceUid: loki
         filterByTraceID: true

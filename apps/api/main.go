@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,6 +18,9 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // requestTimeout は1リクエストにかけてよい時間（middleware.go の withDeadline）。
@@ -28,7 +32,12 @@ func main() {
 	if len(os.Args) > 1 {
 		os.Exit(runCommand(os.Args[1:], os.Stdout, os.Stderr))
 	}
-	slog.SetDefault(newLogger(os.Stdout, parseLevel(os.Getenv("LOG_LEVEL"))))
+	logOut, err := logOutput(os.Stdout, os.Getenv("LOG_FILE"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "LOG_FILE を開けません:", err)
+		os.Exit(1)
+	}
+	slog.SetDefault(newLogger(logOut, parseLevel(os.Getenv("LOG_LEVEL"))))
 	if err := run(); err != nil {
 		slog.Error("api stopped", "err", err.Error())
 		os.Exit(1)
@@ -46,6 +55,20 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// トレースは DB より先に用意する。openDB の SQL の計測が、ここで決めた送り先を使うため。
+	tp, shutdownTracing, err := setupTracing(context.Background())
+	if err != nil {
+		return err
+	}
+	// 止めるときに、まだ送っていないスパンを送り切る。DB を閉じた後（defer は逆順に走る）。
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracing(ctx); err != nil {
+			slog.Warn("tracing shutdown failed", "err", err.Error())
+		}
+	}()
+
 	db, err := openDB(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
@@ -70,7 +93,7 @@ func run() error {
 		metrics:         m,
 		adminTo:         os.Getenv("ADMIN_NOTIFICATION_EMAIL"),
 		sender: &resendSender{
-			client: &http.Client{},
+			client: newOutboundClient(tp),
 			base:   envOr("RESEND_BASE_URL", "https://api.resend.com"),
 			key:    os.Getenv("RESEND_API_KEY"),
 		},
@@ -83,13 +106,14 @@ func run() error {
 	registerBlogRoutes(rt, blogConfig{
 		serviceDomain: os.Getenv("MICROCMS_SERVICE_DOMAIN"),
 		apiKey:        os.Getenv("MICROCMS_API_KEY"),
+		client:        newOutboundClient(tp),
 	})
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
 		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
 		simulationSecret:        os.Getenv("SIMULATION_SECRET"),
 		messenger: &httpMessenger{
-			client:     &http.Client{},
+			client:     newOutboundClient(tp),
 			resendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
 			resendKey:  os.Getenv("RESEND_API_KEY"),
 			lineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
@@ -99,7 +123,7 @@ func run() error {
 		channelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
 		webOrigin:     envOr("WEB_ORIGIN", siteURL),
 		client: &httpLineClient{
-			client:         &http.Client{},
+			client:         newOutboundClient(tp),
 			botBase:        envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
 			accessToken:    os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
 			loginBase:      envOr("LINE_LOGIN_API_BASE", "https://api.line.me"),
@@ -110,7 +134,7 @@ func run() error {
 	}, microcmsWebhookConfig{
 		secret: os.Getenv("MICROCMS_WEBHOOK_SECRET"),
 		deployer: &githubWorkflowDispatcher{
-			client:   &http.Client{},
+			client:   newOutboundClient(tp),
 			apiBase:  envOr("GITHUB_API_BASE", "https://api.github.com"),
 			repo:     "shimaiku1960/juken-map",
 			workflow: "deploy.yml",
@@ -139,6 +163,7 @@ func run() error {
 			maxInFlight: maxInFlight,
 			// 本番は reqId を UUID のまま、開発は短くする（Node と同じ）。
 			shortRequestIDs: os.Getenv("NODE_ENV") != "production",
+			tracer:          tp.Tracer(serviceName),
 		}),
 		// 既定はどれも無制限。遅いクライアントに接続を握られ続けないよう上限を付ける。
 		ReadHeaderTimeout: 5 * time.Second,
@@ -334,11 +359,12 @@ type lineConfig struct {
 type serverOptions struct {
 	maxInFlight     int
 	shortRequestIDs bool
+	tracer          trace.Tracer // 無ければトレースを取らない
 }
 
 // newServerHandler はルーターの外側にミドルウェアを重ねる。外側から順に走る。
 //
-//  1. observe       reqId を振り、返し終えたらログ1行とメトリクス（断った応答も数える）
+//  1. observe       reqId を振り、返し終えたらログ1行とメトリクスとトレース（断った応答も数える）
 //  2. securityHeaders  どの応答にも付ける
 //  3. recoverPanic  ハンドラの panic を 500 にする
 //  4. limitInFlight 同時処理数の上限を超えたら 503
@@ -352,7 +378,11 @@ func newServerHandler(rt *router, m *metrics, opts serverOptions) http.Handler {
 	h = limitInFlight(opts.maxInFlight, h)
 	h = recoverPanic(h)
 	h = securityHeaders(h)
-	return observe(m, opts.shortRequestIDs, h)
+	tracer := opts.tracer
+	if tracer == nil {
+		tracer = noop.NewTracerProvider().Tracer("")
+	}
+	return observe(m, tracer, opts.shortRequestIDs, h)
 }
 
 func envOr(key, fallback string) string {

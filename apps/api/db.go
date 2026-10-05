@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/XSAM/otelsql"
 	"github.com/go-sql-driver/mysql"
 )
 
@@ -32,7 +33,8 @@ func openDB(databaseURL string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db := sql.OpenDB(connector)
+	// SQL 1本ずつのトレース（tracing.go）。setupTracing の前やコマンドで動くときは何もしない。
+	db := otelsql.OpenDB(connector, tracedDBOptions)
 	// Node 側の connectionLimit（既定 15）に揃える。比べるときに条件を同じにするため。
 	db.SetMaxOpenConns(15)
 	db.SetMaxIdleConns(15)
