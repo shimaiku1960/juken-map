@@ -304,6 +304,9 @@ func (st *sqlAdminMasterStore) createTextbookMaster(ctx context.Context, in text
 	if isMySQLError(err, mysqlDuplicateEntry) {
 		return masterOutcome[AdminTextbookMaster]{failure: masterDuplicate}, nil
 	}
+	if err == nil {
+		st.textbookMastersChanged()
+	}
 	return outcome, err
 }
 
@@ -332,6 +335,9 @@ func (st *sqlAdminMasterStore) updateTextbookMaster(ctx context.Context, id int6
 	if isMySQLError(err, mysqlDuplicateEntry) {
 		return masterOutcome[masterChange[AdminTextbookMaster]]{failure: masterDuplicate}, nil
 	}
+	if err == nil && outcome.failure == masterOK {
+		st.textbookMastersChanged()
+	}
 	return outcome, err
 }
 
@@ -347,5 +353,6 @@ func (st *sqlAdminMasterStore) deleteTextbookMaster(ctx context.Context, id int6
 	if _, err := st.db.ExecContext(ctx, "DELETE FROM TextbookMaster WHERE id = ?", id); err != nil {
 		return masterOutcome[AdminTextbookMaster]{}, err
 	}
+	st.textbookMastersChanged()
 	return masterOutcome[AdminTextbookMaster]{value: *master}, nil
 }

@@ -496,8 +496,23 @@ func TestAdminMastersDB(t *testing.T) {
 			return fmt.Sprintf(`{"name":%q,"publisher":" 社 ","edition":"","isbn":%q,"metrics":[{"unit":"page","totalAmount":300,"isDefault":true},{"unit":"chapter","totalAmount":12,"isDefault":false}]}`, name, isbn)
 		}
 
+		// 利用者が選ぶ一覧（GET /api/textbook-masters）での見え方。キャッシュを捨てられているかを見る。
+		listed := func(id int64) *TextbookMaster {
+			t.Helper()
+			var list []TextbookMaster
+			app.expect(app.send("GET", "/api/textbook-masters", "", adminID), 200, &list)
+			if i := slices.IndexFunc(list, func(m TextbookMaster) bool { return m.ID == id }); i >= 0 {
+				return &list[i]
+			}
+			return nil
+		}
+		listed(0) // 作る前に一覧をキャッシュに載せておく
+
 		var created AdminTextbookMaster
 		app.expect(app.send("POST", "/api/admin/textbook-masters", body(name, isbn), adminID), 201, &created)
+		if listed(created.ID) == nil {
+			t.Error("作った参考書が利用者の一覧に出ない（キャッシュが残っている）")
+		}
 		if created.Name != name || created.Isbn != strings.ReplaceAll(isbn, "-", "") || created.Publisher == nil || *created.Publisher != "社" ||
 			created.Edition != nil || created.TextbookCount != 0 {
 			t.Fatalf("作った参考書: %+v", created)
@@ -526,6 +541,9 @@ func TestAdminMastersDB(t *testing.T) {
 			!slices.Equal(updated.Metrics, []AdminTextbookMasterMetric{{Unit: "question", TotalAmount: 450, IsDefault: true}}) {
 			t.Errorf("書き換えた参考書: %+v", updated)
 		}
+		if m := listed(created.ID); m == nil || m.Edition == nil || *m.Edition != "第3版" || len(m.Metrics) != 1 {
+			t.Errorf("書き換えが利用者の一覧に出ない: %+v", m)
+		}
 		app.expectError(app.send("PATCH", "/api/admin/textbook-masters/999999999", body(name, isbn), adminID), 404, textbookMasterMessages.notFound)
 
 		// 名前でも ISBN でも探せる
@@ -549,6 +567,9 @@ func TestAdminMastersDB(t *testing.T) {
 		fx.exec("DELETE FROM Textbook WHERE userId = ?", user)
 
 		app.expect(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 204, nil)
+		if listed(created.ID) != nil {
+			t.Error("消した参考書が利用者の一覧に残っている")
+		}
 		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 404, textbookMasterMessages.notFound)
 		if n := fx.count("SELECT COUNT(*) FROM TextbookMasterMetric WHERE masterId = ?", created.ID); n != 0 {
 			t.Errorf("総量の候補が CASCADE で消えていない: %d", n)

@@ -446,21 +446,3 @@ func mustDate(t *testing.T, ymd string) time.Time {
 	}
 	return d
 }
-
-// TestUniversityStoreInvalidate は、マスターを編集したら大学一覧のキャッシュを捨て、世代を進めること。
-// 世代が進むと、捨てる前に始まっていた読み込みの結果は置かれない（explore の Do の中で比べる）。
-// 読み込みそのものは DB が要るので、admin_masters_db_test.go で編集の前後の一覧を比べて確かめる。
-func TestUniversityStoreInvalidate(t *testing.T) {
-	now := time.Now()
-	st := &universityStore{now: func() time.Time { return now }}
-	st.snapshot.Store(&exploreSnapshot{etag: `"old"`, expiresAt: now.Add(time.Minute)})
-	generation := st.generation
-
-	st.invalidate()
-	if st.snapshot.Load() != nil {
-		t.Error("invalidate してもキャッシュが残っている")
-	}
-	if st.generation == generation {
-		t.Error("invalidate で世代が進んでいない")
-	}
-}

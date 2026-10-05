@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // 参考書の読み取り（JUK-73）。Node の routes/textbooks.ts・textbook-masters.ts の GET と、
@@ -17,6 +18,20 @@ import (
 
 type textbookStore struct {
 	db *sql.DB
+	// masters は GET /api/textbook-masters の JSON。全員に同じで、変わるのは管理画面の編集
+	// （admin_textbook_masters.go）だけなので、メモリに持つ（json_snapshot.go、JUK-50）。
+	masters *jsonSnapshotCache
+}
+
+// textbookMastersCacheTTL は、DB を直接書き換えたとき（seed など）の保険。大学一覧と同じ10分。
+const textbookMastersCacheTTL = 10 * time.Minute
+
+func newTextbookStore(db *sql.DB) *textbookStore {
+	st := &textbookStore{db: db}
+	st.masters = newJSONSnapshotCache(textbookMastersCacheTTL, func(ctx context.Context) (any, error) {
+		return st.listTextbookMasters(ctx)
+	})
+	return st
 }
 
 // textbookRowColumns は Node の TEXTBOOK_COLUMNS と同じ列と並び。scanTextbook で読む。
@@ -136,10 +151,10 @@ func (h *textbookHandlers) list(w http.ResponseWriter, r *http.Request, s *sessi
 
 // listMasters は GET /api/textbook-masters。ログイン必須だが、中身は利用者によらない。
 func (h *textbookHandlers) listMasters(w http.ResponseWriter, r *http.Request, _ *session) {
-	masters, err := h.store.listTextbookMasters(r.Context())
+	snap, err := h.store.masters.get(r.Context())
 	if err != nil {
 		internalError(w, r, fmt.Errorf("textbook-masters: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, masters)
+	writeJSONSnapshot(w, r, snap)
 }

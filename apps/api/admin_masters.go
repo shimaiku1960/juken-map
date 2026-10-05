@@ -200,6 +200,8 @@ type sqlAdminMasterStore struct {
 	db *sql.DB
 	// universitiesChanged は大学・学部を変えて確定したあとに呼ぶ（大学を探す画面のキャッシュを捨てる）。
 	universitiesChanged func()
+	// textbookMastersChanged は参考書マスターを変えて確定したあとに呼ぶ（GET /api/textbook-masters のキャッシュを捨てる）。
+	textbookMastersChanged func()
 }
 
 // foundOutcome は、作った・書き換えた直後に読み直した行を結果にする。直後に別の操作で消えていれば失敗にする。
