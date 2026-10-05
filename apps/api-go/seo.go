@@ -124,16 +124,19 @@ type pageScripts struct {
 	faroCollectorURL string // 画面のエラーの送り先（Grafana Faro）。空なら画面は送らない
 }
 
-// analyticsInlineScript は GA4 のインラインスクリプト。CSP はこの中身のハッシュだけを許すので、
-// 1文字でも Node と違えば実行されない。空白も含めて変えないこと。
-// 画面遷移の計測は GA4 の拡張計測（履歴の変化を自動で拾う）に任せる。
+// analyticsInlineScript は GA4 のインラインスクリプト。CSP はこの中身のハッシュ（inlineScriptHashes）
+// だけを許す。画面遷移の計測は GA4 の拡張計測（履歴の変化を自動で拾う）に任せる。
+//
+// URL にトークンが載る画面（tokenLinkPages）では、最初の page_view を送らない。page_view は
+// ページの URL（dl）ごと Google へ送るが、画面がトークンを URL から消す（useTokenFromLink.ts）のと
+// gtag.js が URL を読むのは早い者勝ちになるため（JUK-124）。消したあとの URL は拡張計測が拾う。
 func analyticsInlineScript(id string) string {
 	return `
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       window.gtag = gtag;
       gtag('js', new Date());
-      gtag('config', '` + id + `');
+      gtag('config', '` + id + `', /[?&](token|linkToken)=/.test(location.search) ? { send_page_view: false } : {});
     `
 }
 

@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router";
+import { Link } from "react-router";
 import PageShell from "@/web/components/layout/PageShell";
 import PageHeader from "@/web/components/layout/PageHeader";
 import InlineFeedback from "@/web/components/feedback/InlineFeedback";
@@ -6,12 +6,12 @@ import LineAccountLinkButton from "@/web/components/LineAccountLinkButton";
 import { buttonVariants } from "@/web/components/ui/button";
 import { cn } from "@/web/lib/utils";
 import { useSession } from "@/web/lib/auth-client";
+import { useLineLinkToken } from "@/web/hooks/useLineLink";
 
 // LINE で「連携」と送ると、この画面への URL が LINE のトークに届く。
 // 本人確認のため、ログインしてから /api/line/account-link を叩く。
 export default function LineLinkPage() {
-  const [searchParams] = useSearchParams();
-  const linkToken = searchParams.get("linkToken");
+  const linkToken = useLineLinkToken();
   const { data: session, isPending } = useSession();
 
   if (!linkToken) {
@@ -35,7 +35,8 @@ export default function LineLinkPage() {
     );
   }
 
-  const callbackURL = `/line/link?linkToken=${encodeURIComponent(linkToken)}`;
+  // linkToken は useLineLinkToken が同じタブに預けるので、戻り先の URL には載せない。
+  const callbackURL = "/line/link";
 
   return (
     <PageShell className="max-w-lg">
