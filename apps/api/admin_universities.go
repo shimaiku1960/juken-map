@@ -1,0 +1,302 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"net/http"
+)
+
+// 管理者ページのマスター編集のうち、大学（/api/admin/universities）。共通の部品と全体の決まりは admin_masters.go。
+
+// ---- 入口 ----
+
+// prefectures は47都道府県。Node の src/shared/prefectures.ts の PREFECTURES と同じ並び。
+var prefectures = []string{
+	"北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+	"茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+	"新潟県", "山梨県", "長野県",
+	"富山県", "石川県", "福井県",
+	"岐阜県", "静岡県", "愛知県", "三重県",
+	"滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県",
+	"鳥取県", "島根県", "岡山県", "広島県", "山口県",
+	"徳島県", "香川県", "愛媛県", "高知県",
+	"福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
+}
+
+// listUniversities は GET /api/admin/universities。
+func (h *adminMasterHandlers) listUniversities(w http.ResponseWriter, r *http.Request, _ *session) {
+	query := parseQuery(r.URL.RawQuery)
+	q, issue := readMasterSearchQuery(query)
+	if issue == nil {
+		var page int
+		page, issue = readPageQuery(query, adminUniversitiesMaxPage)
+		if issue == nil {
+			list, err := h.store.listUniversities(r.Context(), q, page)
+			if err != nil {
+				internalError(w, r, fmt.Errorf("admin universities: %w", err))
+				return
+			}
+			writeJSON(w, http.StatusOK, list)
+			return
+		}
+	}
+	issue.write(w)
+}
+
+// universityDetail は GET /api/admin/universities/{id}。
+func (h *adminMasterHandlers) universityDetail(w http.ResponseWriter, r *http.Request, _ *session) {
+	id, ok := masterID(w, r)
+	if !ok {
+		return
+	}
+	detail, err := h.store.universityDetail(r.Context(), id)
+	if err != nil {
+		internalError(w, r, fmt.Errorf("admin university detail: %w", err))
+		return
+	}
+	if detail == nil {
+		writeError(w, http.StatusNotFound, universityMessages.notFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}
+
+// createUniversity は POST /api/admin/universities。
+func (h *adminMasterHandlers) createUniversity(w http.ResponseWriter, r *http.Request, s *session) {
+	body, ok := readBody(w, r, defaultBodyLimit)
+	if !ok {
+		return
+	}
+	input, in := readUniversityInput(body.value())
+	if in.reject(w) {
+		return
+	}
+	outcome, err := h.store.createUniversity(r.Context(), input)
+	if err != nil {
+		internalError(w, r, fmt.Errorf("admin create university: %w", err))
+		return
+	}
+	if rejectMasterFailure(w, universityMessages, outcome.failure, outcome.count) {
+		return
+	}
+	logMasterChange(r.Context(), s.UserID, "create", "University", outcome.value.ID, "after", outcome.value)
+	writeJSON(w, http.StatusCreated, outcome.value)
+}
+
+// updateUniversity は PATCH /api/admin/universities/{id}。
+func (h *adminMasterHandlers) updateUniversity(w http.ResponseWriter, r *http.Request, s *session) {
+	body, ok := readBody(w, r, defaultBodyLimit)
+	if !ok {
+		return
+	}
+	// Node と同じく path を先に、本文を後に確かめる。
+	id, ok := masterID(w, r)
+	if !ok {
+		return
+	}
+	input, in := readUniversityInput(body.value())
+	if in.reject(w) {
+		return
+	}
+	outcome, err := h.store.updateUniversity(r.Context(), id, input)
+	if err != nil {
+		internalError(w, r, fmt.Errorf("admin update university: %w", err))
+		return
+	}
+	if rejectMasterFailure(w, universityMessages, outcome.failure, outcome.count) {
+		return
+	}
+	logMasterChange(r.Context(), s.UserID, "update", "University", id, "before", outcome.value.before, "after", outcome.value.after)
+	writeJSON(w, http.StatusOK, outcome.value.after)
+}
+
+// deleteUniversity は DELETE /api/admin/universities/{id}。
+func (h *adminMasterHandlers) deleteUniversity(w http.ResponseWriter, r *http.Request, s *session) {
+	// 本文は使わないが、Node（Fastify）はハンドラより先に本文を読むので、受け付けない形なら同じく 415・413 にする。
+	if _, ok := readBody(w, r, defaultBodyLimit); !ok {
+		return
+	}
+	id, ok := masterID(w, r)
+	if !ok {
+		return
+	}
+	outcome, err := h.store.deleteUniversity(r.Context(), id)
+	if err != nil {
+		internalError(w, r, fmt.Errorf("admin delete university: %w", err))
+		return
+	}
+	if rejectMasterFailure(w, universityMessages, outcome.failure, outcome.count) {
+		return
+	}
+	logMasterChange(r.Context(), s.UserID, "delete", "University", id, "before", outcome.value)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- 入力 ----
+
+type universityInput struct {
+	name, prefecture, typ string
+}
+
+// readUniversityInput は universityInputSchema。
+func readUniversityInput(body any) (universityInput, *objectInput) {
+	in := readObject(body)
+	v := universityInput{
+		name:       in.string("name", masterNameRule("大学名")),
+		prefecture: in.string("prefecture", stringRule{checks: []stringCheck{oneOf(prefectures, "invalid_prefecture", "都道府県を選んでください")}}),
+		typ:        in.enum("type", func(s string) bool { return UniversityInputType(s).Valid() }, "種別を選んでください"),
+	}
+	return v, in
+}
+
+// ---- DB ----
+
+const adminUniversityColumns = `u.id, u.name, u.prefecture, u.type,
+  (SELECT COUNT(*) FROM Faculty f WHERE f.universityId = u.id) AS facultyCount,
+  (SELECT COUNT(*) FROM FinalGoal g JOIN Faculty f ON f.id = g.facultyId WHERE f.universityId = u.id) AS goalCount`
+
+func scanAdminUniversity(scan func(...any) error) (AdminUniversity, error) {
+	var u AdminUniversity
+	err := scan(&u.ID, &u.Name, &u.Prefecture, &u.Type, &u.FacultyCount, &u.GoalCount)
+	return u, err
+}
+
+func (st *sqlAdminMasterStore) listUniversities(ctx context.Context, q string, page int) (AdminUniversityList, error) {
+	list := AdminUniversityList{Universities: []AdminUniversity{}, Page: page, PageSize: adminUniversitiesPageSize}
+	where, params := "", []any{}
+	if q != "" {
+		where, params = "WHERE u.name LIKE ?", append(params, "%"+escapeLike(q)+"%")
+	}
+	if err := st.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM University u "+where, params...).Scan(&list.Total); err != nil {
+		return list, err
+	}
+	// #nosec G202 -- adminUniversityColumns は固定の列の並び、where は固定の条件と ? だけ。値は params で渡す
+	rows, err := st.db.QueryContext(ctx,
+		"SELECT "+adminUniversityColumns+" FROM University u "+where+" ORDER BY u.name ASC, u.id ASC LIMIT ? OFFSET ?",
+		append(params, adminUniversitiesPageSize, (page-1)*adminUniversitiesPageSize)...)
+	if err != nil {
+		return list, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		u, err := scanAdminUniversity(rows.Scan)
+		if err != nil {
+			return list, err
+		}
+		list.Universities = append(list.Universities, u)
+	}
+	return list, rows.Err()
+}
+
+// findAdminUniversity は大学を1件引く。無ければ nil。
+func findAdminUniversity(ctx context.Context, db sqlRunner, id int64) (*AdminUniversity, error) {
+	u, err := scanAdminUniversity(db.QueryRowContext(ctx, "SELECT "+adminUniversityColumns+" FROM University u WHERE u.id = ?", id).Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (*AdminUniversityDetail, error) {
+	university, err := findAdminUniversity(ctx, st.db, id)
+	if err != nil || university == nil {
+		return nil, err
+	}
+	rows, err := st.db.QueryContext(ctx,
+		`SELECT f.id, f.name, f.examDate,
+		        (SELECT COUNT(*) FROM FinalGoal g WHERE g.facultyId = f.id) AS goalCount,
+		        t.id AS tagId, t.name AS tagName
+		 FROM Faculty f
+		 LEFT JOIN _FacultyToTag ft ON ft.A = f.id
+		 LEFT JOIN Tag t ON t.id = ft.B
+		 WHERE f.universityId = ?
+		 ORDER BY f.id ASC, t.id ASC`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	detail := &AdminUniversityDetail{University: *university, Faculties: []AdminFaculty{}}
+	for rows.Next() {
+		var (
+			f        AdminFaculty
+			examDate string
+			tagID    *int64
+			tagName  *string
+		)
+		if err := rows.Scan(&f.ID, &f.Name, &examDate, &f.GoalCount, &tagID, &tagName); err != nil {
+			return nil, err
+		}
+		// 行は（学部 × タグ）の数だけ並ぶ。同じ学部の行は隣り合うので、直前と比べて束ねる。
+		if n := len(detail.Faculties); n == 0 || detail.Faculties[n-1].ID != f.ID {
+			f.ExamDate = examDate[:10] // DATETIME の日付の部分（Node の toISOString().slice(0, 10)）
+			f.Tags = []AdminTag{}
+			detail.Faculties = append(detail.Faculties, f)
+		}
+		if tagID != nil && tagName != nil {
+			last := &detail.Faculties[len(detail.Faculties)-1]
+			last.Tags = append(last.Tags, AdminTag{ID: *tagID, Name: *tagName})
+		}
+	}
+	return detail, rows.Err()
+}
+
+func (st *sqlAdminMasterStore) createUniversity(ctx context.Context, in universityInput) (masterOutcome[AdminUniversity], error) {
+	res, err := st.db.ExecContext(ctx,
+		"INSERT INTO University (name, prefecture, type, createdAt) VALUES (?, ?, ?, ?)", in.name, in.prefecture, in.typ, nowMillis())
+	if isMySQLError(err, mysqlDuplicateEntry) {
+		return masterOutcome[AdminUniversity]{failure: masterDuplicate}, nil
+	}
+	if err != nil {
+		return masterOutcome[AdminUniversity]{}, err
+	}
+	st.universitiesChanged()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return masterOutcome[AdminUniversity]{}, err
+	}
+	return foundOutcome(findAdminUniversity(ctx, st.db, id))
+}
+
+func (st *sqlAdminMasterStore) updateUniversity(ctx context.Context, id int64, in universityInput) (masterOutcome[masterChange[AdminUniversity]], error) {
+	type outcome = masterOutcome[masterChange[AdminUniversity]]
+	before, err := findAdminUniversity(ctx, st.db, id)
+	if err != nil || before == nil {
+		return outcome{failure: masterNotFound}, err
+	}
+	_, err = st.db.ExecContext(ctx, "UPDATE University SET name = ?, prefecture = ?, type = ? WHERE id = ?", in.name, in.prefecture, in.typ, id)
+	if isMySQLError(err, mysqlDuplicateEntry) {
+		return outcome{failure: masterDuplicate}, nil
+	}
+	if err != nil {
+		return outcome{}, err
+	}
+	st.universitiesChanged()
+	after, err := foundOutcome(findAdminUniversity(ctx, st.db, id))
+	return outcome{value: masterChange[AdminUniversity]{before: *before, after: after.value}}, err
+}
+
+func (st *sqlAdminMasterStore) deleteUniversity(ctx context.Context, id int64) (masterOutcome[AdminUniversity], error) {
+	university, err := findAdminUniversity(ctx, st.db, id)
+	if err != nil || university == nil {
+		return masterOutcome[AdminUniversity]{failure: masterNotFound}, err
+	}
+	inUse := masterOutcome[AdminUniversity]{failure: masterInUse, count: university.GoalCount}
+	if university.GoalCount > 0 {
+		return inUse, nil
+	}
+	_, err = st.db.ExecContext(ctx, "DELETE FROM University WHERE id = ?", id)
+	if isMySQLError(err, mysqlRowIsReferenced) {
+		return inUse, nil
+	}
+	if err != nil {
+		return masterOutcome[AdminUniversity]{}, err
+	}
+	st.universitiesChanged()
+	return masterOutcome[AdminUniversity]{value: *university}, nil
+}
