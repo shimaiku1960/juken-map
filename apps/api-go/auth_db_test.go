@@ -476,6 +476,61 @@ func TestAuthDBSessionRevocation(t *testing.T) {
 	})
 }
 
+// 06 B2：ログアウトした Cookie では API が 401 になる。ブラウザが Cookie を消さなかったとき（盗まれた
+// Cookie が残っているとき）も、サーバーの側で無効になっていることを見る。ログインで渡す Cookie の属性は
+// TestAuthDBSignUpVerifyAndSignIn（D1）で見ている。
+func TestAuthDB06B2SignOutRevokesCookie(t *testing.T) {
+	e := newAuthEnv(t)
+	email := e.newEmail()
+	e.signUpVerified(email, authTestPassword)
+	b := e.signedIn(email, authTestPassword)
+	saved := *b.cookies[sessionCookieName]
+	expectStatus(t, b.do("GET", "/api/dashboard", nil), 200, "")
+
+	rec := b.do("POST", "/api/auth/sign-out", map[string]any{})
+	expectStatus(t, rec, 200, "")
+	var cleared *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sessionCookieName {
+			cleared = c
+		}
+	}
+	// 消すときも同じ属性で送る（属性が違うと、ブラウザによっては別の Cookie として扱われ、消えない）。
+	if cleared == nil || cleared.MaxAge >= 0 || cleared.Value != "" || cleared.Path != "/" ||
+		!cleared.HttpOnly || !cleared.Secure || cleared.SameSite != http.SameSiteStrictMode {
+		t.Fatalf("ログアウトの Set-Cookie = %+v", cleared)
+	}
+
+	b.cookies[sessionCookieName] = &saved
+	expectStatus(t, b.do("GET", "/api/dashboard", nil), 401, "")
+	expectStatus(t, b.do("POST", "/api/study-logs", map[string]any{}), 401, "")
+	if b.sessionEmail() != "" {
+		t.Fatal("ログアウトした Cookie でセッションが返った")
+	}
+}
+
+// 06 B3：メールの確認が済むまで、利用者の API は使えない。パスワードが合っていてもセッションを渡さない。
+// 外部ログインで、プロバイダーが確認済みと示さないメールを断るのは TestAuthDBGoogleLogin（F2）で見ている。
+func TestAuthDB06B3UnverifiedCannotUseAPI(t *testing.T) {
+	e := newAuthEnv(t)
+	email := e.newEmail()
+	b := e.browser()
+	expectStatus(t, b.do("POST", "/api/auth/sign-up", map[string]string{"email": email, "password": authTestPassword}), 200, "")
+	expectStatus(t, b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword}), 403, "EMAIL_NOT_VERIFIED")
+	if len(b.cookies) != 0 {
+		t.Fatalf("未確認なのに Cookie が付いた: %v", b.cookies)
+	}
+	expectStatus(t, b.do("GET", "/api/dashboard", nil), 401, "")
+	expectStatus(t, b.do("POST", "/api/study-logs", map[string]any{}), 401, "")
+	expectStatus(t, b.do("POST", "/api/auth/mfa/setup", map[string]any{}), 401, "")
+
+	// 確認を済ませれば同じパスワードで使える（断った理由が確認だけであること）。
+	token := e.mails.last(t, email, "メールアドレスの確認").token(t)
+	expectStatus(t, b.do("POST", "/api/auth/verify-email", map[string]string{"token": token}), 200, "")
+	expectStatus(t, b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword}), 200, "")
+	expectStatus(t, b.do("GET", "/api/dashboard", nil), 200, "")
+}
+
 func TestAuthDBPasswordReset(t *testing.T) {
 	e := newAuthEnv(t)
 	email := e.newEmail()
