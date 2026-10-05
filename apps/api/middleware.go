@@ -8,6 +8,8 @@ import (
 	"math"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ミドルウェアは「http.Handler を受け取り、前後に処理を足した http.Handler を返す関数」。
@@ -81,9 +83,10 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 	return r.ResponseWriter
 }
 
-// observe は一番外側で、reqId を振り、返し終えたらアクセスログ1行とメトリクスを残す。
-// Node の genReqId・requestContext・RequestLogController・registerMetrics をまとめたもの。
-func observe(m *metrics, shortIDs bool, next http.Handler) http.Handler {
+// observe は一番外側で、reqId を振り、返し終えたらアクセスログ1行とメトリクスとトレースを残す。
+// Node の genReqId・requestContext・RequestLogController・registerMetrics と、
+// instrumentation.ts の HTTP の計測をまとめたもの。
+func observe(m *metrics, tracer trace.Tracer, shortIDs bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		info := &requestInfo{
@@ -91,7 +94,10 @@ func observe(m *metrics, shortIDs bool, next http.Handler) http.Handler {
 			// シミュレーションからのリクエストに印を付ける（Grafana で実利用者と分ける）。
 			sim: r.Header.Get("X-Sim-Run") != "",
 		}
-		r = r.WithContext(context.WithValue(r.Context(), requestInfoKey{}, info))
+		// トレースのスパンも ctx に入れる。内側の SQL・外部 API のスパンはこの子になり、
+		// ログの行には trace_id が付く（logger.go）。
+		ctx, span := startRequestSpan(r.Context(), tracer, r.Method)
+		r = r.WithContext(context.WithValue(ctx, requestInfoKey{}, info))
 		// 調査のときに画面の Network タブの値でログを引けるよう、応答ヘッダーに載せる
 		// （Node の error-handling.ts。この API はすべて /api/ なので常に付ける）。
 		w.Header().Set("X-Request-Id", info.id)
@@ -105,6 +111,7 @@ func observe(m *metrics, shortIDs bool, next http.Handler) http.Handler {
 			route = "(unmatched)"
 		}
 		m.observe(r.Method, route, rec.status, elapsed)
+		endRequestSpan(span, r.Method, route, rec.status, info)
 
 		// Node の「request completed」と同じ形。URL はパスだけにして、? 以降は残さない
 		// （クエリにトークンが載る入口があるため。Node の redactPath）。

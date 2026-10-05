@@ -52,6 +52,8 @@ curl -b jar localhost:8080/api/dashboard
 | `PORT` | 8080 | 待ち受けるポート |
 | `METRICS_PORT` | なし | 指定したときだけ、このポートで `/metrics` を出す |
 | `OVERLOAD_MAX_IN_FLIGHT` | 160 | 同時に処理する件数の上限。超えたら 503 |
+| `LOG_FILE` | なし | 指定したときだけ、同じ JSON のログをこのファイルにも書く（手元の Alloy → Loki 用。相対パスは起動したディレクトリから） |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | なし | 指定したときだけ、トレースをこの送り先（OTLP/HTTP、`/v1/traces` を足す）へ送る。手元は Tempo、本番は Alloy（JUK-126） |
 | `LOG_LEVEL` | info | pino と同じ名前（debug・info・warn・error） |
 | `NODE_ENV` | なし | `production` のとき reqId を UUID のまま出す（開発は8文字） |
 | `DATABASE_URL` | なし | 必須。Node と同じ形（`mysql://…`） |
@@ -306,6 +308,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `metrics.go` | Prometheus のメトリクス（名前・ラベルは Node と同じ） |
+| `tracing.go` | OpenTelemetry のトレース（リクエスト・SQL・外部 API の呼び出し）。URL のパスとクエリは入れない（JUK-126） |
 | `analytics.go` | 本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80） |
 | `csp_report.go` | ブラウザが送る CSP の違反の報告をログに残す（認証なしの口なので件数と大きさに上限） |
 | `sim.go` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る |
@@ -329,7 +332,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
 | `db.go` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、DATETIME の文字列を ISO にする |
-| `logger.go` | pino と同じ形の JSON ログ |
+| `logger.go` | pino と同じ形の JSON ログ。reqId・trace_id を足し、`LOG_FILE` にも書く |
 | `openapi.gen.go` | `openapi/openapi.yaml` から作った応答・リクエストの型（手で直さない。`pnpm openapi:generate`、設定は `oapi-codegen.yaml`） |
 
 ### 本物の DB に流す横断のテスト（dbtest タグ）
