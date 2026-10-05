@@ -143,15 +143,15 @@ func (e *authEnv) newEmail() string {
 
 func (e *authEnv) cleanup() {
 	for _, email := range e.emails {
-		e.db.Exec("DELETE FROM `user` WHERE email = ?", email)
-		e.db.Exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(email))
+		e.fx.exec("DELETE FROM `user` WHERE email = ?", email)
+		e.fx.exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(email))
 		for _, rule := range []throttleRule{throttleSignInAccount} {
-			e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, email))
+			e.fx.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, email))
 		}
 	}
 	for _, ip := range e.ips {
 		for _, rule := range []throttleRule{throttleSignInIP, throttleAnonymousIP} {
-			e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, ip))
+			e.fx.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, ip))
 		}
 	}
 }
@@ -618,7 +618,9 @@ func (e *authEnv) enableMFA(b *browser) ([]byte, []string) {
 		TotpURI     string   `json:"totpURI"`
 		BackupCodes []string `json:"backupCodes"`
 	}
-	json.Unmarshal(rec.Body.Bytes(), &res)
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		e.t.Fatal(err)
+	}
 	u, _ := url.Parse(res.TotpURI)
 	secret, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(u.Query().Get("secret"))
 	if err != nil || len(secret) != totpSecretSize {
@@ -649,7 +651,9 @@ func TestAuthDBMFA(t *testing.T) {
 	e.mails.last(t, email, "2段階認証を有効にしました")
 	// G2：予備コードは平文でも暗号文でもなく、ハッシュで保存されている。G1：秘密は暗号化されている。
 	var sealed string
-	e.db.QueryRow("SELECT secret FROM AuthTotp WHERE userId = ?", id).Scan(&sealed)
+	if err := e.db.QueryRow("SELECT secret FROM AuthTotp WHERE userId = ?", id).Scan(&sealed); err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(sealed, base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(secret)) || !strings.HasPrefix(sealed, "v0:") {
 		t.Fatalf("秘密が暗号化されていない: %s", sealed)
 	}
@@ -694,7 +698,7 @@ func TestAuthDBMFA(t *testing.T) {
 			expectStatus(t, p.do("POST", "/api/auth/mfa/verify", map[string]string{"code": "000000"}), 401, "INVALID_CODE")
 		}
 		expectStatus(t, p.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 401, "MFA_CHALLENGE_EXPIRED")
-		e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
+		dbFixture{t, e.db}.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
 
 		p.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 		code := totpCode(secret, totpStep(e.clock.Now()))
@@ -744,7 +748,9 @@ type fakeGoogle struct {
 func newFakeGoogle(t *testing.T) *fakeGoogle {
 	g := &fakeGoogle{t: t}
 	g.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			g.t.Error(err)
+		}
 		g.mu.Lock()
 		defer g.mu.Unlock()
 		sum := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
@@ -757,7 +763,9 @@ func newFakeGoogle(t *testing.T) *fakeGoogle {
 			claims[k] = v
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "token_type": "Bearer", "expires_in": 3600, "id_token": fakeIDToken(claims)})
+		if err := json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "token_type": "Bearer", "expires_in": 3600, "id_token": fakeIDToken(claims)}); err != nil {
+			g.t.Error(err)
+		}
 	}))
 	t.Cleanup(g.server.Close)
 	return g
@@ -769,7 +777,9 @@ func (g *fakeGoogle) start(b *browser, callbackURL string) string {
 	rec := b.do("POST", "/api/auth/oauth/google", map[string]string{"callbackURL": callbackURL})
 	expectStatus(g.t, rec, 200, "")
 	var res struct{ URL string }
-	json.Unmarshal(rec.Body.Bytes(), &res)
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		g.t.Fatal(err)
+	}
 	u, _ := url.Parse(res.URL)
 	q := u.Query()
 	if q.Get("code_challenge_method") != "S256" || q.Get("scope") != "openid email" {
@@ -927,7 +937,7 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 			expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": fmt.Sprint("wrong passphrase ", i), "newPassword": "a brand new passphrase"}), 400, "INVALID_PASSWORD")
 		}
 		expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": authTestPassword, "newPassword": "a brand new passphrase"}), 429, "TOO_MANY_REQUESTS")
-		e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleReauthAccount, e.userID(email)))
+		dbFixture{t, e.db}.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleReauthAccount, e.userID(email)))
 	})
 
 	t.Run("2段階認証のコードは、途中の状態を作り直してもアカウントごとに15分10回まで", func(t *testing.T) {
@@ -944,7 +954,7 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 		b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 		e.clock.Advance(totpPeriod)
 		expectStatus(t, b.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 429, "TOO_MANY_MFA_ATTEMPTS")
-		e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
+		dbFixture{t, e.db}.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
 	})
 }
 
@@ -1029,7 +1039,9 @@ func TestAuthDBTOTPKeyRotation(t *testing.T) {
 	b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 	expectStatus(t, b.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 200, "")
 	var sealed string
-	e.db.QueryRow("SELECT secret FROM AuthTotp WHERE userId = ?", id).Scan(&sealed)
+	if err := e.db.QueryRow("SELECT secret FROM AuthTotp WHERE userId = ?", id).Scan(&sealed); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.HasPrefix(sealed, "v1:") {
 		t.Fatalf("新しい鍵で書き直されていない: %s", sealed[:3])
 	}
@@ -1051,7 +1063,7 @@ func TestAuthDBH2SignInTiming(t *testing.T) {
 			start := time.Now()
 			b.do("POST", "/api/auth/sign-in", map[string]string{"email": target, "password": fmt.Sprint("wrong passphrase ", i)})
 			out = append(out, time.Since(start))
-			e.db.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleSignInAccount, target))
+			dbFixture{t, e.db}.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleSignInAccount, target))
 		}
 		slices.Sort(out)
 		return out
@@ -1070,7 +1082,7 @@ func TestAuthDBH2SignInTiming(t *testing.T) {
 			start := time.Now()
 			b.do("POST", "/api/auth/sign-up", map[string]string{"email": target, "password": "another long passphrase"})
 			out = append(out, time.Since(start))
-			e.db.Exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(target))
+			dbFixture{t, e.db}.exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(target))
 		}
 		slices.Sort(out)
 		return out

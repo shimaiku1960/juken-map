@@ -326,7 +326,9 @@ func TestAdminMasterInputValues(t *testing.T) {
 		for raw, want := range map[string]string{"?q=%20%E6%9D%B1%20": "東", "?q=%20%20": "", "": ""} {
 			rec := adminRequest(newAdminMasterTestRouter(&fakeAdminMasterStore{}), "GET", "/api/admin/universities"+raw, "")
 			var list AdminUniversityList
-			json.Unmarshal(rec.Body.Bytes(), &list)
+			if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+				t.Fatal(err)
+			}
 			if rec.Code != http.StatusOK || list.Universities[0].Name != want || list.Page != 1 {
 				t.Errorf("%q: status = %d, q = %q, page = %d", raw, rec.Code, list.Universities[0].Name, list.Page)
 			}

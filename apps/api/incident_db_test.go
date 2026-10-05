@@ -33,7 +33,7 @@ func (fx cliFixture) account(sessions int, role string, verified bool) (email, i
 	now := time.Now().UTC()
 	fx.exec("INSERT INTO `user` (id, email, role, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
 		id, email, role, verified, now, now)
-	fx.t.Cleanup(func() { fx.db.Exec("DELETE FROM `user` WHERE id = ?", id) })
+	fx.t.Cleanup(func() { fx.exec("DELETE FROM `user` WHERE id = ?", id) })
 	for i := range sessions {
 		token := make([]byte, 32)
 		rand.Read(token)
@@ -178,7 +178,9 @@ func TestIncidentCommandDB(t *testing.T) {
 		fx.mustRun("incident", "reset-2fa", email)
 
 		var left int
-		fx.db.QueryRow("SELECT (SELECT COUNT(*) FROM AuthTotp WHERE userId = ?) + (SELECT COUNT(*) FROM AuthBackupCode WHERE userId = ?)", id, id).Scan(&left)
+		if err := fx.db.QueryRow("SELECT (SELECT COUNT(*) FROM AuthTotp WHERE userId = ?) + (SELECT COUNT(*) FROM AuthBackupCode WHERE userId = ?)", id, id).Scan(&left); err != nil {
+			t.Fatal(err)
+		}
 		if left != 0 || fx.sessionCount(id) != 0 {
 			t.Errorf("残りの秘密=%d セッション=%d", left, fx.sessionCount(id))
 		}
@@ -214,7 +216,9 @@ func TestGrantAdminCommandDB(t *testing.T) {
 		out := fx.mustRun("grant-admin", email)
 
 		var role string
-		fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role)
+		if err := fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
+			t.Fatal(err)
+		}
 		if role != "admin" || !strings.Contains(out, "user → admin") || !strings.Contains(out, "2 件消しました") {
 			t.Errorf("role=%s 出力=%q", role, out)
 		}
@@ -226,7 +230,9 @@ func TestGrantAdminCommandDB(t *testing.T) {
 		}
 
 		fx.mustRun("grant-admin", email, "--revoke")
-		fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role)
+		if err := fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
+			t.Fatal(err)
+		}
 		if role != "user" {
 			t.Errorf("--revoke 後の role = %s", role)
 		}
@@ -239,7 +245,9 @@ func TestGrantAdminCommandDB(t *testing.T) {
 		code, _, errOut := fx.run("grant-admin", email)
 
 		var role string
-		fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role)
+		if err := fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
+			t.Fatal(err)
+		}
 		if code != 1 || !strings.Contains(errOut, "メール確認が済んでいない") || role != "user" || fx.sessionCount(id) != 1 {
 			t.Errorf("終了コード %d（%s） role=%s セッション=%d", code, errOut, role, fx.sessionCount(id))
 		}

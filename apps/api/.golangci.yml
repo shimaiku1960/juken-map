@@ -1,0 +1,23 @@
+# golangci-lint の設定（JUK-136）。CI の go のジョブと、README の「手元で回す」が同じ版で使う。
+version: "2"
+
+run:
+  # DB を使うテスト（//go:build dbtest）も見る。go vet と同じく、タグ付きのファイルを取りこぼさない。
+  build-tags:
+    - dbtest
+
+linters:
+  # まずは既定の5つ（errcheck・govet・ineffassign・staticcheck・unused）。増やすかは指摘を見てから決める。
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        # defer tx.Rollback() は、Commit の後に呼ばれると必ず sql.ErrTxDone を返す。失敗の途中で
+        # 呼ばれたときも、元のエラーのほうを返しているので、ここのエラーは見る意味が無い。
+        - (*database/sql.Tx).Rollback
+  exclusions:
+    presets:
+      # Close・Flush・fmt.Fprint* などの返り値を見ない書き方を除く（golangci-lint の標準の除外）。
+      # rows.Close のエラーは rows.Err() で、レスポンスの Body.Close は読み終えた後なので見なくてよい。
+      # CLI の標準出力への書き込みに失敗しても、できることが無い。
+      - std-error-handling

@@ -136,16 +136,6 @@ func (st *sessionStore) revoke(ctx context.Context, sessionID string) error {
 	return err
 }
 
-// revokeUser はその人のセッションを消す。exceptID を渡すと、その1つだけ残す（C5 の「自分のほかの端末」）。
-// 空なら全部（C5 の「ある利用者の全端末」。停止・再設定）。消した数を返す。
-func (st *sessionStore) revokeUser(ctx context.Context, userID, exceptID string) (int64, error) {
-	res, err := st.db.ExecContext(ctx, "DELETE FROM AuthSession WHERE userId = ? AND id <> ?", userID, exceptID)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
-}
-
 // sweep は期限の切れたセッションを少しずつ消す（ログインのたびに最大 100 行）。
 func (st *sessionStore) sweep(ctx context.Context, now time.Time) error {
 	rows, err := st.db.QueryContext(ctx, "SELECT id FROM AuthSession WHERE expiresAt <= ? LIMIT 100", now)

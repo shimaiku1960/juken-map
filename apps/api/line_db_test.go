@@ -28,7 +28,7 @@ func TestLineStore(t *testing.T) {
 			id, id+"@example.test", now, now); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { db.Exec("DELETE FROM `user` WHERE id = ?", id) })
+		t.Cleanup(func() { dbFixture{t, db}.exec("DELETE FROM `user` WHERE id = ?", id) })
 		return id
 	}
 	lineUser := func() string { return "U" + randomHex(16) }
@@ -48,12 +48,14 @@ func TestLineStore(t *testing.T) {
 		}
 
 		// 同じ LINE を bob が連携しようとしても断る（nonce は消す）
-		st.issueLinkNonce(ctx, bob, "n-"+bob)
+		if err := st.issueLinkNonce(ctx, bob, "n-"+bob); err != nil {
+			t.Fatal(err)
+		}
 		mustResult(t, st, "n-"+bob, lineID, accountLinkTaken)
 		mustResult(t, st, "n-"+bob, lineID, accountLinkExpired)
 
 		// 期限切れ
-		db.Exec("INSERT INTO LineLinkNonce (nonce, userId, expiresAt) VALUES (?, ?, ?)",
+		dbFixture{t, db}.exec("INSERT INTO LineLinkNonce (nonce, userId, expiresAt) VALUES (?, ?, ?)",
 			"old-"+bob, bob, time.Now().Add(-time.Second))
 		mustResult(t, st, "old-"+bob, lineUser(), accountLinkExpired)
 	})
@@ -81,7 +83,9 @@ func TestLineStore(t *testing.T) {
 
 	t.Run("同じ nonce が同時に届いても、連携は1回だけ", func(t *testing.T) {
 		alice, lineID := newUser(t), lineUser()
-		st.issueLinkNonce(ctx, alice, "n-"+alice)
+		if err := st.issueLinkNonce(ctx, alice, "n-"+alice); err != nil {
+			t.Fatal(err)
+		}
 		results := make([]accountLinkResult, 5)
 		var wg sync.WaitGroup
 		for i := range results {
@@ -108,8 +112,12 @@ func TestLineStore(t *testing.T) {
 	t.Run("OAuth の試行は1人1つ。期限切れは DB の時計で判定する", func(t *testing.T) {
 		alice := newUser(t)
 		a := oauthAttempt{UserID: alice, Nonce: "N", CodeVerifier: "V", RedirectURI: "https://juken-map.com/api/line/oauth/callback"}
-		st.startOAuthAttempt(ctx, "s1-"+alice, a)
-		st.startOAuthAttempt(ctx, "s2-"+alice, a)
+		if err := st.startOAuthAttempt(ctx, "s1-"+alice, a); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.startOAuthAttempt(ctx, "s2-"+alice, a); err != nil {
+			t.Fatal(err)
+		}
 		if got, _ := st.findOAuthAttempt(ctx, "s1-"+alice); got != nil {
 			t.Error("古い試行が残っている")
 		}
@@ -117,11 +125,13 @@ func TestLineStore(t *testing.T) {
 		if err != nil || got == nil || got.Expired || got.CodeVerifier != "V" || got.RedirectURI != a.RedirectURI {
 			t.Fatalf("attempt = %+v, err = %v", got, err)
 		}
-		db.Exec("UPDATE LineOAuthAttempt SET expiresAt = ? WHERE state = ?", time.Now().Add(-time.Second), "s2-"+alice)
+		dbFixture{t, db}.exec("UPDATE LineOAuthAttempt SET expiresAt = ? WHERE state = ?", time.Now().Add(-time.Second), "s2-"+alice)
 		if got, _ := st.findOAuthAttempt(ctx, "s2-"+alice); got == nil || !got.Expired {
 			t.Fatalf("期限切れにならない: %+v", got)
 		}
-		st.discardOAuthAttempt(ctx, "s2-"+alice)
+		if err := st.discardOAuthAttempt(ctx, "s2-"+alice); err != nil {
+			t.Fatal(err)
+		}
 		if got, _ := st.findOAuthAttempt(ctx, "s2-"+alice); got != nil {
 			t.Error("捨てた試行が残っている")
 		}
@@ -130,11 +140,17 @@ func TestLineStore(t *testing.T) {
 	t.Run("解除で LINE 通知も落とし、nonce と試行も消す", func(t *testing.T) {
 		alice := newUser(t)
 		now := time.Now()
-		db.Exec(`INSERT INTO NotificationPreference (userId, morningEnabled, eveningEnabled, lineMorningEnabled, lineEveningEnabled, updatedAt)
+		dbFixture{t, db}.exec(`INSERT INTO NotificationPreference (userId, morningEnabled, eveningEnabled, lineMorningEnabled, lineEveningEnabled, updatedAt)
 			VALUES (?, TRUE, TRUE, TRUE, TRUE, ?)`, alice, now)
-		st.linkVerifiedLineUser(ctx, alice, lineUser())
-		st.issueLinkNonce(ctx, alice, "n-"+alice)
-		st.startOAuthAttempt(ctx, "s-"+alice, oauthAttempt{UserID: alice, Nonce: "N", CodeVerifier: "V", RedirectURI: "r"})
+		if _, err := st.linkVerifiedLineUser(ctx, alice, lineUser()); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.issueLinkNonce(ctx, alice, "n-"+alice); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.startOAuthAttempt(ctx, "s-"+alice, oauthAttempt{UserID: alice, Nonce: "N", CodeVerifier: "V", RedirectURI: "r"}); err != nil {
+			t.Fatal(err)
+		}
 
 		if err := st.disconnect(ctx, alice); err != nil {
 			t.Fatal(err)
@@ -156,26 +172,30 @@ func TestLineStore(t *testing.T) {
 
 	t.Run("Webhook のイベントは1回だけ印が入る。消せばまた入る", func(t *testing.T) {
 		id := "test-" + randomHex(8)
-		t.Cleanup(func() { db.Exec("DELETE FROM LineWebhookEvent WHERE webhookEventId = ?", id) })
+		t.Cleanup(func() { dbFixture{t, db}.exec("DELETE FROM LineWebhookEvent WHERE webhookEventId = ?", id) })
 		if dup, err := st.markWebhookEvent(ctx, id); err != nil || dup {
 			t.Fatal(dup, err)
 		}
 		if dup, err := st.markWebhookEvent(ctx, id); err != nil || !dup {
 			t.Fatalf("2回目が重複にならない: %v %v", dup, err)
 		}
-		st.unmarkWebhookEvent(ctx, id)
+		if err := st.unmarkWebhookEvent(ctx, id); err != nil {
+			t.Fatal(err)
+		}
 		if dup, err := st.markWebhookEvent(ctx, id); err != nil || dup {
 			t.Fatal(dup, err)
 		}
 
 		// 保持期間を過ぎた印は、次の Webhook のときに消える
 		old := "test-old-" + randomHex(8)
-		db.Exec("INSERT INTO LineWebhookEvent (webhookEventId, createdAt) VALUES (?, ?)", old, time.Now().Add(-lineWebhookEventRetention-time.Hour))
-		st.markWebhookEvent(ctx, "test-"+randomHex(8))
+		dbFixture{t, db}.exec("INSERT INTO LineWebhookEvent (webhookEventId, createdAt) VALUES (?, ?)", old, time.Now().Add(-lineWebhookEventRetention-time.Hour))
+		if _, err := st.markWebhookEvent(ctx, "test-"+randomHex(8)); err != nil {
+			t.Fatal(err)
+		}
 		if n := count(t, db, "SELECT COUNT(*) FROM LineWebhookEvent WHERE webhookEventId = ?", old); n != 0 {
 			t.Error("古い印が消えていない")
 		}
-		db.Exec("DELETE FROM LineWebhookEvent WHERE webhookEventId LIKE 'test-%'")
+		dbFixture{t, db}.exec("DELETE FROM LineWebhookEvent WHERE webhookEventId LIKE 'test-%'")
 	})
 }
 

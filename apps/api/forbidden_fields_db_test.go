@@ -129,7 +129,9 @@ func TestA4ForbiddenFieldsDB(t *testing.T) {
 	for _, row := range fx.rows(`SELECT TABLE_NAME AS name FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'userId'`) {
 		var r struct{ Name string }
-		json.Unmarshal([]byte(row), &r)
+		if err := json.Unmarshal([]byte(row), &r); err != nil {
+			t.Fatal(err)
+		}
 		tablesWithUserID = append(tablesWithUserID, r.Name)
 	}
 
@@ -211,7 +213,9 @@ func TestA4ForbiddenFieldsDB(t *testing.T) {
 					var r struct {
 						ID any `json:"id"`
 					}
-					json.Unmarshal([]byte(row), &r)
+					if err := json.Unmarshal([]byte(row), &r); err != nil {
+						t.Fatal(err)
+					}
 					if fmt.Sprint(r.ID) == fmt.Sprint(forbiddenID) {
 						t.Errorf("%s の行の id が本文の id になった: %s", table, row)
 					}

@@ -195,7 +195,9 @@ func TestDailyNotifierSend(t *testing.T) {
 		store := newFakeStore(recipient{ID: "u", Email: strp("u@example.com"), Morning: true})
 		m := &fakeMessenger{}
 		n := testNotifier(store, m)
-		n.send(context.Background(), NotificationSlotMorning, testNow)
+		if _, err := n.send(context.Background(), NotificationSlotMorning, testNow); err != nil {
+			t.Fatal(err)
+		}
 		second, _ := n.send(context.Background(), NotificationSlotMorning, testNow)
 		if second.Skipped != 1 || second.Sent != 0 || len(m.emails) != 1 {
 			t.Errorf("second = %+v, emails = %v", second, m.emails)
