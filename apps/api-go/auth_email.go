@@ -37,13 +37,14 @@ const (
 	emailAlreadyRegistered emailKind = "already-registered"
 	emailMFAEnabled        emailKind = "mfa-enabled"
 	emailAccountLinked     emailKind = "account-linked"
+	emailAccountDeleted    emailKind = "account-deleted"
 	emailAdminNewUser      emailKind = "admin-new-user"
 )
 
 // emailKinds はメトリクスを 0 で作っておく種類の一覧。
 var emailKinds = []emailKind{
 	emailVerification, emailPasswordReset, emailPasswordChanged, emailAlreadyRegistered,
-	emailMFAEnabled, emailAccountLinked, emailAdminNewUser,
+	emailMFAEnabled, emailAccountLinked, emailAccountDeleted, emailAdminNewUser,
 }
 
 const (
@@ -249,6 +250,15 @@ func (m *authMailer) sendAccountLinked(to, provider, webOrigin string) {
 	m.sendLater(emailAccountLinked, to, "【受験マップ】外部サービスでのログインを連携しました",
 		`<p>受験マップのアカウントに、`+html.EscapeString(providerLabel(provider))+` でのログインを連携しました。`+
 			`次から `+html.EscapeString(providerLabel(provider))+` でもログインできます。</p>`+m.ifNotYou(webOrigin))
+}
+
+// sendAccountDeleted は退会を本人へ知らせる。アカウントはもう無いので、心当たりが無いときの連絡先は
+// パスワードの再設定ではなく運営への問い合わせにする。
+func (m *authMailer) sendAccountDeleted(to, webOrigin string) {
+	m.sendLater(emailAccountDeleted, to, "【受験マップ】退会の手続きが完了しました",
+		`<p>受験マップのアカウントと、学習記録・予定・志望校などのデータをすべて削除しました。ご利用ありがとうございました。</p>`+
+			`<p>心当たりがない場合は、このメールに返信せず、利用規約の「お問い合わせ」にある連絡先までご連絡ください。</p>`+
+			`<p><a href="`+html.EscapeString(webOrigin+"/terms")+`">利用規約</a></p>`)
 }
 
 // notifyAdminOfNewUser は新しい利用者を運営者へ知らせる。宛先の設定が無ければ、ログに残すだけ。

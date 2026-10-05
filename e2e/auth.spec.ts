@@ -118,3 +118,22 @@ test("管理者は2段階認証を設定してから管理画面に入り、次�
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "利用状況" })).toBeVisible();
 });
+
+test("プロフィールから退会すると、データが消えてログインできなくなる（06 G3）", async ({ page }) => {
+  const email = newEmail();
+  helper("user", email, PASSWORD);
+  await login(page, email, PASSWORD);
+
+  await page.goto("/profile");
+  await page.getByRole("button", { name: "退会する" }).click();
+  await page.getByLabel("確認のため、パスワードを入力してください").fill("not my passphrase!!");
+  await page.getByRole("button", { name: "すべて削除して退会する" }).click();
+  await expect(page.getByText("今のパスワードが違います")).toBeVisible();
+
+  await page.getByLabel("確認のため、パスワードを入力してください").fill(PASSWORD);
+  await page.getByRole("button", { name: "すべて削除して退会する" }).click();
+  await expect(page).toHaveURL(/\/\?deleted=1$/);
+
+  await fillLogin(page, email, PASSWORD);
+  await expect(page.getByText("メールアドレスまたはパスワードが違います")).toBeVisible();
+});

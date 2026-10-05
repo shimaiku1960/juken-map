@@ -95,6 +95,10 @@ export const authClient = {
   changePassword: (input: { currentPassword: string; newPassword: string }) =>
     call<Ok>("POST", "/api/auth/password/change", input),
 
+  /** 退会。パスワードがあれば password、無ければ email。2段階認証が有効なら code も要る。 */
+  deleteAccount: (input: { password?: string; email?: string; code?: string; method?: "totp" | "backup" }) =>
+    call<Ok>("POST", "/api/auth/delete-account", input),
+
   listAccounts: () => call<{ hasPassword: boolean; providers: string[] }>("GET", "/api/auth/accounts"),
 
   mfa: {
