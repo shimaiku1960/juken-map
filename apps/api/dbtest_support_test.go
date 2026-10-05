@@ -84,7 +84,7 @@ func (fx dbFixture) user() string {
 	id := "test-go-" + testHex(8)
 	now := time.Now()
 	fx.exec("INSERT INTO `user` (id, email, createdAt, updatedAt) VALUES (?, ?, ?, ?)", id, id+"@example.test", now, now)
-	fx.t.Cleanup(func() { fx.db.Exec("DELETE FROM `user` WHERE id = ?", id) })
+	fx.t.Cleanup(func() { fx.exec("DELETE FROM `user` WHERE id = ?", id) })
 	return id
 }
 
@@ -94,7 +94,7 @@ func (fx dbFixture) university() int64 {
 	fx.t.Helper()
 	universityID := fx.insert("INSERT INTO University (name, prefecture, type, createdAt) VALUES (?, ?, ?, ?)",
 		"大学-"+testHex(8), "東京都", "私立", time.Now())
-	fx.t.Cleanup(func() { fx.db.Exec("DELETE FROM University WHERE id = ?", universityID) })
+	fx.t.Cleanup(func() { fx.exec("DELETE FROM University WHERE id = ?", universityID) })
 	return fx.insert("INSERT INTO Faculty (name, examDate, universityId, createdAt) VALUES (?, ?, ?, ?)",
 		"学部", time.Date(2027, 2, 15, 0, 0, 0, 0, time.UTC), universityID, time.Now())
 }

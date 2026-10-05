@@ -121,7 +121,7 @@ func TestRequestID(t *testing.T) {
 	if id := newRequestID(true); len(id) != 8 {
 		t.Errorf("newRequestID(true) = %q, want 8文字", id)
 	}
-	if newRequestID(false) == newRequestID(false) {
+	if a, b := newRequestID(false), newRequestID(false); a == b {
 		t.Error("同じ reqId が2回出た")
 	}
 }

@@ -114,7 +114,10 @@ func applyMigrations(ctx context.Context, databaseURL, dir string, log io.Writer
 		return nil, fmt.Errorf("別のマイグレーションが実行中です（%d秒待ってもロックが取れませんでした）", migrationLockTimeoutSeconds)
 	}
 	// 接続を閉じればロックも外れるが、ほかの実行を待たせないよう先に返す。ctx が切れていても返せるようにする。
-	defer conn.ExecContext(context.WithoutCancel(ctx), "SELECT RELEASE_LOCK(?)", migrationLockName)
+	// 返せなくても閉じたときに外れるので、エラーは見ない。
+	defer func() {
+		_, _ = conn.ExecContext(context.WithoutCancel(ctx), "SELECT RELEASE_LOCK(?)", migrationLockName)
+	}()
 
 	if _, err := conn.ExecContext(ctx, createLedgerSQL); err != nil {
 		return nil, err

@@ -50,7 +50,9 @@ func newMigrateFixture(t *testing.T) migrateFixture {
 		t.Fatalf("テスト用の MySQL に繋げません: %v", err)
 	}
 	t.Cleanup(func() {
-		admin.Exec("DROP DATABASE IF EXISTS `" + migrateTestDBName + "`")
+		if _, err := admin.Exec("DROP DATABASE IF EXISTS `" + migrateTestDBName + "`"); err != nil {
+			t.Error(err)
+		}
 		admin.Close()
 	})
 	for _, q := range []string{

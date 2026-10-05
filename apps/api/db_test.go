@@ -34,7 +34,7 @@ func TestRDSBundleHasTokyoRoots(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Subjects は非推奨だが、数を数えるだけなら使える（信頼リストの中身を見る手段がほかに無い）。
-	if n := len(cfg.TLS.RootCAs.Subjects()); n != 3 {
+	if n := len(cfg.TLS.RootCAs.Subjects()); n != 3 { //nolint:staticcheck // SA1019：上のとおり、数えるだけなので承知で使う
 		t.Errorf("ルート証明書が %d 本（RSA2048・RSA4096・ECC384 の3本のはず）", n)
 	}
 }

@@ -226,7 +226,7 @@ func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s
 		writeError(w, http.StatusConflict, protectedMessages[protectedNoEmail])
 		return
 	}
-	if strings.ToLower(*target.Email) != strings.ToLower(jsTrim(email)) {
+	if !strings.EqualFold(*target.Email, jsTrim(email)) {
 		writeError(w, http.StatusBadRequest, "メールアドレスが一致しません")
 		return
 	}

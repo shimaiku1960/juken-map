@@ -637,20 +637,22 @@ func TestHTTPLineClientLogin(t *testing.T) {
 			raw, _ := io.ReadAll(r.Body)
 			tokenForm, _ = url.ParseQuery(string(raw))
 			w.Header().Set("Content-Type", "application/json")
-			io.WriteString(w, `{"access_token":"AT","token_type":"Bearer","expires_in":2592000,"id_token":"IDT"}`)
+			_, _ = io.WriteString(w, `{"access_token":"AT","token_type":"Bearer","expires_in":2592000,"id_token":"IDT"}`)
 		case "/oauth2/v2.1/verify":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Error(err)
+			}
 			if r.Form.Get("id_token") != "IDT" || r.Form.Get("client_id") != "CID" || r.Form.Get("nonce") != "N1" {
 				http.Error(w, `{"error":"invalid_request"}`, http.StatusBadRequest)
 				return
 			}
-			io.WriteString(w, `{"sub":"U1","nonce":"N1"}`)
+			_, _ = io.WriteString(w, `{"sub":"U1","nonce":"N1"}`)
 		case "/friendship/v1/status":
 			if r.Header.Get("Authorization") != "Bearer AT" {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-			io.WriteString(w, `{"friendFlag":true}`)
+			_, _ = io.WriteString(w, `{"friendFlag":true}`)
 		default:
 			http.NotFound(w, r)
 		}

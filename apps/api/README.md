@@ -25,6 +25,15 @@ go run .                             # PORT を指定しなければ 8080
 go test ./...
 ```
 
+CI の go のジョブと同じ静的な確かめは次のとおり。lint の設定は `.golangci.yml`（JUK-136）で、
+版は CI（`.github/workflows/ci.yml`）とそろえる。
+
+```sh
+gofmt -l .                                     # 何か出たら gofmt -w . で整形する
+go vet ./... && go vet -tags dbtest ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...   # 初回はビルドに1分ほどかかる
+```
+
 ログは本番と同じ1行1つの JSON。人が読みたいときは、Node と同じ pino-pretty に通す。
 
 ```sh

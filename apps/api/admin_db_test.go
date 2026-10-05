@@ -103,7 +103,7 @@ func (fx dbFixture) adminUser(email, role string, createdAt time.Time, simSeq an
 	}
 	fx.exec("INSERT INTO `user` (id, email, role, simSeq, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, TRUE, ?, ?)",
 		id, emailValue, role, simSeq, createdAt, createdAt)
-	fx.t.Cleanup(func() { fx.db.Exec("DELETE FROM `user` WHERE id = ?", id) })
+	fx.t.Cleanup(func() { fx.exec("DELETE FROM `user` WHERE id = ?", id) })
 	return id
 }
 
@@ -127,7 +127,7 @@ func (fx dbFixture) account(userID, providerID string) {
 // tag はタグを1つ作る（テスト用の DB にはタグが入っていない）。
 func (fx dbFixture) tag(name string) int64 {
 	id := fx.insert("INSERT INTO Tag (name, createdAt) VALUES (?, ?)", name, time.Now())
-	fx.t.Cleanup(func() { fx.db.Exec("DELETE FROM Tag WHERE id = ?", id) })
+	fx.t.Cleanup(func() { fx.exec("DELETE FROM Tag WHERE id = ?", id) })
 	return id
 }
 
@@ -370,11 +370,11 @@ func TestAdminMastersDB(t *testing.T) {
 	// このテストで作る大学・参考書の名前は、この印で始める（最後にまとめて消す。途中で落ちても残さない）。
 	mark := "jk106-" + testHex(6)
 	t.Cleanup(func() {
-		db.Exec(`DELETE g FROM FinalGoal g JOIN Faculty f ON f.id = g.facultyId JOIN University u ON u.id = f.universityId
+		fx.exec(`DELETE g FROM FinalGoal g JOIN Faculty f ON f.id = g.facultyId JOIN University u ON u.id = f.universityId
 		         WHERE u.name LIKE ?`, mark+"%")
-		db.Exec("DELETE FROM University WHERE name LIKE ?", mark+"%")
-		db.Exec("DELETE t FROM Textbook t JOIN TextbookMaster tm ON tm.id = t.masterId WHERE tm.name LIKE ?", mark+"%")
-		db.Exec("DELETE FROM TextbookMaster WHERE name LIKE ?", mark+"%")
+		fx.exec("DELETE FROM University WHERE name LIKE ?", mark+"%")
+		fx.exec("DELETE t FROM Textbook t JOIN TextbookMaster tm ON tm.id = t.masterId WHERE tm.name LIKE ?", mark+"%")
+		fx.exec("DELETE FROM TextbookMaster WHERE name LIKE ?", mark+"%")
 	})
 	tag1, tag2 := fx.tag(mark+"-tag1"), fx.tag(mark+"-tag2")
 
