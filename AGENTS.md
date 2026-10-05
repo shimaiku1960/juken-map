@@ -63,8 +63,9 @@ DevOps・テストの8分野）は、プロジェクト横断の非公開リポ�
 
 `./.standards/INDEX.md`
 
-必要な分野の文書だけを追加で読むこと。**採点結果や実測値は dev-standards には書かず**、
-auto-memory の該当トピックに残す。`./.standards` が無い環境では
+必要な分野の文書だけを追加で読むこと。**基準に対する判定・実測値・実装との対応表は
+dev-standards の `projects/juken-map/` に置く**（基準そのものの `targets/` には書かない）。
+判断の経緯は今までどおり auto-memory の該当トピックに残す。`./.standards` が無い環境では
 `git clone https://github.com/shimaiku1960/dev-standards.git ~/dev/standards` してから
 シンボリックリンクを張る。
 
