@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
-	"github.com/go-sql-driver/mysql"
 )
 
 // 学習予定の書き込み（JUK-75）。Node の次の部分にあたる。
@@ -317,7 +315,7 @@ func (st *studyPlanWriteStore) complete(ctx context.Context, userID string, plan
 		return CompletedStudyPlan{}, err
 	}
 
-	// 同じ予定の実績が既にあれば、studyPlanId の UNIQUE 制約で 1062（重複）になる。
+	// 同じ予定の実績が既にあれば、studyPlanId の UNIQUE 制約に当たる。
 	inserted, err := tx.ExecContext(ctx,
 		`INSERT INTO StudyLog
 		   (userId, studyPlanId, date, minutes, subject, textbookId,
@@ -325,8 +323,7 @@ func (st *studyPlanWriteStore) complete(ctx context.Context, userID string, plan
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		userID, plan.row.ID, plan.rawDate, minutes, plan.row.Subject, plan.row.TextbookID,
 		rangeStart, rangeEnd, rangeUnit, memo, now, now)
-	var mysqlErr *mysql.MySQLError
-	if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+	if isMySQLError(err, mysqlDuplicateEntry) {
 		return CompletedStudyPlan{}, errAlreadyCompleted
 	}
 	if err != nil {

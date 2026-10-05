@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -12,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-sql-driver/mysql"
 )
 
 // シミュレーション（sim/）専用の API（JUK-80）。Node の routes/sim.ts と services/simulation-service.ts にあたる。
@@ -80,8 +77,7 @@ func (st *simStore) markUser(ctx context.Context, m SimulationUserMark) (notFoun
 	res, err := st.db.ExecContext(ctx,
 		"UPDATE `user` SET simSeq = ?, simCohort = ?, updatedAt = ? WHERE email = ? AND email LIKE ?",
 		m.Seq, m.Cohort, time.Now().UTC(), m.Email, simEmailLike)
-	var myErr *mysql.MySQLError
-	if errors.As(err, &myErr) && myErr.Number == 1062 { // ER_DUP_ENTRY
+	if isMySQLError(err, mysqlDuplicateEntry) {
 		return false, true, nil
 	}
 	if err != nil {

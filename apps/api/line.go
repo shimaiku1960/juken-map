@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
 )
@@ -586,8 +585,7 @@ func (st *sqlLineStore) markWebhookEvent(ctx context.Context, eventID string) (b
 		return false, fmt.Errorf("clean line webhook events: %w", err)
 	}
 	_, err := st.db.ExecContext(ctx, "INSERT INTO LineWebhookEvent (webhookEventId) VALUES (?)", eventID)
-	var me *mysql.MySQLError
-	if errors.As(err, &me) && me.Number == 1062 { // ER_DUP_ENTRY
+	if isMySQLError(err, mysqlDuplicateEntry) {
 		return true, nil
 	}
 	if err != nil {

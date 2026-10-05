@@ -99,3 +99,14 @@ func dbConfig(databaseURL string) (*mysql.Config, error) {
 func isoFromDatetime(value string) string {
 	return value[:10] + "T" + value[11:] + "Z"
 }
+
+// isMySQLError は MySQL のエラー番号で見分ける。番号は下の定数で書き、1062 などの数字を直接書かない。
+func isMySQLError(err error, number uint16) bool {
+	var me *mysql.MySQLError
+	return errors.As(err, &me) && me.Number == number
+}
+
+const (
+	mysqlDuplicateEntry  = 1062 // ER_DUP_ENTRY：一意制約に当たった
+	mysqlRowIsReferenced = 1451 // ER_ROW_IS_REFERENCED_2：外部キーに参照されていて消せない
+)

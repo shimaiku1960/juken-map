@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-sql-driver/mysql"
 )
 
 // 管理者ページのマスター編集（/admin/masters、JUK-78）。Node の routes/admin-masters.ts と
@@ -672,19 +670,6 @@ type sqlRunner interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
-
-// isMySQLError は MySQL のエラー番号で見分ける。
-//   - 1062 ER_DUP_ENTRY：一意制約（大学名・ISBN）に当たった
-//   - 1451 ER_ROW_IS_REFERENCED_2：外部キーに参照されていて消せない
-func isMySQLError(err error, number uint16) bool {
-	var me *mysql.MySQLError
-	return errors.As(err, &me) && me.Number == number
-}
-
-const (
-	mysqlDuplicateEntry  = 1062
-	mysqlRowIsReferenced = 1451
-)
 
 // placeholders は IN (…)・VALUES に並べる ? を n 個つなぐ。
 func placeholders(n int, one string) string {
