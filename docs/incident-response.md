@@ -157,6 +157,8 @@ openssl rand -base64 48
 **EC2 の `.env` を直す**：SSM で入り、`sudo -iu ubuntu` で `/home/ubuntu/juken-map/.env` の該当行を書き換える。
 コンテナは作成時にしか `.env` を読まないので、GitHub Actions の「Deploy to EC2」を手動で実行する
 （`gh workflow run deploy.yml`）。
+対話のセッションを使えないとき（エージェントの `!` など）は `aws ssm send-command` でも直せるが、
+コマンドの中身は SSM の実行履歴に残るので、行を消すような秘密を含まない変更だけにする。
 
 **Secrets Manager を直す**：1つのシークレットに JSON でまとめて入っているので、1つの項目だけを差し替えて書き戻す。
 値はシェルの履歴に残さないよう、`read -s` で受ける。
@@ -306,10 +308,17 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
      aws ecr get-login-password --region ap-northeast-1 \
        | docker login --username AWS --password-stdin 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com
      git worktree add --detach ../juken-map-restore <信頼できるコミット> && cd ../juken-map-restore
+     c=$(git rev-parse HEAD)
+     # deploy.yml と同じ引数で作る。APP_COMMIT が無いと /api/health のコミットが空になり、
+     # microCMS の鍵が無いとブログの記事が SSG されない。鍵は手元の .env から読む（4 で差し替えたなら新しい値）
+     set -a; . ../juken-map/.env; set +a
      docker buildx build --platform linux/amd64 --push \
-       -t 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:restore-<コミット> .
-     docker buildx build --platform linux/amd64 --push \
-       -t 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:restore-<コミット> apps/api-go
+       --build-arg APP_COMMIT=$c \
+       --secret id=microcms_api_key,env=MICROCMS_API_KEY \
+       --build-arg MICROCMS_SERVICE_DOMAIN --build-arg SSG_ARTICLES=required \
+       -t 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:restore-$c .
+     docker buildx build --platform linux/amd64 --push --build-arg APP_COMMIT=$c \
+       -t 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:restore-$c apps/api-go
      ```
 
    - CI を使わずに、手元から deploy.yml と同じコマンドを送る（信頼できるコミットのファイルを使う）
@@ -319,11 +328,15 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
      remote="echo '$(base64 < .github/scripts/deploy-ec2.sh | tr -d '\n')' | base64 -d | bash -s -- '$tag' \
        '$(base64 < observability/alloy/production.alloy | tr -d '\n')' \
        '$(base64 < infra/nginx/juken-map-go-routes.conf | tr -d '\n')' \
-       '$(tar -C infra/systemd -cz . | base64 | tr -d '\n')'"
+       '$(COPYFILE_DISABLE=1 tar --no-xattrs -C infra/systemd -cz . | base64 | tr -d '\n')'"
      aws ssm send-command --region ap-northeast-1 --instance-ids i-0eeb166295363e11d \
        --document-name AWS-RunShellScript --timeout-seconds 900 --comment "Restore juken-map $tag" \
        --parameters "$(jq -cn --arg c "$remote" '{commands: [$c]}')" --query Command.CommandId --output text
      ```
+
+     結果は `aws ssm get-command-invocation --region ap-northeast-1 --instance-id i-0eeb166295363e11d --command-id <ID>` で見る。
+     `/api/health` のコミットが信頼できるコミットになっていればよい。`COPYFILE_DISABLE=1` と `--no-xattrs` は、Mac の tar が
+     拡張属性と `._` で始まるファイルを混ぜないようにするため（EC2 の tar が警告を出す）。戻したイメージは、次に CI がデプロイするまで動き続ける
 
    - EC2 そのものに手を入れられた疑い（知らないプロセス・cron・ユーザー）があれば、Terraform で EC2 を作り直す
 6. 原因を取り除いてから戻す。ワークフローを直してマージし、ロールの拒否を外し、ワークフローを有効にする
@@ -346,12 +359,12 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
 | Grafana の問い合わせ（メトリクス・ログ） | 2026-10-02 | 本番を読み取りだけ |
 | アラートが鳴って受け口に届く | 2026-10-01・10-02 | 本番で実際に起こした（JUK-98）。H3 は Alloy を止めて、3本が約8〜20分で届いた |
 | CloudTrail・SSM・ECR の記録を引く | 2026-10-02 | 本番を読み取りだけ |
-| CI のロールに付ける拒否のポリシー | 2026-10-02 | IAM のシミュレーションで、`ecr:PutImage`・`ssm:SendCommand` が `explicitDeny` になることを確かめた。実際に付けて外すのは未 |
-| Secrets Manager の1項目の差し替え | 2026-10-02（一部） | jq の置き換えは偽の JSON で、`file:///dev/stdin` から値を渡せることは読み取りの API（`validate-resource-policy`）で確かめた。本番のシークレットへの書き込みは未 |
+| CI のロールに付ける拒否のポリシー | 2026-10-02 | IAM のシミュレーションで、`ecr:PutImage`・`ssm:SendCommand` が `explicitDeny` になることを確かめた。実際に付けて外したのは下の行（2026-10-05） |
+| Secrets Manager の1項目の差し替え | 2026-10-02（一部）・10-04 | jq の置き換えは偽の JSON で、`file:///dev/stdin` から値を渡せることは読み取りの API（`validate-resource-policy`）で確かめた。10-04 に本番で、上の手順のまま1項目を足した（JUK-112）。ほかの項目が残ることをキー名で、再デプロイで値が Go に渡ることを確かめた |
 | `ALTER USER` で DB のパスワードを変える | 2026-10-02 | 手元の MySQL に `mysql:8.4` のコンテナから入り、使い捨てのユーザーで実行した。古い値は 1045 で断られ、新しい値で入れた |
 | 新しい値を作る（`openssl rand`） | 2026-10-02 | 手元 |
-| ワークフローを止めて戻す（`gh workflow disable / enable`） | 未 | |
-| CI のロールに拒否のポリシーを付けて外す | 未 | |
-| EC2 の `.env` を直して再デプロイする | 未 | |
-| 手元で amd64 のイメージを作って ECR に push し、手元から SSM でデプロイする | 未 | |
+| ワークフローを止めて戻す（`gh workflow disable / enable`） | 2026-10-05 | 本番で、5 の手順 1・6 のループのとおり3つを止め、`gh workflow list --all` で `disabled_manually` を確かめてから戻した（数秒） |
+| CI のロールに拒否のポリシーを付けて外す | 2026-10-05 | 本番で 5 の手順 2 のとおりに付け、IAM のシミュレーションで `ecr:PutImage`・`ssm:SendCommand` が `explicitDeny` になるのを見てから、手順 6 のとおりに外した（約15秒） |
+| EC2 の `.env` を直して再デプロイする | 2026-10-05 | 本番の `.env` にアプリが読まない行（`INCIDENT_DRILL`）を `send-command` で足し、`gh workflow run deploy.yml` のあと、新しいコンテナの `printenv` に出ることを確かめてから行を消した |
+| 手元で amd64 のイメージを作って ECR に push し、手元から SSM でデプロイする | 2026-10-05 | 本番で、その時の `main`（`8d9d7fc`）を `restore-` のタグで作って push し、上の手順のまま SSM で送った。`/api/health` のコミットとブログ記事のページを確かめた。このとき、手順のビルドに `APP_COMMIT`・microCMS の鍵・`SSG_ARTICLES` が抜けていた（コミットが空・記事が SSG されないイメージになる）のを直した |
 | 外部サービスの鍵の作り直し（Google・GitHub・LINE・Resend・microCMS・Grafana） | 未 | 各サービスの画面の操作。漏えいが無いのに作り直すと、差し替えまでの間アプリが止まるため |
