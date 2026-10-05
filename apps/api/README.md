@@ -133,6 +133,11 @@ rt.job("POST /api/cron/…", secret, cron.handle)           // タイマー（in
 path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。想定外の失敗は
 `internalError(w, r, err)` に渡す（500 を返し、原因はログにだけ残す）。
 
+利用者の持ち物（志望校・参考書・実績・予定）を読む・変える関数は、引数に `userID` を取り、
+SQL を `WHERE id = ? AND userId = ?` にする。ハンドラーも先に持ち主を確かめる（他人のものは 404）が、
+それを書き忘れても他人の行が変わらないようにするため（JUK-54）。新しく足す関数もこの形にし、
+`ownership_store_db_test.go` に1件足す。
+
 ルートを足したら、次の3か所に足す。
 
 1. `main.go` の `registerRoutes` と、`main_test.go` の一覧（入口の種類）
@@ -339,7 +344,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `ownership_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3）と禁止項目（A4）を確かめる |
+| `ownership_db_test.go`・`ownership_store_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3。入口からと、ストアを直接呼んで）と禁止項目（A4）を確かめる |
 | `list_limits_db_test.go` | 学習記録・予定の一覧が 1000 件で切り詰められることを確かめる（06 E2） |
 
 ## Node と揃えていること

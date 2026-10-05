@@ -122,18 +122,13 @@ type studyLogWriteStore struct {
 	db *sql.DB
 }
 
-// findStudyLog は実績を1件読む。userID が空でなければ、その人のものだけ（Node の findOwnedStudyLog）。
-// 無ければ nil。
+// findStudyLog は userID の人の実績を1件読む（Node の findOwnedStudyLog）。無いか他人のものなら nil。
 func findStudyLog(ctx context.Context, q queryRower, id int64, userID string) (*storedStudyLog, error) {
-	query := "SELECT" + studyLogRowColumns + " FROM StudyLog AS l WHERE l.id = ?"
-	args := []any{id}
-	if userID != "" {
-		query += " AND l.userId = ? LIMIT 1"
-		args = append(args, userID)
-	}
 	var s storedStudyLog
 	r := &s.row
-	err := q.QueryRowContext(ctx, query, args...).Scan(
+	err := q.QueryRowContext(ctx,
+		"SELECT"+studyLogRowColumns+" FROM StudyLog AS l WHERE l.id = ? AND l.userId = ? LIMIT 1", id, userID,
+	).Scan(
 		&r.ID, &r.UserID, &s.rawDate, &r.Subject, &r.Minutes, &r.TextbookID,
 		&r.RangeStart, &r.RangeEnd, &r.RangeUnit, &r.Memo, &r.StudyPlanID,
 		&r.CreatedAt, &r.UpdatedAt)
@@ -198,7 +193,7 @@ func (st *studyLogWriteStore) create(ctx context.Context, userID string, in stud
 		return CreatedStudyLog{}, err
 	}
 	// INSERT は行を返さないので、応答に使う形を同じトランザクションで読み直す。
-	created, err := findStudyLog(ctx, tx, id, "")
+	created, err := findStudyLog(ctx, tx, id, userID)
 	if err != nil {
 		return CreatedStudyLog{}, err
 	}
@@ -218,8 +213,8 @@ func (st *studyLogWriteStore) create(ctx context.Context, userID string, in stud
 }
 
 // update は実績を書き換え、書き換えた後の行を返す。予定から作られた実績は、予定との紐づきを壊す項目
-// （日付・科目・参考書）を今の値のまま書き戻す（Node と同じ）。
-func (st *studyLogWriteStore) update(ctx context.Context, current *storedStudyLog, in studyLogInput) (StudyLogRow, error) {
+// （日付・科目・参考書）を今の値のまま書き戻す（Node と同じ）。userID の人のものだけを変える。
+func (st *studyLogWriteStore) update(ctx context.Context, userID string, current *storedStudyLog, in studyLogInput) (StudyLogRow, error) {
 	var date any = dateFromYMD(in.date)
 	subject, textbookID := in.subject.ptr(), in.textbookID.ptr()
 	if current.row.StudyPlanID != nil {
@@ -229,14 +224,14 @@ func (st *studyLogWriteStore) update(ctx context.Context, current *storedStudyLo
 		`UPDATE StudyLog
 		 SET date = ?, minutes = ?, subject = ?, textbookId = ?,
 		     rangeStart = ?, rangeEnd = ?, rangeUnit = ?, memo = ?, updatedAt = ?
-		 WHERE id = ?`,
+		 WHERE id = ? AND userId = ?`,
 		date, in.minutes, subject, textbookID,
 		in.rangeStart.ptr(), in.rangeEnd.ptr(), in.rangeUnit.ptr(), in.memo.ptr(), nowMillis(),
-		current.row.ID,
+		current.row.ID, userID,
 	); err != nil {
 		return StudyLogRow{}, err
 	}
-	updated, err := findStudyLog(ctx, st.db, current.row.ID, "")
+	updated, err := findStudyLog(ctx, st.db, current.row.ID, userID)
 	if err != nil {
 		return StudyLogRow{}, err
 	}
@@ -246,8 +241,9 @@ func (st *studyLogWriteStore) update(ctx context.Context, current *storedStudyLo
 	return updated.row, nil
 }
 
-func (st *studyLogWriteStore) delete(ctx context.Context, id int64) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM StudyLog WHERE id = ?", id)
+// delete は userID の人の実績だけを消す。
+func (st *studyLogWriteStore) delete(ctx context.Context, userID string, id int64) error {
+	_, err := st.db.ExecContext(ctx, "DELETE FROM StudyLog WHERE id = ? AND userId = ?", id, userID)
 	return err
 }
 
@@ -357,7 +353,7 @@ func (h *studyLogWriteHandlers) update(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	updated, err := h.store.update(r.Context(), log, input)
+	updated, err := h.store.update(r.Context(), s.UserID, log, input)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("study-logs update: %w", err))
 		return
@@ -374,7 +370,7 @@ func (h *studyLogWriteHandlers) delete(w http.ResponseWriter, r *http.Request, s
 	if log == nil {
 		return
 	}
-	if err := h.store.delete(r.Context(), log.row.ID); err != nil {
+	if err := h.store.delete(r.Context(), s.UserID, log.row.ID); err != nil {
 		internalError(w, r, fmt.Errorf("study-logs delete: %w", err))
 		return
 	}

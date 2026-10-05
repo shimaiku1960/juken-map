@@ -155,15 +155,11 @@ type textbookProgress struct {
 	rangeUnit, targetDate, subject optional[string]
 }
 
-// findTextbook は参考書を1件読む。userID が空でなければ、その人のものだけ（Node の findOwnedTextbook）。無ければ nil。
+// findTextbook は userID の人の参考書を1件読む（Node の findOwnedTextbook）。無いか他人のものなら nil。
 func (st *textbookStore) findTextbook(ctx context.Context, id int64, userID string) (*TextbookRow, error) {
-	query := "SELECT " + textbookRowColumns + " FROM Textbook WHERE id = ?"
-	args := []any{id}
-	if userID != "" {
-		query += " AND userId = ? LIMIT 1"
-		args = append(args, userID)
-	}
-	t, err := scanTextbook(st.db.QueryRowContext(ctx, query, args...).Scan)
+	t, err := scanTextbook(st.db.QueryRowContext(ctx,
+		"SELECT "+textbookRowColumns+" FROM Textbook WHERE id = ? AND userId = ? LIMIT 1", id, userID,
+	).Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -199,11 +195,11 @@ func (st *textbookStore) createTextbook(ctx context.Context, userID string, t ne
 	if err != nil {
 		return nil, err
 	}
-	return st.mustFindTextbook(ctx, id)
+	return st.mustFindTextbook(ctx, id, userID)
 }
 
-func (st *textbookStore) mustFindTextbook(ctx context.Context, id int64) (*TextbookRow, error) {
-	t, err := st.findTextbook(ctx, id, "")
+func (st *textbookStore) mustFindTextbook(ctx context.Context, id int64, userID string) (*TextbookRow, error) {
+	t, err := st.findTextbook(ctx, id, userID)
 	if err == nil && t == nil {
 		err = fmt.Errorf("Textbook %d が見つかりません", id)
 	}
@@ -269,8 +265,8 @@ func (st *textbookStore) textbookFromMaster(ctx context.Context, masterID int64)
 }
 
 // updateProgress は逆算設定のうち、送られてきた項目だけを書き換える（Node の updateTextbookProgress）。
-// 更新日時は何も送られていなくても書き換える。
-func (st *textbookStore) updateProgress(ctx context.Context, id int64, p textbookProgress) (*TextbookRow, error) {
+// 更新日時は何も送られていなくても書き換える。userID の人のものだけを変える。
+func (st *textbookStore) updateProgress(ctx context.Context, userID string, id int64, p textbookProgress) (*TextbookRow, error) {
 	// 列名はこのコードに書いた固定の名前だけで、利用者の入力は値として ? で渡す。
 	var columns []string
 	var args []any
@@ -295,10 +291,11 @@ func (st *textbookStore) updateProgress(ctx context.Context, id int64, p textboo
 
 	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（columns）。値は args で ? として渡す
 	if _, err := st.db.ExecContext(ctx,
-		"UPDATE Textbook SET "+strings.Join(columns, ", ")+" WHERE id = ?", append(args, id)...); err != nil {
+		"UPDATE Textbook SET "+strings.Join(columns, ", ")+" WHERE id = ? AND userId = ?",
+		append(args, id, userID)...); err != nil {
 		return nil, err
 	}
-	return st.mustFindTextbook(ctx, id)
+	return st.mustFindTextbook(ctx, id, userID)
 }
 
 // create は POST /api/textbooks。
@@ -364,7 +361,7 @@ func (h *textbookHandlers) updateProgress(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusNotFound, "参考書が見つかりません")
 		return
 	}
-	updated, err := h.store.updateProgress(r.Context(), id, progress)
+	updated, err := h.store.updateProgress(r.Context(), s.UserID, id, progress)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("textbooks update: %w", err))
 		return
