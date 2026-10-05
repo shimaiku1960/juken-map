@@ -359,7 +359,7 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
 | --- | --- | --- |
 | `pnpm incident` の6つの操作 | 2026-10-02 | 手元の DB に使い捨ての管理者（2段階認証つき・セッション2件）を作り、6つを順に実行して DB の変化を確かめた。`apps/api/src/services/incident-service.test.ts` が CI で毎回確かめる（2026-10-05 に Go へ移し、今は `apps/api-go/incident_db_test.go`。JUK-122）（2026-10-04 に `revoke-all` を足し、表をログインの自作の表に替えた。JUK-115） |
 | コンテナの中から `tsx src/incident.ts` を実行する | 2026-10-02 | 本番と同じ Dockerfile で作ったイメージを手元の DB に繋ぎ、`docker exec` と同じ形で実行した。2026-10-05 に本番の Node のコンテナが無くなり（JUK-109）、この形は使えなくなった |
-| Go のコンテナの中から `/api-go incident`・`grant-admin` を実行する | 2026-10-05 | 本番と同じ Dockerfile（distroless）で作った Go のイメージを手元の DB に繋ぎ、`/api-go` を直接呼んだ（JUK-122） |
+| Go のコンテナの中から `/api-go incident`・`grant-admin` を実行する | 2026-10-05 | 本番と同じ Dockerfile（distroless）で作った Go のイメージを手元の DB に繋ぎ、`/api-go` を直接呼んだ。同日、本番の `juken-map-go` で `grant-admin --list` と、いない人への `incident sessions`（終了コード 1）を `docker exec` で実行した（JUK-122） |
 | `grant-admin.ts --list` | 2026-10-02 | 手元の DB（2026-10-05 から Go の `grant-admin --list`） |
 | Grafana の問い合わせ（メトリクス・ログ） | 2026-10-02 | 本番を読み取りだけ |
 | アラートが鳴って受け口に届く | 2026-10-01・10-02 | 本番で実際に起こした（JUK-98）。H3 は Alloy を止めて、3本が約8〜20分で届いた |
