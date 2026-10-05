@@ -18,6 +18,7 @@ import (
 //	sudo docker exec juken-map-go /api grant-admin --list
 //
 // 手元では pnpm incident・pnpm admin:grant（scripts/go-cli.sh）が .env を読んで同じものを呼ぶ。手順は docs/incident-response.md。
+// 変える操作は、実行の内容を OpsAuditLog に残す（incident.go の recordOps、JUK-138）。`incident log` で見る。
 // migrate（migrate.go）だけは本番でもデプロイが1回きりのコンテナで流し、手元では pnpm db:migrate が呼ぶ。
 
 const incidentUsage = `使い方: incident <操作> [メールアドレス]
@@ -27,9 +28,13 @@ const incidentUsage = `使い方: incident <操作> [メールアドレス]
   unban <メール>      止めたのを戻す
   revoke-admins       管理者全員のセッションを消す
   revoke-all          全員のセッションを消す（全員がログインし直し）
-  reset-2fa <メール>  2段階認証を設定前に戻し、セッションをすべて消す`
+  reset-2fa <メール>  2段階認証を設定前に戻し、セッションをすべて消す
+  log                 運用コマンドで変えたことの記録を、新しい順に50件見る`
 
 const grantAdminUsage = "使い方: grant-admin <メールアドレス> [--revoke] / grant-admin --list"
+
+// opsLogLimit は incident log が出す件数。運用コマンドはめったに使わないので、これで1年分に足りる見込み。
+const opsLogLimit = 50
 
 // cliTimeout は1回の操作にかけてよい時間。DB が詰まっていても、手順の途中で固まらないように。
 const cliTimeout = 30 * time.Second
@@ -100,6 +105,18 @@ func runIncident(ctx context.Context, st incidentStore, args []string, out io.Wr
 			return err
 		}
 		fmt.Fprintf(out, "全員のセッションを %d 件消しました\n", removed)
+		return nil
+	case "log":
+		entries, err := st.listOps(ctx, opsLogLimit)
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			fmt.Fprintln(out, "記録はありません")
+		}
+		for _, e := range entries {
+			fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\n", e.CreatedAt, e.Action, orDash(e.TargetID), e.Host, e.Detail)
+		}
 		return nil
 	}
 

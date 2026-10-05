@@ -43,6 +43,25 @@
   | `revoke-admins` | 管理者全員のセッションを消す |
   | `revoke-all` | 全員のセッションを消す（全員がログインし直し）。ログインの不具合や、セッションの表が漏れた疑いのとき |
   | `reset-2fa <メール>` | 2段階認証を設定前に戻し、セッションを全部消す |
+  | `log` | 下の「運用コマンドの記録」を新しい順に50件出す |
+
+- **運用コマンドで変えたことは DB の `OpsAuditLog` に残る**（JUK-138、セキュリティ基準 H4）。`docker exec` の出力は
+  実行した人の端末にしか出ず、コンテナのログ（Loki）に乗らないため。`incident` の変える操作と `grant-admin`（`set-role`）が
+  対象で、`sessions`・`--list`・`log` のような見るだけの操作は残さない。1年で消える（CloudTrail と同じ）
+
+  ```sh
+  # EC2 の中で。列は「日時（UTC）・操作・対象の userId・実行したコンテナ・前後の値」
+  sudo docker exec juken-map-go /api incident log
+  ```
+
+  コンテナの中からは SSM で入った人が分からないので、**誰が**は CloudTrail の `StartSession` と日時で突き合わせる
+  （90日より前は 5 の手順 3 のとおり S3 から）。
+
+  ```sh
+  aws cloudtrail lookup-events --region ap-northeast-1 \
+    --lookup-attributes AttributeKey=EventName,AttributeValue=StartSession \
+    --query 'Events[].{t:EventTime,who:Username}' --output text
+  ```
 
 - **Grafana はエージェントか CLI で見る**。トークンは Terraform 用（`TF_VAR_grafana_auth`）を使う。
 
@@ -374,6 +393,7 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
 | `pnpm incident` の6つの操作 | 2026-10-02 | 手元の DB に使い捨ての管理者（2段階認証つき・セッション2件）を作り、6つを順に実行して DB の変化を確かめた。`apps/api/src/services/incident-service.test.ts` が CI で毎回確かめる（2026-10-05 に Go へ移し、今は `apps/api/incident_db_test.go`。JUK-122）（2026-10-04 に `revoke-all` を足し、表をログインの自作の表に替えた。JUK-115） |
 | コンテナの中から `tsx src/incident.ts` を実行する | 2026-10-02 | 本番と同じ Dockerfile で作ったイメージを手元の DB に繋ぎ、`docker exec` と同じ形で実行した。2026-10-05 に本番の Node のコンテナが無くなり（JUK-109）、この形は使えなくなった |
 | Go のコンテナの中から `/api-go incident`・`grant-admin` を実行する | 2026-10-05 | 本番と同じ Dockerfile（distroless）で作った Go のイメージを手元の DB に繋ぎ、`/api-go` を直接呼んだ。同日、本番の `juken-map-go` で `grant-admin --list` と、いない人への `incident sessions`（終了コード 1）を `docker exec` で実行した（JUK-122） |
+| 運用コマンドの記録を残して `incident log` で引く | 2026-10-05 | 本番と同じ Dockerfile（distroless）で作った Go のイメージを手元のテスト用 DB に繋ぎ、使い捨ての利用者に `ban`・`unban` をしてから `log` を実行した。日時・操作・userId・コンテナ ID・前後の `bannedAt` が出た。`apps/api/incident_db_test.go` が CI で毎回確かめる（JUK-138） |
 | `grant-admin.ts --list` | 2026-10-02 | 手元の DB（2026-10-05 から Go の `grant-admin --list`） |
 | Grafana の問い合わせ（メトリクス・ログ） | 2026-10-02 | 本番を読み取りだけ |
 | アラートが鳴って受け口に届く | 2026-10-01・10-02 | 本番で実際に起こした（JUK-98）。H3 は Alloy を止めて、3本が約8〜20分で届いた |
