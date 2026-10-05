@@ -2,10 +2,10 @@
 
 // 本物の MySQL に流すテスト（dbtest タグ、JUK-97）の下ごしらえ。
 //
-// DB は Node のテストと同じ juken_map_test を使う。本番と同じマイグレーションが当たっていて、
-// 繋ぐのは本番と同じ権限（DML だけ）のユーザー。先に `pnpm --filter @juken-map/api test-db:prepare` で用意する。
+// DB は db/ のテストと同じ juken_map_test を使う。本番と同じマイグレーションが当たっていて、
+// 繋ぐのは本番と同じ権限（DML だけ）のユーザー。先に `pnpm --filter @juken-map/db test-db:prepare` で用意する。
 //
-// テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる（Node の test-db/fixtures.ts と同じ）。
+// テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる（db/test-db/fixtures.ts と同じ）。
 // ユーザーを消せば、志望校・予定・実績などは外部キーの CASCADE で一緒に消える。
 package main
 
@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-// Node の test-db/config.ts と同じ既定値。
+// db/test-db/config.ts と同じ既定値。
 const defaultTestDatabaseURL = "mysql://juken_app_test:juken_app_test@127.0.0.1:3306/juken_map_test"
 
 func openTestDB(t *testing.T) *sql.DB {
@@ -43,7 +43,7 @@ func openTestDB(t *testing.T) *sql.DB {
 	}
 	db, err := openDB(url)
 	if err != nil {
-		t.Fatalf("テスト用の MySQL に繋げません。`pnpm db:start` と `pnpm --filter @juken-map/api test-db:prepare` を先に動かしてください: %v", err)
+		t.Fatalf("テスト用の MySQL に繋げません。`pnpm db:start` と `pnpm --filter @juken-map/db test-db:prepare` を先に動かしてください: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
 	return db

@@ -1,7 +1,7 @@
-// 本番の DB ユーザーに付ける権限の SQL を出力する（定義は apps/api/src/infra/dbUsers.ts）。
+// 本番の DB ユーザーに付ける権限の SQL を出力する（定義は db/db-users.ts）。
 // ユーザーの作成（パスワード）は別に行い、この出力は権限を付け直すときに流す。
 //   例) pnpm exec tsx db/print-user-grants.ts > grants.sql
-import { grantStatements } from "../apps/api/src/infra/dbUsers";
+import { grantStatements } from "./db-users";
 
 const DATABASE = "juken_map";
 const USERS = [

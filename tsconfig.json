@@ -16,6 +16,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["src/**/*.ts", "db/**/*.ts", "sim/**/*.ts", "e2e/**/*.ts", "e2e-production/**/*.ts", "*.ts", "*.mts"],
-  "exclude": ["node_modules", "apps"]
+  "include": ["src/**/*.ts", "sim/**/*.ts", "e2e/**/*.ts", "e2e-production/**/*.ts", "*.ts", "*.mts"],
+  "exclude": ["node_modules", "apps", "db"]
 }

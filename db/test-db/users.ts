@@ -1,9 +1,9 @@
 import type { Connection } from "mysql2/promise";
-import { type DbUserRole, grantStatements } from "../infra/dbUsers.ts";
+import { type DbUserRole, grantStatements } from "../db-users";
 
 /**
  * 接続文字列のユーザーを、role の権限だけを持つ状態にする（無ければ作る）。
- * 権限の中身は本番と同じ定義（infra/dbUsers.ts）から作る。
+ * 権限の中身は本番と同じ定義（db/db-users.ts）から作る。
  */
 export async function ensureTestDbUser(admin: Connection, role: DbUserRole, databaseUrl: string) {
   const url = new URL(databaseUrl);

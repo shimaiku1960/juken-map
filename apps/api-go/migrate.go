@@ -53,7 +53,7 @@ const createLedgerSQL = `
     PRIMARY KEY (id)
   ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-// runMigrate は `migrate` コマンド。本番のアプリのユーザーはテーブルを作れない（apps/api/src/infra/dbUsers.ts）ので、
+// runMigrate は `migrate` コマンド。本番のアプリのユーザーはテーブルを作れない（db/db-users.ts）ので、
 // テーブル定義を変えられるユーザーを MIGRATION_DATABASE_URL で渡す。無ければ DATABASE_URL で当てる（手元・CI）。
 func runMigrate(stdout, stderr io.Writer) int {
 	databaseURL := os.Getenv("MIGRATION_DATABASE_URL")

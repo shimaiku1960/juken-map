@@ -193,8 +193,8 @@ LINE 連携の SQL（`line_db_test.go` の `TestLineStore`）も同じ仕組み�
 `registerRoutes` の user のルートを全件、表と突き合わせるので、ルートを足して表に書かなければ落ちる。
 
 - `dbtest` タグのテスト（`*_db_test.go` のうち `//go:build dbtest` のもの）。ふだんの `go test` では動かない
-- DB は Node のテストと同じ `juken_map_test`。本番と同じマイグレーションが当たり、本番と同じ DML だけの権限で繋ぐ。
-  `pnpm --filter @juken-map/api test-db:prepare` が用意する（`pnpm test:go-db` は先にこれを呼ぶ）
+- DB は `db/` のテストと同じ `juken_map_test`。本番と同じマイグレーションが当たり、本番と同じ DML だけの権限で繋ぐ。
+  `pnpm --filter @juken-map/db test-db:prepare`（`db/test-db/`）が用意する（`pnpm test:go-db` は先にこれを呼ぶ）
 - セッションは Cookie「test」の値を利用者 ID として読む（Better Auth の Cookie の確かめは `auth_test.go`）
 - CI は MySQL のある check のジョブで回す（go のジョブには DB が無い）
 - 守りを外すと落ちることは確かめた（参考書の持ち主の確認を外すと A3 が2本、プロフィールの更新で role を書くと A4 が1本落ちる）
@@ -234,7 +234,7 @@ Go は5本同時に送るが、メールは Resend の上限（チーム全体�
 | `logger.go` | pino と同じ形の JSON ログ | `observability/logger.ts` |
 | `metrics.go` | Prometheus のメトリクス（名前・ラベルは Node と同じ） | `observability/metrics.ts` |
 | `http.go` | JSON の書き出し、ヘルスチェック | Fastify 本体 |
-| `db.go` | 接続プール、RDS への TLS、DATETIME の文字列を ISO にする | `infra/db.ts` |
+| `db.go` | 接続プール、RDS への TLS、DATETIME の文字列を ISO にする | `infra/db.ts`（seed・テスト用に `db/connection.ts` として残る） |
 | `Dockerfile` | 本番のイメージ（distroless の static に実行ファイル1つ） | ルートの `Dockerfile` |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし | `src/shared/date.ts` |
 | `dashboard.go` | ダッシュボードの応答の型、3本の SQL を同時に流して組み立てる | `services/dashboard-service.ts` |

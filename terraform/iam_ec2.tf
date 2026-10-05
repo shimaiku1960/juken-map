@@ -16,7 +16,8 @@ resource "aws_iam_role" "ec2_ecr" {
   })
 }
 
-# デプロイ（deploy-ec2.sh）で juken-map・juken-map-go の2つを pull するだけの権限。
+# デプロイ（deploy-ec2.sh）で juken-map-go を pull するだけの権限。
+# 画面のビルドイメージ（juken-map）は CI が Go のイメージへ写すだけで、EC2 は pull しない（JUK-125・JUK-130）。
 # AWS 管理ポリシー AmazonEC2ContainerRegistryReadOnly は全リポジトリの一覧・読み取りまで含むので使わない（JUK-82）。
 resource "aws_iam_role_policy" "ec2_ecr_pull" {
   name = "juken-map-ecr-pull"
@@ -38,7 +39,7 @@ resource "aws_iam_role_policy" "ec2_ecr_pull" {
           "ecr:BatchGetImage",
           "ecr:GetDownloadUrlForLayer",
         ]
-        Resource = [aws_ecr_repository.juken_map.arn, aws_ecr_repository.juken_map_go.arn]
+        Resource = [aws_ecr_repository.juken_map_go.arn]
       }
     ]
   })

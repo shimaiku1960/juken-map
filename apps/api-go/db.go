@@ -22,7 +22,7 @@ import (
 var rdsCA []byte
 
 // openDB は DATABASE_URL（mysql://user:pass@host:port/db）をドライバの設定に直し、
-// 接続プールを作る。Node 側の parseDatabaseUrl と createPool（apps/api/src/infra/db.ts）にあたる。
+// 接続プールを作る。Node 側の parseDatabaseUrl と createPool（seed・テスト用の db/connection.ts）にあたる。
 func openDB(databaseURL string) (*sql.DB, error) {
 	cfg, err := dbConfig(databaseURL)
 	if err != nil {

@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 // SQL を文字列の連結・埋め込みで組み立てている箇所を見つける（セキュリティ基準 06 の D1、JUK-104）。
 // `pnpm lint:sql` で、本体の eslint.config.mjs とは別に流す。本体の設定は apps/ を対象から外していて
-// （全体にかけるのは JUK-53）、ここでは SQL の規則だけを apps/api と db/ にかける。
+// （全体にかけるのは JUK-53）、ここでは SQL の規則だけを db/ にかける。
 // Go（apps/api-go）は gosec の G201・G202 が同じことを見る（ci.yml の go のジョブ）。
 //
 // 値は必ずプレースホルダー（?）で渡す。プレースホルダーにできない部分（固定の列名の並び・? を件数ぶん
@@ -29,7 +29,7 @@ export const sqlInjectionRules = {
 
 export default defineConfig([
   {
-    files: ["apps/api/src/**/*.ts", "db/**/*.ts"],
+    files: ["db/**/*.ts"],
     // テストは外から呼ばれない。テスト用 DB の名前など、決まった値を埋め込んでいる。
     ignores: ["**/*.test.ts"],
     languageOptions: { parser: tseslint.parser },

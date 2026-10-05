@@ -1,11 +1,11 @@
 {
-  "name": "@juken-map/api",
+  "name": "@juken-map/db",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test-db:prepare": "tsx src/test-db/prepare.ts"
+    "test-db:prepare": "tsx test-db/prepare.ts"
   },
   "dependencies": {
     "mysql2": "^3.24.4"
