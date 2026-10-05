@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"time"
 )
 
@@ -95,13 +98,76 @@ func (st incidentStore) listSessions(ctx context.Context, email string) (inciden
 	return u, sessions, rows.Err()
 }
 
+// opsAuditRetention は OpsAuditLog を残す期間。CloudTrail（S3 に1年）とそろえ、突き合わせられる期間を同じにする。
+const opsAuditRetention = 365 * 24 * time.Hour
+
+// recordOps は、コマンドが変えたことを OpsAuditLog に1行書く（JUK-138、セキュリティ基準 H4）。
+// 本番では `docker exec` で動き、出力が実行した人の端末にしか出ないので、DB に残す。見るだけの操作
+// （sessions・grant-admin --list）は書かない。変えた後に書くので、書けなかったときはエラーを返して
+// コマンドを失敗（終了コード 1）にし、記録が無いことに実行した人が気づけるようにする。
+// 書いたついでに、残す期間を過ぎた行を消す（運用コマンドはめったに使わないので、行は少ない）。
+func (st incidentStore) recordOps(ctx context.Context, action, targetID string, detail map[string]any) error {
+	raw, err := json.Marshal(detail)
+	if err != nil {
+		return err
+	}
+	var target any // 全員が対象の操作（revoke-all など）は NULL
+	if targetID != "" {
+		target = targetID
+	}
+	host, _ := os.Hostname() // 本番ではコンテナ ID
+	now := st.now().UTC()
+	if _, err := st.db.ExecContext(ctx,
+		"INSERT INTO OpsAuditLog (action, targetId, detail, host, createdAt) VALUES (?, ?, ?, ?, ?)",
+		action, target, string(raw), host, now); err != nil {
+		return fmt.Errorf("操作はしましたが、記録（OpsAuditLog）に書けませんでした: %w", err)
+	}
+	if _, err := st.db.ExecContext(ctx, "DELETE FROM OpsAuditLog WHERE createdAt < ?", now.Add(-opsAuditRetention)); err != nil {
+		return fmt.Errorf("操作と記録はしましたが、1年より古い記録を消せませんでした: %w", err)
+	}
+	return nil
+}
+
+type opsAuditEntry struct {
+	CreatedAt string
+	Action    string
+	TargetID  *string
+	Host      string
+	Detail    string
+}
+
+// listOps は OpsAuditLog を新しい順に limit 件返す（incident log）。本番の RDS にはマスターで入らないと
+// SQL を打てないので、記録を見るのも運用コマンドと同じ docker exec でできるようにする。
+func (st incidentStore) listOps(ctx context.Context, limit int) ([]opsAuditEntry, error) {
+	rows, err := st.db.QueryContext(ctx,
+		"SELECT createdAt, action, targetId, host, detail FROM OpsAuditLog ORDER BY createdAt DESC, id DESC LIMIT ?", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	entries := []opsAuditEntry{}
+	for rows.Next() {
+		var e opsAuditEntry
+		if err := rows.Scan(&e.CreatedAt, &e.Action, &e.TargetID, &e.Host, &e.Detail); err != nil {
+			return nil, err
+		}
+		e.CreatedAt = isoFromDatetime(e.CreatedAt)
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
 // revokeSessions はその人のセッションをすべて消す。止めはしないので、パスワードを知っていればまた入れる。
 func (st incidentStore) revokeSessions(ctx context.Context, email string) (int64, error) {
 	u, err := st.findByEmail(ctx, email)
 	if err != nil {
 		return 0, err
 	}
-	return st.deleteSessions(ctx, u.ID)
+	removed, err := st.deleteSessions(ctx, u.ID)
+	if err != nil {
+		return 0, err
+	}
+	return removed, st.recordOps(ctx, "revoke", u.ID, map[string]any{"sessionsRemoved": removed})
 }
 
 // ban はその人を止め、セッションをすべて消す。止めた人は次のログインで断られる（auth_handlers.go）。
@@ -112,12 +178,23 @@ func (st incidentStore) ban(ctx context.Context, email string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	now := st.now().UTC()
+	// DATETIME(3) は端数を丸めるので、先にミリ秒で切っておき、記録の after と DB の値をそろえる。
+	now := st.now().UTC().Truncate(time.Millisecond)
 	if _, err := st.db.ExecContext(ctx,
 		"UPDATE `user` SET bannedAt = COALESCE(bannedAt, ?), updatedAt = ? WHERE id = ?", now, now, u.ID); err != nil {
 		return 0, err
 	}
-	return st.deleteSessions(ctx, u.ID)
+	removed, err := st.deleteSessions(ctx, u.ID)
+	if err != nil {
+		return 0, err
+	}
+	after := u.BannedAt
+	if after == nil {
+		iso := isoMillis(now)
+		after = &iso
+	}
+	return removed, st.recordOps(ctx, "ban", u.ID, map[string]any{
+		"before": map[string]any{"bannedAt": u.BannedAt}, "after": map[string]any{"bannedAt": after}, "sessionsRemoved": removed})
 }
 
 // unban は止めたのを戻す。
@@ -126,8 +203,11 @@ func (st incidentStore) unban(ctx context.Context, email string) error {
 	if err != nil {
 		return err
 	}
-	_, err = st.db.ExecContext(ctx, "UPDATE `user` SET bannedAt = NULL, updatedAt = ? WHERE id = ?", st.now().UTC(), u.ID)
-	return err
+	if _, err := st.db.ExecContext(ctx, "UPDATE `user` SET bannedAt = NULL, updatedAt = ? WHERE id = ?", st.now().UTC(), u.ID); err != nil {
+		return err
+	}
+	return st.recordOps(ctx, "unban", u.ID, map[string]any{
+		"before": map[string]any{"bannedAt": u.BannedAt}, "after": map[string]any{"bannedAt": nil}})
 }
 
 // revokeAll は全員のセッションを消す（C5 の4）。ログインの不具合や、セッションを読める立場（DB）からの
@@ -137,7 +217,11 @@ func (st incidentStore) revokeAll(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	removed, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return removed, st.recordOps(ctx, "revoke-all", "", map[string]any{"sessionsRemoved": removed})
 }
 
 // revokeAdmins は管理者全員のセッションを消す。管理者のアカウントが1つでも乗っ取られたかもしれないときに使う。
@@ -165,7 +249,7 @@ func (st incidentStore) revokeAdmins(ctx context.Context) ([]string, int64, erro
 		return nil, 0, err
 	}
 
-	names := []string{}
+	names, ids := []string{}, []string{}
 	var removed int64
 	for _, a := range admins {
 		n, err := st.deleteSessions(ctx, a.id)
@@ -173,13 +257,15 @@ func (st incidentStore) revokeAdmins(ctx context.Context) ([]string, int64, erro
 			return nil, 0, err
 		}
 		removed += n
+		ids = append(ids, a.id)
 		if a.email.Valid {
 			names = append(names, a.email.String)
 		} else {
 			names = append(names, a.id)
 		}
 	}
-	return names, removed, nil
+	// 対象が複数なので、targetId は空にして detail に userId を並べる（メールアドレスは残さない）。
+	return names, removed, st.recordOps(ctx, "revoke-admins", "", map[string]any{"targetIds": ids, "sessionsRemoved": removed})
 }
 
 // resetTwoFactor は2段階認証を設定する前に戻し、セッションをすべて消す。認証アプリの秘密が漏れたかもしれない
@@ -198,7 +284,11 @@ func (st incidentStore) resetTwoFactor(ctx context.Context, email string) (int64
 			return 0, err
 		}
 	}
-	return st.deleteSessions(ctx, u.ID)
+	removed, err := st.deleteSessions(ctx, u.ID)
+	if err != nil {
+		return 0, err
+	}
+	return removed, st.recordOps(ctx, "reset-2fa", u.ID, map[string]any{"sessionsRemoved": removed})
 }
 
 // errUnverified は、メール確認前の人を管理者にしようとしたとき。
@@ -228,8 +318,11 @@ func (st incidentStore) setRole(ctx context.Context, email, role string) (previo
 	if _, err := st.db.ExecContext(ctx, "UPDATE `user` SET role = ?, updatedAt = ? WHERE id = ?", role, st.now().UTC(), id); err != nil {
 		return "", 0, err
 	}
-	removed, err = st.deleteSessions(ctx, id)
-	return previous, removed, err
+	if removed, err = st.deleteSessions(ctx, id); err != nil {
+		return "", 0, err
+	}
+	return previous, removed, st.recordOps(ctx, "set-role", id, map[string]any{
+		"before": map[string]any{"role": previous}, "after": map[string]any{"role": role}, "sessionsRemoved": removed})
 }
 
 type adminSummary struct {

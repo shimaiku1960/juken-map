@@ -302,7 +302,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `cli.go` | 引数の読み取りと振り分け：`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）・`migrate`。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
-| `incident.go` | `incident`・`grant-admin` が使う SQL（セッションの取り消し・停止・2段階認証の解除・役割の付け外し）。手順は `docs/incident-response.md` |
+| `incident.go` | `incident`・`grant-admin` が使う SQL（セッションの取り消し・停止・2段階認証の解除・役割の付け外し）と、変えたことの記録（`OpsAuditLog`、`incident log` で見る。JUK-138）。手順は `docs/incident-response.md` |
 | `migrate.go` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
 
 ### 共通の部品
