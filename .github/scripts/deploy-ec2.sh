@@ -151,7 +151,9 @@ fi
 # LINE 連携（JUK-79）も Go が受けるので、Webhook の署名用（LINE_CHANNEL_SECRET）と LINE ログインの2つも渡す。
 # ログイン（JUK-115）も Go が受けるので、Google・GitHub ログインの4つ、新規登録を知らせる宛先、2段階認証の秘密を
 # 暗号化する鍵（AUTH_TOTP_KEYS。無ければ BETTER_AUTH_SECRET から導く）も渡す。
-grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|LINE_CHANNEL_SECRET|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET|DAILY_NOTIFICATION_SECRET|SIMULATION_ENABLED|SIMULATION_SECRET|AUTH_GOOGLE_ID|AUTH_GOOGLE_SECRET|AUTH_GITHUB_ID|AUTH_GITHUB_SECRET|ADMIN_NOTIFICATION_EMAIL|AUTH_TOTP_KEYS)=' \
+# 画面の配信（JUK-111）も Go が受けるので、HTML に差し込む GA4 と Faro の設定、ブログの中継（/api/blog）に使う microCMS の
+# 2つも渡す。
+grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|LINE_CHANNEL_SECRET|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET|DAILY_NOTIFICATION_SECRET|SIMULATION_ENABLED|SIMULATION_SECRET|AUTH_GOOGLE_ID|AUTH_GOOGLE_SECRET|AUTH_GITHUB_ID|AUTH_GITHUB_SECRET|ADMIN_NOTIFICATION_EMAIL|AUTH_TOTP_KEYS|GA_MEASUREMENT_ID|FARO_COLLECTOR_URL|MICROCMS_SERVICE_DOMAIN|MICROCMS_API_KEY)=' \
   "$RUNTIME_ENV_FILE" > "$GO_ENV_FILE" || true
 for key in DATABASE_URL BETTER_AUTH_SECRET; do
   grep -q "^$key=" "$GO_ENV_FILE" || { echo "Go に渡す $key が見つからない" >&2; exit 1; }
@@ -300,7 +302,8 @@ docker run -d \
 
 # スモークテスト: 最大45秒待つ。見るのは新しいコンテナのポート。この間ずっと、利用者には古いコンテナが応えている。
 # - Node: 画面（/login）と DB 接続（/api/health）。/login は静的な SPA なので DB に繋がらなくても 200 になる
-# - Go: DB 接続（/api/health）と、ダッシュボードのルートがあること（Cookie 無しなので 401）
+# - Go: DB 接続（/api/health）と、ダッシュボードのルートがあること（Cookie 無しなので 401）、
+#   画面（/login）を配れること（JUK-111。イメージに画面のビルドが入っていなければ 404 になる）
 ok=false
 code="not-requested"
 for _ in $(seq 1 15); do
@@ -308,8 +311,9 @@ for _ in $(seq 1 15); do
   health="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$NEW_PORT/api/health" || true)"
   go_health="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$GO_NEW_PORT/api/health" || true)"
   go_dashboard="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$GO_NEW_PORT/api/dashboard" || true)"
-  code="login=$login health=$health go_health=$go_health go_dashboard=$go_dashboard"
-  if [ "$login" = "200" ] && [ "$health" = "200" ] && [ "$go_health" = "200" ] && [ "$go_dashboard" = "401" ]; then
+  go_login="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$GO_NEW_PORT/login" || true)"
+  code="login=$login health=$health go_health=$go_health go_dashboard=$go_dashboard go_login=$go_login"
+  if [ "$login" = "200" ] && [ "$health" = "200" ] && [ "$go_health" = "200" ] && [ "$go_dashboard" = "401" ] && [ "$go_login" = "200" ]; then
     ok=true
     break
   fi

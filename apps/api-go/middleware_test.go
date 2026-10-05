@@ -229,6 +229,9 @@ func TestLimitInFlight(t *testing.T) {
 	rt.public("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
+	rt.public("GET /assets/app.js", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 1})
 
 	// 1件目を処理中のまま止めておく。
@@ -252,6 +255,10 @@ func TestLimitInFlight(t *testing.T) {
 	// 死活監視は混んでいても数えない。
 	if res := serve(h, "GET", "/api/health", ""); res.Code != http.StatusOK {
 		t.Errorf("/api/health = %d, want 200", res.Code)
+	}
+	// 画面と静的ファイル（/api/ の外）も数えない（画面を開くと何十本も同時に読むため）。
+	if res := serve(h, "GET", "/assets/app.js", ""); res.Code != http.StatusOK {
+		t.Errorf("/assets/app.js = %d, want 200", res.Code)
 	}
 
 	// 1件目が終われば、枠が空いて次を受け付ける。

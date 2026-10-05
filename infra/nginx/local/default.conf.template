@@ -1,5 +1,6 @@
 # 手元（開発・E2E）の nginx のサイト設定（JUK-96）。本番のサイト設定（infra/nginx/README.md）と同じ形にして、
-# 振り分けは本番と同じ ../juken-map-go-routes.conf をそのまま読む。違うのは次だけ。
+# 振り分けは本番と同じ ../juken-map-go-routes.conf をそのまま読む。JUK-111 からは go-routes.conf の最後の受け皿が
+# 残りを全部 Go へ送るので、下の location /（Node）には本番と同じく何も届かない。違うのは次だけ。
 #   - HTTPS ではなく 8080 番の HTTP（コンテナの外へは scripts/local-proxy.sh が好きな番号で出す）
 #   - 転送先が手元の Node と Go（NODE_PORT・GO_PORT は起動時に nginx の公式イメージが埋める）
 #

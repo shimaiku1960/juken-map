@@ -28,6 +28,8 @@ func TestRegisteredRoutes(t *testing.T) {
 		{"POST /api/auth/mfa/verify", accessAuth},
 		{"POST /api/auth/oauth/{provider}", accessAuth},
 		{"GET /api/auth/callback/{provider}", accessAuth},
+		{"GET /api/blog", accessPublic},
+		{"GET /api/blog/{id}", accessPublic},
 		{"GET /api/health", accessPublic},
 		{"GET /api/dashboard", accessUser},
 		{"GET /api/study-logs", accessUser},
@@ -63,6 +65,7 @@ func TestRegisteredRoutes(t *testing.T) {
 		{"GET /api/line/oauth/start", accessOAuth},
 		{"GET /api/line/oauth/callback", accessOAuth},
 		{"POST /api/line/webhook", accessWebhook},
+		{"GET /line/settings", accessPublic},
 		{"POST /api/webhooks/microcms", accessWebhook},
 		{"GET /api/admin/overview", accessAdmin},
 		{"GET /api/admin/users", accessAdmin},
@@ -91,6 +94,7 @@ func TestRegisteredRoutes(t *testing.T) {
 	// ハンドラは呼ばないので、DB は nil のままでよい。
 	rt := newRouter(fakeSessions(nil))
 	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
+	registerBlogRoutes(rt, blogConfig{})
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	if len(rt.routes) != len(want) {
@@ -114,6 +118,7 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	// 2段階認証の確認を別のサイトから送らせない（ログインの CSRF。認証基準 10 の D2）。
 	rt := newRouter(fakeSessions(testSessions))
 	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
+	registerBlogRoutes(rt, blogConfig{})
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	checked := 0

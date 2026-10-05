@@ -56,13 +56,17 @@ jobs:
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
       # Go の API（apps/api-go、JUK-72）。Node と同じタグにして、同じコミットの組で並べて動かす。
+      # 画面（JUK-111）も Go が配るので、上で作った Node のイメージから画面のビルド成果物（/app/web）を写す。
+      # 記事の SSG を2回せず、Node と Go が同じ画面を持つ。
       - name: Build and push (Go)
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: juken-map-go
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build --build-arg APP_COMMIT=$IMAGE_TAG -t $REGISTRY/$REPOSITORY:$IMAGE_TAG apps/api-go
+          docker build --build-arg APP_COMMIT=$IMAGE_TAG \
+            --build-context web=docker-image://$REGISTRY/juken-map:$IMAGE_TAG \
+            -t $REGISTRY/$REPOSITORY:$IMAGE_TAG apps/api-go
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
   deploy:

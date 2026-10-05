@@ -321,12 +321,14 @@ locals {
       for         = "0s"
       no_data     = "OK"
     }
+    # 監視の途絶の2本は runtime で絞らない。死活監視（30秒ごとの /api/health）を受けるのが Node から Go に変わった
+    # （JUK-111）ため、片方だけを見ると、切り替えの前か後のどちらかで誤って鳴る。Go が止まったことは「受験マップ API（Go）：停止」が受け持つ。
     metrics_gap = {
       name        = "受験マップ：監視の途絶（メトリクスが届かない）"
-      summary     = "Node の API のメトリクスが10分間届いていません"
-      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map と alloy が動いているかを確かめてください。"
+      summary     = "API のメトリクスが10分間届いていません"
+      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map-go と alloy が動いているかを確かめてください。"
       datasource  = "grafanacloud-prom"
-      expr        = "sum(increase(http_requests_total{env=\"production\",runtime=\"node\"}[10m]))"
+      expr        = "sum(increase(http_requests_total{env=\"production\"}[10m]))"
       op          = "lt"
       threshold   = 1
       for         = "5m"
@@ -334,10 +336,10 @@ locals {
     }
     logs_gap = {
       name        = "受験マップ：監視の途絶（ログが届かない）"
-      summary     = "Node の API のログが15分間届いていません"
-      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map と alloy が動いているかを確かめてください。"
+      summary     = "API のログが15分間届いていません"
+      description = "アプリ・Alloy・Grafana Cloud までの経路のどこかが止まっています。検知を黙らせるために止められた可能性もあります。EC2 で docker ps を見て、juken-map-go と alloy が動いているかを確かめてください。"
       datasource  = "grafanacloud-logs"
-      expr        = "sum(count_over_time({job=\"juken-map-api\", env=\"production\", runtime=\"node\"}[15m]))"
+      expr        = "sum(count_over_time({job=\"juken-map-api\", env=\"production\"}[15m]))"
       op          = "lt"
       threshold   = 1
       for         = "5m"

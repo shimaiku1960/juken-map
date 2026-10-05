@@ -7,8 +7,8 @@ Node から消した（JUK-84）。ダッシュボード・学習記録と予定
 
 ログイン（`/api/auth/*`）も Better Auth（Node）から移し、Go で自作した（JUK-115、`auth_*.go`）。
 判定の基準は dev-standards の `targets/10_authentication.md`（認証 基準）で、コメントの B1・C3 などはその項目。
-Node に残っているのは、ブログ（`/api/blog`）・`/api/health`・`/line/settings`（画面への振り分け）と、
-画面（SPA）・sitemap の配信。
+画面（SPA・SSG の HTML・静的ファイル）・sitemap・ブログの中継（`/api/blog`）・`/line/settings` も Node から移した
+（JUK-111、`spa.go`・`seo.go`・`blog.go`）。本番の Node は何も受けていない（コンテナを外すのは JUK-109）。
 
 ### ログインの作り（`auth_*.go`）
 
@@ -79,6 +79,10 @@ curl -b jar localhost:8080/api/dashboard
 | `MICROCMS_WEBHOOK_SECRET` | なし | microCMS の Webhook の署名を確かめる（JUK-112）。空なら Webhook は必ず 401 |
 | `GITHUB_DEPLOY_TOKEN` | なし | microCMS の Webhook で deploy.yml を動かす GitHub のトークン（fine-grained、このリポジトリの Actions: Read and write だけ）。空なら Webhook は 502 |
 | `GITHUB_API_BASE` | `https://api.github.com` | GitHub の API の根元。テスト用 |
+| `WEB_DIST_DIR` | なし（イメージでは `/web`） | 画面のビルド成果物（apps/web の dist）。`index.html` が無ければ画面を配らない（開発は Vite が配る） |
+| `GA_MEASUREMENT_ID` | なし | GA4 の測定 ID。画面の HTML に計測のタグを差し込み、CSP でそのインラインスクリプトだけをハッシュで許す |
+| `FARO_COLLECTOR_URL` | なし | 画面のエラーの送り先（Grafana Faro）。HTML の meta で画面へ渡し、CSP の connect-src にオリジンを足す |
+| `MICROCMS_SERVICE_DOMAIN`・`MICROCMS_API_KEY` | なし | ブログの中継（`/api/blog`）。どちらか空なら 502 |
 
 ## 本番
 
@@ -247,6 +251,9 @@ Go は5本同時に送るが、メールは Resend の上限（チーム全体�
 | `admin_masters.go` | 管理画面のマスター編集（大学・学部・タグ・参考書。使われている行は消さない、大学一覧のキャッシュを捨てる） | `routes/admin-masters.ts`・`services/master-service.ts` |
 | `ownership_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3）と禁止項目（A4）を本物の DB で確かめる（dbtest タグ） | `ownership.test.ts`・`forbidden-fields.test.ts` |
 | `line_db_test.go` | LINE 連携の SQL を本物の DB で確かめる（dbtest タグ） | — |
+| `spa.go` | 画面の配信（dist を起動時にメモリへ読み、gzip を作り置く。SSG の HTML、知らないパスの 404、sitemap） | `spa.ts` |
+| `seo.go` | ページごとの meta・GA4・Faro の差し込み、画面の CSP、sitemap の中身、SPA のルートの一覧 | `seo.ts`・`security-headers.ts`・`src/shared/routes.ts` |
+| `blog.go` | ブログの記事の中継（microCMS、3秒で打ち切り、障害は 502） | `routes/blog.ts`・`infra/microcms.ts` |
 
 Go ではフォルダ1つが1つのパッケージで、ファイルの分け方はコンパイル結果に関係しない。
 上の分け方は、読む人が探しやすいようにしているだけ。

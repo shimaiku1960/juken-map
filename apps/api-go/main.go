@@ -76,6 +76,10 @@ func run() error {
 	})
 	rt := newRouter((&sessionAuth{store: authHandlers.sessions}).load)
 	registerAuthRoutes(rt, authHandlers)
+	registerBlogRoutes(rt, blogConfig{
+		serviceDomain: os.Getenv("MICROCMS_SERVICE_DOMAIN"),
+		apiKey:        os.Getenv("MICROCMS_API_KEY"),
+	})
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
 		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
@@ -110,6 +114,20 @@ func run() error {
 			token:    os.Getenv("GITHUB_DEPLOY_TOKEN"),
 		},
 	})
+
+	// 画面（apps/web のビルド成果物）を配る（JUK-111）。WEB_DIST_DIR が無ければ配らない（開発は Vite が配る）。
+	// GA4 と Faro の設定は画面のバンドルに焼き込まず、ここで HTML に差し込む。
+	site, err := loadSPA(os.Getenv("WEB_DIST_DIR"), pageScripts{
+		gaMeasurementID:  os.Getenv("GA_MEASUREMENT_ID"),
+		faroCollectorURL: os.Getenv("FARO_COLLECTOR_URL"),
+	})
+	if err != nil {
+		return err
+	}
+	if site != nil {
+		registerSPA(rt, site)
+		slog.Info("api-go serving web", "files", len(site.assets), "prerendered", len(site.pages))
+	}
 
 	srv := &http.Server{
 		Addr: ":" + envOr("PORT", "8080"),
@@ -183,6 +201,13 @@ func registerAuthRoutes(rt *router, h *authHandlers) {
 	rt.auth("GET /api/auth/callback/{provider}", h.oauthCallback)
 }
 
+// registerBlogRoutes はブログの記事の中継（blog.go）を登録する。
+func registerBlogRoutes(rt *router, c blogConfig) {
+	blog := newBlogHandlers(c)
+	rt.public("GET /api/blog", blog.list)
+	rt.public("GET /api/blog/{id}", blog.detail)
+}
+
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
@@ -244,6 +269,7 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig, mic
 	rt.oauth("GET /api/line/oauth/start", lineRoutes.oauthStart)
 	rt.oauth("GET /api/line/oauth/callback", lineRoutes.oauthCallback)
 	rt.webhook("POST /api/line/webhook", lineRoutes.webhook)
+	rt.publicWithSession("GET /line/settings", lineRoutes.settings)
 
 	// microCMS で記事を変えたら、記事を作り直すデプロイを動かす（JUK-112）。
 	microcmsWebhook := &microcmsWebhookHandler{secret: microcms.secret, trigger: newDeployTrigger(microcms.deployer)}
