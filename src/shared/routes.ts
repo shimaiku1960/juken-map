@@ -4,10 +4,10 @@
  * サーバーは誰が来ても index.html を返すため、これが無いと存在しないパスまで 200 になる
  * （本番ログで /wp-login.php のようなボットのスキャンが全部「正常」に計上されていた）。
  * ここを正として突き合わせ、一致しないパスは同じ HTML を 404 で返す
- * （apps/api-go/seo.go の spaRoutes）。
+ * （apps/api/seo.go の spaRoutes）。
  *
  * App.tsx・Go と二重管理になるので、ずれていないことは
- * apps/web/src/App.routes.test.ts と apps/api-go/spa_test.go が機械的に確かめる。
+ * apps/web/src/App.routes.test.ts と apps/api/spa_test.go が機械的に確かめる。
  */
 export const SPA_ROUTES = [
   // 公開

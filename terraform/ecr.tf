@@ -23,7 +23,7 @@ resource "aws_ecr_lifecycle_policy" "juken_map" {
   })
 }
 
-# Go の API（apps/api-go、JUK-72）のイメージ。Node のイメージと同じコミットのタグで並べて置く。
+# Go の API（apps/api、JUK-72）のイメージ。Node のイメージと同じコミットのタグで並べて置く。
 # 同じリポジトリにタグを分けて置くと、下の「最新10件」を Node と Go で分け合うことになり、
 # 戻せるデプロイの数が半分になるので分ける。
 resource "aws_ecr_repository" "juken_map_go" {

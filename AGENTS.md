@@ -1,14 +1,14 @@
 ## 構成の前提
 
 このリポジトリは pnpm workspace のモノレポで、`apps/web` が React 19 + Vite の
-SPA、`apps/api-go` が Go の API サーバーである。本番は Go が API・ログイン・ビルド済み SPA の
+SPA、`apps/api` が Go の API サーバーである。本番は Go が API・ログイン・ビルド済み SPA の
 すべてを配る（JUK-70・JUK-115・JUK-111）。運用のコマンド（`pnpm incident`・`pnpm admin:grant`）と、マイグレーションの
-適用（`pnpm db:migrate`、`apps/api-go/migrate.go`）も Go にある（JUK-122・JUK-125）。開発でしか使わない
+適用（`pnpm db:migrate`、`apps/api/migrate.go`）も Go にある（JUK-122・JUK-125）。開発でしか使わない
 DB の道具（seed・テスト用 DB の準備・Node の DB 接続）は `db/`（Node.js 24 の TS）にあり、本番では使わない（JUK-130）。Next.js は使っていない（2026-09に削除済み）ため、
 App Router・Server Components・Server Actions・`next/*` の作法を持ち込まないこと。
 
 DBは MySQL 8.4 で、ORM は使わず SQL を直接書く（Go は `database/sql`、Node の seed は `mysql2`）。
-ルートの一覧は `apps/api-go/main.go` の `registerRoutes`、入口の種類ごとの拒否は `apps/api-go/router.go` にある。
+ルートの一覧は `apps/api/main.go` の `registerRoutes`、入口の種類ごとの拒否は `apps/api/router.go` にある。
 
 ## 依存関係とlockfile
 

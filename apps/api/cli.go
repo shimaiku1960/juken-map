@@ -14,8 +14,8 @@ import (
 // 本番は RDS に外から繋げないので、EC2 で動いている Go のコンテナの中で実行する（distroless でシェルが無いので
 // 実行ファイルを直接呼ぶ）。コンテナの DATABASE_URL をそのまま使う。
 //
-//	sudo docker exec juken-map-go /api-go incident sessions <メールアドレス>
-//	sudo docker exec juken-map-go /api-go grant-admin --list
+//	sudo docker exec juken-map-go /api incident sessions <メールアドレス>
+//	sudo docker exec juken-map-go /api grant-admin --list
 //
 // 手元では pnpm incident・pnpm admin:grant（scripts/go-cli.sh）が .env を読んで同じものを呼ぶ。手順は docs/incident-response.md。
 // migrate（migrate.go）だけは本番でもデプロイが1回きりのコンテナで流し、手元では pnpm db:migrate が呼ぶ。

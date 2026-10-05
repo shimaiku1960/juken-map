@@ -33,10 +33,10 @@ export default async function setup() {
     await admin.end();
   }
 
-  // 本番と同じマイグレーションを、本番と同じ Go の migrate コマンド（apps/api-go/migrate.go、JUK-125）で当てるので、
+  // 本番と同じマイグレーションを、本番と同じ Go の migrate コマンド（apps/api/migrate.go、JUK-125）で当てるので、
   // テストの DB は本番と同じ形になる。
   execFileSync("go", ["run", ".", "migrate"], {
-    cwd: fileURLToPath(new URL("../../apps/api-go", import.meta.url)),
+    cwd: fileURLToPath(new URL("../../apps/api", import.meta.url)),
     env: {
       ...process.env,
       MIGRATION_DATABASE_URL: testMigrateDatabaseUrl,

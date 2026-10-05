@@ -13,7 +13,7 @@ import { useIsLineInAppBrowser, useSafeCallbackURL } from "@/web/hooks/useBrowse
 import { isLineInAppBrowser } from "@/web/lib/browser";
 import TwoFactorCodeForm from "@/web/components/auth/TwoFactorCodeForm";
 
-// 外部ログインから戻ってきたときの理由（apps/api-go の auth_oauth.go が付ける ?error=）。
+// 外部ログインから戻ってきたときの理由（apps/api の auth_oauth.go が付ける ?error=）。
 const OAUTH_ERRORS: Record<string, string> = {
   oauth: "外部サービスでのログインに失敗しました。もう一度お試しください",
   oauth_email:
@@ -66,7 +66,7 @@ export default function LoginPage() {
           "メールアドレスの確認が完了していません。確認メールをご確認ください。"
         );
       } else if (error.status === 429) {
-        // IP 単位とアカウント単位の回数制限（apps/api-go の auth_throttle.go）。
+        // IP 単位とアカウント単位の回数制限（apps/api の auth_throttle.go）。
         setErrorMessage("ログインの試行が多すぎます。しばらく待ってから、もう一度お試しください。");
       } else {
         setErrorMessage(error.message);

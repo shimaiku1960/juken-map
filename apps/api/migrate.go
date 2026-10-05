@@ -8,7 +8,7 @@ package main
 // 当てた記録が残っているので、表を引き継げば移し替えは要らない（表の名前に prisma が残るのはそのため）。
 // checksum も Prisma と同じ「ファイルの SHA-256」。
 //
-// 本番はデプロイがアプリの起動前に、Go のイメージの1回きりのコンテナで `/api-go migrate` を流す
+// 本番はデプロイがアプリの起動前に、Go のイメージの1回きりのコンテナで `/api migrate` を流す
 // （.github/scripts/deploy-ec2.sh）。手元は `pnpm db:migrate`（`pnpm dev` も最初に流す）、CI は E2E の前に流す。
 // 新しいマイグレーションは db/migrations/<日時>_<内容>/migration.sql を手で書いて足す。
 

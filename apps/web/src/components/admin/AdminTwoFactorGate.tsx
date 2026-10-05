@@ -12,7 +12,7 @@ import { authClient, useSession } from "@/web/lib/auth-client";
 import { useHasPassword } from "@/web/hooks/useTwoFactor";
 
 // 管理画面の入口。管理 API は、2段階認証を通して作られたセッションでないと 403 を返す
-// （apps/api-go の router.go の admin）。守るのは API で、ここはその手前で
+// （apps/api の router.go の admin）。守るのは API で、ここはその手前で
 // 「何をすれば入れるか」を案内するだけ。管理者でない人はそのまま中身を出し、API の 403 で
 // 「権限がありません」になる。
 //

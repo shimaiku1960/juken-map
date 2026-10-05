@@ -8,7 +8,7 @@ import { defineConfig, devices } from "@playwright/test";
 //     `next start` で起動して実行する（docker compose は使わない）。
 //
 // SPA 移行中の暫定運用: E2E_BASE_URL を渡すと、その URL に対して実行する。
-// apps/web（Vite）と apps/api（Fastify）は別々に起動しておく必要があるため、
+// apps/web（Vite）と apps/api（Go）は別々に起動しておく必要があるため、
 // このときは webServer を立てずに既存のサーバへつなぐ。
 //   例: E2E_BASE_URL=http://localhost:5173 pnpm run e2e
 const isCI = !!process.env.CI;

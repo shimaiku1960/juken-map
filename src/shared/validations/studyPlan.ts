@@ -5,7 +5,7 @@ import { isCalendarYmd, YMD_PATTERN } from "@/shared/date";
 /**
  * 日付の文字列に「YYYY-MM-DD の形」と「暦にある日付」の規則を足す（JUK-75）。実績と予定の日付で使う。
  * 以前は形を見ずに new Date() へ渡していたので、"1" が 2001 年、"2026-09-3" がサーバーの時間帯の日付になり、
- * 空白だけでは 500 になっていた。Go（apps/api-go）も同じ規則で弾く。
+ * 空白だけでは 500 になっていた。Go（apps/api）も同じ規則で弾く。
  */
 export function ymdDate(field: z.ZodString) {
   return field

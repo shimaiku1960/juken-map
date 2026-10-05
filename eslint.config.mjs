@@ -13,7 +13,7 @@ import { sqlInjectionRules } from "./eslint.sql.config.mjs";
 // 画面と API が同じものを別々に持つ状態へ戻る。
 //
 // 注意: apps/ は独自の tsconfig を持つ別パッケージなので lint 対象から外している。
-// アプリ同士（apps/web → apps/api-go の中身など）を直接参照する経路は、そもそも
+// アプリ同士（apps/web → apps/api の中身など）を直接参照する経路は、そもそも
 // tsconfig の paths に無いので物理的に解決できない。ここで守るのは shared の純度だけ。
 const layerBoundaries = [
   {

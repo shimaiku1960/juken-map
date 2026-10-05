@@ -21,10 +21,10 @@ updates:
     commit-message:
       prefix: ci
 
-  # Go の API（apps/api-go）の依存。考え方は上の github-actions と同じで、月1回・1本にまとめ、
+  # Go の API（apps/api）の依存。考え方は上の github-actions と同じで、月1回・1本にまとめ、
   # メジャー版は手で上げる。
   - package-ecosystem: gomod
-    directory: /apps/api-go
+    directory: /apps/api
     schedule:
       interval: monthly
     ignore:

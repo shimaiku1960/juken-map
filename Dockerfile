@@ -1,4 +1,4 @@
-# 画面（apps/web）をビルドするだけのイメージ（JUK-121・JUK-125）。本番で動くのは Go（apps/api-go）だけで、
+# 画面（apps/web）をビルドするだけのイメージ（JUK-121・JUK-125）。本番で動くのは Go（apps/api）だけで、
 # Go のイメージが --build-context web= で、ここの /app/web を写す（deploy.yml）。このイメージは実行しない。
 FROM node:24-slim AS base
 WORKDIR /app

@@ -2,7 +2,7 @@
 // 1. vite build が作った dist/index.html（JS・CSS の読み込みタグ入り）をひな形にする
 // 2. vite build --ssr が作った dist-server/entry-server.mjs で各ページを描く
 // 3. できた HTML を dist/ssg/<パス>.html に置き、記事の meta を dist/ssg/meta.json にまとめる
-// 置いたファイルはサーバー（apps/api-go/spa.go）が、そのパスへのリクエストに
+// 置いたファイルはサーバー（apps/api/spa.go）が、そのパスへのリクエストに
 // index.html の代わりに返す。meta の差し込みもサーバーが行う。
 //
 // 記事は microCMS で書き換えるので、記事を更新したらデプロイ（このビルド）をやり直して作り直す（JUK-110）。

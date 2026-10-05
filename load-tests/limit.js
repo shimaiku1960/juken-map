@@ -89,7 +89,7 @@ const status2xx = new Counter("status_2xx");
 const status4xx = new Counter("status_4xx");
 const status5xx = new Counter("status_5xx");
 const statusFailed = new Counter("status_failed"); // 接続できなかった（status 0）
-// 混雑時にサーバーが意図して断った分（apps/api/src/overload.ts）。想定外の 5xx とは分けて数える。
+// 混雑時にサーバーが意図して断った分（apps/api/overload.go）。想定外の 5xx とは分けて数える。
 const statusShed = new Counter("status_shed");
 // 成功した応答だけの所要時間。断った 503 は一瞬で返るので、全体の p95 に混ぜると
 // 「受け付けた分がどれだけ速く返ったか」が実際より良く見える。
