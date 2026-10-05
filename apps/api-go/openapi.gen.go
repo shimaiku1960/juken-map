@@ -182,6 +182,7 @@ const (
 	ServerErrorCodeInvalidMediaType     ServerErrorCode = "FST_ERR_CTP_INVALID_MEDIA_TYPE"
 	ServerErrorCodeNotFound             ServerErrorCode = "NOT_FOUND"
 	ServerErrorCodeOverloaded           ServerErrorCode = "OVERLOADED"
+	ServerErrorCodeTooManyRequests      ServerErrorCode = "TOO_MANY_REQUESTS"
 )
 
 // Valid indicates whether the value is a known member of the ServerErrorCode enum.
@@ -198,6 +199,8 @@ func (e ServerErrorCode) Valid() bool {
 	case ServerErrorCodeNotFound:
 		return true
 	case ServerErrorCodeOverloaded:
+		return true
+	case ServerErrorCodeTooManyRequests:
 		return true
 	default:
 		return false

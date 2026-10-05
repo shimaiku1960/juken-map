@@ -978,7 +978,7 @@ export interface components {
         ServerError: {
             error: string;
             /** @enum {string} */
-            code: "INTERNAL_ERROR" | "OVERLOADED" | "NOT_FOUND" | "FST_ERR_CTP_BODY_TOO_LARGE" | "FST_ERR_CTP_INVALID_MEDIA_TYPE" | "FST_ERR_CTP_INVALID_CONTENT_LENGTH";
+            code: "INTERNAL_ERROR" | "OVERLOADED" | "NOT_FOUND" | "FST_ERR_CTP_BODY_TOO_LARGE" | "FST_ERR_CTP_INVALID_MEDIA_TYPE" | "FST_ERR_CTP_INVALID_CONTENT_LENGTH" | "TOO_MANY_REQUESTS";
             reqId: string;
         };
         /** @description 予定1件（Zod の studyPlanItemSchema）。スキーマに書けない規則：範囲の3つ（StudyLogInput と同じ）と、 参考書・範囲・メモのどれかが要る（plan_content_required。メモは前後の空白を削った後で見る） */

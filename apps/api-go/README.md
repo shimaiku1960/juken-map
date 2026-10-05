@@ -225,6 +225,7 @@ Go は5本同時に送るが、メールは Resend の上限（チーム全体�
 | `auth.go` | セッション Cookie の署名確認と、session テーブルの照会 | Better Auth の `getSession` |
 | `middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 | `observability/logger.ts`・`requestContext.ts`・`security-headers.ts` |
 | `overload.go` | 同時処理数の上限を超えたら 503 | `overload.ts` |
+| `user_rate_limit.go` | 利用者単位の回数制限（読み取り・書き込みの2種類、メモリのトークンバケット）。超えたら 429 と `Retry-After` | —（Node には無い。06 E2） |
 | `errors.go` | エラー応答の形、404、path の ID | `error-handling.ts`・`routes/params.ts` |
 | `logger.go` | pino と同じ形の JSON ログ | `observability/logger.ts` |
 | `metrics.go` | Prometheus のメトリクス（名前・ラベルは Node と同じ） | `observability/metrics.ts` |

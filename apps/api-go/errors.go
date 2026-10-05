@@ -19,6 +19,8 @@ const (
 	codeInternal   = ServerErrorCodeInternal
 	codeOverloaded = ServerErrorCodeOverloaded
 	codeNotFound   = ServerErrorCodeNotFound
+	// 利用者単位の回数制限（user_rate_limit.go）。Node には無い
+	codeTooManyRequests = ServerErrorCodeTooManyRequests
 )
 
 // 利用者に見せる文言。5xx は原因を出さない（SQL やパスが画面に出ないように）。
@@ -40,6 +42,8 @@ func newErrorBody(status int, code ServerErrorCode, reqID string) ServerError {
 	switch {
 	case code == codeOverloaded:
 		message = overloadedMessage
+	case code == codeTooManyRequests:
+		message = tooManyRequestsMessage
 	case status >= 500:
 		message = serverMessage
 	case clientMessages[code] != "":

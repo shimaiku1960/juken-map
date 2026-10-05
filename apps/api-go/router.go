@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // 全ルートに「誰が呼んでよいか（入口の種類）」を持たせ、認証・管理者・デモの拒否を
@@ -79,6 +80,7 @@ type router struct {
 	loadSession sessionLoader
 	routes      []routeEntry
 	crossOrigin *http.CrossOriginProtection
+	rateLimiter *userRateLimiter
 }
 
 // crossOriginMessage は、別のサイトから送られた書き込みを断るときの文言。
@@ -91,7 +93,12 @@ func newRouter(load sessionLoader) *router {
 	// どちらのヘッダーも無いリクエスト（curl・応答一致テスト）はブラウザではないので通す。
 	//
 	// Node の自前 API はオリジンを確かめず、SameSite=Lax の Cookie だけで守っている。Go ではこれを足して一段強くする。
-	rt := &router{mux: http.NewServeMux(), loadSession: load, crossOrigin: http.NewCrossOriginProtection()}
+	rt := &router{
+		mux:         http.NewServeMux(),
+		loadSession: load,
+		crossOrigin: http.NewCrossOriginProtection(),
+		rateLimiter: newUserRateLimiter(time.Now),
+	}
 	// どのルートにも当たらないものは 404。ServeMux の既定はテキストの「404 page not found」で、
 	// JSON を読むつもりの画面が壊れるので、Node と同じ形のエラーにする。
 	// メソッド違い（POST /api/dashboard など）もここに来る。ServeMux は当たるルートが1本も
@@ -131,7 +138,7 @@ func (rt *router) anonymousWrite(pattern string, h http.HandlerFunc) {
 }
 
 // user はログイン必須のルートを登録する。別のサイトからの書き込みは 403、未ログインは 401、停止中は 403、
-// デモアカウントの書き込み（GET・HEAD 以外）は 403 で、ハンドラまで来ない。
+// デモアカウントの書き込み（GET・HEAD 以外）は 403、利用者の回数制限を超えたら 429 で、ハンドラまで来ない。
 func (rt *router) user(pattern string, h sessionHandler) {
 	rt.handle(pattern, accessUser, func(w http.ResponseWriter, r *http.Request) {
 		if !rt.sameOrigin(w, r) {
@@ -145,11 +152,15 @@ func (rt *router) user(pattern string, h sessionHandler) {
 			writeError(w, http.StatusForbidden, "デモアカウントは閲覧専用です")
 			return
 		}
+		if !rt.limitUser(w, r, s) {
+			return
+		}
 		h(w, r, s)
 	})
 }
 
 // admin は管理者だけのルートを登録する。別のサイトからの書き込みと、管理者でなければ 403。
+// 回数制限は user と同じ札を使う（管理者も1人の利用者として数える）。
 func (rt *router) admin(pattern string, h sessionHandler) {
 	rt.handle(pattern, accessAdmin, func(w http.ResponseWriter, r *http.Request) {
 		if !rt.sameOrigin(w, r) {
@@ -170,6 +181,9 @@ func (rt *router) admin(pattern string, h sessionHandler) {
 				"error": "管理画面を開くには、2段階認証を通してログインしてください。",
 				"code":  twoFactorRequired,
 			})
+			return
+		}
+		if !rt.limitUser(w, r, s) {
 			return
 		}
 		h(w, r, s)

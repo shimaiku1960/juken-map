@@ -1778,6 +1778,8 @@ components:
             - FST_ERR_CTP_BODY_TOO_LARGE
             - FST_ERR_CTP_INVALID_MEDIA_TYPE
             - FST_ERR_CTP_INVALID_CONTENT_LENGTH
+            # 利用者単位の回数制限を超えた（429、Go の user_rate_limit.go）
+            - TOO_MANY_REQUESTS
           x-enum-varnames:
             - ServerErrorCodeInternal
             - ServerErrorCodeOverloaded
@@ -1785,6 +1787,7 @@ components:
             - ServerErrorCodeBodyTooLarge
             - ServerErrorCodeInvalidMediaType
             - ServerErrorCodeInvalidContentLength
+            - ServerErrorCodeTooManyRequests
         reqId: { type: string }
 
     StudyPlanItemInput:
