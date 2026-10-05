@@ -40,6 +40,8 @@ SITE_CONF="${SITE_CONF:-/etc/nginx/sites-available/default}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 NOTIFY_ENV_FILE="${NOTIFY_ENV_FILE:-/etc/juken-map/daily-notification.env}"
 NOTIFY_TIMERS="juken-map-daily-notification-morning.timer juken-map-daily-notification-evening.timer"
+# nginx のログの回し方（Ubuntu の nginx パッケージが置くもの）。保存期間を14日に区切る（JUK-128）。
+NGINX_LOGROTATE="${NGINX_LOGROTATE:-/etc/logrotate.d/nginx}"
 GO_PORT_A=8080
 GO_PORT_B=8081
 
@@ -425,4 +427,39 @@ if [ -n "$SYSTEMD_UNITS_B64" ]; then
     echo "timers: 毎日の通知のタイマーを入れた（朝7時・夜21時）"
   fi
   unset notify_secret
+fi
+
+# ---- nginx のログの保存期間（JUK-128）----
+# アクセスログには IP と URL（管理画面なら利用者の ID）が残るので、退会した人の分が残る期間を14日に区切る
+# （dev-standards 06 G3）。Ubuntu の既定は毎日・14世代だが、notifempty のため空の日は回らず、ほとんど空の
+# エラーログは14世代が1か月以上に延びていた（2026-10-05 に 09-02 のものが残っていた）。空の日も回し（ifempty）、
+# 回したものは14日で消す（maxage 14）。書き換えが壊れていたら元に戻してデプロイを失敗にする（アプリは動き続ける）。
+if [ -f "$NGINX_LOGROTATE" ]; then
+  has_maxage=0
+  grep -qE '^[[:space:]]*maxage[[:space:]]' "$NGINX_LOGROTATE" && has_maxage=1
+  # 書きかけを /etc/logrotate.d/ に置くと logrotate がそれも読むので、別の場所で作る。
+  lr_dir="$(mktemp -d)"
+  cp "$NGINX_LOGROTATE" "$lr_dir/orig"
+  awk -v has_maxage="$has_maxage" '
+    /^[[:space:]]*notifempty[[:space:]]*$/ { sub(/notifempty/, "ifempty") }
+    { print }
+    has_maxage == 0 && /^[[:space:]]*rotate[[:space:]]+[0-9]+[[:space:]]*$/ {
+      match($0, /^[[:space:]]*/); print substr($0, 1, RLENGTH) "maxage 14"
+    }' "$lr_dir/orig" > "$lr_dir/new"
+  if cmp -s "$lr_dir/orig" "$lr_dir/new"; then
+    echo "logrotate: nginx のログは、もう空の日も回し14日で消す設定になっている"
+  else
+    # 持ち主と権限を変えないよう、中身だけを書き換える。
+    cat "$lr_dir/new" > "$NGINX_LOGROTATE"
+    if ! logrotate -d "$NGINX_LOGROTATE" > "$lr_dir/check" 2>&1; then
+      cat "$lr_dir/orig" > "$NGINX_LOGROTATE"
+      echo "logrotate: 書き換えた nginx の設定を logrotate が読めないので元に戻す" >&2
+      cat "$lr_dir/check" >&2
+      rm -rf "$lr_dir"
+      exit 1
+    fi
+    echo "logrotate: nginx のログを空の日も回し、14日で消すようにした"
+  fi
+  rm -rf "$lr_dir"
+  unset has_maxage lr_dir
 fi
