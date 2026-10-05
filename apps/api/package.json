@@ -3,7 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "migrate": "tsx --env-file-if-exists=../../.env src/migrate.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test-db:prepare": "tsx src/test-db/prepare.ts"

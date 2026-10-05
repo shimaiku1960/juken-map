@@ -14,9 +14,8 @@ GO_ROUTES_B64="${3:-}"
 # infra/systemd/（毎日の通知のタイマー、JUK-85）を tar.gz にして base64 にしたもの（deploy.yml が渡す）。
 # 空のときはタイマーに触らない。
 SYSTEMD_UNITS_B64="${4:-}"
-# Node のイメージ。マイグレーション（docker-entrypoint.sh の migrate）にだけ使う。
-REPO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map"
 # Go の API（apps/api-go、JUK-72）。本番で動くアプリのコンテナはこれだけ（JUK-109）。
+# マイグレーションも同じイメージの `/api-go migrate` で当てる（JUK-125）。
 REPO_GO="961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go"
 ENV_FILE="${ENV_FILE:-/home/ubuntu/juken-map/.env}"
 RUNTIME_SECRET_ID="juken-map/production/runtime"
@@ -185,7 +184,6 @@ df -h / | tail -1
 # 既定の bridge は名前で引けないので、自分で作ったネットワークに載せる。
 docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK"
 
-docker pull "$REPO:$IMAGE_TAG"   # マイグレーションだけに使う
 docker pull "$REPO_GO:$IMAGE_TAG"
 
 # ---------------- 無停止デプロイ ----------------
@@ -271,13 +269,13 @@ recover_next juken-map-go "$GO_CURRENT_PORT"
 # Node のアプリのコンテナはもう起こさない（JUK-109）。以前の付け替えの途中で残ったものがあれば消す。
 docker rm -f juken-map-next >/dev/null 2>&1 || true
 
-# マイグレーションを、新しいイメージ（Node）の1回きりのコンテナで先に当てる。失敗したら set -e でここで
+# マイグレーションを、新しいイメージの1回きりのコンテナ（/api-go migrate、JUK-125）で先に当てる。失敗したら set -e でここで
 # 止まり、新しいコンテナは起動しない（nginx は古いコンテナを向いたままなので、本番は無傷）。
 echo "deploy: マイグレーションを当てる"
 docker run --rm \
   --network "$NETWORK" \
   --env-file "$MIGRATE_ENV_FILE" \
-  "$REPO:$IMAGE_TAG" \
+  "$REPO_GO:$IMAGE_TAG" \
   migrate
 
 echo "deploy: nginx は Go $GO_CURRENT_PORT を向いている -> 新しいコンテナを Go $GO_NEW_PORT で起こす"

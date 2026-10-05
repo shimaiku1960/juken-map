@@ -466,7 +466,7 @@ apps/
 │   ├── src/hooks/         TanStack Query のサーバー状態フック
 │   └── public/            favicon、PWAアイコン、manifest、robots.txt
 ├── api-go/              # バックエンド一式（Go）。API・ログイン・画面の配信・運用のコマンド
-└── api/                 # Node の CLI だけ。マイグレーションを当てる処理と、seed・テストが使う DB 接続
+└── api/                 # seed・テストが使う Node の DB 接続だけ（本番では使わない）
 
 src/
 └── shared/              # 外部依存のない純粋関数・型・Zodスキーマ（両方のアプリから使う）

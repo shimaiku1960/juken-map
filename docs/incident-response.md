@@ -318,10 +318,12 @@ SSM のコマンドは EC2 の root で動くので、CI を乗っ取られた�
        --secret id=microcms_api_key,env=MICROCMS_API_KEY \
        --build-arg MICROCMS_SERVICE_DOMAIN --build-arg SSG_ARTICLES=required \
        -t 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:restore-$c .
-     # Go のイメージは画面（JUK-111）を Node のイメージから写す。--build-context を忘れると画面の無いイメージになり、
-     # デプロイのスモークテスト（Go の /login）で止まる
+     # Go のイメージは画面（JUK-111）を上のイメージから写し、マイグレーション（JUK-125）を db/migrations から入れる。
+     # web を忘れると画面の無いイメージになり、デプロイのスモークテスト（Go の /login）で止まる。
+     # migrations を忘れると、デプロイの migrate が「マイグレーションがありません」で止まる
      docker buildx build --platform linux/amd64 --push --build-arg APP_COMMIT=$c \
        --build-context web=docker-image://961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map:restore-$c \
+       --build-context migrations=db/migrations \
        -t 961457613174.dkr.ecr.ap-northeast-1.amazonaws.com/juken-map-go:restore-$c apps/api-go
      ```
 
