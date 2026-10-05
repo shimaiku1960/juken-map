@@ -29,7 +29,7 @@ func newCLIFixture(t *testing.T) cliFixture {
 	if err := db.QueryRow("SELECT COALESCE(MAX(id), 0) FROM OpsAuditLog").Scan(&fx.opsFrom); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Exec("DELETE FROM OpsAuditLog WHERE id > ?", fx.opsFrom) })
+	t.Cleanup(func() { fx.exec("DELETE FROM OpsAuditLog WHERE id > ?", fx.opsFrom) })
 	return fx
 }
 
