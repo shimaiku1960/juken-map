@@ -138,7 +138,8 @@ Claude Code でも Codex でもないエージェント（例えば Cursor の�
 品質の判断基準は、プロジェクト横断の非公開リポジトリ
 `shimaiku1960/dev-standards` を正とする。索引は `./.standards/INDEX.md`
 （gitignore 済みのエントリポイント）から読み、必要な分野の文書だけを追加で読む。
-**採点結果や実測値は dev-standards には書かず**、auto-memory の該当トピックに残す。
+**基準に対する判定・実測値・実装との対応表は dev-standards の `projects/juken-map/` に置く**
+（`targets/` には書かない）。判断の経緯は auto-memory の該当トピックに残す。
 
 `./.standards` が無い環境では、次のように用意する：
 
