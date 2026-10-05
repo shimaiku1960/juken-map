@@ -4,10 +4,7 @@
 2つのアプリからなる。本番では Go が API・ログイン・ビルド済みの画面のすべてを配る（JUK-70・JUK-111・JUK-115）。
 開発でしか使わない DB の道具（seed・テスト用 DB の準備・Node の DB 接続）は `db/` に置く。以前の `apps/api`（Node）は、
 Fastify のサーバーを JUK-121 で、マイグレーションの適用を JUK-125 で Go へ移し、残りを JUK-130 で `db/` へ寄せて消した。
-画面と共有するコードは `src/shared` に置く。
-
-> ⚠️ 下の「判断とその理由」のうち、Fastify・Better Auth・`routes`/`services` を前提にした節は Node が
-> API を配っていた頃の記録で、今のコードとは合わない（直すのは JUK-55）。Go の構成は `apps/api/README.md`。
+画面と共有するコードは `src/shared` に置く。Go のファイルの分け方とルートの足し方は `apps/api/README.md`。
 
 もとは Next.js のモジュラーモノリスだった。2026-09-10 に分離へ切り替え、Next.js は削除した。
 経緯と手順は `docs/split-migration-plan.md`、性能まわりの計測は `docs/performance.md` にある。
@@ -53,16 +50,23 @@ src/shared/             2つのアプリが共有する、外部依存のない�
 ## 依存の向き
 
 ```
-apps/web  ────────────────────→  shared
-apps/api  routes ──→ services ──→  shared
+apps/web  ──→  shared                      （TS の import）
+db        ──→  shared                      （seed が日付の関数を使う）
+apps/web  ── HTTP（JSON）──→  apps/api      （Go。TS のコードは import しない）
+openapi/openapi.yaml  ──生成──→  shared/openapi.gen.ts・apps/api/openapi.gen.go
+
+apps/api の中:  router.go（入口の種類で拒否）──→ ハンドラ（入力・状態コード）──→ ストア（SQL）
 ```
 
 - **shared は何にも依存しない。** DB・HTTP・ブラウザ API に依存するものは置かない。
   ここが崩れると、画面と API が同じものを別々に持つ状態に戻る。
 - **apps/web は apps/api の中身を呼べない。** これは約束ではなく**物理的に不可能**である。
-  `apps/web/tsconfig.json` の `paths` に `@/api` が無く、そもそも解決できない。
-  データが必要なら HTTP を通すしかない。
-- **routes は薄い。** 認証・入力検証・ステータスコードだけを持ち、処理は services に置く。
+  API は Go なので、TS から import する経路がそもそも無い。データが必要なら HTTP を通すしかない。
+- **画面と API が同じ形をやり取りすることは、契約から作った型が保証する。** 形の正は
+  `openapi/openapi.yaml` で、TS の型（`src/shared/openapi.gen.ts`）と Go の型（`apps/api/openapi.gen.go`）を
+  `pnpm openapi:generate` で作る（JUK-76）。入力チェックの規則（Zod）は Go が手で同じものを書く（JUK-75、
+  理由は `apps/api/README.md` の「書き込みのルート」）。
+- **API の中は、入口 → ハンドラ → ストアの順に呼ぶ。** 分担は下の「入口・ハンドラ・ストアの分担」。
 - **バックエンドのコードは `apps/api` に全部ある。** 以前は `src/backend` にも分散していたが、
   それは Next.js のモノリスを分割したときの名残で、利用者が `apps/api` だけになった時点で
   置き場所としての理由を失っていた。`src/` に残すのは 2 つのアプリが共有する `shared` だけ。
@@ -73,14 +77,17 @@ apps/api  routes ──→ services ──→  shared
 同居していたので、境界は**フォルダと ESLint による約束**にすぎなかった。
 
 プロセスを分けたことで、その約束は**型解決の仕組みそのもの**に置き換わった。画面から
-サービス層を直接呼ぶコードは、書いても import が解決しない。守り方としてはこちらが強い。
+API の中身を直接呼ぶコードは、書いても import が解決しない。守り方としてはこちらが強い。
+API を Go に移した（JUK-70）今は、言語も違うので、なおさら混ざらない。
 
 ## 判断とその理由
 
 実装は git 履歴を見れば分かるが、選ばなかった選択肢とその理由はコードに残らないため、
 ここに書く。
 
-### Fastify が API と SPA の両方を配る
+### 1つのコンテナが API と画面の両方を配る
+
+分離した当初（2026-09）は Node の Fastify が配り、2026-10 に Go へ移した（JUK-111）。下の理由はどちらにも当てはまる。
 
 nginx に静的ファイルを配らせ、`/api` だけ Fastify へ振る構成も検討した（当初の計画はこちら）。
 採らなかった理由は**性能ではなくリスクの形**である。
@@ -96,7 +103,7 @@ Fastify を 3000 番で待ち受けさせれば、nginx は
 - 既存のスモークテストと自動ロールバックがそのまま効く
 - SPA と API のバージョンがずれることが原理的に起きない
 
-代償は、静的配信を nginx ではなく Node が担うこと。この規模では実測で問題にならない。
+代償は、静的配信を nginx ではなくアプリ（当時は Node、今は Go）が担うこと。この規模では実測で問題にならない。
 必要になれば nginx に `location /api` を足すだけで移せる（アプリ側は無変更）。
 
 **2026-10、JUK-111 で配る役目を Go（`apps/api`）へ移した。** 考え方は同じで、Go のコンテナが API と画面の
@@ -107,10 +114,11 @@ gzip を作り置く（`apps/api/spa.go`）。
 ### SPA 化で失う SEO を、サーバー側で作り直した
 
 SPA は誰が来ても同じ `index.html` を返す。JS を実行する前の HTML しか読まないクローラーと
-SNS には、中身が空に見える。Next.js が黙って担っていた分を `apps/api/src/seo.ts` で作り直した。
+SNS には、中身が空に見える。Next.js が黙って担っていた分をサーバー側で作り直した
+（はじめは Node の `seo.ts`、JUK-111 から Go の `apps/api/seo.go`）。
 
 - `robots.txt` と OGP 画像は `apps/web/public` の実ファイル
-- `sitemap.xml` は SSG した記事から起動時に作るので Fastify のルート
+- `sitemap.xml` は SSG した記事から起動時に作るので API サーバーのルート
 - `index.html` を返すときに head を差し込む。ログイン後ページと認証フローには `noindex` を付ける
 - 記事（`/articles/:id`）はビルドで microCMS から全件取り、本文入りの HTML と meta（`dist/ssg/meta.json`）を
   作り置く（JUK-110）。記事を更新したら、デプロイ（`deploy.yml`）をやり直して作り直す。
@@ -119,8 +127,9 @@ SNS には、中身が空に見える。Next.js が黙って担っていた分�
 
 **放置すると `/robots.txt` が 200 で HTML を返す**という、404 より質の悪い状態になっていた。
 
-なお `fastify-static` の `index` は切ってある。切らないと `/` に `index.html` が直接返り、
-一番 SEO が要るトップページだけ meta が入らない。
+なお `/` も、ほかの画面と同じく head を差し込んでから返す（`apps/api/spa.go`）。Node の頃は
+`fastify-static` の `index` を切って同じことをしていた。切らないと `/` に `index.html` が直接返り、
+一番 SEO が要るトップページだけ meta が入らなかった。
 
 一覧やアプリ内の画面は今も JS 実行後にしか中身が出ない。これは SPA である限り残る弱点で、
 実害と認識のうえで許容している。
@@ -132,47 +141,49 @@ Actions を使わない理由として書いていたが（URL が固定され�
 ボディが React 独自形式）、分離した今はそもそも選択肢が存在しない。
 
 `POST /api/study-logs` に JSON を送るだけで、Web もアプリも同じ入口を使える。
-画面と API が同じ形をやり取りすることは `src/shared/dto/` の型が保証している。
-予定と実績の一覧は、サービス（`listStudyPlans` / `listStudyLogs`）の戻り値の型をこの型にしている。
+画面と API が同じ形をやり取りすることは、同じ契約（`openapi/openapi.yaml`）から作った型が保証している
+（画面は `src/shared/dto/`、Go は `apps/api/openapi.gen.go`）。予定と実績の一覧は、ストア
+（`study.go` の `listStudyPlans` / `listStudyLogs`）の戻り値の型をこの型にしている。
 
-### 画面へ返す形への変換はサービスで行う（2026-09-11〜）
+### 画面へ返す形は、SQL を読むところで組み立てる（2026-09-11〜）
 
-以前は `apps/api/src/dto/study-mapper.ts` に変換関数を置き、routes から呼んでいた。
+以前は `apps/api/src/dto/study-mapper.ts`（Node）に変換関数を置き、routes から呼んでいた。
 Next.js 時代に同じ変換が画面3箇所と API に重複していたのを集めたものだった。
 
 SPA に分けたあとは、変換を使うのが予定と実績の一覧の GET の2か所だけになった。
 流れを追うときに開くファイルが1つ増えるだけだったので、ファイルを消し、
-サービスが最初から画面の形で組み立てるようにした。整形は1回で済み、
-routes → services → infra の3層だけで流れを追える。
+SQL を読むところで最初から画面の形に組み立てるようにした。Go でも同じで、日時は `time.Time` にせず
+DB の文字列のまま受けて ISO 文字列に直す（`apps/api/db.go` の `ParseTime = false`）。
 
-**見直す条件:** cron のように、日時を `Date` のまま使いたい呼び出し元が出てきたとき。
-そのときはサービスの戻り値を `Date` に戻し、変換を呼び出し元へ分ける。
+**見直す条件:** 日時を時刻の値のまま計算したい呼び出し元が増えたとき。そのときは読む型を
+`time.Time` に戻し、画面の形への変換を呼び出し元へ分ける。
 
-### routes は DB を触らない
+### 入口・ハンドラ・ストアの分担
 
-`apps/api/src/routes/` は `infra/`（DB）を import しない。DB へ行くのは
-`services/` だけで、routes は次の4つだけを持つ。
+Go の API は、1つの機能を1つのファイル（大きいものは数ファイル）に置き、その中を
+**ハンドラ**（HTTP を読み書きする）と**ストア**（SQL を流す）に分ける。その手前に、入口の種類ごとの
+拒否（`router.go`）がある。Node の頃の `routes/` と `services/` の分担を、Go へ移すとき（JUK-70）に
+フォルダではなくファイルの中の分担にした。
 
-1. 認証（`requireSession`）
-2. 権限（`denyDemoWrite`）
-3. 入力検証（Zod の `safeParse`）
-4. ステータスコードへの翻訳（`not_found` → 404、`duplicate` → 409 など）
+1. **入口（`router.go`）**：未ログイン・停止中・管理者でない・デモの書き込みを断る。ルートは
+   `rt.user` や `rt.admin` のように種類を選んで登録し、種類を選ばずに登録する方法が無いので、書き忘れが起きない
+2. **ハンドラ**：本文と入力を確かめ（`readBody`・`readObject`）、自分の行かを確かめ、
+   ストアの結果をステータスコードへ翻訳する（見つからない → 404、重複 → 409 など）
+3. **ストア**：SQL を流し、失敗は値（`admin_masters.go` の `masterOutcome`）か目印のエラー
+   （`study_plan_writes.go` の `errAlreadyCompleted`）で返す。ステータスコードは知らない。
+   一意制約違反の判定（`isMySQLError(err, mysqlDuplicateEntry)`、`db.go`）もストアの中で済ませる
 
 **この順番に意味がある。** 誰か分からない人に入力の良し悪しを教えないため、
-認証 → 権限 → 入力の順で門番を並べている。
+入口の拒否 → 入力の順で門番を並べている。入力の確認は「自分の行か」より先に行う（Node と同じ応答にするため）。
 
-サービス層は HTTP を知らない。「見つからない」は `null`、業務ルールに反したときは
-`{ result: "duplicate" }` や `{ result: "invalid_range", message }` のような結果の型で返し、
-それを 404・409・400 のどれにするかは routes が決める。一意制約違反（`isDuplicateEntry`）の
-判定も services の中で済ませる。こうしておくと、cron やバッチなど HTTP 以外の入口から
-呼んでも同じルールが効く。
+Node の頃は、予定の完了時の範囲チェックや「実績済みの予定は未完了に戻せない」がルートに
+書かれていて、サービスを直接呼ぶと素通りできた（JUK-17 で services へ移した）。Go では予定を完了にする
+ストア（`studyPlanWriteStore`）をハンドラ以外から呼ぶ所が無いので、範囲チェックのようなルールはハンドラに置いている。
+ハンドラの外（タイマーのジョブや運用のコマンド）から同じ書き込みをすることになったら、ルールをストアか共通の関数へ移す。
 
-以前は、予定の完了時の範囲チェックや「実績済みの予定は未完了に戻せない」がルートに
-書かれていて、サービスを直接呼ぶと素通りできた（JUK-17 で services へ移した）。
-
-所有者チェックは `findFirst({ where: { id, userId } })` の形に統一した。以前は
-`findUnique` で引いてから `userId` を比べていたが、取得と判定が1回のクエリで済み、
-比較の書き忘れも起きない。
+所有者チェックは `WHERE id = ? AND userId = ?` の形に統一している（`findStudyPlan` など）。取得と判定が
+1回のクエリで済み、比較の書き忘れも起きない。他人の ID を渡しても読み書きできないことは
+`ownership_db_test.go` が user の全ルートについて確かめる。
 
 ### 画面から DB を触らない
 
@@ -181,15 +192,19 @@ routes → services → infra の3層だけで流れを追える。
 `findUnique` が書かれていた（`docs/performance.md` の TASK 3）。片方だけ `select` を直せば、
 画面と API で返るデータが静かにずれる。
 
-サービス層に集約すれば直す場所は1つになる。加えて全サービスが `measured()` を通るので、
-どのクエリが遅いかがログから追える。画面に直書きされたクエリはこの計測から漏れる。
+API に集約すれば直す場所は1つになる。加えて全リクエストがアクセスログと計測（`apps/api/middleware.go`）を
+通るので、どの API が遅いかがログとメトリクスから追える（Node の頃は全サービスが `measured()` を通していた）。
+画面に直書きされたクエリはこの計測から漏れる。
 
 分離後は、このルールは ESLint ではなく構成そのものが保証している（上記「依存の向き」）。
 
 ### リポジトリ層は導入していない
 
-サービス層が `infra/db` の `select` / `execute` で SQL を直接書いている。
-`GoalRepository` のような層は挟んでいない（2026-09-13 に再検討して、入れないと決めた）。
+ストアが `database/sql` で SQL を直接書いている。`GoalRepository` のような、テーブルごとに
+読み書きを隠す層は挟んでいない（2026-09-13 に Node の構成で再検討して、入れないと決めた。Go へ移したあとも同じ）。
+Go の「ストア」は機能ごとの SQL の置き場で、テーブルごとのリポジトリではない。一部のストア
+（管理画面のマスター・利用者、LINE、通知）を interface にしているのは、DB を使わないテストで失敗を作るためで、
+DB を差し替えるためではない。
 
 **理由: 得られるものがほとんど無く、処理を縦に追いにくくなるため。**
 
@@ -197,11 +212,11 @@ routes → services → infra の3層だけで流れを追える。
   「テストでモックしやすいこと」だが、MySQL から移る予定は無く、テストはモックではなく
   本物のテスト用 MySQL で行っている。
 - **隠せる情報が無い。** 生 SQL は画面ごとに取る列が違うので、リポジトリにすると
-  「SQL 1本 = メソッド1個」になり、名前を付け替えるだけの層になる。単純な CRUD の
-  列定義と行→DTO の変換は `services/study-columns.ts` にまとめてある。
+  「SQL 1本 = メソッド1個」になり、名前を付け替えるだけの層になる。同じ列を何度も読むものは、
+  列の並びを定数（`goals.go` の `goalColumns`、`study_plan_writes.go` の `studyPlanRowColumns` など）にまとめてある。
 - **業務ルールが SQL そのものになっている。** 予定の完了は、`UPDATE ... WHERE firstStudyLogAt IS NULL`
   での初回判定、UNIQUE 制約と `ER_DUP_ENTRY` による二重完了の検出、トランザクションで
-  成り立っている。これを「ルールはサービス、SQL はリポジトリ」に分けると、1つのルールが
+  成り立っている（`studyPlanWriteStore.complete`）。これを「ルールはサービス、SQL はリポジトリ」に分けると、1つのルールが
   2つのファイルに割れる。
 - **層を足すと「横の追いやすさ」は増えるが、「縦の追いやすさ」が減る。** このプロジェクトで
   求めているのは、1つの API がどの SQL を流すかを上から下へ追えることのほう。
@@ -218,13 +233,14 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移した�
 何本の SQL が流れるか（`include` は JOIN ではなく `IN (...)` の別クエリになる）、
 `updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
 
-`services/` はすべて移行済み（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）。
-そのうち user 以外は、のちに Go（`apps/api`）へ移して Node から消した（JUK-84）。
-Better Auth（`auth.ts`）も同じ mysql2 のプールを使う（内部の Kysely で読み書きする）。
-アプリの実行時も seed（`db/seed*.ts`）もマイグレーションの適用も Prisma を使っていない。
-seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使い、日時の扱い（UTC）もアプリと揃えている。
-`schema.prisma`・生成コード・Prisma の依存パッケージも消した（2026-09-11）。テーブル定義の正は
-`db/migrations` の SQL、行の型は `infra/tables.ts`。
+当時の Node の `services/`（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）は
+すべて mysql2 へ移した。Better Auth も同じ mysql2 のプールを使っていた。`schema.prisma`・生成コード・Prisma の
+依存パッケージも消した（2026-09-11）。
+
+その後、API は Go（`database/sql`）へ移して Node から消し（JUK-70・JUK-84）、ログインも Better Auth から
+Go の自作に替えた（JUK-115）。いま Node の mysql2 を使うのは、開発用の seed とテストの準備（`db/`）だけで、
+`db/seed-helpers.ts` 経由で `db/connection.ts` の接続プールを使い、日時の扱い（UTC）を Go と揃えている。
+テーブル定義の正は `db/migrations` の SQL、Go の行の型は各ファイルの struct と、契約から作った `openapi.gen.go`。
 
 ### マイグレーション（テーブル定義の変更）
 
@@ -249,22 +265,23 @@ seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使�
   デプロイのスモークテストが落ちて前のイメージに戻る。
 - `GET_LOCK` で、同時に2つ動いても二重に当てない。
 - **新しいマイグレーションは SQL を手で書く。** ORM がスキーマの差分から作ってくれることはもう無い。
-  `db/migrations/<YYYYMMDDHHMMSS>_<内容>/migration.sql` を足し、テーブル1行の型
-  （`infra/tables.ts`）も合わせて直す。当てたあとの migration.sql は書き換えない（変えても DB には
+  `db/migrations/<YYYYMMDDHHMMSS>_<内容>/migration.sql` を足し、その列を読み書きする Go の SQL と struct
+  （応答に出る列なら `openapi/openapi.yaml` も）を合わせて直す。当てたあとの migration.sql は書き換えない（変えても DB には
   反映されず、警告だけが出る）。直すときは新しいマイグレーションを足す。
 
 ORM を外すと、次のことを自分で持つことになる。どれも Go の `apps/api/db.go`、seed とテスト用の `db/connection.ts` とテストで押さえている。
 
 - **日時の時間帯。** MySQL の `DATETIME` は時間帯を持たない。Prisma は UTC として読み書き
   していたが、ドライバの既定はプロセスのローカル時刻で、Mac（JST）では9時間ずれる。
-  `timezone: "Z"` で UTC に揃えている。
-- **真偽値。** `BOOLEAN` は `TINYINT(1)` なので `1 / 0` が返る。`typeCast` で直している。
+  Go は `cfg.Loc = time.UTC`、Node（`db/connection.ts`）は `timezone: "Z"` で UTC に揃えている。
+- **真偽値。** `BOOLEAN` は `TINYINT(1)` なので `1 / 0` が返る。Go は `bool` へ Scan すれば変換され、
+  Node は `typeCast` で直している。
 - **`updatedAt`。** Prisma の `@updatedAt` は DB の機能ではなく Prisma が毎回値を足していた。
   列に既定値は無いので、INSERT / UPDATE で必ず書く。
 - **一意制約違反。** Prisma の `P2002` の代わりに MySQL の `ER_DUP_ENTRY`（1062）で判定する
-  （`isDuplicateEntry`）。
-- **型。** 上の「Prisma の型推論」は失われた。行の型は `infra/tables.ts` に手で書いており、
-  列を足してもここを直し忘れたら型エラーにならない。
+  （Go は `db.go` の `isMySQLError(err, mysqlDuplicateEntry)`）。
+- **型。** Prisma の型推論は失われた。Go の行の型は struct に手で書いており、列を足しても
+  直し忘れはコンパイルでは分からない（SELECT の列と Scan の受け皿の数が合わなければ、DB に流すテストで落ちる）。
 - **入れ子の組み立てと SQL の本数。** `include` は JOIN ではなく、親を取ってから子を
   `IN (...)` で別に取る。生 SQL では自分で選ぶ。大学 → 学部 → タグのような一本道の
   1対多は JOIN 1本で取って詰め直す。ユーザー → 予定・実績のように1対多が並ぶときは、
@@ -280,8 +297,8 @@ ORM を外すと、次のことを自分で持つことになる。どれも Go 
   エラーにならず他人の行を更新してしまう（テスト用 DB で実際に確かめた）。そこでは
   `userId` で UPDATE し、1行も変わらなければ INSERT する。
 
-上の「リポジトリ層は導入していない」は変わらない。何を取るかは services、DB との通信は
-infra という分担は、ORM の有無と関係なく同じだった。
+上の「リポジトリ層は導入していない」は変わらない。何を取るかを書いた SQL がそのまま業務のルールで、
+それを機能ごとのファイルに置くという考えは、ORM の有無とも、Node か Go かとも関係なく同じだった。
 
 ## 境界の強制
 
@@ -301,14 +318,17 @@ infra という分担は、ORM の有無と関係なく同じだった。
 | `apps/web` | `pnpm --filter @juken-map/web test` | 画面まわりの純粋関数 |
 | 通し | Playwright | 記録→可視化の毎日ループ、デモ閲覧専用、モバイルナビ |
 
-Node が API を配っていた頃（JUK-121 まで）の `apps/api` のテストは Fastify の `inject()` を使っていた。ハンドラを直接呼ばないのは、
-**本物のルーティングと JSON 解析を通すため**である。とくに JSON 解析は
-「壊れた JSON でも 400 にせず認証チェックを先に効かせる」という細工が入っており
-（`server.ts` のコメント参照）、ハンドラ直呼びではここが素通りしてしまう。
+Go の API の DB テストは、本番と同じ `registerRoutes` で組んだルーターに `httptest` でリクエストを送る
+（`apps/api/dbtest_support_test.go` の `dbTestApp`）。ハンドラを直接呼ばないのは、
+**本物のルーティングと入口の拒否・本文の読み取りを通すため**である。たとえば本文は
+「壊れた JSON でも 400 にせず、入口の拒否（未ログイン・デモ）を先に効かせる」ように読んでおり
+（`apps/api/body.go`）、ハンドラ直呼びではここが素通りしてしまう。Node の頃（JUK-121 まで）は
+Fastify の `inject()` で同じことをしていた。
 
-差し替えるのは認証・外部サービスという境界だけで、門番のロジックは実物を動かす。
+差し替えるのはセッションの取得（Cookie の値を利用者 ID として読む）と外部サービスという境界だけで、
+門番のロジックは実物を動かす。
 
-**生 SQL に移したサービスのテストは、DB も差し替えず本物の MySQL に流す。** ORM の呼び出しを
+**SQL を流すテストは、DB も差し替えず本物の MySQL に流す。** ORM の呼び出しを
 モックしても SQL の誤りは分からず、SQL 文字列を照合するテストは書き方を変えただけで壊れるため。
 一意制約による 409 や同時アクセスの挙動も、本物の DB でしか確かめられない。
 
