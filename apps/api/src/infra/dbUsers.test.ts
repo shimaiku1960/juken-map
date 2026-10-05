@@ -3,7 +3,6 @@ import { afterAll, describe, expect, it } from "vitest";
 import { testDatabaseAdminUrl, testDatabaseUrl } from "../test-db/config.ts";
 import { ensureTestDbUser } from "../test-db/users.ts";
 import { grantStatements } from "./dbUsers.ts";
-import { applyMigrations } from "./migrations.ts";
 
 // 本番の DB ユーザーに付ける権限（dbUsers.ts）で、許すことだけができ、それ以外は拒まれることを
 // 本物の MySQL で確かめる。app と migrate のユーザーは globalSetup が同じ定義で作っていて、
@@ -58,12 +57,6 @@ describe("app（アプリの実行時）", () => {
     ["ほかの DB の読み取り", "SELECT user FROM mysql.user"],
   ])("%sは拒まれる", async (_label, sql) => {
     await expect(app.query(sql)).rejects.toMatchObject(denied);
-  });
-
-  it("マイグレーションは当てられない（デプロイでは migrate のユーザーで当てる）", async () => {
-    await expect(
-      applyMigrations({ databaseUrl: testDatabaseUrl, log: () => {} })
-    ).rejects.toMatchObject(denied);
   });
 });
 

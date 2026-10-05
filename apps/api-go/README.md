@@ -79,6 +79,8 @@ curl -b jar localhost:8080/api/dashboard
 | `MICROCMS_WEBHOOK_SECRET` | なし | microCMS の Webhook の署名を確かめる（JUK-112）。空なら Webhook は必ず 401 |
 | `GITHUB_DEPLOY_TOKEN` | なし | microCMS の Webhook で deploy.yml を動かす GitHub のトークン（fine-grained、このリポジトリの Actions: Read and write だけ）。空なら Webhook は 502 |
 | `GITHUB_API_BASE` | `https://api.github.com` | GitHub の API の根元。テスト用 |
+| `MIGRATION_DATABASE_URL` | なし | `migrate` コマンド（`migrate.go`）が繋ぐ、テーブル定義を変えられるユーザー。無ければ `DATABASE_URL` |
+| `MIGRATIONS_DIR` | なし（イメージでは `/migrations`、手元は `pnpm db:migrate` が `db/migrations` を渡す） | `migrate` が当てる SQL の置き場 |
 | `WEB_DIST_DIR` | なし（イメージでは `/web`） | 画面のビルド成果物（apps/web の dist）。`index.html` が無ければ画面を配らない（開発は Vite が配る） |
 | `GA_MEASUREMENT_ID` | なし | GA4 の測定 ID。画面の HTML に計測のタグを差し込み、CSP でそのインラインスクリプトだけをハッシュで許す |
 | `FARO_COLLECTOR_URL` | なし | 画面のエラーの送り先（Grafana Faro）。HTML の meta で画面へ渡し、CSP の connect-src にオリジンを足す |

@@ -5,7 +5,7 @@
 // それぞれに要る操作だけを1つの DB に対して許す（セキュリティ基準 F4）。
 //
 // - app:      アプリの実行時。services の SQL と Better Auth は DML しか使わない
-// - migrate:  デプロイ時のマイグレーション（infra/migrations.ts）だけ。GET_LOCK に権限は要らない
+// - migrate:  デプロイ時のマイグレーション（apps/api-go/migrate.go）だけ。GET_LOCK に権限は要らない
 // - readonly: 本番の調査用。書き込めない
 //
 // 権限を変えるときはここを直し、本番へは `pnpm exec tsx db/print-user-grants.ts` の出力を流す。
