@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { execute, pool } from "@/api/infra/db";
+import { execute, pool } from "../connection";
 
 // 本物の DB に流すテストの下ごしらえ。
 //

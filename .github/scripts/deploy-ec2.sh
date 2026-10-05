@@ -83,7 +83,7 @@ secret_json="$(aws secretsmanager get-secret-value \
   --output text)"
 
 # DB の接続先。アプリ用（DML だけ）とマイグレーション用（テーブル定義も変えられる）の2つを
-# シークレットに置く（権限は apps/api/src/infra/dbUsers.ts）。マイグレーション用はアプリの
+# シークレットに置く（権限は db/db-users.ts）。マイグレーション用はアプリの
 # コンテナに渡さず、起動前に1回きりのコンテナで使うだけにする。
 # 2つともまだ無い間は、.env の DATABASE_URL でアプリもマイグレーションも繋ぐ。
 APP_DATABASE_URL="$(jq -r '.DATABASE_URL // empty' <<<"$secret_json")"

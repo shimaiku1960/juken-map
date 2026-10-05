@@ -1,5 +1,7 @@
 packages:
   - apps/*
+  # seed・テスト用 DB の準備・DB の接続。開発でしか使わない（JUK-130）。
+  - db
 
 # 各アプリの依存宣言は保ち、解決結果はルートの1ファイルで管理する。
 sharedWorkspaceLockfile: true

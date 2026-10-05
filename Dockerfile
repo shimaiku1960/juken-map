@@ -5,8 +5,8 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # ローカル・CI・DockerでpackageManagerの固定バージョンを共有する。
 RUN npm install --global "$(node -p "require('./package.json').packageManager")"
-COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
+COPY db/package.json ./db/package.json
 
 # ---- SPAをビルドする（型検査も含む） ----
 # ブログの記事もここで microCMS から取って SSG する（JUK-110）。本番のデプロイは

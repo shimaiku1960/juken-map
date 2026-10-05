@@ -2,8 +2,9 @@
 
 受験マップは **React + Vite の SPA（`apps/web`）** と **Go の API（`apps/api-go`）** の
 2つのアプリからなる。本番では Go が API・ログイン・ビルド済みの画面のすべてを配る（JUK-70・JUK-111・JUK-115）。
-`apps/api`（Node）に残るのは seed・テストが使う DB 接続だけ（Fastify のサーバーは JUK-121 で、
-マイグレーションの適用は JUK-125 で Go へ移して消した）。画面と共有するコードは `src/shared` に置く。
+開発でしか使わない DB の道具（seed・テスト用 DB の準備・Node の DB 接続）は `db/` に置く。以前の `apps/api`（Node）は、
+Fastify のサーバーを JUK-121 で、マイグレーションの適用を JUK-125 で Go へ移し、残りを JUK-130 で `db/` へ寄せて消した。
+画面と共有するコードは `src/shared` に置く。
 
 > ⚠️ 下の「判断とその理由」のうち、Fastify・Better Auth・`routes`/`services` を前提にした節は Node が
 > API を配っていた頃の記録で、今のコードとは合わない（直すのは JUK-55）。Go の構成は `apps/api-go/README.md`。
@@ -24,12 +25,12 @@ apps/web/               画面（React + Vite の SPA）
 
 apps/api-go/            バックエンド一式（Go）。ファイルの分け方は apps/api-go/README.md
 
-apps/api/               Node の CLI だけ（JUK-121）
-└ src/
-  ├ migrate.ts            マイグレーションを当てる（本番はデプロイのたびに1回きりのコンテナで動かす）
-  ├ infra/                migrations（当てる処理）, db（seed とテストが使う接続プール）,
-  │                       dbUsers（本番の DB ユーザーの権限）
-  └ test-db/              テスト用 MySQL の準備と、テストデータの作成
+db/                     DB の道具。開発でしか使わない Node の TS（workspace の @juken-map/db、JUK-130）
+├ migrations/             マイグレーションの SQL（当てるのは Go の migrate、JUK-125）
+├ seed*.ts                seed（pnpm db:seed など）と seed-helpers
+├ connection.ts           seed とテストが使う接続プール（mysql2）
+├ db-users.ts             本番の DB ユーザーの権限（print-user-grants.ts とテスト用ユーザーが使う）
+└ test-db/                テスト用 MySQL の準備と、テストデータの作成（Go の DB テストも使う）
 
 src/shared/             2つのアプリが共有する、外部依存のない純粋関数・型のみ
 ├ date.ts, subjects.ts, studyStats.ts, site.ts, demo.ts
@@ -39,7 +40,7 @@ src/shared/             2つのアプリが共有する、外部依存のない�
 
 ## パッケージ管理
 
-ルート・`apps/api`・`apps/web` をpnpm workspaceとして管理する。
+ルート・`apps/web`・`db` をpnpm workspaceとして管理する（`apps/api-go` は Go のモジュールで、workspace の外）。
 `pnpm-workspace.yaml`が参加パッケージを定義し、各`package.json`に依存を宣言する。
 解決結果はルートの`pnpm-lock.yaml`へ集約し、pnpmのバージョンもルートの
 `packageManager`で固定する。ルートの`pnpm install`で全パッケージを導入できる。
@@ -232,7 +233,7 @@ seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使�
 `db/migrations` はイメージの `/migrations` に入れてある（`deploy.yml` の `--build-context migrations=`）。
 ローカルは `pnpm dev` / `pnpm run db:migrate`、CI は E2E の前、テストは globalSetup で流す。
 
-- 本番の DB ユーザーは役割ごとに分けてある（`apps/api/src/infra/dbUsers.ts`）。アプリは DML だけの
+- 本番の DB ユーザーは役割ごとに分けてある（`db/db-users.ts`）。アプリは DML だけの
   `juken_app` で繋ぎ、テーブル定義を変えられる `juken_migrate` はマイグレーションのコンテナにだけ渡す
   （`MIGRATION_DATABASE_URL`）。調査用の `juken_readonly` は SELECT だけ。テストも同じ権限のユーザーで
   動かすので、アプリが DML 以外の SQL を使い始めるとテストが落ちる。
@@ -252,7 +253,7 @@ seed は `db/seed-helpers.ts` 経由でアプリと同じ接続プールを使�
   （`infra/tables.ts`）も合わせて直す。当てたあとの migration.sql は書き換えない（変えても DB には
   反映されず、警告だけが出る）。直すときは新しいマイグレーションを足す。
 
-ORM を外すと、次のことを自分で持つことになる。どれも `infra/db.ts` とテストで押さえている。
+ORM を外すと、次のことを自分で持つことになる。どれも Go の `apps/api-go/db.go`、seed とテスト用の `db/connection.ts` とテストで押さえている。
 
 - **日時の時間帯。** MySQL の `DATETIME` は時間帯を持たない。Prisma は UTC として読み書き
   していたが、ドライバの既定はプロセスのローカル時刻で、Mac（JST）では9時間ずれる。
@@ -295,11 +296,12 @@ infra という分担は、ORM の有無と関係なく同じだった。
 | 対象 | 実行 | 内容 |
 |---|---|---|
 | `src/shared` | ルートの vitest | 純粋関数、Zod スキーマ |
-| `apps/api` | `pnpm --filter @juken-map/api test` | エンドポイントの門番（401 / 403 / 400 / 404 / 409）、通知本文、外部連携 |
+| `apps/api-go` | `go test ./...`、DB に流すものは `pnpm test:go-db` | API の門番・SQL・ログイン（`apps/api-go/README.md`） |
+| `db/` | `pnpm --filter @juken-map/db test` | 接続の設定（時間帯・真偽値）、本番の DB ユーザーの権限 |
 | `apps/web` | `pnpm --filter @juken-map/web test` | 画面まわりの純粋関数 |
 | 通し | Playwright | 記録→可視化の毎日ループ、デモ閲覧専用、モバイルナビ |
 
-`apps/api` のテストは Fastify の `inject()` を使う。ハンドラを直接呼ばないのは、
+Node が API を配っていた頃（JUK-121 まで）の `apps/api` のテストは Fastify の `inject()` を使っていた。ハンドラを直接呼ばないのは、
 **本物のルーティングと JSON 解析を通すため**である。とくに JSON 解析は
 「壊れた JSON でも 400 にせず認証チェックを先に効かせる」という細工が入っており
 （`server.ts` のコメント参照）、ハンドラ直呼びではここが素通りしてしまう。
@@ -311,20 +313,21 @@ infra という分担は、ORM の有無と関係なく同じだった。
 一意制約による 409 や同時アクセスの挙動も、本物の DB でしか確かめられない。
 
 - テスト用 DB は開発用とは別の `juken_map_test`。vitest の globalSetup
-  （`apps/api/src/test-db/global-setup.ts`）が作成とマイグレーションを行う。
+  （`db/test-db/global-setup.ts`）が作成とマイグレーションを行う。Go の DB テストは同じ準備を
+  `pnpm --filter @juken-map/db test-db:prepare` で行う。
   取り違え防止のため、DB 名が `_test` で終わらなければ何もせずに止まる。
 - ローカルでは `pnpm db:start` で DB コンテナを起動しておく必要がある。CI は `check` ジョブに
   MySQL サービスを持つ。
 - テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる
-  （`test-db/fixtures.ts`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
+  （`db/test-db/fixtures.ts`、Go は `apps/api-go/dbtest_support_test.go`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
 - 往復（書いて読む）だけのテストでは時間帯の誤りが打ち消されて見えないので、
-  `infra/db.test.ts` で DB 側の生の値と突き合わせている。CI（UTC）でもずれを検出できるよう、
+  `db/connection.test.ts` で DB 側の生の値と突き合わせている。CI（UTC）でもずれを検出できるよう、
   テストは `TZ=Asia/Tokyo` で動かす。
 - モックするのは外部の境界（認証のセッション取得、LINE・メールなどの外部 API）だけ。
 
 ## デプロイ
 
-`apps/web` のビルド成果物と `apps/api` を1つのイメージに入れ、EC2 上の Docker で動かす。
+`apps/web` のビルド成果物と Go の API（`apps/api-go`）を1つのイメージに入れ、EC2 上の Docker で動かす。
 nginx（EC2 ホスト上）が 443 を受けて 3000 番へ流す。設定の実物は `infra/nginx/README.md`。
 
 `src/shared` は `apps/*` の外にあるが、pnpm workspaceのルート依存からZodなどを解決できる。

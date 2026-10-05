@@ -28,7 +28,7 @@ esac
 if [[ "${1:-}" == "--staged" ]]; then
   for file in \
     package.json pnpm-lock.yaml pnpm-workspace.yaml \
-    apps/api/package.json apps/web/package.json; do
+    apps/web/package.json db/package.json; do
     mkdir -p "$source_root/$(dirname "$file")"
     if ! git -C "$PROJECT_ROOT" show ":$file" > "$source_root/$file"; then
       echo "エラー: コミット予定の $file を読み取れません。" >&2
@@ -37,7 +37,7 @@ if [[ "${1:-}" == "--staged" ]]; then
   done
 fi
 
-for dir in . apps/api apps/web; do
+for dir in . apps/web db; do
   mkdir -p "$CHECK_ROOT/$dir"
   cp "$source_root/$dir/package.json" "$CHECK_ROOT/$dir/package.json"
 done
@@ -50,7 +50,7 @@ if [[ "$use_linux" -eq 1 ]]; then
     node:24-slim sh -ec '
       npm install --global "$(node -p "require(\"./package.json\").packageManager")" --no-audit --no-fund
       pnpm install --frozen-lockfile
-      pnpm --filter @juken-map/api exec tsx --version
+      pnpm --filter @juken-map/db exec tsx --version
       pnpm --filter @juken-map/web exec vite --version
     '
 else
