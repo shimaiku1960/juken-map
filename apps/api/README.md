@@ -245,8 +245,9 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `auth_oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
 | `auth_throttle.go`・`auth_email.go` | 回数制限と、上限つきのメール送信 |
 | `auth_delete_account.go` | 本人の退会（確かめ直してから、利用者とぶら下がるデータをすべて消す。JUK-123） |
+| `expired_cleanup.go` | 期限の切れたセッション・トークン・ログインの途中の値・LINE 連携の途中の値を、起動時と1時間ごとに500行ずつ消す（06 G1、JUK-140） |
 
-テストは `auth_unit_test.go`（DB なし）と `auth_db_test.go`・`auth_delete_account_db_test.go`（本物の MySQL）。
+テストは `auth_unit_test.go`（DB なし）と `auth_db_test.go`・`auth_delete_account_db_test.go`・`expired_cleanup_db_test.go`（本物の MySQL）。
 
 ### 学習記録・志望校・参考書（利用者の画面の API）
 

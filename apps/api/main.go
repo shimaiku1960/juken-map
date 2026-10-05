@@ -158,6 +158,9 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// 期限の切れたログイン・LINE 連携の行を1時間ごとに消す（expired_cleanup.go）。
+	go runExpiredCleanup(ctx, db, time.Now)
+
 	// ListenAndServe は止まるまで戻らないので、別の goroutine で動かし、
 	// 「サーバーが落ちた」と「止めるよう言われた」のどちらか早いほうを待つ。
 	serveErr := make(chan error, len(servers))
