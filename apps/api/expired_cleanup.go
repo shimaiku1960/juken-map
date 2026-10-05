@@ -17,7 +17,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 )
 
@@ -61,8 +60,9 @@ func deleteExpired(ctx context.Context, db *sql.DB, now time.Time, batch int) (m
 			// 条件は主キーだけにする。expiresAt も条件に入れると、小さい表では MySQL が expiresAt の索引を選び、
 			// 範囲でロックしてしまう（手元の EXPLAIN で確かめた）。expiresAt を後から延ばすコードは無いので、
 			// 選んだ行は消すまでのあいだも期限切れのまま。
+			// #nosec G202 -- 表名と列名は expiredTables に書いた固定の名前、ほかは件数ぶん並べた ? だけ。値は keys で渡す
 			res, err := db.ExecContext(ctx,
-				"DELETE FROM `"+table.name+"` WHERE `"+table.key+"` IN (?"+strings.Repeat(", ?", len(keys)-1)+")", keys...)
+				"DELETE FROM `"+table.name+"` WHERE `"+table.key+"` IN ("+placeholders(len(keys), "?")+")", keys...)
 			if err != nil {
 				return removed, fmt.Errorf("delete expired %s: %w", table.name, err)
 			}
@@ -81,6 +81,7 @@ func deleteExpired(ctx context.Context, db *sql.DB, now time.Time, batch int) (m
 
 // expiredKeys は期限の切れた行の主キーを batch 個まで返す（ロックしない読み取り）。
 func expiredKeys(ctx context.Context, db *sql.DB, table expiringTable, now time.Time, batch int) ([]any, error) {
+	// #nosec G202 -- 表名と列名は expiredTables に書いた固定の名前だけ。値は ? で渡す
 	rows, err := db.QueryContext(ctx,
 		"SELECT `"+table.key+"` FROM `"+table.name+"` WHERE expiresAt <= ? LIMIT ?", now, batch)
 	if err != nil {
