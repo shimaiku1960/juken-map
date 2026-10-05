@@ -198,11 +198,6 @@ func (st incidentStore) resetTwoFactor(ctx context.Context, email string) (int64
 			return 0, err
 		}
 	}
-	// twoFactorEnabled は Better Auth の頃の列で、今は読んでいない（消すのは JUK-119）。古い値が残らないように揃える。
-	if _, err := st.db.ExecContext(ctx,
-		"UPDATE `user` SET twoFactorEnabled = false, updatedAt = ? WHERE id = ?", st.now().UTC(), u.ID); err != nil {
-		return 0, err
-	}
 	return st.deleteSessions(ctx, u.ID)
 }
 

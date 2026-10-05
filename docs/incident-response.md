@@ -244,7 +244,7 @@ ALTER USER 'juken_app'@'%' IDENTIFIED BY '<新しい値>';
 1. 範囲を記録から特定する。何が・何人分・いつからいつまで、の3つを、分かった根拠と一緒に記録に書く
    - DB の主な個人データ：`user`（メール・名前・画像・ニックネーム）、`AuthIdentity`（Google / GitHub の連携。トークンは持たない）、
      `AuthSession`（IP・ブラウザ）、学習のデータ（志望校・記録・予定・参考書）、LINE の連携（LINE のユーザー ID）。
-     Better Auth の表（`account`・`session` など）も JUK-115 の切り替えの後に消すまでは残っている
+     Better Auth の表（`account`・`session` など）と移管済みの課金の表は、2026-10-05 に消した（JUK-127）
    - 経路ごとの記録：アプリのログとメトリクス（Grafana Cloud、プランの保存期間まで）、nginx のアクセスログ（EC2）、
      AWS の操作（CloudTrail、90日。5 の手順 3）、送ったメール（Resend）
    - 他人のデータを読まれた疑いなら、403・404 が多い route と時間帯から、どの ID が試されたかを見る

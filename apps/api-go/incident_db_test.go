@@ -170,7 +170,6 @@ func TestIncidentCommandDB(t *testing.T) {
 		fx := newCLIFixture(t)
 		email, id := fx.account(1, "admin", true)
 		now := time.Now().UTC()
-		fx.exec("UPDATE `user` SET twoFactorEnabled = true WHERE id = ?", id)
 		fx.exec("INSERT INTO AuthTotp (userId, secret, createdAt, enabledAt) VALUES (?, 'v0:secret', ?, ?)", id, now, now)
 		code := make([]byte, 32)
 		rand.Read(code)
@@ -178,12 +177,10 @@ func TestIncidentCommandDB(t *testing.T) {
 
 		fx.mustRun("incident", "reset-2fa", email)
 
-		var enabled bool
 		var left int
-		fx.db.QueryRow("SELECT twoFactorEnabled FROM `user` WHERE id = ?", id).Scan(&enabled)
 		fx.db.QueryRow("SELECT (SELECT COUNT(*) FROM AuthTotp WHERE userId = ?) + (SELECT COUNT(*) FROM AuthBackupCode WHERE userId = ?)", id, id).Scan(&left)
-		if enabled || left != 0 || fx.sessionCount(id) != 0 {
-			t.Errorf("twoFactorEnabled=%v 残りの秘密=%d セッション=%d", enabled, left, fx.sessionCount(id))
+		if left != 0 || fx.sessionCount(id) != 0 {
+			t.Errorf("残りの秘密=%d セッション=%d", left, fx.sessionCount(id))
 		}
 	})
 

@@ -79,7 +79,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 	}
 
 	if err := inTx(ctx, h.db, func(tx *sql.Tx) error {
-		return deleteUserAndData(ctx, tx, u.ID, u.Email)
+		return deleteUserAndData(ctx, tx, u.ID)
 	}); err != nil {
 		internalError(w, r, fmt.Errorf("delete-account: %w", err))
 		return
@@ -123,13 +123,9 @@ func (h *authHandlers) confirmEmail(w http.ResponseWriter, r *http.Request, u *a
 
 // deleteUserAndData は利用者を消す。本人の退会と管理者の削除の両方が使う。
 //
-// 利用者を指す表は、ほとんどが外部キーの ON DELETE CASCADE で一緒に消える。CASCADE でないのは
-// SupportCheckoutInvitation（課金の招待。移管済みの機能の表で、SET NULL）だけで、メールアドレスが
-// 残るので先に消す。すべての表に本人の行が残らないことは TestDeleteUserLeavesNoRows が確かめる。
-func deleteUserAndData(ctx context.Context, tx *sql.Tx, id, email string) error {
-	if _, err := tx.ExecContext(ctx, "DELETE FROM SupportCheckoutInvitation WHERE userId = ? OR (? <> '' AND email = ?)", id, email, email); err != nil {
-		return err
-	}
+// 利用者を指す表は、すべて外部キーの ON DELETE CASCADE で一緒に消える。すべての表に本人の行が
+// 残らないことは TestAuthDBDeleteLeavesNoRows が確かめる。
+func deleteUserAndData(ctx context.Context, tx *sql.Tx, id string) error {
 	_, err := tx.ExecContext(ctx, "DELETE FROM `user` WHERE id = ?", id)
 	return err
 }

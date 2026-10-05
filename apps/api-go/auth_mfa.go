@@ -105,9 +105,6 @@ func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *ses
 		return
 	}
 	res, err := h.db.ExecContext(ctx, "UPDATE AuthTotp SET enabledAt = ?, lastUsedStep = ? WHERE userId = ? AND enabledAt IS NULL", now, step, s.UserID)
-	if err == nil {
-		_, err = h.db.ExecContext(ctx, "UPDATE `user` SET twoFactorEnabled = true, updatedAt = ? WHERE id = ?", now, s.UserID)
-	}
 	if err != nil {
 		internalError(w, r, fmt.Errorf("mfa confirm: %w", err))
 		return
