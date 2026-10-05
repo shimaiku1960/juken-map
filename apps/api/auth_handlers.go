@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -54,7 +53,7 @@ const (
 
 // authHandlers は認証の入口が使うものをまとめる。
 type authHandlers struct {
-	db        *sql.DB
+	store     *authStore
 	sessions  *sessionStore
 	hasher    *passwordHasher
 	throttle  *throttle
@@ -71,42 +70,6 @@ func (h *authHandlers) clock() time.Time {
 
 // ---- 利用者 ----
 
-// authUser はログインの判定に使う利用者の値。
-type authUser struct {
-	ID            string
-	Email         string
-	Name          string
-	Role          string
-	EmailVerified bool
-	Banned        bool
-	MFAEnabled    bool
-	PasswordHash  sql.NullString
-}
-
-const authUserColumns = "u.id, COALESCE(u.email, ''), COALESCE(u.name, ''), u.role, u.emailVerified, u.bannedAt IS NOT NULL," +
-	" EXISTS(SELECT 1 FROM AuthTotp AS t WHERE t.userId = u.id AND t.enabledAt IS NOT NULL), p.hash" +
-	" FROM `user` AS u LEFT JOIN AuthPassword AS p ON p.userId = u.id"
-
-func scanAuthUser(row *sql.Row) (*authUser, error) {
-	var u authUser
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.EmailVerified, &u.Banned, &u.MFAEnabled, &u.PasswordHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
-}
-
-func (h *authHandlers) findUserByEmail(ctx context.Context, email string) (*authUser, error) {
-	return scanAuthUser(h.db.QueryRowContext(ctx, "SELECT "+authUserColumns+" WHERE u.email = ?", email))
-}
-
-func (h *authHandlers) findUserByID(ctx context.Context, id string) (*authUser, error) {
-	return scanAuthUser(h.db.QueryRowContext(ctx, "SELECT "+authUserColumns+" WHERE u.id = ?", id))
-}
-
 // normalizeEmail はメールアドレスを小文字にして前後の空白を落とす。保存も検索もこの形で行う。
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
@@ -121,67 +84,6 @@ func validEmail(email string) bool {
 
 func newUserID() string {
 	return hex.EncodeToString(randomBytes(16))
-}
-
-// setPassword はパスワードのハッシュを保存する（無ければ作る）。
-func setPassword(ctx context.Context, q execer, userID, hash string, now time.Time) error {
-	_, err := q.ExecContext(ctx,
-		"INSERT INTO AuthPassword (userId, hash, updatedAt) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE hash = VALUES(hash), updatedAt = VALUES(updatedAt)",
-		userID, hash, now)
-	return err
-}
-
-// execer は *sql.DB と *sql.Tx の両方で使う書き込み。
-type execer interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-}
-
-// ---- メールで送るトークン（10 E1） ----
-
-// issueToken は用途つきのトークンを作る。同じ人・同じ用途の古いものと、期限の切れたものは消す。
-func (h *authHandlers) issueToken(ctx context.Context, userID, purpose string, ttl time.Duration) (string, error) {
-	now := h.clock()
-	if _, err := h.db.ExecContext(ctx, "DELETE FROM AuthToken WHERE userId = ? AND (purpose = ? OR expiresAt <= ?)", userID, purpose, now); err != nil {
-		return "", err
-	}
-	raw, hash := newToken()
-	_, err := h.db.ExecContext(ctx,
-		"INSERT INTO AuthToken (tokenHash, purpose, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?)",
-		hash, purpose, userID, now, now.Add(ttl))
-	return raw, err
-}
-
-// peekToken はトークンを使わずに持ち主を返す（使う前にパスワードの規則を確かめたいとき）。
-func (h *authHandlers) peekToken(ctx context.Context, raw, purpose string) (string, error) {
-	hash := hashToken(raw)
-	if hash == nil {
-		return "", nil
-	}
-	var userID string
-	err := h.db.QueryRowContext(ctx,
-		"SELECT userId FROM AuthToken WHERE tokenHash = ? AND purpose = ? AND expiresAt > ?", hash, purpose, h.clock()).Scan(&userID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	return userID, err
-}
-
-// consumeToken はトークンを使う。用途が違う・期限切れ・使用済みなら空を返す。
-// 消せたときだけ使えたことにするので、同じトークンが同時に2回送られても1回しか通らない。
-func (h *authHandlers) consumeToken(ctx context.Context, raw, purpose string) (string, error) {
-	userID, err := h.peekToken(ctx, raw, purpose)
-	if err != nil || userID == "" {
-		return "", err
-	}
-	res, err := h.db.ExecContext(ctx,
-		"DELETE FROM AuthToken WHERE tokenHash = ? AND purpose = ? AND expiresAt > ?", hashToken(raw), purpose, h.clock())
-	if err != nil {
-		return "", err
-	}
-	if n, err := res.RowsAffected(); err != nil || n != 1 {
-		return "", err
-	}
-	return userID, nil
 }
 
 // ---- 応答とログ ----
@@ -252,15 +154,8 @@ func (h *authHandlers) startSession(w http.ResponseWriter, r *http.Request, u *a
 // startMFAChallenge は「パスワード（か外部ログイン）は通ったが、2段階認証がまだ」の状態を作る（G3）。
 // セッションではない一時的な状態で、できるのはコードの確認だけ。
 func (h *authHandlers) startMFAChallenge(w http.ResponseWriter, r *http.Request, userID string) error {
-	now := h.clock()
-	ctx := r.Context()
-	if _, err := h.db.ExecContext(ctx, "DELETE FROM AuthMfaChallenge WHERE userId = ? OR expiresAt <= ?", userID, now); err != nil {
-		return err
-	}
-	raw, hash := newToken()
-	if _, err := h.db.ExecContext(ctx,
-		"INSERT INTO AuthMfaChallenge (tokenHash, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?)",
-		hash, userID, now, now.Add(mfaChallengeTTL)); err != nil {
+	raw, err := h.store.createMFAChallenge(r.Context(), userID)
+	if err != nil {
 		return err
 	}
 	setCookie(w, mfaCookieName, raw, mfaChallengeTTL, http.SameSiteLaxMode)
@@ -300,27 +195,19 @@ func (h *authHandlers) session(w http.ResponseWriter, r *http.Request, s *sessio
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
-	var res SessionResponse
-	var name sql.NullString
-	var createdAt, expiresAt string
-	err := h.db.QueryRowContext(r.Context(),
-		"SELECT u.id, COALESCE(u.email, ''), u.name, u.nickname, u.image, u.role, u.emailVerified,"+
-			" EXISTS(SELECT 1 FROM AuthTotp AS t WHERE t.userId = u.id AND t.enabledAt IS NOT NULL), u.createdAt, s.expiresAt"+
-			" FROM AuthSession AS s JOIN `user` AS u ON u.id = s.userId WHERE s.id = ?", s.ID,
-	).Scan(&res.User.ID, &res.User.Email, &name, &res.User.Nickname, &res.User.Image, &res.User.Role,
-		&res.User.EmailVerified, &res.User.TwoFactorEnabled, &createdAt, &expiresAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeJSON(w, http.StatusOK, nil)
-		return
-	}
+	u, expiresAt, err := h.store.sessionUser(r.Context(), s.ID)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("auth session: %w", err))
 		return
 	}
-	res.User.Name = name.String
-	res.User.CreatedAt = isoFromDatetime(createdAt)
-	res.Session = SessionInfo{ID: s.ID, ExpiresAt: isoFromDatetime(expiresAt), TwoFactorVerified: s.TwoFactorVerified}
-	writeJSON(w, http.StatusOK, res)
+	if u == nil {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, SessionResponse{
+		User:    *u,
+		Session: SessionInfo{ID: s.ID, ExpiresAt: isoFromDatetime(expiresAt), TwoFactorVerified: s.TwoFactorVerified},
+	})
 }
 
 // signUp は POST /api/auth/sign-up。
@@ -359,7 +246,7 @@ func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *session
 		internalError(w, r, fmt.Errorf("sign-up: %w", err))
 		return
 	}
-	existing, err := h.findUserByEmail(ctx, email)
+	existing, err := h.store.findUserByEmail(ctx, email)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("sign-up: %w", err))
 		return
@@ -369,23 +256,7 @@ func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *session
 	switch {
 	case existing == nil:
 		id := newUserID()
-		tx, err := h.db.BeginTx(ctx, nil)
-		if err != nil {
-			internalError(w, r, fmt.Errorf("sign-up: %w", err))
-			return
-		}
-		defer tx.Rollback()
-		if _, err := tx.ExecContext(ctx,
-			"INSERT INTO `user` (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, false, ?, ?)",
-			id, email, email, now, now); err != nil {
-			internalError(w, r, fmt.Errorf("sign-up: %w", err))
-			return
-		}
-		if err := setPassword(ctx, tx, id, hash, now); err != nil {
-			internalError(w, r, fmt.Errorf("sign-up: %w", err))
-			return
-		}
-		if err := tx.Commit(); err != nil {
+		if err := h.store.createUserWithPassword(ctx, id, email, hash, now); err != nil {
 			internalError(w, r, fmt.Errorf("sign-up: %w", err))
 			return
 		}
@@ -395,7 +266,7 @@ func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *session
 		}
 		logAuthEvent(r, slog.LevelInfo, "sign_up", id)
 	case !existing.EmailVerified:
-		if err := setPassword(ctx, h.db, existing.ID, hash, now); err != nil {
+		if err := h.store.setPassword(ctx, existing.ID, hash, now); err != nil {
 			internalError(w, r, fmt.Errorf("sign-up: %w", err))
 			return
 		}
@@ -414,7 +285,7 @@ func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *session
 // sendVerification は確認のトークンを作り、メールを送る（送るのは応答のあと）。
 // リンクは確認の画面を開くだけで、トークンを使うのは画面のボタンからの POST（10 E2）。
 func (h *authHandlers) sendVerification(ctx context.Context, userID, email, callback string) error {
-	raw, err := h.issueToken(ctx, userID, tokenPurposeVerifyEmail, verifyEmailTTL)
+	raw, err := h.store.issueToken(ctx, userID, tokenPurposeVerifyEmail, verifyEmailTTL)
 	if err != nil {
 		return err
 	}
@@ -469,7 +340,7 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 		return
 	}
 
-	u, err := h.findUserByEmail(ctx, email)
+	u, err := h.store.findUserByEmail(ctx, email)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("sign-in: %w", err))
 		return
@@ -534,7 +405,7 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 func (h *authHandlers) rehash(r *http.Request, userID, password string) {
 	hash, err := h.hasher.hash(r.Context(), password)
 	if err == nil {
-		err = setPassword(r.Context(), h.db, userID, hash, h.clock())
+		err = h.store.setPassword(r.Context(), userID, hash, h.clock())
 	}
 	if err != nil {
 		slog.ErrorContext(r.Context(), "[auth] Failed to rehash password.", "userId", userID, "err", err.Error())
@@ -563,27 +434,8 @@ func (h *authHandlers) accounts(w http.ResponseWriter, r *http.Request, s *sessi
 		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
-	var hasPassword bool
-	if err := h.db.QueryRowContext(r.Context(), "SELECT EXISTS(SELECT 1 FROM AuthPassword WHERE userId = ?)", s.UserID).Scan(&hasPassword); err != nil {
-		internalError(w, r, fmt.Errorf("auth accounts: %w", err))
-		return
-	}
-	rows, err := h.db.QueryContext(r.Context(), "SELECT provider FROM AuthIdentity WHERE userId = ? ORDER BY provider", s.UserID)
+	hasPassword, providers, err := h.store.loginMethods(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("auth accounts: %w", err))
-		return
-	}
-	defer rows.Close()
-	providers := []string{}
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			internalError(w, r, fmt.Errorf("auth accounts: %w", err))
-			return
-		}
-		providers = append(providers, p)
-	}
-	if err := rows.Err(); err != nil {
 		internalError(w, r, fmt.Errorf("auth accounts: %w", err))
 		return
 	}
@@ -615,7 +467,7 @@ func newAuthHandlers(db *sql.DB, cfg authConfig) *authHandlers {
 		cfg.metrics = newMetrics()
 	}
 	return &authHandlers{
-		db:        db,
+		store:     &authStore{db: db, now: cfg.now},
 		sessions:  &sessionStore{db: db, now: cfg.now},
 		hasher:    newPasswordHasher(cfg.hashConcurrency),
 		throttle:  &throttle{db: db, now: cfg.now},

@@ -33,7 +33,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 		return
 	}
 	ctx := r.Context()
-	u, err := h.findUserByID(ctx, s.UserID)
+	u, err := h.store.findUserByID(ctx, s.UserID)
 	if err != nil || u == nil {
 		internalError(w, r, fmt.Errorf("delete-account: %w (user=%v)", err, u != nil))
 		return
@@ -62,7 +62,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 		}
 		var ok bool
 		if in.Method == "backup" {
-			ok, err = h.useBackupCode(r, u.ID, in.Code)
+			ok, err = h.store.useBackupCode(ctx, u.ID, in.Code)
 		} else {
 			ok, err = h.useTOTP(r, u.ID, in.Code)
 		}
@@ -78,9 +78,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 		}
 	}
 
-	if err := inTx(ctx, h.db, func(tx *sql.Tx) error {
-		return deleteUserAndData(ctx, tx, u.ID)
-	}); err != nil {
+	if err := h.store.deleteUser(ctx, u.ID); err != nil {
 		internalError(w, r, fmt.Errorf("delete-account: %w", err))
 		return
 	}

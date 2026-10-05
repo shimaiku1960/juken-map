@@ -20,7 +20,7 @@ func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *se
 		return
 	}
 	ctx := r.Context()
-	userID, err := h.consumeToken(ctx, in.Token, tokenPurposeVerifyEmail)
+	userID, err := h.store.consumeToken(ctx, in.Token, tokenPurposeVerifyEmail)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("verify-email: %w", err))
 		return
@@ -31,14 +31,14 @@ func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *se
 		return
 	}
 	now := h.clock()
-	res, err := h.db.ExecContext(ctx, "UPDATE `user` SET emailVerified = true, updatedAt = ? WHERE id = ? AND emailVerified = false", now, userID)
+	first, err := h.store.markEmailVerified(ctx, userID, now)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("verify-email: %w", err))
 		return
 	}
 	// 初めて確認できたときだけ、運営者へ新しい利用者を知らせる（Better Auth の afterEmailVerification と同じ）。
-	if n, _ := res.RowsAffected(); n == 1 {
-		if u, err := h.findUserByID(ctx, userID); err == nil && u != nil {
+	if first {
+		if u, err := h.store.findUserByID(ctx, userID); err == nil && u != nil {
 			h.mailer.notifyAdminOfNewUser(u.Name, u.Email, now)
 		}
 	}
@@ -59,7 +59,7 @@ func (h *authHandlers) resendVerification(w http.ResponseWriter, r *http.Request
 	email := normalizeEmail(in.Email)
 	callback := safeRedirectPath(in.CallbackURL, "/dashboard")
 	h.later(r, "resend-verification", func(ctx context.Context) error {
-		u, err := h.findUserByEmail(ctx, email)
+		u, err := h.store.findUserByEmail(ctx, email)
 		if err != nil || u == nil || u.EmailVerified {
 			return err
 		}
@@ -79,11 +79,11 @@ func (h *authHandlers) forgotPassword(w http.ResponseWriter, r *http.Request, _ 
 	}
 	email := normalizeEmail(in.Email)
 	h.later(r, "forgot-password", func(ctx context.Context) error {
-		u, err := h.findUserByEmail(ctx, email)
+		u, err := h.store.findUserByEmail(ctx, email)
 		if err != nil || u == nil || u.Banned {
 			return err
 		}
-		raw, err := h.issueToken(ctx, u.ID, tokenPurposePasswordReset, passwordResetTTL)
+		raw, err := h.store.issueToken(ctx, u.ID, tokenPurposePasswordReset, passwordResetTTL)
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *
 		writeAuthError(w, http.StatusBadRequest, "INVALID_TOKEN", "リンクが無効か、期限が切れています。もう一度、再設定のメールを送ってください。")
 	}
 	// 規則に合わないパスワードで断るときは、トークンを使わない（直して送り直せるように）。
-	userID, err := h.peekToken(ctx, in.Token, tokenPurposePasswordReset)
+	userID, err := h.store.peekToken(ctx, in.Token, tokenPurposePasswordReset)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
@@ -136,7 +136,7 @@ func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *
 		invalid()
 		return
 	}
-	u, err := h.findUserByID(ctx, userID)
+	u, err := h.store.findUserByID(ctx, userID)
 	if err != nil || u == nil {
 		internalError(w, r, fmt.Errorf("reset-password: %w (user=%v)", err, u != nil))
 		return
@@ -150,47 +150,24 @@ func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *
 		internalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	}
-	if consumed, err := h.consumeToken(ctx, in.Token, tokenPurposePasswordReset); err != nil {
+	if consumed, err := h.store.consumeToken(ctx, in.Token, tokenPurposePasswordReset); err != nil {
 		internalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	} else if consumed == "" {
 		invalid()
 		return
 	}
-	if err := h.replacePassword(ctx, u.ID, hash, ""); err != nil {
+	if err := h.store.replacePassword(ctx, u.ID, hash, ""); err != nil {
 		internalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	}
-	if _, err := h.db.ExecContext(ctx, "UPDATE `user` SET emailVerified = true, updatedAt = ? WHERE id = ? AND emailVerified = false", h.clock(), u.ID); err != nil {
+	if _, err := h.store.markEmailVerified(ctx, u.ID, h.clock()); err != nil {
 		internalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	}
 	h.mailer.sendPasswordChanged(u.Email, h.webOrigin)
 	logAuthEvent(r, slog.LevelInfo, "password_reset", u.ID)
 	writeOK(w)
-}
-
-// replacePassword はパスワードを置き換え、keepSessionID 以外のセッションと、まだ使われていない
-// 再設定・確認のトークン、2段階認証の途中の状態を消す（06 B6・10 E3）。
-func (h *authHandlers) replacePassword(ctx context.Context, userID, hash, keepSessionID string) error {
-	tx, err := h.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := setPassword(ctx, tx, userID, hash, h.clock()); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM AuthSession WHERE userId = ? AND id <> ?", userID, keepSessionID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM AuthToken WHERE userId = ?", userID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM AuthMfaChallenge WHERE userId = ?", userID); err != nil {
-		return err
-	}
-	return tx.Commit()
 }
 
 // changePassword は POST /api/auth/password/change。今のパスワードを入れ直してもらい（06 B6・10 E4）、
@@ -217,7 +194,7 @@ func (h *authHandlers) changePassword(w http.ResponseWriter, r *http.Request, s 
 		internalError(w, r, fmt.Errorf("change-password: %w", err))
 		return
 	}
-	if err := h.replacePassword(ctx, u.ID, hash, s.ID); err != nil {
+	if err := h.store.replacePassword(ctx, u.ID, hash, s.ID); err != nil {
 		internalError(w, r, fmt.Errorf("change-password: %w", err))
 		return
 	}
@@ -256,7 +233,7 @@ func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s 
 		writeTooMany(w, "TOO_MANY_REQUESTS", retry)
 		return nil, false
 	}
-	u, err := h.findUserByID(ctx, s.UserID)
+	u, err := h.store.findUserByID(ctx, s.UserID)
 	if err != nil || u == nil {
 		internalError(w, r, fmt.Errorf("reauth: %w (user=%v)", err, u != nil))
 		return nil, false

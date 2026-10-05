@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/subtle"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -118,18 +117,11 @@ func (h *authHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *ses
 	if !h.allowAnonymous(w, r) {
 		return
 	}
-	ctx := r.Context()
-	now := h.clock()
 	state, stateHash := newToken()
 	verifier := oauth2.GenerateVerifier()
 	nonce := base64.RawURLEncoding.EncodeToString(randomBytes(16))
-	if _, err := h.db.ExecContext(ctx, "DELETE FROM AuthOAuthState WHERE expiresAt <= ?", now); err != nil {
-		internalError(w, r, fmt.Errorf("oauth start: %w", err))
-		return
-	}
-	if _, err := h.db.ExecContext(ctx,
-		"INSERT INTO AuthOAuthState (stateHash, provider, codeVerifier, nonce, redirectTo, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		stateHash, p.name, verifier, nonce, safeRedirectPath(in.CallbackURL, "/"), now, now.Add(oauthStateTTL)); err != nil {
+	if err := h.store.saveOAuthState(r.Context(), stateHash, p.name,
+		savedOAuthState{verifier: verifier, nonce: nonce, redirectTo: safeRedirectPath(in.CallbackURL, "/")}); err != nil {
 		internalError(w, r, fmt.Errorf("oauth start: %w", err))
 		return
 	}
@@ -166,7 +158,7 @@ func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, pre
 		fail("state_mismatch", "oauth", nil)
 		return
 	}
-	saved, err := h.consumeOAuthState(ctx, q.Get("state"), p.name)
+	saved, err := h.store.consumeOAuthState(ctx, q.Get("state"), p.name)
 	if err != nil || saved == nil {
 		fail("state_unknown", "oauth", err)
 		return
@@ -213,37 +205,6 @@ func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, pre
 	http.Redirect(w, r, saved.redirectTo, http.StatusFound)
 }
 
-type savedOAuthState struct {
-	verifier, nonce, redirectTo string
-}
-
-// consumeOAuthState は state の行を読んで消す（1回だけ使える）。プロバイダーが違えば使わない。
-func (h *authHandlers) consumeOAuthState(ctx context.Context, state, provider string) (*savedOAuthState, error) {
-	hash := hashToken(state)
-	if hash == nil {
-		return nil, nil
-	}
-	now := h.clock()
-	var s savedOAuthState
-	err := h.db.QueryRowContext(ctx,
-		"SELECT codeVerifier, nonce, redirectTo FROM AuthOAuthState WHERE stateHash = ? AND provider = ? AND expiresAt > ?",
-		hash, provider, now).Scan(&s.verifier, &s.nonce, &s.redirectTo)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	res, err := h.db.ExecContext(ctx, "DELETE FROM AuthOAuthState WHERE stateHash = ?", hash)
-	if err != nil {
-		return nil, err
-	}
-	if n, _ := res.RowsAffected(); n != 1 {
-		return nil, nil
-	}
-	return &s, nil
-}
-
 // resolveOAuthUser は外部ログインの利用者を決める（F2）。
 //
 //  1. プロバイダーと、プロバイダー側の ID の組で結びつきがあれば、その利用者（メールアドレスでは見分けない）
@@ -254,13 +215,12 @@ func (h *authHandlers) consumeOAuthState(ctx context.Context, state, provider st
 //  5. いなければ新しく作り、運営者へ知らせる
 func (h *authHandlers) resolveOAuthUser(r *http.Request, provider string, ident *oauthIdentity) (*authUser, error) {
 	ctx := r.Context()
-	var userID string
-	err := h.db.QueryRowContext(ctx, "SELECT userId FROM AuthIdentity WHERE provider = ? AND providerUserId = ?", provider, ident.Subject).Scan(&userID)
-	if err == nil {
-		return h.findUserByID(ctx, userID)
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	userID, err := h.store.identityUser(ctx, provider, ident.Subject)
+	if err != nil {
 		return nil, err
+	}
+	if userID != "" {
+		return h.store.findUserByID(ctx, userID)
 	}
 	email := normalizeEmail(ident.Email)
 	if !ident.EmailVerified || !validEmail(email) {
@@ -268,61 +228,12 @@ func (h *authHandlers) resolveOAuthUser(r *http.Request, provider string, ident 
 	}
 
 	now := h.clock()
-	tx, err := h.db.BeginTx(ctx, nil)
+	userID, event, err := h.store.linkOAuthIdentity(ctx, provider, email, ident, now)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
-	var existingID string
-	var verified bool
-	err = tx.QueryRowContext(ctx, "SELECT id, emailVerified FROM `user` WHERE email = ? FOR UPDATE", email).Scan(&existingID, &verified)
-	event := ""
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		existingID = newUserID()
-		name := ident.Name
-		if name == "" {
-			name = email
-		}
-		var image any
-		if ident.Image != "" {
-			image = truncate(ident.Image, 191)
-		}
-		if _, err := tx.ExecContext(ctx,
-			"INSERT INTO `user` (id, name, email, image, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, true, ?, ?)",
-			existingID, truncate(name, 191), email, image, now, now); err != nil {
-			return nil, err
-		}
-		event = "created"
-	case err != nil:
-		return nil, err
-	case verified:
-		event = "linked"
-	default:
-		for _, q := range []string{
-			"DELETE FROM AuthPassword WHERE userId = ?",
-			"DELETE FROM AuthSession WHERE userId = ?",
-			"DELETE FROM AuthToken WHERE userId = ?",
-		} {
-			if _, err := tx.ExecContext(ctx, q, existingID); err != nil {
-				return nil, err
-			}
-		}
-		if _, err := tx.ExecContext(ctx, "UPDATE `user` SET emailVerified = true, updatedAt = ? WHERE id = ?", now, existingID); err != nil {
-			return nil, err
-		}
-		event = "claimed_unverified"
-	}
-	if _, err := tx.ExecContext(ctx,
-		"INSERT INTO AuthIdentity (provider, providerUserId, userId, createdAt) VALUES (?, ?, ?, ?)",
-		provider, ident.Subject, existingID, now); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
 
-	u, err := h.findUserByID(ctx, existingID)
+	u, err := h.store.findUserByID(ctx, userID)
 	if err != nil || u == nil {
 		return nil, fmt.Errorf("find user after oauth: %w (user=%v)", err, u != nil)
 	}
