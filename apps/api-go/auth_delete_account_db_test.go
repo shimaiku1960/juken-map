@@ -152,17 +152,6 @@ func fillEveryUserTable(t *testing.T, fx dbFixture, id, email string, facultyID 
 	// 有効にしていない（enabledAt が NULL）ので、退会でコードは求められない。
 	fx.exec("INSERT INTO AuthTotp (userId, secret, createdAt) VALUES (?, ?, ?)", id, "v0:"+testHex(16), now)
 	fx.exec("INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", id, h())
-	// 移管済みの課金と、Better Auth の古い表（JUK-119 で消すまでは残る）。
-	fx.exec("INSERT INTO SupportCheckoutInvitation (id, tokenHash, email, expiresAt, userId, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
-		testHex(8), testHex(16), email, later, id, now)
-	fx.exec("INSERT INTO SupportCheckoutInvitation (id, tokenHash, email, expiresAt, updatedAt) VALUES (?, ?, ?, ?, ?)",
-		testHex(8), testHex(16), email, later, now)
-	fx.exec("INSERT INTO SupportLineConnection (id, userId, updatedAt) VALUES (?, ?, ?)", testHex(8), id, now)
-	fx.exec("INSERT INTO SupportSubscription (id, userId, stripeCustomerId, stripeSubscriptionId, status, updatedAt) VALUES (?, ?, ?, ?, 'active', ?)",
-		testHex(8), id, "cus_"+testHex(6), "sub_"+testHex(6), now)
-	fx.exec("INSERT INTO account (id, userId, accountId, providerId, updatedAt) VALUES (?, ?, ?, 'credential', ?)", testHex(8), id, id, now)
-	fx.exec("INSERT INTO session (id, userId, expiresAt, token, updatedAt) VALUES (?, ?, ?, ?, ?)", testHex(8), id, later, testHex(16), now)
-	fx.exec("INSERT INTO twoFactor (id, secret, backupCodes, userId) VALUES (?, ?, ?, ?)", testHex(8), testHex(16), testHex(16), id)
 
 	for _, ref := range userReferences(t, fx) {
 		if fx.count("SELECT COUNT(*) FROM `"+ref.table+"` WHERE `"+ref.column+"` = ?", id) == 0 {

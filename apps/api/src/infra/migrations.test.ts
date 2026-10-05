@@ -84,7 +84,7 @@ describe("applyMigrations", () => {
       expect(record.checksum).toBe(createHash("sha256").update(sql).digest("hex"));
       expect(record.finished).toBe(1);
     }
-    expect(await tables()).toEqual(expect.arrayContaining(["user", "session", "StudyPlan", "StudyLog"]));
+    expect(await tables()).toEqual(expect.arrayContaining(["user", "AuthSession", "StudyPlan", "StudyLog"]));
   });
 
   it("当て済みの記録があるものは飛ばし、足されたものだけを当てる", async () => {

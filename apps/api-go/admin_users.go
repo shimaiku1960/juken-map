@@ -591,7 +591,7 @@ func (st *sqlAdminUserStore) deleteUser(ctx context.Context, id string) (removed
 		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(email, '') FROM `user` WHERE id = ?", id).Scan(&email); err != nil {
 			return err
 		}
-		return deleteUserAndData(ctx, tx, id, email)
+		return deleteUserAndData(ctx, tx, id)
 	})
 	return c, err
 }

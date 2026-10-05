@@ -453,8 +453,8 @@ sudo docker exec juken-map-go /api-go grant-admin <メールアドレス>   # �
 2. メールとパスワードでログインし、`/admin`で2段階認証を設定する（QRを認証アプリで読み取り、予備コードを保存し、6桁のコードを確かめる）
 3. 次からは、パスワードのあとに認証アプリのコードを入力してログインする
 
-認証アプリも予備コードも無くしたときは、本番のDBで `user.twoFactorEnabled` を戻して `twoFactor` の行を消し、
-設定し直します（利用者本人の確認ができたときだけ行う）。
+認証アプリも予備コードも無くしたときは、本番の Go のコンテナで `incident reset-2fa <メール>` を実行して設定前に戻し、
+設定し直します（利用者本人の確認ができたときだけ行う。手順は [docs/incident-response.md](docs/incident-response.md)）。
 
 ## 主なディレクトリ
 
