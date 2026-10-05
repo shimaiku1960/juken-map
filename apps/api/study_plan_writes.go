@@ -131,16 +131,12 @@ func (s *storedStudyPlan) fixDates() {
 	s.row.UpdatedAt = isoFromDatetime(s.row.UpdatedAt)
 }
 
-// findStudyPlan は予定を1件読む。userID が空でなければ、その人のものだけ（Node の findOwnedStudyPlan）。無ければ nil。
+// findStudyPlan は userID の人の予定を1件読む（Node の findOwnedStudyPlan）。無いか他人のものなら nil。
 func findStudyPlan(ctx context.Context, q queryRower, id int64, userID string) (*storedStudyPlan, error) {
-	query := "SELECT" + studyPlanRowColumns + " FROM StudyPlan AS p WHERE p.id = ?"
-	args := []any{id}
-	if userID != "" {
-		query += " AND p.userId = ? LIMIT 1"
-		args = append(args, userID)
-	}
 	var s storedStudyPlan
-	if err := q.QueryRowContext(ctx, query, args...).Scan(s.dest()...); err != nil {
+	if err := q.QueryRowContext(ctx,
+		"SELECT"+studyPlanRowColumns+" FROM StudyPlan AS p WHERE p.id = ? AND p.userId = ? LIMIT 1", id, userID,
+	).Scan(s.dest()...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
@@ -200,9 +196,9 @@ func (st *studyPlanWriteStore) hasLinkedStudyLog(ctx context.Context, planID int
 	return n > 0, err
 }
 
-// update は送られた項目だけを書き換え、書き換えた後の行を返す。
+// update は送られた項目だけを書き換え、書き換えた後の行を返す。userID の人のものだけを変える。
 // 列名はこのコードに書いた固定の名前だけで、利用者の入力は値として ? で渡す（Node と同じ）。
-func (st *studyPlanWriteStore) update(ctx context.Context, id int64, v studyPlanUpdate) (StudyPlanRow, error) {
+func (st *studyPlanWriteStore) update(ctx context.Context, userID string, id int64, v studyPlanUpdate) (StudyPlanRow, error) {
 	var sets []string
 	var args []any
 	set := func(column string, value any) {
@@ -237,10 +233,11 @@ func (st *studyPlanWriteStore) update(ctx context.Context, id int64, v studyPlan
 
 	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（set の1つ目）。値は args で ? として渡す
 	if _, err := st.db.ExecContext(ctx,
-		"UPDATE StudyPlan SET "+strings.Join(sets, ", ")+" WHERE id = ?", append(args, id)...); err != nil {
+		"UPDATE StudyPlan SET "+strings.Join(sets, ", ")+" WHERE id = ? AND userId = ?",
+		append(args, id, userID)...); err != nil {
 		return StudyPlanRow{}, err
 	}
-	updated, err := findStudyPlan(ctx, st.db, id, "")
+	updated, err := findStudyPlan(ctx, st.db, id, userID)
 	if err != nil {
 		return StudyPlanRow{}, err
 	}
@@ -250,9 +247,9 @@ func (st *studyPlanWriteStore) update(ctx context.Context, id int64, v studyPlan
 	return updated.row, nil
 }
 
-// delete は予定を消す。ひも付いた実績の studyPlanId は、外部キーの ON DELETE SET NULL で DB が NULL にする。
-func (st *studyPlanWriteStore) delete(ctx context.Context, id int64) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM StudyPlan WHERE id = ?", id)
+// delete は userID の人の予定を消す。ひも付いた実績の studyPlanId は、外部キーの ON DELETE SET NULL で DB が NULL にする。
+func (st *studyPlanWriteStore) delete(ctx context.Context, userID string, id int64) error {
+	_, err := st.db.ExecContext(ctx, "DELETE FROM StudyPlan WHERE id = ? AND userId = ?", id, userID)
 	return err
 }
 
@@ -333,8 +330,14 @@ func (st *studyPlanWriteStore) complete(ctx context.Context, userID string, plan
 	if err != nil {
 		return CompletedStudyPlan{}, err
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE StudyPlan SET done = ?, updatedAt = ? WHERE id = ?", true, now, plan.row.ID); err != nil {
+	// 他人の予定なら1行も変わらない。そのときは作った実績ごとロールバックする。
+	done, err := tx.ExecContext(ctx,
+		"UPDATE StudyPlan SET done = ?, updatedAt = ? WHERE id = ? AND userId = ?", true, now, plan.row.ID, userID)
+	if err != nil {
 		return CompletedStudyPlan{}, err
+	}
+	if n, err := done.RowsAffected(); err != nil || n == 0 {
+		return CompletedStudyPlan{}, errors.Join(fmt.Errorf("StudyPlan %d が見つかりません", plan.row.ID), err)
 	}
 
 	// INSERT も UPDATE も行を返さないので、応答に使う形を同じトランザクションで読み直す。
@@ -342,7 +345,7 @@ func (st *studyPlanWriteStore) complete(ctx context.Context, userID string, plan
 	if err != nil {
 		return CompletedStudyPlan{}, err
 	}
-	updated, err := findStudyPlan(ctx, tx, plan.row.ID, "")
+	updated, err := findStudyPlan(ctx, tx, plan.row.ID, userID)
 	if err != nil {
 		return CompletedStudyPlan{}, err
 	}
@@ -480,7 +483,7 @@ func (h *studyPlanWriteHandlers) update(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 	}
-	updated, err := h.store.update(r.Context(), id, input)
+	updated, err := h.store.update(r.Context(), s.UserID, id, input)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("study-plans update: %w", err))
 		return
@@ -500,7 +503,7 @@ func (h *studyPlanWriteHandlers) delete(w http.ResponseWriter, r *http.Request, 
 	if h.ownedPlan(w, r, id, s) == nil {
 		return
 	}
-	if err := h.store.delete(r.Context(), id); err != nil {
+	if err := h.store.delete(r.Context(), s.UserID, id); err != nil {
 		internalError(w, r, fmt.Errorf("study-plans delete: %w", err))
 		return
 	}

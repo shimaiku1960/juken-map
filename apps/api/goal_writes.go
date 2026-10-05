@@ -35,17 +35,13 @@ type goalPatch struct {
 
 const goalFieldColumns = "g.id, g.createdAt, g.userId, g.facultyId, g.isFirstChoice, g.note, g.status"
 
-// findGoalFields は志望校の行だけ（学部は付けない）を読む。userID が空でなければ、その人のものだけ
-// （Node の findOwnedGoal）。無ければ nil。
+// findGoalFields は userID の人の志望校の行だけ（学部は付けない）を読む（Node の findOwnedGoal）。
+// 無いか他人のものなら nil。
 func (st *goalStore) findGoalFields(ctx context.Context, id int64, userID string) (*GoalFields, error) {
-	query := "SELECT " + goalFieldColumns + " FROM FinalGoal AS g WHERE g.id = ?"
-	args := []any{id}
-	if userID != "" {
-		query += " AND g.userId = ? LIMIT 1"
-		args = append(args, userID)
-	}
 	var g GoalFields
-	err := st.db.QueryRowContext(ctx, query, args...).Scan(
+	err := st.db.QueryRowContext(ctx,
+		"SELECT "+goalFieldColumns+" FROM FinalGoal AS g WHERE g.id = ? AND g.userId = ? LIMIT 1", id, userID,
+	).Scan(
 		&g.ID, &g.CreatedAt, &g.UserID, &g.FacultyID, &g.IsFirstChoice, &g.Note, &g.Status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -90,13 +86,15 @@ func (st *goalStore) createGoal(ctx context.Context, userID string, facultyID in
 
 // replaceFaculty は志望校の学部を差し替える（Node の updateGoal）。facultyId が無ければ何も変えない。
 // 同じ学部の志望校が既にあると一意制約、無い学部だと外部キーで弾かれ、Node と同じく 500 になる。
-func (st *goalStore) replaceFaculty(ctx context.Context, id int64, facultyID optional[int64]) (*GoalFields, error) {
+// userID の人のものだけを変える（呼び出し元の確かめが抜けても、他人の志望校は変わらない）。
+func (st *goalStore) replaceFaculty(ctx context.Context, userID string, id int64, facultyID optional[int64]) (*GoalFields, error) {
 	if v := facultyID.ptr(); v != nil {
-		if _, err := st.db.ExecContext(ctx, "UPDATE FinalGoal SET facultyId = ? WHERE id = ?", *v, id); err != nil {
+		if _, err := st.db.ExecContext(ctx,
+			"UPDATE FinalGoal SET facultyId = ? WHERE id = ? AND userId = ?", *v, id, userID); err != nil {
 			return nil, err
 		}
 	}
-	g, err := st.findGoalFields(ctx, id, "")
+	g, err := st.findGoalFields(ctx, id, userID)
 	if err == nil && g == nil {
 		err = fmt.Errorf("FinalGoal %d が見つかりません", id)
 	}
@@ -104,6 +102,7 @@ func (st *goalStore) replaceFaculty(ctx context.Context, id int64, facultyID opt
 }
 
 // applyPatch は第一志望・メモ・ステータスのうち、送られてきたものだけを書き換える（Node の applyGoalPatch）。
+// userID の人のものだけを変える。
 //
 // 第一志望は1ユーザー1校までなので、付け替えは「全部外す→1件立てる」をひとつのトランザクションで行う。
 // 分けて実行すると、途中で失敗したときに第一志望が0校の状態が残る。
@@ -124,8 +123,8 @@ func (st *goalStore) applyPatch(ctx context.Context, userID string, id int64, p 
 		return nil
 	}
 	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（columns）。値は args で ? として渡す
-	update := "UPDATE FinalGoal SET " + strings.Join(columns, ", ") + " WHERE id = ?"
-	args = append(args, id)
+	update := "UPDATE FinalGoal SET " + strings.Join(columns, ", ") + " WHERE id = ? AND userId = ?"
+	args = append(args, id, userID)
 
 	if !p.isFirstChoice.present || !*p.isFirstChoice.value {
 		// 1文だけなので、トランザクションで包まなくても途中の状態は残らない。
@@ -146,8 +145,9 @@ func (st *goalStore) applyPatch(ctx context.Context, userID string, id int64, p 
 	return tx.Commit()
 }
 
-func (st *goalStore) deleteGoal(ctx context.Context, id int64) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM FinalGoal WHERE id = ?", id)
+// deleteGoal は userID の人の志望校だけを消す。
+func (st *goalStore) deleteGoal(ctx context.Context, userID string, id int64) error {
+	_, err := st.db.ExecContext(ctx, "DELETE FROM FinalGoal WHERE id = ? AND userId = ?", id, userID)
 	return err
 }
 
@@ -210,7 +210,7 @@ func (h *goalHandlers) replace(w http.ResponseWriter, r *http.Request, s *sessio
 	if !h.ownedGoal(w, r, id, s) {
 		return
 	}
-	updated, err := h.store.replaceFaculty(r.Context(), id, facultyID)
+	updated, err := h.store.replaceFaculty(r.Context(), s.UserID, id, facultyID)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("goals replace: %w", err))
 		return
@@ -259,7 +259,7 @@ func (h *goalHandlers) delete(w http.ResponseWriter, r *http.Request, s *session
 	if !h.ownedGoal(w, r, id, s) {
 		return
 	}
-	if err := h.store.deleteGoal(r.Context(), id); err != nil {
+	if err := h.store.deleteGoal(r.Context(), s.UserID, id); err != nil {
 		internalError(w, r, fmt.Errorf("goals delete: %w", err))
 		return
 	}
