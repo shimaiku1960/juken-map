@@ -15,7 +15,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -334,8 +333,7 @@ func (st *sqlNotificationStore) markDelivery(ctx context.Context, userID string,
 	res, err := st.db.ExecContext(ctx,
 		`INSERT INTO NotificationDelivery (userId, date, slot, channel, createdAt) VALUES (?, ?, ?, ?, ?)`,
 		userID, date, slot, channel, time.Now().UTC())
-	var myErr *mysql.MySQLError
-	if errors.As(err, &myErr) && myErr.Number == 1062 { // ER_DUP_ENTRY
+	if isMySQLError(err, mysqlDuplicateEntry) {
 		return 0, true, nil
 	}
 	if err != nil {
