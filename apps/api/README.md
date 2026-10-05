@@ -10,19 +10,7 @@ Node から消した（JUK-84）。ダッシュボード・学習記録と予定
 画面（SPA・SSG の HTML・静的ファイル）・sitemap・ブログの中継（`/api/blog`）・`/line/settings` も Node から移した
 （JUK-111、`spa.go`・`seo.go`・`blog.go`）。本番で動くアプリのコンテナは Go だけ（JUK-109 で Node のコンテナを外した）。
 
-### ログインの作り（`auth_*.go`）
-
-| ファイル | 中身 |
-| --- | --- |
-| `auth_handlers.go` | 入口の一覧、登録・ログイン・ログアウト・セッションの取得 |
-| `auth_recovery.go` | メールの確認・確認メールの再送・再設定・パスワードの変更 |
-| `auth_mfa.go`・`auth_totp.go` | 2段階認証（TOTP・予備コード・秘密の暗号化） |
-| `auth_oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
-| `auth_session.go`・`auth_token.go` | セッション（期限・取り消し・Cookie）とトークンの作り方 |
-| `auth_password.go` | パスワードのハッシュ（Argon2id）と規則（15文字以上・よくあるものの拒否） |
-| `auth_throttle.go`・`auth_email.go` | 回数制限と、上限つきのメール送信 |
-
-テストは `auth_unit_test.go`（DB なし）と `auth_db_test.go`（本物の MySQL、`pnpm test:go-db`）。
+どのファイルに何があるかは、下の「[ファイルの分け方](#ファイルの分け方)」にまとめた。
 
 ## 動かし方
 
@@ -218,51 +206,125 @@ Go は5本同時に送るが、メールは Resend の上限（チーム全体�
 
 ## ファイルの分け方
 
-右の列は移す前の Node のファイル。業務の API の分は JUK-84 で Node から消したので、
-`git log --diff-filter=D -- apps/api/src` で探す。
-
-| ファイル | 役割 | Node 側で近いもの |
-| --- | --- | --- |
-| `main.go` | 設定の読み込み、ルートの登録、ミドルウェアの順番、起動と停止 | `server.ts` |
-| `router.go` | 入口の種類ごとの拒否（未ログイン・停止中・管理者・デモ） | `access-control.ts`・`context.ts` |
-| `auth.go` | セッション Cookie の署名確認と、session テーブルの照会 | Better Auth の `getSession` |
-| `middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 | `observability/logger.ts`・`requestContext.ts`・`security-headers.ts` |
-| `overload.go` | 同時処理数の上限を超えたら 503 | `overload.ts` |
-| `cli.go`・`incident.go` | 引数を付けて起動したときのコマンド：`incident`（乗っ取りの操作）と `grant-admin`（管理者の付け外し）。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`。テストは `incident_db_test.go`（dbtest） | `incident.ts`・`grant-admin.ts`（JUK-122 で消した） |
-| `user_rate_limit.go` | 利用者単位の回数制限（読み取り・書き込みの2種類、メモリのトークンバケット）。超えたら 429 と `Retry-After` | —（Node には無い。06 E2） |
-| `errors.go` | エラー応答の形、404、path の ID | `error-handling.ts`・`routes/params.ts` |
-| `logger.go` | pino と同じ形の JSON ログ | `observability/logger.ts` |
-| `metrics.go` | Prometheus のメトリクス（名前・ラベルは Node と同じ） | `observability/metrics.ts` |
-| `http.go` | JSON の書き出し、ヘルスチェック | Fastify 本体 |
-| `db.go` | 接続プール、RDS への TLS、DATETIME の文字列を ISO にする | `infra/db.ts`（seed・テスト用に `db/connection.ts` として残る） |
-| `Dockerfile` | 本番のイメージ（distroless の static に実行ファイル1つ） | ルートの `Dockerfile` |
-| `dates.go` | 東京の「今日」、月初・月末、日付のずらし | `src/shared/date.ts` |
-| `dashboard.go` | ダッシュボードの応答の型、3本の SQL を同時に流して組み立てる | `services/dashboard-service.ts` |
-| `study.go` | 学習記録・予定の応答の型と SQL（ダッシュボードと一覧で共有） | `study-log-service.ts`・`study-plan-service.ts` の list 系 |
-| `study_handlers.go` | 学習記録・予定の一覧の API | `routes/study-logs.ts`・`study-plans.ts` の GET |
-| `goals.go` | 志望校の一覧と第一志望（応答の型と SQL） | `services/goal-service.ts`・`routes/goals.ts`・`home.ts` の GET |
-| `textbooks.go` | 参考書の一覧と参考書マスター（応答の型と SQL） | `services/textbook-service.ts`・`routes/textbooks.ts`・`textbook-masters.ts` の GET |
-| `notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存 | `routes/notification-preferences.ts` |
-| `universities.go` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 | `services/university-service.ts`・`routes/universities.ts` |
-| `notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる | `routes/cron.ts`・`services/sendDailyNotifications.ts` |
-| `daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 | `domain/dailyNotification.ts` |
-| `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 | fast-querystring・Zod |
-| `body.go` | リクエスト本文の読み方（Content-Type・上限・壊れた JSON・不正な UTF-8）、415・413 の形 | Fastify の本文の解析・`server.ts` の JSON パーサー |
-| `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） | `src/shared/validations/`・`routes/validation-error.ts` |
-| `study_plan_writes.go` | 学習予定の作成（まとめて）・書き換え（送った項目だけ）・削除・完了（実績を作る） | `routes/study-plans.ts` の POST・PATCH・DELETE・complete、`study-plan-service.ts` |
-| `study_log_writes.go` | 学習記録の記録・書き換え・削除（参考書の範囲の確かめ、初回記録の印） | `routes/study-logs.ts` の POST・`study-log-item.ts`・`study-log-service.ts`・`domain/textbookRange.ts` |
-| `profile.go` | プロフィールの更新 | `routes/profile.ts`・`services/user-service.ts` の updateProfile |
-| `admin_users.go` | 管理画面の利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） | `routes/admin.ts`・`services/admin-service.ts` |
-| `admin_masters.go` | 管理画面のマスター編集（大学・学部・タグ・参考書。使われている行は消さない、大学一覧のキャッシュを捨てる） | `routes/admin-masters.ts`・`services/master-service.ts` |
-| `ownership_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3）と禁止項目（A4）を本物の DB で確かめる（dbtest タグ） | `ownership.test.ts`・`forbidden-fields.test.ts` |
-| `line_db_test.go` | LINE 連携の SQL を本物の DB で確かめる（dbtest タグ） | — |
-| `list_limits_db_test.go` | 学習記録・予定の一覧が 1000 件で切り詰められることを本物の DB で確かめる（dbtest タグ、06 E2） | — |
-| `spa.go` | 画面の配信（dist を起動時にメモリへ読み、gzip を作り置く。SSG の HTML、知らないパスの 404、sitemap） | `spa.ts` |
-| `seo.go` | ページごとの meta・GA4・Faro の差し込み、画面の CSP、sitemap の中身、SPA のルートの一覧 | `seo.ts`・`security-headers.ts`・`src/shared/routes.ts` |
-| `blog.go` | ブログの記事の中継（microCMS、3秒で打ち切り、障害は 502） | `routes/blog.ts`・`infra/microcms.ts` |
-
 Go ではフォルダ1つが1つのパッケージで、ファイルの分け方はコンパイル結果に関係しない。
-上の分け方は、読む人が探しやすいようにしているだけ。
+下の分け方は、読む人が探しやすいようにしているだけ。テスト（`*_test.go`）は、確かめる相手の
+ファイル名に `_test` か `_db_test`（本物の MySQL、`pnpm test:go-db`）を付けた名前にしている。
+
+移す前の Node のどのファイルにあたるかの対応表は、改名（JUK-131）の前の README にある
+（`git show 4c8c109:apps/api-go/README.md`）。Node のファイルは `git log --diff-filter=D -- apps/api/src` で探す。
+
+### 入口（起動・ルート・断り方）
+
+| ファイル | 中身 |
+| --- | --- |
+| `main.go` | 設定の読み込み、ルートの登録（`registerRoutes`）、ミドルウェアの順番、起動と停止 |
+| `router.go` | 入口の種類ごとの拒否（未ログイン・停止中・管理者・デモ） |
+| `middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 |
+| `overload.go` | 同時処理数の上限を超えたら 503 |
+| `user_rate_limit.go` | 利用者単位の回数制限（読み取り・書き込みの2種類、メモリのトークンバケット）。超えたら 429 と `Retry-After`（06 E2） |
+| `Dockerfile` | 本番のイメージ（distroless の static に実行ファイル1つ） |
+
+### ログイン（`auth_*.go`、JUK-115）
+
+| ファイル | 中身 |
+| --- | --- |
+| `auth_handlers.go` | 入口の一覧、登録・ログイン・ログアウト・セッションの取得 |
+| `auth_session.go`・`auth_token.go` | セッション（期限・取り消し・Cookie、各ルートでの照会）とトークンの作り方 |
+| `auth_password.go` | パスワードのハッシュ（Argon2id）と規則（15文字以上・よくあるものの拒否。一覧は `auth_common_passwords.txt`） |
+| `auth_recovery.go` | メールの確認・確認メールの再送・再設定・パスワードの変更 |
+| `auth_mfa.go`・`auth_totp.go` | 2段階認証（TOTP・予備コード・秘密の暗号化） |
+| `auth_oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
+| `auth_throttle.go`・`auth_email.go` | 回数制限と、上限つきのメール送信 |
+| `auth_delete_account.go` | 本人の退会（確かめ直してから、利用者とぶら下がるデータをすべて消す。JUK-123） |
+
+テストは `auth_unit_test.go`（DB なし）と `auth_db_test.go`・`auth_delete_account_db_test.go`（本物の MySQL）。
+
+### 学習記録・志望校・参考書（利用者の画面の API）
+
+読み取りは `<名前>.go`、書き込みは `<名前>_writes.go` に分けている。
+
+| ファイル | 中身 |
+| --- | --- |
+| `dashboard.go` | ダッシュボードの応答の型、3本の SQL を同時に流して組み立てる |
+| `study.go` | 学習記録・予定の応答の型と SQL（ダッシュボードと一覧で共有） |
+| `study_handlers.go` | 学習記録・予定の一覧の API |
+| `study_log_writes.go` | 学習記録の記録・書き換え・削除（参考書の範囲の確かめ、初回記録の印） |
+| `study_plan_writes.go` | 学習予定の作成（まとめて）・書き換え（送った項目だけ）・削除・完了（実績を作る） |
+| `goals.go`・`goal_writes.go` | 志望校の一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除 |
+| `textbooks.go`・`textbook_writes.go` | 参考書の一覧と参考書マスター／参考書の追加（マスターからも）・進み具合の書き換え |
+| `universities.go` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 |
+| `profile.go` | プロフィールの更新 |
+| `notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存 |
+
+### 管理画面（`/api/admin/*`）
+
+| ファイル | 中身 |
+| --- | --- |
+| `admin_users.go` | 利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） |
+| `admin_masters.go` | マスター編集（大学・学部・タグ・参考書。使われている行は消さない、大学一覧のキャッシュを捨てる） |
+
+### 画面の配信（JUK-111）
+
+| ファイル | 中身 |
+| --- | --- |
+| `spa.go` | 画面の配信（dist を起動時にメモリへ読み、gzip を作り置く。SSG の HTML、知らないパスの 404、sitemap） |
+| `seo.go` | ページごとの meta・GA4・Faro の差し込み、画面の CSP、sitemap の中身、SPA のルートの一覧 |
+| `blog.go` | ブログの記事の中継（microCMS、3秒で打ち切り、障害は 502） |
+
+### 外部サービスとの連携
+
+| ファイル | 中身 |
+| --- | --- |
+| `line.go` | LINE 連携の入口（連携の確認・解除、トークからの Account Link、プロフィールからの LINE Login、Webhook） |
+| `line_api.go` | LINE の API を呼ぶ部分（Messaging API・LINE Login、Webhook の署名の確かめ）。テストでは偽物に差し替える |
+| `microcms_webhook.go` | microCMS の記事の公開・更新・削除を受け、署名を確かめてから GitHub の API でデプロイを動かす（JUK-112） |
+
+### 毎日の通知
+
+送り方の速さは上の「[毎日の通知の送り方](#毎日の通知の送り方)」。
+
+| ファイル | 中身 |
+| --- | --- |
+| `notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる |
+| `daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 |
+
+### 計測・シミュレーション
+
+| ファイル | 中身 |
+| --- | --- |
+| `metrics.go` | Prometheus のメトリクス（名前・ラベルは Node と同じ） |
+| `analytics.go` | 本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80） |
+| `csp_report.go` | ブラウザが送る CSP の違反の報告をログに残す（認証なしの口なので件数と大きさに上限） |
+| `sim.go` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る |
+
+### コマンド（引数を付けて起動したとき）
+
+| ファイル | 中身 |
+| --- | --- |
+| `cli.go` | 引数の読み取りと振り分け：`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）・`migrate`。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
+| `incident.go` | `incident`・`grant-admin` が使う SQL（セッションの取り消し・停止・2段階認証の解除・役割の付け外し）。手順は `docs/incident-response.md` |
+| `migrate.go` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
+
+### 共通の部品
+
+| ファイル | 中身 |
+| --- | --- |
+| `http.go` | JSON の書き出し、ヘルスチェック |
+| `errors.go` | エラー応答の形、404、path の ID |
+| `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 |
+| `body.go` | リクエスト本文の読み方（Content-Type・上限・壊れた JSON・不正な UTF-8）、415・413 の形 |
+| `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） |
+| `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
+| `db.go` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、DATETIME の文字列を ISO にする |
+| `logger.go` | pino と同じ形の JSON ログ |
+| `openapi.gen.go` | `openapi/openapi.yaml` から作った応答・リクエストの型（手で直さない。`pnpm openapi:generate`、設定は `oapi-codegen.yaml`） |
+
+### 本物の DB に流す横断のテスト（dbtest タグ）
+
+| ファイル | 中身 |
+| --- | --- |
+| `ownership_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3）と禁止項目（A4）を確かめる |
+| `list_limits_db_test.go` | 学習記録・予定の一覧が 1000 件で切り詰められることを確かめる（06 E2） |
 
 ## Node と揃えていること
 
