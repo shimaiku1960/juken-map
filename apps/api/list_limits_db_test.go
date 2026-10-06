@@ -3,7 +3,7 @@
 // 一覧の件数の上限（セキュリティ基準 06 の E2）を本物の DB で確かめる。
 //
 // 学習記録・予定の一覧は、利用者が期間（?from=&to=）を好きなだけ広く指定できる。その代わり SQL の LIMIT で
-// 1000 件（maxLogs・maxPlans）に切り詰め、1回の応答の重さに上限を置いている。上限を超える件数を入れて、
+// 1000 件（study.MaxLogs・study.MaxPlans）に切り詰め、1回の応答の重さに上限を置いている。上限を超える件数を入れて、
 // 超えた分が返らないこと（どちらの端が切れるか）を見る。LIMIT を外すと、どれも 1001 件が返って落ちる。
 package main
 
@@ -16,6 +16,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/study"
 )
 
 func TestE2ListLimitsDB(t *testing.T) {
@@ -24,13 +25,13 @@ func TestE2ListLimitsDB(t *testing.T) {
 	app := newDBTestApp(db)
 	userID := fx.User()
 	today := dates.OnTokyo(time.Now())
-	const n = maxLogs + 1
+	const n = study.MaxLogs + 1
 
 	// 学習記録は今日から過去へ、予定は今日から先へ、1日1件ずつ上限＋1件入れる（日別の合計も上限＋1日になる）
 	insertDaily(t, db, `INSERT INTO StudyLog (userId, date, minutes, createdAt, updatedAt) VALUES (?, ?, 30, NOW(3), NOW(3))`,
 		userID, today, -1, n)
 	insertDaily(t, db, `INSERT INTO StudyPlan (userId, date, content, done, createdAt, updatedAt) VALUES (?, ?, '予定', false, NOW(3), NOW(3))`,
-		userID, today, 1, maxPlans+1)
+		userID, today, 1, study.MaxPlans+1)
 
 	ymd := func(d time.Time) string { return d.Format("2006-01-02") }
 	wide := "from=" + ymd(dates.AddDays(today, -2*n)) + "&to=" + ymd(dates.AddDays(today, 2*n))
@@ -42,10 +43,10 @@ func TestE2ListLimitsDB(t *testing.T) {
 		wantLast  time.Time
 	}{
 		// 新しい日付から並ぶので、いちばん古い1件が切れる
-		{"学習記録", "/api/study-logs?" + wide, maxLogs, today, dates.AddDays(today, -(maxLogs - 1))},
-		{"日別の合計", "/api/study-logs/daily?" + wide, maxLogs, today, dates.AddDays(today, -(maxLogs - 1))},
+		{"学習記録", "/api/study-logs?" + wide, study.MaxLogs, today, dates.AddDays(today, -(study.MaxLogs - 1))},
+		{"日別の合計", "/api/study-logs/daily?" + wide, study.MaxLogs, today, dates.AddDays(today, -(study.MaxLogs - 1))},
 		// 古い日付から並ぶので、いちばん先の1件が切れる
-		{"予定", "/api/study-plans?" + wide, maxPlans, today, dates.AddDays(today, maxPlans-1)},
+		{"予定", "/api/study-plans?" + wide, study.MaxPlans, today, dates.AddDays(today, study.MaxPlans-1)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

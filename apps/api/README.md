@@ -260,11 +260,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `dashboard.go` | ダッシュボードの応答の型、3本の SQL を同時に流して組み立てる |
-| `study.go` | 学習記録・予定の応答の型と SQL（ダッシュボードと一覧で共有） |
-| `study_handlers.go` | 学習記録・予定の一覧の API |
-| `study_log_writes.go` | 学習記録の記録・書き換え・削除の入口（本文の確かめと応答の形。書き込みは `internal/write/studyrecord`） |
-| `study_plan_writes.go` | 学習予定の作成（まとめて）・書き換え（送った項目だけ）・削除・完了の入口（書き込みは `internal/write/studyrecord`） |
+| `internal/feature/study/` | 学習記録・予定の一覧とダッシュボード（3本の SQL を同時に流して組み立てる）／学習記録の記録・書き換え・削除、学習予定の作成（まとめて）・書き換え・削除・完了の入口（書き込みは `internal/write/studyrecord`）。一覧の期間（`?from=&to=`）の読み方もここ |
 | `internal/feature/goals/` | 志望校の一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除の入口（書き込みは `internal/write/goal`） |
 | `internal/feature/textbooks/` | 参考書の一覧と参考書マスター／参考書の追加（マスターからも）・進み具合の書き換えの入口（書き込みは `internal/write/textbook`） |
 | `universities.go` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 |
@@ -327,7 +323,6 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `http.go` | ヘルスチェック |
-| `query.go` | 学習の一覧の期間（`?from=&to=`）の読み方 |
 | `internal/dates/` | 東京の「今日」、月初・月末、日付のずらし、`YYYY-MM-DD` の読み方（Node の `new Date` と同じ繰り越し）、DB に書く時刻（ミリ秒で切り捨て）と ISO 文字列。機能をまたいで使う（JUK-156） |
 | `internal/site/` | 本番の画面のオリジン（`site.URL`）。通知の本文・SEO・LINE の連携先が使う（JUK-156） |
 | `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify と同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |

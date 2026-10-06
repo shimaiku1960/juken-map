@@ -1,4 +1,4 @@
-package main
+package study
 
 import (
 	"database/sql"
@@ -107,17 +107,17 @@ func writeStudyRecordError(w http.ResponseWriter, r *http.Request, op string, er
 	}
 }
 
-type studyLogWriteHandlers struct {
+type LogWriteHandlers struct {
 	db  *sql.DB
 	now func() time.Time
 }
 
-func (h *studyLogWriteHandlers) today() string {
+func (h *LogWriteHandlers) today() string {
 	return dates.YMD(dates.OnTokyo(h.now()))
 }
 
-// create は POST /api/study-logs。
-func (h *studyLogWriteHandlers) create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Create は POST /api/study-logs。
+func (h *LogWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -139,9 +139,9 @@ func (h *studyLogWriteHandlers) create(w http.ResponseWriter, r *http.Request, s
 	})
 }
 
-// update は PATCH /api/study-logs/{id}。Node と同じく、本文は先に読み（415・413 は ID の確かめより先）、
+// Update は PATCH /api/study-logs/{id}。Node と同じく、本文は先に読み（415・413 は ID の確かめより先）、
 // 自分の実績かを本文の確かめより先に見る（無ければ本文に関わらず 404）。
-func (h *studyLogWriteHandlers) update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *LogWriteHandlers) Update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -172,8 +172,8 @@ func (h *studyLogWriteHandlers) update(w http.ResponseWriter, r *http.Request, s
 	httpx.WriteJSON(w, http.StatusOK, apischema.StudyLogRow(updated))
 }
 
-// delete は DELETE /api/study-logs/{id}。
-func (h *studyLogWriteHandlers) delete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Delete は DELETE /api/study-logs/{id}。
+func (h *LogWriteHandlers) Delete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}

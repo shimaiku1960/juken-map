@@ -1,4 +1,7 @@
-package main
+// Package study は学習記録・予定とダッシュボードの入口（/api/study-logs・/api/study-plans・GET /api/dashboard）。
+// ハンドラと読み取りの SQL を持ち、書き込みは internal/write/studyrecord に任せる（JUK-156）。
+// ダッシュボードは一覧の API と同じ読み取りを使うので、別の feature に分けずここに置く。
+package study
 
 import (
 	"context"
@@ -15,8 +18,8 @@ import (
 
 // 応答の件数の上限。期間で絞ったうえでの安全網で、ページングではない（Node と同じ値）。
 const (
-	maxLogs  = 1000
-	maxPlans = 1000
+	MaxLogs  = 1000
+	MaxPlans = 1000
 )
 
 // ここから下の型が応答の形（src/shared/dto/study.ts）。
@@ -102,13 +105,13 @@ func (c *textbookCols) dto() *apischema.Textbook {
 	return tb
 }
 
-// studyStore は学習記録と予定の SQL をまとめたもの。
-type studyStore struct {
+// store は学習記録と予定の SQL をまとめたもの。
+type store struct {
 	db *sql.DB
 }
 
 // listStudyLogs は新しい日付から並べる。同じ日付の中は記録した順（id 昇順）。
-func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRange) ([]apischema.StudyLog, error) {
+func (st *store) listStudyLogs(ctx context.Context, userID string, r dateRange) ([]apischema.StudyLog, error) {
 	where, args := r.where("l", userID)
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+logColumns+","+textbookColumns+`
@@ -117,7 +120,7 @@ func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRa
 		 WHERE `+where+`
 		 ORDER BY l.date DESC, l.id ASC
 		 LIMIT ?`,
-		append(args, maxLogs)...,
+		append(args, MaxLogs)...,
 	)
 	if err != nil {
 		return nil, err
@@ -152,7 +155,7 @@ func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRa
 
 // listStudyPlans は古い日付から並べる。同じ日付の中は作った順（id 昇順）。
 // 実績は予定1件につき最大1件（StudyLog.studyPlanId が UNIQUE）なので、JOIN しても行は増えない。
-func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateRange) ([]apischema.StudyPlan, error) {
+func (st *store) listStudyPlans(ctx context.Context, userID string, r dateRange) ([]apischema.StudyPlan, error) {
 	where, args := r.where("p", userID)
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+planColumns+","+textbookColumns+`, l.id AS log_id
@@ -162,7 +165,7 @@ func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateR
 		 WHERE `+where+`
 		 ORDER BY p.date ASC, p.id ASC
 		 LIMIT ?`,
-		append(args, maxPlans)...,
+		append(args, MaxPlans)...,
 	)
 	if err != nil {
 		return nil, err
@@ -193,7 +196,7 @@ func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateR
 }
 
 // listDailyStudyMinutes は日ごとの合計学習時間を、新しい日付から返す。
-func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, r dateRange) ([]apischema.DailyStudyMinutes, error) {
+func (st *store) listDailyStudyMinutes(ctx context.Context, userID string, r dateRange) ([]apischema.DailyStudyMinutes, error) {
 	where, args := r.where("l", userID)
 	// #nosec G202 -- where は dateRange.where が固定の列名と ? で作る。値は args で渡す
 	rows, err := st.db.QueryContext(ctx,
@@ -203,7 +206,7 @@ func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, 
 		 GROUP BY l.date
 		 ORDER BY l.date DESC
 		 LIMIT ?`,
-		append(args, maxLogs)...,
+		append(args, MaxLogs)...,
 	)
 	if err != nil {
 		return nil, err

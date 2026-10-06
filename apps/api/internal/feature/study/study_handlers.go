@@ -1,6 +1,7 @@
-package main
+package study
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"time"
@@ -22,12 +23,31 @@ const (
 	defaultPlanFutureDays = 90  // 予定：今日から先の日数
 )
 
-type studyHandlers struct {
-	store *studyStore
+// Handlers は学習記録・予定・ダッシュボードの入口をまとめたもの。
+// ダッシュボードは一覧の API と同じ読み取りを使うので、別の feature に分けずここに置く。
+type Handlers struct {
+	Reads     *ReadHandlers
+	Dashboard *DashboardHandler
+	Logs      *LogWriteHandlers
+	Plans     *PlanWriteHandlers
 }
 
-// listLogs は GET /api/study-logs。from を省くと直近90日、to を省くと上限なし。
-func (h *studyHandlers) listLogs(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func New(db *sql.DB) *Handlers {
+	store := &store{db: db}
+	return &Handlers{
+		Reads:     &ReadHandlers{store: store},
+		Dashboard: &DashboardHandler{store: store},
+		Logs:      &LogWriteHandlers{db: db, now: time.Now},
+		Plans:     &PlanWriteHandlers{db: db},
+	}
+}
+
+type ReadHandlers struct {
+	store *store
+}
+
+// ListLogs は GET /api/study-logs。from を省くと直近90日、to を省くと上限なし。
+func (h *ReadHandlers) ListLogs(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	q, ok := readDateRangeQuery(w, r)
 	if !ok {
 		return
@@ -46,8 +66,8 @@ func (h *studyHandlers) listLogs(w http.ResponseWriter, r *http.Request, s *http
 	httpx.WriteJSON(w, http.StatusOK, logs)
 }
 
-// listDaily は GET /api/study-logs/daily。日ごとの合計だけを返す軽い方（連続記録日数が使う）。
-func (h *studyHandlers) listDaily(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// ListDaily は GET /api/study-logs/daily。日ごとの合計だけを返す軽い方（連続記録日数が使う）。
+func (h *ReadHandlers) ListDaily(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	q, ok := readDateRangeQuery(w, r)
 	if !ok {
 		return
@@ -66,8 +86,8 @@ func (h *studyHandlers) listDaily(w http.ResponseWriter, r *http.Request, s *htt
 	httpx.WriteJSON(w, http.StatusOK, daily)
 }
 
-// listPlans は GET /api/study-plans。予定は未来にもあるので、省くと今日の前後90日。
-func (h *studyHandlers) listPlans(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// ListPlans は GET /api/study-plans。予定は未来にもあるので、省くと今日の前後90日。
+func (h *ReadHandlers) ListPlans(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	q, ok := readDateRangeQuery(w, r)
 	if !ok {
 		return

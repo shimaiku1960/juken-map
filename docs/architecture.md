@@ -144,7 +144,7 @@ Actions を使わない理由として書いていたが（URL が固定され�
 `POST /api/study-logs` に JSON を送るだけで、Web もアプリも同じ入口を使える。
 画面と API が同じ形をやり取りすることは、同じ契約（`openapi/openapi.yaml`）から作った型が保証している
 （画面は `src/shared/dto/`、Go は `apps/api/internal/apischema/openapi.gen.go`）。予定と実績の一覧は、ストア
-（`study.go` の `listStudyPlans` / `listStudyLogs`）の戻り値の型をこの型にしている。
+（`internal/feature/study` の `listStudyPlans` / `listStudyLogs`）の戻り値の型をこの型にしている。
 
 ### 画面へ返す形は、SQL を読むところで組み立てる（2026-09-11〜）
 
@@ -171,7 +171,7 @@ Go の API は、1つの機能を1つのファイル（大きいものは数フ�
 2. **ハンドラ**：本文と入力を確かめ（`readBody`・`readObject`）、自分の行かを確かめ、
    ストアの結果をステータスコードへ翻訳する（見つからない → 404、重複 → 409 など）
 3. **ストア**：SQL を流し、失敗は値（`admin_masters.go` の `masterOutcome`）か目印のエラー
-   （`study_plan_writes.go` の `errAlreadyCompleted`）で返す。ステータスコードは知らない。
+   （`internal/write/studyrecord` の `ErrAlreadyCompleted`）で返す。ステータスコードは知らない。
    一意制約違反の判定（`database.IsMySQLError(err, database.DuplicateEntry)`、`internal/database`）もストアの中で済ませる
 
 **この順番に意味がある。** 誰か分からない人に入力の良し悪しを教えないため、
@@ -226,7 +226,7 @@ API に集約すれば直す場所は1つになる。加えて全リクエスト
   決まりがそのまま入っているので、2か所にあると片方だけ直される。利用停止は、実際にずれていた。
 - **読み取りには隠せる情報が無い。** 生 SQL は画面ごとに取る列が違うので、1か所に集めると
   「SQL 1本 = メソッド1個」になり、名前を付け替えるだけの層になる。同じ列を何度も読むものは、
-  列の並びを定数（`internal/feature/goals` の `goalColumns`、`study_plan_writes.go` の `studyPlanRowColumns` など）にまとめてある。
+  列の並びを定数（`internal/feature/goals` の `goalColumns`、`internal/feature/study` の `logColumns` など）にまとめてある。
 - **リポジトリ層の利点は、このプロジェクトには当てはまらない。** よく挙がる利点は
   「DB を差し替えられること」と「テストでモックしやすいこと」だが、MySQL から移る予定は無く、
   テストは本物のテスト用 MySQL で行っている。残る「データの扱いを1か所に集める」は、書き込みだけで足りる。
@@ -249,7 +249,7 @@ apps/api/
 └ internal/
   ├ app/                  起動・終了、依存の組み立て、ルートとアクセス条件の一覧
   ├ feature/              画面・入口ごとの処理（ハンドラと読み取りの SQL）
-  │ ├ auth/  study/  goals/  textbooks/  dashboard/
+  │ ├ auth/  study/  goals/  textbooks/   （study はダッシュボードも持つ。同じ読み取りを使うため）
   │ └ admin/  line/  ops/
   ├ write/                書き込みの持ち主（操作とトランザクション）
   │ ├ account/  authguard/  studyrecord/  textbook/  goal/
