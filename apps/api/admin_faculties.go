@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 管理者ページのマスター編集のうち、学部とタグ（/api/admin/faculties・/api/admin/tags）。
@@ -188,7 +190,7 @@ func (st *sqlAdminMasterStore) listTags(ctx context.Context) ([]AdminTag, error)
 }
 
 // findFacultySnapshot は学部を、監査ログと応答の形（タグは id だけ）で引く。無ければ nil。
-func findFacultySnapshot(ctx context.Context, db sqlRunner, id int64) (*AdminFacultySnapshot, error) {
+func findFacultySnapshot(ctx context.Context, db database.Runner, id int64) (*AdminFacultySnapshot, error) {
 	var f AdminFacultySnapshot
 	var examDate string
 	err := db.QueryRowContext(ctx, "SELECT id, universityId, name, examDate FROM Faculty WHERE id = ?", id).
@@ -238,7 +240,7 @@ func allTagsExist(ctx context.Context, tx *sql.Tx, tagIDs []int64) (bool, error)
 		args[i] = id
 	}
 	var count int
-	err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM Tag WHERE id IN ("+placeholders(len(tagIDs), "?")+")", args...).Scan(&count)
+	err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM Tag WHERE id IN ("+database.Placeholders(len(tagIDs), "?")+")", args...).Scan(&count)
 	return count == len(tagIDs), err
 }
 
@@ -255,7 +257,7 @@ func replaceTags(ctx context.Context, tx *sql.Tx, facultyID int64, tagIDs []int6
 		args = append(args, facultyID, tagID)
 	}
 	// #nosec G202 -- 埋め込むのは件数ぶん並べた (?, ?) だけ。値は args で渡す
-	_, err := tx.ExecContext(ctx, "INSERT INTO _FacultyToTag (A, B) VALUES "+placeholders(len(tagIDs), "(?, ?)"), args...)
+	_, err := tx.ExecContext(ctx, "INSERT INTO _FacultyToTag (A, B) VALUES "+database.Placeholders(len(tagIDs), "(?, ?)"), args...)
 	return err
 }
 
@@ -277,7 +279,7 @@ func checkFacultyInput(ctx context.Context, tx *sql.Tx, universityID int64, in f
 
 func (st *sqlAdminMasterStore) createFaculty(ctx context.Context, in facultyInput) (masterOutcome[AdminFacultySnapshot], error) {
 	var outcome masterOutcome[AdminFacultySnapshot]
-	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
+	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		// 大学を押さえてから学部を足す（確かめている間に大学が消されないように）。
 		var universityID int64
 		err := tx.QueryRowContext(ctx, "SELECT id FROM University WHERE id = ? FOR UPDATE", in.universityID).Scan(&universityID)
@@ -314,7 +316,7 @@ func (st *sqlAdminMasterStore) createFaculty(ctx context.Context, in facultyInpu
 
 func (st *sqlAdminMasterStore) updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[AdminFacultySnapshot]], error) {
 	var outcome masterOutcome[masterChange[AdminFacultySnapshot]]
-	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
+	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		before, err := findFacultySnapshot(ctx, tx, id)
 		if err != nil || before == nil {
 			outcome.failure = masterNotFound
@@ -354,7 +356,7 @@ func (st *sqlAdminMasterStore) deleteFaculty(ctx context.Context, id int64) (mas
 	}
 	// 中間テーブルの行は外部キーの CASCADE で一緒に消える。
 	_, err = st.db.ExecContext(ctx, "DELETE FROM Faculty WHERE id = ?", id)
-	if isMySQLError(err, mysqlRowIsReferenced) {
+	if database.IsMySQLError(err, database.RowIsReferenced) {
 		return inUse, nil
 	}
 	if err != nil {

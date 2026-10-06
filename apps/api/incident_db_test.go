@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 type cliFixture struct {
@@ -63,7 +65,7 @@ func (fx cliFixture) opsRecords() []opsRecord {
 		if err := json.Unmarshal([]byte(r.RawDetail), &r.Detail); err != nil {
 			fx.t.Fatal(err)
 		}
-		if r.CreatedAt, err = time.Parse(time.RFC3339Nano, isoFromDatetime(createdAt)); err != nil {
+		if r.CreatedAt, err = time.Parse(time.RFC3339Nano, database.ISOFromDatetime(createdAt)); err != nil {
 			fx.t.Fatal(err)
 		}
 		records = append(records, r)
@@ -219,7 +221,7 @@ func TestIncidentCommandDB(t *testing.T) {
 		if banned == nil {
 			t.Fatal("止めていない")
 		}
-		bannedAt := isoFromDatetime(*banned)
+		bannedAt := database.ISOFromDatetime(*banned)
 		fx.mustRun("incident", "unban", email)
 
 		records := fx.opsRecords()

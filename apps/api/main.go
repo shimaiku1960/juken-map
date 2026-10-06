@@ -21,6 +21,8 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // requestTimeout は1リクエストにかけてよい時間（middleware.go の withDeadline）。
@@ -55,7 +57,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	// トレースは DB より先に用意する。openDB の SQL の計測が、ここで決めた送り先を使うため。
+	// トレースは DB より先に用意する。database.Open の SQL の計測が、ここで決めた送り先を使うため。
 	tp, shutdownTracing, err := setupTracing(context.Background())
 	if err != nil {
 		return err
@@ -69,7 +71,7 @@ func run() error {
 		}
 	}()
 
-	db, err := openDB(os.Getenv("DATABASE_URL"))
+	db, err := database.Open(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
 	}

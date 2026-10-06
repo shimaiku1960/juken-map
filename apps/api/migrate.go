@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 同時に2つ動かないようにする MySQL のロック名。デプロイが重なっても二重に当てない。
@@ -86,12 +88,12 @@ func applyMigrations(ctx context.Context, databaseURL, dir string, log io.Writer
 		return nil, err
 	}
 
-	cfg, err := dbConfig(databaseURL)
+	cfg, err := database.Config(databaseURL)
 	if err != nil {
 		return nil, err
 	}
 	// migration.sql は複数の文を1ファイルに持つので、この接続だけ複数文の実行を許す。
-	// アプリのプール（openDB）では許さない（SQL インジェクションの被害を広げないため）。
+	// アプリのプール（database.Open）では許さない（SQL インジェクションの被害を広げないため）。
 	cfg.MultiStatements = true
 	connector, err := mysql.NewConnector(cfg)
 	if err != nil {

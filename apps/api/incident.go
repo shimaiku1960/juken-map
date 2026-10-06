@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 乗っ取りが起きたときの操作と、管理者の付け外し（cli.go のコマンドが使う。手順は docs/incident-response.md）。
@@ -58,7 +60,7 @@ func (st incidentStore) findByEmail(ctx context.Context, email string) (incident
 	}
 	u.Email = userMail.String
 	if banned.Valid {
-		iso := isoFromDatetime(banned.String)
+		iso := database.ISOFromDatetime(banned.String)
 		u.BannedAt = &iso
 	}
 	return u, nil
@@ -92,7 +94,7 @@ func (st incidentStore) listSessions(ctx context.Context, email string) (inciden
 		if err := rows.Scan(&s.CreatedAt, &s.ExpiresAt, &s.LastUsedAt, &s.IPAddress, &s.UserAgent, &s.TwoFactorVerified); err != nil {
 			return u, nil, err
 		}
-		s.CreatedAt, s.ExpiresAt, s.LastUsedAt = isoFromDatetime(s.CreatedAt), isoFromDatetime(s.ExpiresAt), isoFromDatetime(s.LastUsedAt)
+		s.CreatedAt, s.ExpiresAt, s.LastUsedAt = database.ISOFromDatetime(s.CreatedAt), database.ISOFromDatetime(s.ExpiresAt), database.ISOFromDatetime(s.LastUsedAt)
 		sessions = append(sessions, s)
 	}
 	return u, sessions, rows.Err()
@@ -151,7 +153,7 @@ func (st incidentStore) listOps(ctx context.Context, limit int) ([]opsAuditEntry
 		if err := rows.Scan(&e.CreatedAt, &e.Action, &e.TargetID, &e.Host, &e.Detail); err != nil {
 			return nil, err
 		}
-		e.CreatedAt = isoFromDatetime(e.CreatedAt)
+		e.CreatedAt = database.ISOFromDatetime(e.CreatedAt)
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()

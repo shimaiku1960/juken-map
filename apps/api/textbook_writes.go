@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 参考書の書き込み（JUK-75）。Node の次の部分にあたる。
@@ -185,7 +187,7 @@ func (st *textbookStore) createTextbook(ctx context.Context, userID string, t ne
 		   (userId, name, masterId, totalAmount, rangeUnit, subject, createdAt, updatedAt)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		userID, t.name, t.masterID, t.totalAmount, t.rangeUnit, t.subject, now, now)
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return nil, errDuplicateTextbook
 	}
 	if err != nil {

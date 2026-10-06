@@ -1,10 +1,14 @@
-package main
+// Package database は MySQL への接続と、書き込み・読み取りの両方で使う補助を持つ。
+// 書き込みの持ち主（internal/write）と読み取り（internal/feature）が同じものを使えるよう、
+// package main から分けた（JUK-152、docs/architecture.md「バックエンドの構成」）。
+package database
 
 import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
+	"database/sql/driver"
 	_ "embed"
 	"errors"
 	"net/url"
@@ -13,6 +17,7 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/go-sql-driver/mysql"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // rdsCA は RDS（ap-northeast-1）のルート証明書。RDS の証明書は OS の信頼リストに無い AWS 独自の
@@ -22,10 +27,10 @@ import (
 //go:embed rds-ca-ap-northeast-1.pem
 var rdsCA []byte
 
-// openDB は DATABASE_URL（mysql://user:pass@host:port/db）をドライバの設定に直し、
+// Open は DATABASE_URL（mysql://user:pass@host:port/db）をドライバの設定に直し、
 // 接続プールを作る。Node 側の parseDatabaseUrl と createPool（seed・テスト用の db/connection.ts）にあたる。
-func openDB(databaseURL string) (*sql.DB, error) {
-	cfg, err := dbConfig(databaseURL)
+func Open(databaseURL string) (*sql.DB, error) {
+	cfg, err := Config(databaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +38,9 @@ func openDB(databaseURL string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	// SQL 1本ずつのトレース（tracing.go）。setupTracing の前やコマンドで動くときは何もしない。
-	db := otelsql.OpenDB(connector, tracedDBOptions)
+	// SQL 1本ずつのトレース（下の tracedSpanOptions）。送り先はアプリ全体の設定（tracing.go の setupTracing）を使い、
+	// その前やコマンドで動くときは何もしない。
+	db := otelsql.OpenDB(connector, tracedSpanOptions)
 	// Node 側の connectionLimit（既定 15）に揃える。比べるときに条件を同じにするため。
 	db.SetMaxOpenConns(15)
 	db.SetMaxIdleConns(15)
@@ -53,8 +59,21 @@ func openDB(databaseURL string) (*sql.DB, error) {
 	return db, nil
 }
 
-// dbConfig は DATABASE_URL をドライバの設定に直す。繋がずに中身を確かめられるよう openDB から分けた。
-func dbConfig(databaseURL string) (*mysql.Config, error) {
+// tracedSpanOptions は SQL のスパンの出し方。1本の照会につき1つのスパンにして、SQL の文（? のまま。
+// 値はドライバが後で埋めるので入らない）を属性に残す。
+var tracedSpanOptions = otelsql.WithSpanOptions(otelsql.SpanOptions{
+	// 結果を読む時間・接続の使い回しの準備は、照会のスパンと別に出すと数が倍になる割に読むことが無い。
+	OmitRows:             true,
+	OmitConnResetSession: true,
+	OmitConnPrepare:      true,
+	// リクエストの外（起動時の確認など）の SQL は、親の無いスパンになって一覧を埋めるので出さない。
+	SpanFilter: func(ctx context.Context, _ otelsql.Method, _ string, _ []driver.NamedValue) bool {
+		return trace.SpanContextFromContext(ctx).IsValid()
+	},
+})
+
+// Config は DATABASE_URL をドライバの設定に直す。繋がずに中身を確かめられるよう Open から分けた。
+func Config(databaseURL string) (*mysql.Config, error) {
 	if databaseURL == "" {
 		return nil, errors.New("DATABASE_URL が空です")
 	}
@@ -96,19 +115,49 @@ func dbConfig(databaseURL string) (*mysql.Config, error) {
 	return cfg, nil
 }
 
-// isoFromDatetime は DATETIME(3) の文字列 "2026-09-27 00:00:00.000" を
+// ISOFromDatetime は DATETIME(3) の文字列 "2026-09-27 00:00:00.000" を
 // Date#toISOString と同じ "2026-09-27T00:00:00.000Z" にする。Node 側の toIsoString と同じ。
-func isoFromDatetime(value string) string {
+func ISOFromDatetime(value string) string {
 	return value[:10] + "T" + value[11:] + "Z"
 }
 
-// isMySQLError は MySQL のエラー番号で見分ける。番号は下の定数で書き、1062 などの数字を直接書かない。
-func isMySQLError(err error, number uint16) bool {
+// IsMySQLError は MySQL のエラー番号で見分ける。番号は下の定数で書き、1062 などの数字を直接書かない。
+func IsMySQLError(err error, number uint16) bool {
 	var me *mysql.MySQLError
 	return errors.As(err, &me) && me.Number == number
 }
 
 const (
-	mysqlDuplicateEntry  = 1062 // ER_DUP_ENTRY：一意制約に当たった
-	mysqlRowIsReferenced = 1451 // ER_ROW_IS_REFERENCED_2：外部キーに参照されていて消せない
+	DuplicateEntry  = 1062 // ER_DUP_ENTRY：一意制約に当たった
+	RowIsReferenced = 1451 // ER_ROW_IS_REFERENCED_2：外部キーに参照されていて消せない
 )
+
+// InTx は fn をトランザクションの中で動かす。fn がエラーを返したら取り消す。
+func InTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// Runner は *sql.DB と *sql.Tx の両方で使う読み書き。
+type Runner interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// QueryRower は *sql.DB と *sql.Tx の共通部分（トランザクションの中でも外でも読めるように）。
+type QueryRower interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// Placeholders は IN (…)・VALUES に並べる ? を n 個つなぐ。
+func Placeholders(n int, one string) string {
+	return strings.TrimSuffix(strings.Repeat(one+", ", n), ", ")
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 学習記録と予定の読み取り。ダッシュボード（dashboard.go）と一覧の API（study_handlers.go）が共有する。
@@ -92,7 +94,7 @@ func (c *textbookCols) dto() *Textbook {
 		Subject:     c.subject,
 	}
 	if c.targetDate != nil {
-		iso := isoFromDatetime(*c.targetDate)
+		iso := database.ISOFromDatetime(*c.targetDate)
 		tb.TargetDate = &iso
 	}
 	return tb
@@ -138,7 +140,7 @@ func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRa
 		if err := rows.Scan(append(dest, tb.dest(&ignore)...)...); err != nil {
 			return nil, err
 		}
-		l.Date = isoFromDatetime(date)
+		l.Date = database.ISOFromDatetime(date)
 		l.Textbook = tb.dto()
 		logs = append(logs, l)
 	}
@@ -181,7 +183,7 @@ func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateR
 		if err := rows.Scan(append(dest, &p.StudyLogID)...); err != nil {
 			return nil, err
 		}
-		p.Date = isoFromDatetime(date)
+		p.Date = database.ISOFromDatetime(date)
 		p.Textbook = tb.dto()
 		plans = append(plans, p)
 	}
@@ -216,7 +218,7 @@ func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, 
 		if err := rows.Scan(&date, &d.Minutes); err != nil {
 			return nil, err
 		}
-		d.Date = isoFromDatetime(date)
+		d.Date = database.ISOFromDatetime(date)
 		daily = append(daily, d)
 	}
 	return daily, rows.Err()

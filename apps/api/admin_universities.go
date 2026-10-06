@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 管理者ページのマスター編集のうち、大学（/api/admin/universities）。共通の部品と全体の決まりは admin_masters.go。
@@ -191,7 +193,7 @@ func (st *sqlAdminMasterStore) listUniversities(ctx context.Context, q string, p
 }
 
 // findAdminUniversity は大学を1件引く。無ければ nil。
-func findAdminUniversity(ctx context.Context, db sqlRunner, id int64) (*AdminUniversity, error) {
+func findAdminUniversity(ctx context.Context, db database.Runner, id int64) (*AdminUniversity, error) {
 	u, err := scanAdminUniversity(db.QueryRowContext(ctx, "SELECT "+adminUniversityColumns+" FROM University u WHERE u.id = ?", id).Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -249,7 +251,7 @@ func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (
 func (st *sqlAdminMasterStore) createUniversity(ctx context.Context, in universityInput) (masterOutcome[AdminUniversity], error) {
 	res, err := st.db.ExecContext(ctx,
 		"INSERT INTO University (name, prefecture, type, createdAt) VALUES (?, ?, ?, ?)", in.name, in.prefecture, in.typ, nowMillis())
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return masterOutcome[AdminUniversity]{failure: masterDuplicate}, nil
 	}
 	if err != nil {
@@ -270,7 +272,7 @@ func (st *sqlAdminMasterStore) updateUniversity(ctx context.Context, id int64, i
 		return outcome{failure: masterNotFound}, err
 	}
 	_, err = st.db.ExecContext(ctx, "UPDATE University SET name = ?, prefecture = ?, type = ? WHERE id = ?", in.name, in.prefecture, in.typ, id)
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return outcome{failure: masterDuplicate}, nil
 	}
 	if err != nil {
@@ -291,7 +293,7 @@ func (st *sqlAdminMasterStore) deleteUniversity(ctx context.Context, id int64) (
 		return inUse, nil
 	}
 	_, err = st.db.ExecContext(ctx, "DELETE FROM University WHERE id = ?", id)
-	if isMySQLError(err, mysqlRowIsReferenced) {
+	if database.IsMySQLError(err, database.RowIsReferenced) {
 		return inUse, nil
 	}
 	if err != nil {

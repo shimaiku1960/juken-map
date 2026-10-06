@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 学習予定の書き込み（JUK-75）。Node の次の部分にあたる。
@@ -126,13 +128,13 @@ func (s *storedStudyPlan) dest() []any {
 }
 
 func (s *storedStudyPlan) fixDates() {
-	s.row.Date = isoFromDatetime(s.rawDate)
-	s.row.CreatedAt = isoFromDatetime(s.row.CreatedAt)
-	s.row.UpdatedAt = isoFromDatetime(s.row.UpdatedAt)
+	s.row.Date = database.ISOFromDatetime(s.rawDate)
+	s.row.CreatedAt = database.ISOFromDatetime(s.row.CreatedAt)
+	s.row.UpdatedAt = database.ISOFromDatetime(s.row.UpdatedAt)
 }
 
 // findStudyPlan は userID の人の予定を1件読む（Node の findOwnedStudyPlan）。無いか他人のものなら nil。
-func findStudyPlan(ctx context.Context, q queryRower, id int64, userID string) (*storedStudyPlan, error) {
+func findStudyPlan(ctx context.Context, q database.QueryRower, id int64, userID string) (*storedStudyPlan, error) {
 	var s storedStudyPlan
 	if err := q.QueryRowContext(ctx,
 		"SELECT"+studyPlanRowColumns+" FROM StudyPlan AS p WHERE p.id = ? AND p.userId = ? LIMIT 1", id, userID,
@@ -320,7 +322,7 @@ func (st *studyPlanWriteStore) complete(ctx context.Context, userID string, plan
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		userID, plan.row.ID, plan.rawDate, minutes, plan.row.Subject, plan.row.TextbookID,
 		rangeStart, rangeEnd, rangeUnit, memo, now, now)
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return CompletedStudyPlan{}, errAlreadyCompleted
 	}
 	if err != nil {
@@ -359,7 +361,7 @@ func (st *studyPlanWriteStore) complete(ctx context.Context, userID string, plan
 }
 
 // findStudyLogWithTextbook は実績と、その参考書の行（無ければ null）を読む。
-func findStudyLogWithTextbook(ctx context.Context, q queryRower, id int64) (StudyLogWithTextbook, error) {
+func findStudyLogWithTextbook(ctx context.Context, q database.QueryRower, id int64) (StudyLogWithTextbook, error) {
 	var l StudyLogWithTextbook
 	var tbID *int64
 	var tb TextbookRow
@@ -376,12 +378,12 @@ func findStudyLogWithTextbook(ctx context.Context, q queryRower, id int64) (Stud
 	if err != nil {
 		return StudyLogWithTextbook{}, err
 	}
-	l.Date, l.CreatedAt, l.UpdatedAt = isoFromDatetime(l.Date), isoFromDatetime(l.CreatedAt), isoFromDatetime(l.UpdatedAt)
+	l.Date, l.CreatedAt, l.UpdatedAt = database.ISOFromDatetime(l.Date), database.ISOFromDatetime(l.CreatedAt), database.ISOFromDatetime(l.UpdatedAt)
 	if tbID != nil {
 		tb.ID, tb.UserID, tb.Name = *tbID, *tbUserID, *tbName
-		tb.CreatedAt, tb.UpdatedAt = isoFromDatetime(*tbCreated), isoFromDatetime(*tbUpdated)
+		tb.CreatedAt, tb.UpdatedAt = database.ISOFromDatetime(*tbCreated), database.ISOFromDatetime(*tbUpdated)
 		if tb.TargetDate != nil {
-			*tb.TargetDate = isoFromDatetime(*tb.TargetDate)
+			*tb.TargetDate = database.ISOFromDatetime(*tb.TargetDate)
 		}
 		l.Textbook = &tb
 	}

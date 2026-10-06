@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 学習記録（実績）の書き込み（JUK-75）。Node の次の部分にあたる。
@@ -108,11 +110,6 @@ type storedStudyLog struct {
 	rawDate string
 }
 
-// queryRower は *sql.DB と *sql.Tx の共通部分（トランザクションの中でも外でも読めるように）。
-type queryRower interface {
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
 const studyLogRowColumns = `
   l.id, l.userId, l.date, l.subject, l.minutes, l.textbookId,
   l.rangeStart, l.rangeEnd, l.rangeUnit, l.memo, l.studyPlanId,
@@ -123,7 +120,7 @@ type studyLogWriteStore struct {
 }
 
 // findStudyLog は userID の人の実績を1件読む（Node の findOwnedStudyLog）。無いか他人のものなら nil。
-func findStudyLog(ctx context.Context, q queryRower, id int64, userID string) (*storedStudyLog, error) {
+func findStudyLog(ctx context.Context, q database.QueryRower, id int64, userID string) (*storedStudyLog, error) {
 	var s storedStudyLog
 	r := &s.row
 	err := q.QueryRowContext(ctx,
@@ -138,9 +135,9 @@ func findStudyLog(ctx context.Context, q queryRower, id int64, userID string) (*
 	if err != nil {
 		return nil, err
 	}
-	r.Date = isoFromDatetime(s.rawDate)
-	r.CreatedAt = isoFromDatetime(r.CreatedAt)
-	r.UpdatedAt = isoFromDatetime(r.UpdatedAt)
+	r.Date = database.ISOFromDatetime(s.rawDate)
+	r.CreatedAt = database.ISOFromDatetime(r.CreatedAt)
+	r.UpdatedAt = database.ISOFromDatetime(r.UpdatedAt)
 	return &s, nil
 }
 

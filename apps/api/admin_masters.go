@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 // 管理者ページのマスター編集（/admin/masters、JUK-78）。Node の routes/admin-masters.ts と
@@ -183,18 +182,6 @@ func masterNameRule(label string) stringRule {
 }
 
 // ---- ここから下は本物の DB ----
-
-// sqlRunner は *sql.DB と *sql.Tx の両方で使う読み書き。
-type sqlRunner interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-// placeholders は IN (…)・VALUES に並べる ? を n 個つなぐ。
-func placeholders(n int, one string) string {
-	return strings.TrimSuffix(strings.Repeat(one+", ", n), ", ")
-}
 
 type sqlAdminMasterStore struct {
 	db *sql.DB

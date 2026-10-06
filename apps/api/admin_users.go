@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 管理者ページ（/admin）の利用者の管理（JUK-78）。Node の routes/admin.ts と services/admin-service.ts にあたる。
@@ -518,10 +520,10 @@ func (st *sqlAdminUserStore) listUsers(ctx context.Context, kind UserKind, q str
 			&u.BannedAt, &u.CreatedAt, &providers, &u.LastLoginAt, &u.StudyLogCount, &u.LastStudyLogAt); err != nil {
 			return list, err
 		}
-		u.CreatedAt = isoFromDatetime(u.CreatedAt)
+		u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)
 		for _, p := range []*IsoDateTime{u.BannedAt, u.LastLoginAt, u.LastStudyLogAt} {
 			if p != nil {
-				*p = isoFromDatetime(*p)
+				*p = database.ISOFromDatetime(*p)
 			}
 		}
 		u.Providers = []string{}
@@ -544,7 +546,7 @@ func (st *sqlAdminUserStore) findTarget(ctx context.Context, id string) (*adminT
 		return nil, err
 	}
 	if t.BannedAt != nil {
-		*t.BannedAt = isoFromDatetime(*t.BannedAt)
+		*t.BannedAt = database.ISOFromDatetime(*t.BannedAt)
 	}
 	return &t, nil
 }
@@ -554,7 +556,7 @@ func (st *sqlAdminUserStore) findTarget(ctx context.Context, id string) (*adminT
 // bannedAt を見て断る）。認証基準 10 の C5 の「ある利用者の全端末」にあたる。
 func (st *sqlAdminUserStore) ban(ctx context.Context, id string, now time.Time) (int, error) {
 	var removed int64
-	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
+	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx,
 			"UPDATE `user` SET bannedAt = COALESCE(bannedAt, ?), updatedAt = ? WHERE id = ?", now, now, id); err != nil {
 			return err
@@ -577,7 +579,7 @@ func (st *sqlAdminUserStore) unban(ctx context.Context, id string, now time.Time
 // deleteUser は利用者を消す。消し方は本人の退会と同じ deleteUserAndData（auth_delete_account.go）。
 func (st *sqlAdminUserStore) deleteUser(ctx context.Context, id string) (removedCounts, error) {
 	var c removedCounts
-	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
+	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		if err := tx.QueryRowContext(ctx,
 			`SELECT (SELECT COUNT(*) FROM StudyLog WHERE userId = ?),
 			        (SELECT COUNT(*) FROM StudyPlan WHERE userId = ?),

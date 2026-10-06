@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // プロフィールの更新（JUK-75）。Node の routes/profile.ts と services/user-service.ts の updateProfile にあたる。
@@ -46,11 +48,11 @@ func (st *userStore) updateProfile(ctx context.Context, userID string, in Profil
 		// 行が無い（sql.ErrNoRows）も 500。Node も「見つかりません」を throw して 500 にしている。
 		return User{}, err
 	}
-	u.CreatedAt = isoFromDatetime(u.CreatedAt)
-	u.UpdatedAt = isoFromDatetime(u.UpdatedAt)
+	u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)
+	u.UpdatedAt = database.ISOFromDatetime(u.UpdatedAt)
 	for _, p := range []*IsoDateTime{u.FirstStudyLogAt, u.AnalyticsSignUpTrackedAt} {
 		if p != nil {
-			*p = isoFromDatetime(*p)
+			*p = database.ISOFromDatetime(*p)
 		}
 	}
 	return u, nil

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 参考書の読み取り（JUK-73）。Node の routes/textbooks.ts・textbook-masters.ts の GET と、
@@ -47,11 +49,11 @@ func scanTextbook(scan func(...any) error) (TextbookRow, error) {
 		return t, err
 	}
 	if t.TargetDate != nil {
-		iso := isoFromDatetime(*t.TargetDate)
+		iso := database.ISOFromDatetime(*t.TargetDate)
 		t.TargetDate = &iso
 	}
-	t.CreatedAt = isoFromDatetime(t.CreatedAt)
-	t.UpdatedAt = isoFromDatetime(t.UpdatedAt)
+	t.CreatedAt = database.ISOFromDatetime(t.CreatedAt)
+	t.UpdatedAt = database.ISOFromDatetime(t.UpdatedAt)
 	return t, nil
 }
 
@@ -114,8 +116,8 @@ func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]TextbookMas
 		}
 		// ORDER BY で同じマスターの行が隣り合うので、直前の要素と比べるだけで束ねられる。
 		if len(masters) == 0 || masters[len(masters)-1].ID != tm.ID {
-			tm.CreatedAt = isoFromDatetime(tm.CreatedAt)
-			tm.UpdatedAt = isoFromDatetime(tm.UpdatedAt)
+			tm.CreatedAt = database.ISOFromDatetime(tm.CreatedAt)
+			tm.UpdatedAt = database.ISOFromDatetime(tm.UpdatedAt)
 			tm.Metrics = make([]TextbookMasterMetric, 0)
 			masters = append(masters, tm)
 		}
@@ -127,8 +129,8 @@ func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]TextbookMas
 				Unit:        *mUnit,
 				TotalAmount: *mTotalAmount,
 				IsDefault:   *mIsDefault,
-				CreatedAt:   isoFromDatetime(*mCreatedAt),
-				UpdatedAt:   isoFromDatetime(*mUpdatedAt),
+				CreatedAt:   database.ISOFromDatetime(*mCreatedAt),
+				UpdatedAt:   database.ISOFromDatetime(*mUpdatedAt),
 			})
 		}
 	}

@@ -112,7 +112,7 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
   例外は大学の一覧で、全員に同じ 80KB なので、Go が1回だけ gzip にした形を持って返す
 - 大学の一覧は Go のメモリに10分持つ。管理画面で大学・学部を編集したら（`admin_universities.go`・`admin_faculties.go`）その場で捨てるので、
   編集はすぐ大学を探す画面に出る。10分の期限は、DB を直接書き換えたとき（seed など）の保険
-- RDS へは TLS で繋ぐ（`db.go`。ホスト名が `.rds.amazonaws.com` のときだけ）。証明書は
+- RDS へは TLS で繋ぐ（`internal/database`。ホスト名が `.rds.amazonaws.com` のときだけ）。証明書は
   `rds-ca-ap-northeast-1.pem` を実行ファイルに埋め込む
 - ログとメトリクスは Node と同じ `job="juken-map-api"` で Grafana Cloud に入り、
   `runtime="go"` で分けられる（`observability/alloy/production.alloy`）
@@ -336,8 +336,8 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `body.go` | リクエスト本文の読み方（Content-Type・上限・壊れた JSON・不正な UTF-8）、415・413 の形 |
 | `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
-| `db.go` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、DATETIME の文字列を ISO にする |
 | `logger.go` | pino と同じ形の JSON ログ。reqId・trace_id を足し、`LOG_FILE` にも書く |
+| `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
 | `openapi.gen.go` | `openapi/openapi.yaml` から作った応答・リクエストの型（手で直さない。`pnpm openapi:generate`、設定は `oapi-codegen.yaml`） |
 
 ### 本物の DB に流す横断のテスト（dbtest タグ）

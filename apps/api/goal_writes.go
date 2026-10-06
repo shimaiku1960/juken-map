@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 志望校の書き込み（JUK-75）。Node の次の部分にあたる。
@@ -49,7 +51,7 @@ func (st *goalStore) findGoalFields(ctx context.Context, id int64, userID string
 	if err != nil {
 		return nil, err
 	}
-	g.CreatedAt = isoFromDatetime(g.CreatedAt)
+	g.CreatedAt = database.ISOFromDatetime(g.CreatedAt)
 	return &g, nil
 }
 
@@ -64,7 +66,7 @@ func (st *goalStore) createGoal(ctx context.Context, userID string, facultyID in
 	res, err := st.db.ExecContext(ctx,
 		"INSERT INTO FinalGoal (userId, facultyId, status, createdAt) VALUES (?, ?, ?, ?)",
 		userID, facultyID, s, nowMillis())
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return nil, errDuplicateGoal
 	}
 	if err != nil {

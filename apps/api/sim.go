@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // シミュレーション（sim/）専用の API（JUK-80）。Node の routes/sim.ts と services/simulation-service.ts にあたる。
@@ -64,7 +66,7 @@ func (st *simStore) state(ctx context.Context) (SimulationState, error) {
 		if err := rows.Scan(&u.Seq, &u.Email, &u.Cohort, &u.CreatedAt, &u.DormantFrom, &u.LastActedOn); err != nil {
 			return SimulationState{}, err
 		}
-		u.CreatedAt = isoFromDatetime(u.CreatedAt)
+		u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)
 		state.Users = append(state.Users, u)
 		state.NextSeq = u.Seq + 1
 	}
@@ -77,7 +79,7 @@ func (st *simStore) markUser(ctx context.Context, m SimulationUserMark) (notFoun
 	res, err := st.db.ExecContext(ctx,
 		"UPDATE `user` SET simSeq = ?, simCohort = ?, updatedAt = ? WHERE email = ? AND email LIKE ?",
 		m.Seq, m.Cohort, time.Now().UTC(), m.Email, simEmailLike)
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return false, true, nil
 	}
 	if err != nil {

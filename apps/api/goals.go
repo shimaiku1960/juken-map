@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 志望校の読み取り（JUK-73）。Node の routes/goals.ts・home.ts の GET と、
@@ -42,10 +44,10 @@ func goalDest(g *FirstChoiceGoal) []any {
 }
 
 func fixGoalDates(g *FirstChoiceGoal) {
-	g.CreatedAt = isoFromDatetime(g.CreatedAt)
-	g.Faculty.ExamDate = isoFromDatetime(g.Faculty.ExamDate)
-	g.Faculty.CreatedAt = isoFromDatetime(g.Faculty.CreatedAt)
-	g.Faculty.University.CreatedAt = isoFromDatetime(g.Faculty.University.CreatedAt)
+	g.CreatedAt = database.ISOFromDatetime(g.CreatedAt)
+	g.Faculty.ExamDate = database.ISOFromDatetime(g.Faculty.ExamDate)
+	g.Faculty.CreatedAt = database.ISOFromDatetime(g.Faculty.CreatedAt)
+	g.Faculty.University.CreatedAt = database.ISOFromDatetime(g.Faculty.University.CreatedAt)
 }
 
 // withTags は第一志望の形に、学部のタグを足して一覧の1件にする。
@@ -104,7 +106,7 @@ func (st *goalStore) listGoals(ctx context.Context, userID string) ([]Goal, erro
 		if tagID != nil {
 			last := &goals[len(goals)-1]
 			last.Faculty.Tags = append(last.Faculty.Tags, Tag{
-				ID: *tagID, Name: *tagName, CreatedAt: isoFromDatetime(*tagAdded),
+				ID: *tagID, Name: *tagName, CreatedAt: database.ISOFromDatetime(*tagAdded),
 			})
 		}
 	}

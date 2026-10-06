@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 大学の読み取り（JUK-73）。Node の routes/universities.ts と services/university-service.ts にあたる。
@@ -139,7 +141,7 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*Universit
 			return nil, err
 		}
 		if detail == nil {
-			u.CreatedAt = isoFromDatetime(u.CreatedAt)
+			u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)
 			u.Faculties = make([]FacultyWithTags, 0)
 			detail = &u
 		}
@@ -151,15 +153,15 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*Universit
 			detail.Faculties = append(detail.Faculties, FacultyWithTags{
 				ID:           *fID,
 				Name:         *fName,
-				ExamDate:     isoFromDatetime(*fExamDate),
-				CreatedAt:    isoFromDatetime(*fCreatedAt),
+				ExamDate:     database.ISOFromDatetime(*fExamDate),
+				CreatedAt:    database.ISOFromDatetime(*fCreatedAt),
 				UniversityID: *fUniversityID,
 				Tags:         make([]Tag, 0),
 			})
 		}
 		if tID != nil {
 			f := &detail.Faculties[len(detail.Faculties)-1]
-			f.Tags = append(f.Tags, Tag{ID: *tID, Name: *tName, CreatedAt: isoFromDatetime(*tCreatedAt)})
+			f.Tags = append(f.Tags, Tag{ID: *tID, Name: *tName, CreatedAt: database.ISOFromDatetime(*tCreatedAt)})
 		}
 	}
 	return detail, rows.Err()
