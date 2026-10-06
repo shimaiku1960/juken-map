@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
 func TestAuthDBDeleteAccount(t *testing.T) {
@@ -75,7 +77,7 @@ func TestAuthDBDeleteAccount(t *testing.T) {
 		email := e.newEmail()
 		id := e.signUpVerified(email, authTestPassword)
 		b := e.signedIn(email, authTestPassword)
-		e.fx.exec("DELETE FROM AuthPassword WHERE userId = ?", id)
+		e.fx.Exec("DELETE FROM AuthPassword WHERE userId = ?", id)
 
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"email": "someone@else.example"}), 400, "EMAIL_MISMATCH")
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"email": ""}), 400, "EMAIL_MISMATCH")
@@ -88,7 +90,7 @@ func TestAuthDBDeleteAccount(t *testing.T) {
 	t.Run("管理者は退会できない", func(t *testing.T) {
 		email := e.newEmail()
 		id := e.signUpVerified(email, authTestPassword)
-		e.fx.exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
+		e.fx.Exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
 		b := e.signedIn(email, authTestPassword)
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"password": authTestPassword}), 409, "ADMIN_CANNOT_DELETE")
 		if e.fx.count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 1 {
@@ -106,7 +108,7 @@ func TestAuthDBDeleteAccount(t *testing.T) {
 // 利用者を指す表が増えたのに fillEveryUserTable に行を足していなければ落ちる（新しい表が消えるかを確かめるため）。
 func TestAuthDBDeleteLeavesNoRows(t *testing.T) {
 	e := newAuthEnv(t)
-	facultyID := e.fx.university()
+	facultyID := e.fx.University()
 
 	t.Run("本人の退会", func(t *testing.T) {
 		email := e.newEmail()
@@ -136,22 +138,22 @@ func fillEveryUserTable(t *testing.T, fx dbFixture, id, email string, facultyID 
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	later := now.Add(time.Hour)
 	h := func() []byte { return randomBytes(32) }
-	fx.textbook(id)
-	fx.studyPlan(id)
-	fx.studyLog(id)
-	fx.finalGoal(id, facultyID)
-	fx.lineConnection(id)
-	fx.exec("INSERT INTO LineLinkNonce (nonce, userId, expiresAt) VALUES (?, ?, ?)", testHex(16), id, later)
-	fx.exec("INSERT INTO LineOAuthAttempt (state, userId, nonce, codeVerifier, redirectUri, expiresAt) VALUES (?, ?, ?, ?, ?, ?)",
-		testHex(16), id, testHex(16), testHex(32), "https://juken-map.com/api/line/oauth/callback", later)
-	fx.exec("INSERT INTO NotificationPreference (userId, updatedAt) VALUES (?, ?)", id, now)
-	fx.exec("INSERT INTO NotificationDelivery (userId, date, slot) VALUES (?, ?, ?)", id, now, "morning")
-	fx.exec("INSERT INTO AuthIdentity (provider, providerUserId, userId, createdAt) VALUES ('google', ?, ?, ?)", "g-"+testHex(6), id, now)
-	fx.exec("INSERT INTO AuthToken (tokenHash, purpose, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?)", h(), tokenPurposePasswordReset, id, now, later)
-	fx.exec("INSERT INTO AuthMfaChallenge (tokenHash, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?)", h(), id, now, later)
+	fx.Textbook(id)
+	fx.StudyPlan(id)
+	fx.StudyLog(id)
+	fx.FinalGoal(id, facultyID)
+	fx.LineConnection(id)
+	fx.Exec("INSERT INTO LineLinkNonce (nonce, userId, expiresAt) VALUES (?, ?, ?)", dbtest.Hex(16), id, later)
+	fx.Exec("INSERT INTO LineOAuthAttempt (state, userId, nonce, codeVerifier, redirectUri, expiresAt) VALUES (?, ?, ?, ?, ?, ?)",
+		dbtest.Hex(16), id, dbtest.Hex(16), dbtest.Hex(32), "https://juken-map.com/api/line/oauth/callback", later)
+	fx.Exec("INSERT INTO NotificationPreference (userId, updatedAt) VALUES (?, ?)", id, now)
+	fx.Exec("INSERT INTO NotificationDelivery (userId, date, slot) VALUES (?, ?, ?)", id, now, "morning")
+	fx.Exec("INSERT INTO AuthIdentity (provider, providerUserId, userId, createdAt) VALUES ('google', ?, ?, ?)", "g-"+dbtest.Hex(6), id, now)
+	fx.Exec("INSERT INTO AuthToken (tokenHash, purpose, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?)", h(), tokenPurposePasswordReset, id, now, later)
+	fx.Exec("INSERT INTO AuthMfaChallenge (tokenHash, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?)", h(), id, now, later)
 	// 有効にしていない（enabledAt が NULL）ので、退会でコードは求められない。
-	fx.exec("INSERT INTO AuthTotp (userId, secret, createdAt) VALUES (?, ?, ?)", id, "v0:"+testHex(16), now)
-	fx.exec("INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", id, h())
+	fx.Exec("INSERT INTO AuthTotp (userId, secret, createdAt) VALUES (?, ?, ?)", id, "v0:"+dbtest.Hex(16), now)
+	fx.Exec("INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", id, h())
 
 	for _, ref := range userReferences(t, fx) {
 		if fx.count("SELECT COUNT(*) FROM `"+ref.table+"` WHERE `"+ref.column+"` = ?", id) == 0 {
@@ -165,7 +167,7 @@ type columnRef struct{ table, column string }
 // userReferences は外部キーで user を指す列の一覧。
 func userReferences(t *testing.T, fx dbFixture) []columnRef {
 	t.Helper()
-	rows, err := fx.db.Query(`SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
+	rows, err := fx.DB.Query(`SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
 		WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'user' ORDER BY 1, 2`)
 	if err != nil {
 		t.Fatal(err)
@@ -189,7 +191,7 @@ func userReferences(t *testing.T, fx dbFixture) []columnRef {
 // 外部キーの無い表（回数制限・メールの記録など）も見る。そうした表は宛先や利用者を SHA-256 にして持つので当たらない。
 func expectNoTrace(t *testing.T, fx dbFixture, id, email string) {
 	t.Helper()
-	rows, err := fx.db.Query(`SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
+	rows, err := fx.DB.Query(`SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = DATABASE() AND DATA_TYPE IN ('char', 'varchar', 'text', 'mediumtext', 'longtext') ORDER BY 1, 2`)
 	if err != nil {
 		t.Fatal(err)

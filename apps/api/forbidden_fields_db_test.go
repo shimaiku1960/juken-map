@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
 // どのテーブルにも無い大きさの id。これが行の id になっていたら、本文の id が使われた。
@@ -51,13 +53,13 @@ func forbiddenWrites(facultyID int64) map[string]forbiddenArrange {
 			return "/api/goals", map[string]any{"facultyId": facultyID}
 		},
 		"PUT /api/goals/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/goals/%d", fx.finalGoal(caller, facultyID)), map[string]any{"status": "candidate"}
+			return path("/api/goals/%d", fx.FinalGoal(caller, facultyID)), map[string]any{"status": "candidate"}
 		},
 		"PATCH /api/goals/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/goals/%d", fx.finalGoal(caller, facultyID)), map[string]any{"note": "メモ"}
+			return path("/api/goals/%d", fx.FinalGoal(caller, facultyID)), map[string]any{"note": "メモ"}
 		},
 		"DELETE /api/goals/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/goals/%d", fx.finalGoal(caller, facultyID)), nil
+			return path("/api/goals/%d", fx.FinalGoal(caller, facultyID)), nil
 		},
 
 		// 実績
@@ -65,10 +67,10 @@ func forbiddenWrites(facultyID int64) map[string]forbiddenArrange {
 			return "/api/study-logs", map[string]any{"date": todayTokyo(), "minutes": 30}
 		},
 		"PATCH /api/study-logs/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/study-logs/%d", fx.studyLog(caller)), map[string]any{"date": todayTokyo(), "minutes": 45}
+			return path("/api/study-logs/%d", fx.StudyLog(caller)), map[string]any{"date": todayTokyo(), "minutes": 45}
 		},
 		"DELETE /api/study-logs/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/study-logs/%d", fx.studyLog(caller)), nil
+			return path("/api/study-logs/%d", fx.StudyLog(caller)), nil
 		},
 
 		// 予定
@@ -78,13 +80,13 @@ func forbiddenWrites(facultyID int64) map[string]forbiddenArrange {
 			return "/api/study-plans", map[string]any{"date": "2027-02-20", "items": []any{item}}
 		},
 		"PATCH /api/study-plans/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/study-plans/%d", fx.studyPlan(caller)), map[string]any{"content": "書き換え"}
+			return path("/api/study-plans/%d", fx.StudyPlan(caller)), map[string]any{"content": "書き換え"}
 		},
 		"DELETE /api/study-plans/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/study-plans/%d", fx.studyPlan(caller)), nil
+			return path("/api/study-plans/%d", fx.StudyPlan(caller)), nil
 		},
 		"POST /api/study-plans/{id}/complete": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/study-plans/%d/complete", fx.studyPlan(caller)), map[string]any{"minutes": 30}
+			return path("/api/study-plans/%d/complete", fx.StudyPlan(caller)), map[string]any{"minutes": 30}
 		},
 
 		// 参考書
@@ -92,7 +94,7 @@ func forbiddenWrites(facultyID int64) map[string]forbiddenArrange {
 			return "/api/textbooks", map[string]any{"name": "参考書"}
 		},
 		"PATCH /api/textbooks/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			return path("/api/textbooks/%d", fx.textbook(caller)), map[string]any{"totalAmount": 100}
+			return path("/api/textbooks/%d", fx.Textbook(caller)), map[string]any{"totalAmount": 100}
 		},
 
 		// 設定・連携
@@ -109,7 +111,7 @@ func forbiddenWrites(facultyID int64) map[string]forbiddenArrange {
 			return "/api/line/account-link", map[string]any{"linkToken": "link-token"}
 		},
 		"DELETE /api/line/connection": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
-			fx.lineConnection(caller)
+			fx.LineConnection(caller)
 			return "/api/line/connection", nil
 		},
 		"POST /api/analytics/registration": func(dbFixture, string, map[string]any) (string, map[string]any) {
@@ -119,14 +121,14 @@ func forbiddenWrites(facultyID int64) map[string]forbiddenArrange {
 }
 
 func TestA4ForbiddenFieldsDB(t *testing.T) {
-	db := openTestDB(t)
-	fx := dbFixture{t: t, db: db}
+	db := dbtest.Open(t)
+	fx := newDBFixture(t, db)
 	app := newDBTestApp(db)
-	writes := forbiddenWrites(fx.university())
+	writes := forbiddenWrites(fx.University())
 
 	// 持ち主の列（userId）を持つテーブルは information_schema から引くので、あとからテーブルを足しても自動で対象に入る。
 	var tablesWithUserID []string
-	for _, row := range fx.rows(`SELECT TABLE_NAME AS name FROM information_schema.COLUMNS
+	for _, row := range fx.Rows(`SELECT TABLE_NAME AS name FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'userId'`) {
 		var r struct{ Name string }
 		if err := json.Unmarshal([]byte(row), &r); err != nil {
@@ -137,14 +139,14 @@ func TestA4ForbiddenFieldsDB(t *testing.T) {
 
 	// rowsOf は、その人の行を user と userId を持つ全テーブルから集める。
 	rowsOf := func(fx dbFixture, user string) map[string][]string {
-		rows := map[string][]string{"user": fx.rows("SELECT * FROM `user` WHERE id = ?", user)}
+		rows := map[string][]string{"user": fx.Rows("SELECT * FROM `user` WHERE id = ?", user)}
 		for _, table := range tablesWithUserID {
-			rows[table] = fx.rows(fmt.Sprintf("SELECT * FROM `%s` WHERE userId = ?", table), user)
+			rows[table] = fx.Rows(fmt.Sprintf("SELECT * FROM `%s` WHERE userId = ?", table), user)
 		}
 		return rows
 	}
 	protectedColumnsOf := func(fx dbFixture, user string) []string {
-		return fx.rows("SELECT role, bannedAt, emailVerified, email FROM `user` WHERE id = ?", user)
+		return fx.Rows("SELECT role, bannedAt, emailVerified, email FROM `user` WHERE id = ?", user)
 	}
 
 	t.Run("A4 利用者の API の書き込みは全件が表にあり、表に余りも無い", func(t *testing.T) {
@@ -187,8 +189,8 @@ func TestA4ForbiddenFieldsDB(t *testing.T) {
 	for route, arrange := range writes {
 		method, _, _ := strings.Cut(route, " ")
 		t.Run("A4 "+route+"：禁止項目を混ぜても通り、書き換わらない", func(t *testing.T) {
-			fx := dbFixture{t: t, db: db}
-			caller, victim := fx.user(), fx.user()
+			fx := newDBFixture(t, db)
+			caller, victim := fx.User(), fx.User()
 			forbidden := forbiddenFields(victim)
 			url, body := arrange(fx, caller, forbidden)
 			sent := map[string]any{}

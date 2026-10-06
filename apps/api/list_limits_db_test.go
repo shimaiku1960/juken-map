@@ -13,13 +13,15 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
 func TestE2ListLimitsDB(t *testing.T) {
-	db := openTestDB(t)
-	fx := dbFixture{t: t, db: db}
+	db := dbtest.Open(t)
+	fx := newDBFixture(t, db)
 	app := newDBTestApp(db)
-	userID := fx.user()
+	userID := fx.User()
 	today := dateOnTokyo(time.Now())
 	const n = maxLogs + 1
 

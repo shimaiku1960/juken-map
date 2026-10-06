@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -114,13 +115,13 @@ type authEnv struct {
 }
 
 func newAuthEnv(t *testing.T) *authEnv {
-	db := openTestDB(t)
+	db := dbtest.Open(t)
 	keys, err := newTOTPKeyring("", "test-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
 	e := &authEnv{
-		t: t, db: db, fx: dbFixture{t, db},
+		t: t, db: db, fx: newDBFixture(t, db),
 		clock: &testClock{now: time.Now().UTC().Truncate(time.Millisecond)},
 		mails: &fakeMailbox{},
 	}
@@ -138,22 +139,22 @@ func newAuthEnv(t *testing.T) *authEnv {
 
 // newEmail はテストで使うメールアドレス。最後にその利用者・回数制限・メールの記録を消す。
 func (e *authEnv) newEmail() string {
-	email := "auth-" + testHex(6) + "@auth-test.example"
+	email := "auth-" + dbtest.Hex(6) + "@auth-test.example"
 	e.emails = append(e.emails, email)
 	return email
 }
 
 func (e *authEnv) cleanup() {
 	for _, email := range e.emails {
-		e.fx.exec("DELETE FROM `user` WHERE email = ?", email)
-		e.fx.exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(email))
+		e.fx.Exec("DELETE FROM `user` WHERE email = ?", email)
+		e.fx.Exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(email))
 		for _, rule := range []throttleRule{throttleSignInAccount} {
-			e.fx.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, email))
+			e.fx.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, email))
 		}
 	}
 	for _, ip := range e.ips {
 		for _, rule := range []throttleRule{throttleSignInIP, throttleAnonymousIP} {
-			e.fx.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, ip))
+			e.fx.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, ip))
 		}
 	}
 }
@@ -388,7 +389,7 @@ func TestAuthDBSessionExpiry(t *testing.T) {
 	t.Run("C3 管理者は使わないと1時間で切れる", func(t *testing.T) {
 		email := e.newEmail()
 		id := e.signUpVerified(email, authTestPassword)
-		e.fx.exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
+		e.fx.Exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
 		b := e.signedIn(email, authTestPassword)
 		e.clock.Advance(59 * time.Minute)
 		if b.sessionEmail() != email {
@@ -407,7 +408,7 @@ func TestAuthDBSessionExpiry(t *testing.T) {
 	t.Run("C3 管理者は使い続けても24時間で切れる", func(t *testing.T) {
 		email := e.newEmail()
 		id := e.signUpVerified(email, authTestPassword)
-		e.fx.exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
+		e.fx.Exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
 		b := e.signedIn(email, authTestPassword)
 		for range 28 {
 			e.clock.Advance(50 * time.Minute)
@@ -474,7 +475,7 @@ func TestAuthDBSessionRevocation(t *testing.T) {
 			t.Fatal("停止した人のセッションが残っている")
 		}
 		expectStatus(t, e.browser().do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword}), 403, "ACCOUNT_BANNED")
-		e.fx.exec("UPDATE `user` SET bannedAt = NULL WHERE id = ?", id)
+		e.fx.Exec("UPDATE `user` SET bannedAt = NULL WHERE id = ?", id)
 	})
 }
 
@@ -599,7 +600,7 @@ func TestAuthDBLegacyPasswordIsRehashed(t *testing.T) {
 	email := e.newEmail()
 	id := e.signUpVerified(email, authTestPassword)
 	const legacy = "00112233445566778899aabbccddeeff:c3ed6e7eb77125c0e5bce6a24fb96b9e99e4fdc6e82b2cbdea90bdceb95a421cd78e9bb23c184fdf83e175d3635b65c2673c65efa8eb4e52e4b623b7c36065d8"
-	e.fx.exec("UPDATE AuthPassword SET hash = ? WHERE userId = ?", legacy, id)
+	e.fx.Exec("UPDATE AuthPassword SET hash = ? WHERE userId = ?", legacy, id)
 	expectStatus(t, e.browser().do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": "legacy-password-1234"}), 200, "")
 	var hash string
 	if err := e.db.QueryRow("SELECT hash FROM AuthPassword WHERE userId = ?", id).Scan(&hash); err != nil {
@@ -636,7 +637,7 @@ func TestAuthDBMFA(t *testing.T) {
 	e := newAuthEnv(t)
 	email := e.newEmail()
 	id := e.signUpVerified(email, authTestPassword)
-	e.fx.exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
+	e.fx.Exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
 	b := e.signedIn(email, authTestPassword)
 
 	// 06 B7：2段階認証を通していない管理者のセッションは、管理 API で 403。
@@ -700,7 +701,7 @@ func TestAuthDBMFA(t *testing.T) {
 			expectStatus(t, p.do("POST", "/api/auth/mfa/verify", map[string]string{"code": "000000"}), 401, "INVALID_CODE")
 		}
 		expectStatus(t, p.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 401, "MFA_CHALLENGE_EXPIRED")
-		dbFixture{t, e.db}.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
+		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
 
 		p.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 		code := totpCode(secret, totpStep(e.clock.Now()))
@@ -804,7 +805,7 @@ func TestAuthDBGoogleLogin(t *testing.T) {
 
 	t.Run("新しい利用者を作ってログインし、戻り先へ送る", func(t *testing.T) {
 		email := e.newEmail()
-		g.claims = map[string]any{"sub": "g-" + testHex(6), "email": email, "email_verified": true}
+		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": email, "email_verified": true}
 		b := e.browser()
 		state := g.start(b, "/goals")
 		rec := callback(b, state, "good-code")
@@ -819,7 +820,7 @@ func TestAuthDBGoogleLogin(t *testing.T) {
 	})
 
 	t.Run("06 C4 state が Cookie と違えば断る", func(t *testing.T) {
-		g.claims = map[string]any{"sub": "g-" + testHex(6), "email": e.newEmail(), "email_verified": true}
+		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": e.newEmail(), "email_verified": true}
 		b := e.browser()
 		g.start(b, "/")
 		other := e.browser()
@@ -832,17 +833,17 @@ func TestAuthDBGoogleLogin(t *testing.T) {
 	})
 
 	t.Run("F1 code_verifier が違えば断る", func(t *testing.T) {
-		g.claims = map[string]any{"sub": "g-" + testHex(6), "email": e.newEmail(), "email_verified": true}
+		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": e.newEmail(), "email_verified": true}
 		b := e.browser()
 		state := g.start(b, "/")
-		e.fx.exec("UPDATE AuthOAuthState SET codeVerifier = ? WHERE stateHash = ?", "x"+strings.Repeat("y", 42), hashToken(state))
+		e.fx.Exec("UPDATE AuthOAuthState SET codeVerifier = ? WHERE stateHash = ?", "x"+strings.Repeat("y", 42), hashToken(state))
 		if rec := callback(b, state, "good-code"); rec.Header().Get("Location") != "/login?error=oauth" || b.sessionEmail() != "" {
 			t.Fatalf("location=%s", rec.Header().Get("Location"))
 		}
 	})
 
 	t.Run("F1 nonce が違えば断る", func(t *testing.T) {
-		g.claims = map[string]any{"sub": "g-" + testHex(6), "email": e.newEmail(), "email_verified": true, "nonce": "another-nonce"}
+		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": e.newEmail(), "email_verified": true, "nonce": "another-nonce"}
 		b := e.browser()
 		state := g.start(b, "/")
 		if rec := callback(b, state, "good-code"); rec.Header().Get("Location") != "/login?error=oauth" || b.sessionEmail() != "" {
@@ -853,7 +854,7 @@ func TestAuthDBGoogleLogin(t *testing.T) {
 	t.Run("F2 確認済みの既存の利用者には結びつけ、本人へ知らせる", func(t *testing.T) {
 		email := e.newEmail()
 		id := e.signUpVerified(email, authTestPassword)
-		g.claims = map[string]any{"sub": "g-" + testHex(6), "email": email, "email_verified": true}
+		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": email, "email_verified": true}
 		b := e.browser()
 		callback(b, g.start(b, "/"), "good-code")
 		if b.sessionEmail() != email || e.fx.count("SELECT COUNT(*) FROM AuthIdentity WHERE userId = ?", id) != 1 {
@@ -865,7 +866,7 @@ func TestAuthDBGoogleLogin(t *testing.T) {
 	t.Run("F2 未確認の既存の利用者は、パスワードを消してから結びつける", func(t *testing.T) {
 		email := e.newEmail()
 		e.browser().do("POST", "/api/auth/sign-up", map[string]string{"email": email, "password": "the attacker passphrase"})
-		g.claims = map[string]any{"sub": "g-" + testHex(6), "email": email, "email_verified": true}
+		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": email, "email_verified": true}
 		b := e.browser()
 		callback(b, g.start(b, "/"), "good-code")
 		if b.sessionEmail() != email {
@@ -877,7 +878,7 @@ func TestAuthDBGoogleLogin(t *testing.T) {
 	t.Run("F2 プロバイダーが確認済みと示さないメールでは結びつけない", func(t *testing.T) {
 		email := e.newEmail()
 		e.signUpVerified(email, authTestPassword)
-		g.claims = map[string]any{"sub": "g-" + testHex(6), "email": email, "email_verified": false}
+		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": email, "email_verified": false}
 		b := e.browser()
 		rec := callback(b, g.start(b, "/"), "good-code")
 		if rec.Header().Get("Location") != "/login?error=oauth_email" || b.sessionEmail() != "" {
@@ -889,7 +890,7 @@ func TestAuthDBGoogleLogin(t *testing.T) {
 		email := e.newEmail()
 		e.signUpVerified(email, authTestPassword)
 		secret, _ := e.enableMFA(e.signedIn(email, authTestPassword))
-		g.claims = map[string]any{"sub": "g-" + testHex(6), "email": email, "email_verified": true}
+		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": email, "email_verified": true}
 		b := e.browser()
 		rec := callback(b, g.start(b, "/goals"), "good-code")
 		if rec.Header().Get("Location") != "/login?mfa=required&callbackURL=%2Fgoals" || b.sessionEmail() != "" {
@@ -939,7 +940,7 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 			expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": fmt.Sprint("wrong passphrase ", i), "newPassword": "a brand new passphrase"}), 400, "INVALID_PASSWORD")
 		}
 		expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": authTestPassword, "newPassword": "a brand new passphrase"}), 429, "TOO_MANY_REQUESTS")
-		dbFixture{t, e.db}.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleReauthAccount, e.userID(email)))
+		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleReauthAccount, e.userID(email)))
 	})
 
 	t.Run("2段階認証のコードは、途中の状態を作り直してもアカウントごとに15分10回まで", func(t *testing.T) {
@@ -956,7 +957,7 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 		b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 		e.clock.Advance(totpPeriod)
 		expectStatus(t, b.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 429, "TOO_MANY_MFA_ATTEMPTS")
-		dbFixture{t, e.db}.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
+		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
 	})
 }
 
@@ -1065,7 +1066,7 @@ func TestAuthDBH2SignInTiming(t *testing.T) {
 			start := time.Now()
 			b.do("POST", "/api/auth/sign-in", map[string]string{"email": target, "password": fmt.Sprint("wrong passphrase ", i)})
 			out = append(out, time.Since(start))
-			dbFixture{t, e.db}.exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleSignInAccount, target))
+			newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleSignInAccount, target))
 		}
 		slices.Sort(out)
 		return out
@@ -1084,7 +1085,7 @@ func TestAuthDBH2SignInTiming(t *testing.T) {
 			start := time.Now()
 			b.do("POST", "/api/auth/sign-up", map[string]string{"email": target, "password": "another long passphrase"})
 			out = append(out, time.Since(start))
-			dbFixture{t, e.db}.exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(target))
+			newDBFixture(t, e.db).Exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(target))
 		}
 		slices.Sort(out)
 		return out

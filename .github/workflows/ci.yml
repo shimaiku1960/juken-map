@@ -147,10 +147,14 @@ jobs:
       # 空の DB に migrate の権限で db/migrations を全部当てられることも確かめる（JUK-125）。
       # DB は Node のテストと同じ juken_map_test（本番と同じマイグレーションと、DML だけの権限）。
       # MySQL がこのジョブにしか無いので、go のジョブではなくここで動かす。
+      # DB テストは名前に DB を入れる（-run DB で拾う）。持ち主のパッケージ（internal/write/...）の DB テストも
+      # 同じ決まりで拾うので、パッケージを足してもここは変えない（JUK-158）。
+      # -p 1 でパッケージを1つずつ流す。DB 全体を数えるテスト（管理画面の概要）が、ほかのパッケージの
+      # テストが同時に作った利用者を数えてしまうため。
       - name: Test Go with DB
         run: |
           pnpm --filter @juken-map/db test-db:prepare
-          cd apps/api && go test -tags dbtest -run 'TestA3|TestA4|TestLineStore|TestAdminUsersDB|TestAdminMastersDB|TestAuthDB|TestE2|TestIncidentCommandDB|TestGrantAdminCommandDB|TestMigrateDB|TestExpiredCleanupDB' -count=1 ./...
+          cd apps/api && go test -tags dbtest -p 1 -run DB -count=1 ./...
 
       # 本番へ出るのは apps/web のバンドル。ここが壊れていないことを確認する。
       - name: Build SPA

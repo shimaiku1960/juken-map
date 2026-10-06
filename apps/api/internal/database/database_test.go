@@ -2,7 +2,7 @@ package database
 
 import "testing"
 
-func TestDBConfigUsesTLSOnlyForRDS(t *testing.T) {
+func TestConfigUsesTLSOnlyForRDS(t *testing.T) {
 	rds, err := Config("mysql://juken_app:pw@juken-map-db.abc123.ap-northeast-1.rds.amazonaws.com:3306/juken_map")
 	if err != nil {
 		t.Fatal(err)

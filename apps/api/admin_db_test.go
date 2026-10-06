@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
 // dbAdminApp は本番と同じ registerRoutes で組んだルーター。Cookie「test」の値を、2段階認証を通した管理者の
@@ -85,49 +87,49 @@ func (app dbAdminApp) expectError(rec *httptest.ResponseRecorder, status int, me
 }
 
 func (fx dbFixture) count(query string, args ...any) int {
-	fx.t.Helper()
+	fx.T.Helper()
 	var n int
-	if err := fx.db.QueryRow(query, args...).Scan(&n); err != nil {
-		fx.t.Fatalf("%s: %v", query, err)
+	if err := fx.DB.QueryRow(query, args...).Scan(&n); err != nil {
+		fx.T.Fatalf("%s: %v", query, err)
 	}
 	return n
 }
 
 // adminUser は利用者を1人作る。email が空ならメールなし（NULL）。消すのはテストの終わり（ぶら下がる行は CASCADE）。
 func (fx dbFixture) adminUser(email, role string, createdAt time.Time, simSeq any) string {
-	fx.t.Helper()
-	id := "test-go-" + testHex(8)
+	fx.T.Helper()
+	id := "test-go-" + dbtest.Hex(8)
 	var emailValue any
 	if email != "" {
 		emailValue = email
 	}
-	fx.exec("INSERT INTO `user` (id, email, role, simSeq, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, TRUE, ?, ?)",
+	fx.Exec("INSERT INTO `user` (id, email, role, simSeq, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, TRUE, ?, ?)",
 		id, emailValue, role, simSeq, createdAt, createdAt)
-	fx.t.Cleanup(func() { fx.exec("DELETE FROM `user` WHERE id = ?", id) })
+	fx.T.Cleanup(func() { fx.Exec("DELETE FROM `user` WHERE id = ?", id) })
 	return id
 }
 
 func (fx dbFixture) session(userID string, createdAt time.Time) {
 	_, hash := newToken()
-	fx.exec("INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt) VALUES (?, ?, ?, ?, ?, ?)",
-		testHex(16), hash, userID, createdAt, createdAt.Add(time.Hour), createdAt)
+	fx.Exec("INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt) VALUES (?, ?, ?, ?, ?, ?)",
+		dbtest.Hex(16), hash, userID, createdAt, createdAt.Add(time.Hour), createdAt)
 }
 
 // account はログインの手段を足す。credential はパスワード、それ以外は外部ログインの結びつき。
 func (fx dbFixture) account(userID, providerID string) {
 	now := time.Now()
 	if providerID == "credential" {
-		fx.exec("INSERT INTO AuthPassword (userId, hash, updatedAt) VALUES (?, ?, ?)", userID, "$argon2id$test", now)
+		fx.Exec("INSERT INTO AuthPassword (userId, hash, updatedAt) VALUES (?, ?, ?)", userID, "$argon2id$test", now)
 		return
 	}
-	fx.exec("INSERT INTO AuthIdentity (provider, providerUserId, userId, createdAt) VALUES (?, ?, ?, ?)",
-		providerID, testHex(8), userID, now)
+	fx.Exec("INSERT INTO AuthIdentity (provider, providerUserId, userId, createdAt) VALUES (?, ?, ?, ?)",
+		providerID, dbtest.Hex(8), userID, now)
 }
 
 // tag はタグを1つ作る（テスト用の DB にはタグが入っていない）。
 func (fx dbFixture) tag(name string) int64 {
-	id := fx.insert("INSERT INTO Tag (name, createdAt) VALUES (?, ?)", name, time.Now())
-	fx.t.Cleanup(func() { fx.exec("DELETE FROM Tag WHERE id = ?", id) })
+	id := fx.Insert("INSERT INTO Tag (name, createdAt) VALUES (?, ?)", name, time.Now())
+	fx.T.Cleanup(func() { fx.Exec("DELETE FROM Tag WHERE id = ?", id) })
 	return id
 }
 
@@ -146,13 +148,13 @@ func testSimSeq() int64 {
 }
 
 func TestAdminUsersDB(t *testing.T) {
-	db := openTestDB(t)
-	fx := dbFixture{t, db}
+	db := dbtest.Open(t)
+	fx := newDBFixture(t, db)
 	app := newDBAdminApp(t, db)
-	adminID := fx.adminUser("admin-"+testHex(6)+"@example.test", "admin", time.Now(), nil)
+	adminID := fx.adminUser("admin-"+dbtest.Hex(6)+"@example.test", "admin", time.Now(), nil)
 
 	t.Run("一覧：種別・検索語・ページで絞り、件数と最終ログイン・記録を数える", func(t *testing.T) {
-		mark := "jk106-" + testHex(6)
+		mark := "jk106-" + dbtest.Hex(6)
 		older, newer := time.Now().Add(-48*time.Hour).Truncate(time.Millisecond), time.Now().Add(-time.Hour).Truncate(time.Millisecond)
 		quiet := fx.adminUser(mark+"-a@example.test", "user", older, nil)
 		active := fx.adminUser(mark+"-b@example.test", "user", newer, nil)
@@ -160,8 +162,8 @@ func TestAdminUsersDB(t *testing.T) {
 		fx.session(active, newer.Add(2*time.Minute))
 		fx.account(active, "google")
 		fx.account(active, "credential")
-		fx.studyLog(active)
-		fx.studyLog(active)
+		fx.StudyLog(active)
+		fx.StudyLog(active)
 		sim := fx.adminUser(mark+"-sim@example.test", "user", newer, testSimSeq())
 		seed := fx.adminUser(mark+"@synthetic.juken-map.invalid", "user", newer, nil)
 
@@ -245,8 +247,8 @@ func TestAdminUsersDB(t *testing.T) {
 			t.Fatalf("kinds = %v, want %v（0人の種別も同じ順に並ぶ）", kinds, userKinds)
 		}
 
-		id := fx.adminUser("jk106-"+testHex(6)+"@example.test", "user", time.Now(), nil)
-		fx.studyLog(id)
+		id := fx.adminUser("jk106-"+dbtest.Hex(6)+"@example.test", "user", time.Now(), nil)
+		fx.StudyLog(id)
 		after := overview()
 		b, a := before.Kinds[0], after.Kinds[0]
 		if a.Total-b.Total != 1 || a.Verified-b.Verified != 1 || a.NewLast7Days-b.NewLast7Days != 1 ||
@@ -268,16 +270,16 @@ func TestAdminUsersDB(t *testing.T) {
 	})
 
 	t.Run("停止→もう一度停止→解除→メール違い→削除", func(t *testing.T) {
-		facultyID := fx.university()
-		email := "jk106-" + testHex(6) + "@example.test"
+		facultyID := fx.University()
+		email := "jk106-" + dbtest.Hex(6) + "@example.test"
 		id := fx.adminUser(email, "user", time.Now(), nil)
 		fx.session(id, time.Now())
 		fx.session(id, time.Now())
-		fx.studyLog(id)
-		fx.studyLog(id)
-		fx.studyPlan(id)
-		fx.textbook(id)
-		fx.finalGoal(id, facultyID)
+		fx.StudyLog(id)
+		fx.StudyLog(id)
+		fx.StudyPlan(id)
+		fx.Textbook(id)
+		fx.FinalGoal(id, facultyID)
 		bannedAt := func() *string {
 			t.Helper()
 			var v sql.NullString
@@ -338,7 +340,7 @@ func TestAdminUsersDB(t *testing.T) {
 	})
 
 	t.Run("守られている相手は、DB の role・email を読んで断る", func(t *testing.T) {
-		otherAdmin := fx.adminUser("jk106-"+testHex(6)+"@example.test", "admin", time.Now(), nil)
+		otherAdmin := fx.adminUser("jk106-"+dbtest.Hex(6)+"@example.test", "admin", time.Now(), nil)
 		noEmail := fx.adminUser("", "user", time.Now(), nil)
 		for _, c := range []struct {
 			name, method, path, body string
@@ -362,19 +364,19 @@ func TestAdminUsersDB(t *testing.T) {
 }
 
 func TestAdminMastersDB(t *testing.T) {
-	db := openTestDB(t)
-	fx := dbFixture{t, db}
+	db := dbtest.Open(t)
+	fx := newDBFixture(t, db)
 	app := newDBAdminApp(t, db)
-	adminID := fx.adminUser("admin-"+testHex(6)+"@example.test", "admin", time.Now(), nil)
+	adminID := fx.adminUser("admin-"+dbtest.Hex(6)+"@example.test", "admin", time.Now(), nil)
 
 	// このテストで作る大学・参考書の名前は、この印で始める（最後にまとめて消す。途中で落ちても残さない）。
-	mark := "jk106-" + testHex(6)
+	mark := "jk106-" + dbtest.Hex(6)
 	t.Cleanup(func() {
-		fx.exec(`DELETE g FROM FinalGoal g JOIN Faculty f ON f.id = g.facultyId JOIN University u ON u.id = f.universityId
+		fx.Exec(`DELETE g FROM FinalGoal g JOIN Faculty f ON f.id = g.facultyId JOIN University u ON u.id = f.universityId
 		         WHERE u.name LIKE ?`, mark+"%")
-		fx.exec("DELETE FROM University WHERE name LIKE ?", mark+"%")
-		fx.exec("DELETE t FROM Textbook t JOIN TextbookMaster tm ON tm.id = t.masterId WHERE tm.name LIKE ?", mark+"%")
-		fx.exec("DELETE FROM TextbookMaster WHERE name LIKE ?", mark+"%")
+		fx.Exec("DELETE FROM University WHERE name LIKE ?", mark+"%")
+		fx.Exec("DELETE t FROM Textbook t JOIN TextbookMaster tm ON tm.id = t.masterId WHERE tm.name LIKE ?", mark+"%")
+		fx.Exec("DELETE FROM TextbookMaster WHERE name LIKE ?", mark+"%")
 	})
 	tag1, tag2 := fx.tag(mark+"-tag1"), fx.tag(mark+"-tag2")
 
@@ -464,11 +466,11 @@ func TestAdminMastersDB(t *testing.T) {
 		}
 
 		// 志望校に使われている学部・大学は消せない
-		user := fx.user()
-		fx.finalGoal(user, faculty.ID)
+		user := fx.User()
+		fx.FinalGoal(user, faculty.ID)
 		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/faculties/%d", faculty.ID), "", adminID), 409, fmt.Sprintf(facultyMessages.inUse, 1))
 		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/universities/%d", a.ID), "", adminID), 409, fmt.Sprintf(universityMessages.inUse, 1))
-		fx.exec("DELETE FROM FinalGoal WHERE userId = ?", user)
+		fx.Exec("DELETE FROM FinalGoal WHERE userId = ?", user)
 
 		app.expect(app.send("DELETE", fmt.Sprintf("/api/admin/faculties/%d", faculty.ID), "", adminID), 204, nil)
 		if n := fx.count("SELECT COUNT(*) FROM _FacultyToTag WHERE A = ?", faculty.ID); n != 0 {
@@ -556,15 +558,15 @@ func TestAdminMastersDB(t *testing.T) {
 		}
 
 		// 利用者の参考書が使っていれば消せない
-		user := fx.user()
-		fx.exec("INSERT INTO Textbook (userId, name, masterId, updatedAt) VALUES (?, ?, ?, ?)", user, name, created.ID, time.Now())
+		user := fx.User()
+		fx.Exec("INSERT INTO Textbook (userId, name, masterId, updatedAt) VALUES (?, ?, ?, ?)", user, name, created.ID, time.Now())
 		var used []AdminTextbookMaster
 		app.expect(app.send("GET", "/api/admin/textbook-masters?q="+name, "", adminID), 200, &used)
 		if len(used) != 1 || used[0].TextbookCount != 1 {
 			t.Errorf("使われている数: %+v", used)
 		}
 		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 409, fmt.Sprintf(textbookMasterMessages.inUse, 1))
-		fx.exec("DELETE FROM Textbook WHERE userId = ?", user)
+		fx.Exec("DELETE FROM Textbook WHERE userId = ?", user)
 
 		app.expect(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 204, nil)
 		if listed(created.ID) != nil {

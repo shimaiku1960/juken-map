@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -27,12 +28,12 @@ type cliFixture struct {
 }
 
 func newCLIFixture(t *testing.T) cliFixture {
-	db := openTestDB(t)
-	fx := cliFixture{dbFixture: dbFixture{t: t, db: db}, st: incidentStore{db: db, now: time.Now}}
+	db := dbtest.Open(t)
+	fx := cliFixture{dbFixture: newDBFixture(t, db), st: incidentStore{db: db, now: time.Now}}
 	if err := db.QueryRow("SELECT COALESCE(MAX(id), 0) FROM OpsAuditLog").Scan(&fx.opsFrom); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { fx.exec("DELETE FROM OpsAuditLog WHERE id > ?", fx.opsFrom) })
+	t.Cleanup(func() { fx.Exec("DELETE FROM OpsAuditLog WHERE id > ?", fx.opsFrom) })
 	return fx
 }
 
@@ -48,10 +49,10 @@ type opsRecord struct {
 
 // opsRecords は、このテストのあいだに書かれた OpsAuditLog の行を、書かれた順に返す。
 func (fx cliFixture) opsRecords() []opsRecord {
-	fx.t.Helper()
-	rows, err := fx.db.Query("SELECT action, targetId, detail, host, createdAt FROM OpsAuditLog WHERE id > ? ORDER BY id", fx.opsFrom)
+	fx.T.Helper()
+	rows, err := fx.DB.Query("SELECT action, targetId, detail, host, createdAt FROM OpsAuditLog WHERE id > ? ORDER BY id", fx.opsFrom)
 	if err != nil {
-		fx.t.Fatal(err)
+		fx.T.Fatal(err)
 	}
 	defer rows.Close()
 	var records []opsRecord
@@ -61,28 +62,28 @@ func (fx cliFixture) opsRecords() []opsRecord {
 			createdAt string
 		)
 		if err := rows.Scan(&r.Action, &r.TargetID, &r.RawDetail, &r.Host, &createdAt); err != nil {
-			fx.t.Fatal(err)
+			fx.T.Fatal(err)
 		}
 		if err := json.Unmarshal([]byte(r.RawDetail), &r.Detail); err != nil {
-			fx.t.Fatal(err)
+			fx.T.Fatal(err)
 		}
 		if r.CreatedAt, err = time.Parse(time.RFC3339Nano, database.ISOFromDatetime(createdAt)); err != nil {
-			fx.t.Fatal(err)
+			fx.T.Fatal(err)
 		}
 		records = append(records, r)
 	}
 	if err := rows.Err(); err != nil {
-		fx.t.Fatal(err)
+		fx.T.Fatal(err)
 	}
 	return records
 }
 
 // wantOneOps は、このテストのあいだに書かれた記録が1行だけで、その操作と対象（全員が対象なら ""）が合うことを確かめる。
 func (fx cliFixture) wantOneOps(action, targetID string) opsRecord {
-	fx.t.Helper()
+	fx.T.Helper()
 	records := fx.opsRecords()
 	if len(records) != 1 {
-		fx.t.Fatalf("OpsAuditLog の行 = %d 件（%+v）", len(records), records)
+		fx.T.Fatalf("OpsAuditLog の行 = %d 件（%+v）", len(records), records)
 	}
 	r := records[0]
 	gotTarget := ""
@@ -90,44 +91,44 @@ func (fx cliFixture) wantOneOps(action, targetID string) opsRecord {
 		gotTarget = *r.TargetID
 	}
 	if r.Action != action || gotTarget != targetID || r.Host == "" {
-		fx.t.Errorf("記録 = action %s target %q host %q、want action %s target %q", r.Action, gotTarget, r.Host, action, targetID)
+		fx.T.Errorf("記録 = action %s target %q host %q、want action %s target %q", r.Action, gotTarget, r.Host, action, targetID)
 	}
 	return r
 }
 
 // account は利用者を作り、セッションを sessions 件ぶら下げてメールアドレスと ID を返す。
 func (fx cliFixture) account(sessions int, role string, verified bool) (email, id string) {
-	fx.t.Helper()
-	id = "test-go-incident-" + testHex(8)
+	fx.T.Helper()
+	id = "test-go-incident-" + dbtest.Hex(8)
 	email = id + "@example.test"
 	now := time.Now().UTC()
-	fx.exec("INSERT INTO `user` (id, email, role, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+	fx.Exec("INSERT INTO `user` (id, email, role, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
 		id, email, role, verified, now, now)
-	fx.t.Cleanup(func() { fx.exec("DELETE FROM `user` WHERE id = ?", id) })
+	fx.T.Cleanup(func() { fx.Exec("DELETE FROM `user` WHERE id = ?", id) })
 	for i := range sessions {
 		token := make([]byte, 32)
 		rand.Read(token)
-		fx.exec(`INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt, ipAddress)
+		fx.Exec(`INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt, ipAddress)
 		         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			testHex(16), token, id, now.Add(time.Duration(i)*time.Second), now.Add(24*time.Hour), now, fmt.Sprintf("192.0.2.%d", i))
+			dbtest.Hex(16), token, id, now.Add(time.Duration(i)*time.Second), now.Add(24*time.Hour), now, fmt.Sprintf("192.0.2.%d", i))
 	}
 	return email, id
 }
 
 func (fx cliFixture) sessionCount(userID string) int {
-	fx.t.Helper()
+	fx.T.Helper()
 	var n int
-	if err := fx.db.QueryRow("SELECT COUNT(*) FROM AuthSession WHERE userId = ?", userID).Scan(&n); err != nil {
-		fx.t.Fatal(err)
+	if err := fx.DB.QueryRow("SELECT COUNT(*) FROM AuthSession WHERE userId = ?", userID).Scan(&n); err != nil {
+		fx.T.Fatal(err)
 	}
 	return n
 }
 
 func (fx cliFixture) bannedAt(userID string) *string {
-	fx.t.Helper()
+	fx.T.Helper()
 	var v *string
-	if err := fx.db.QueryRow("SELECT bannedAt FROM `user` WHERE id = ?", userID).Scan(&v); err != nil {
-		fx.t.Fatal(err)
+	if err := fx.DB.QueryRow("SELECT bannedAt FROM `user` WHERE id = ?", userID).Scan(&v); err != nil {
+		fx.T.Fatal(err)
 	}
 	return v
 }
@@ -141,10 +142,10 @@ func (fx cliFixture) run(args ...string) (int, string, string) {
 
 // mustRun は成功することを確かめて標準出力を返す。
 func (fx cliFixture) mustRun(args ...string) string {
-	fx.t.Helper()
+	fx.T.Helper()
 	code, out, errOut := fx.run(args...)
 	if code != 0 {
-		fx.t.Fatalf("%v: 終了コード %d（%s）", args, code, errOut)
+		fx.T.Fatalf("%v: 終了コード %d（%s）", args, code, errOut)
 	}
 	return out
 }
@@ -211,30 +212,6 @@ func TestIncidentCommandDB(t *testing.T) {
 		}
 	})
 
-	t.Run("停止・解除は、記録が書けなければ取り消す（停止とセッションの削除と記録を1つのトランザクションで行う）", func(t *testing.T) {
-		fx := newCLIFixture(t)
-		_, id := fx.account(2, "user", true)
-		// host は VARCHAR(255)。長すぎる値で記録の INSERT だけを失敗させる。
-		broken := account.OpsAudit{Host: strings.Repeat("h", 256)}
-
-		_, err := account.Suspend(context.Background(), fx.db, id, time.Now().UTC(), &broken)
-
-		if err == nil || !strings.Contains(err.Error(), "止めていません") {
-			t.Fatalf("err = %v", err)
-		}
-		if fx.bannedAt(id) != nil || fx.sessionCount(id) != 2 {
-			t.Errorf("記録が無いのに変わった: bannedAt=%v sessions=%d", fx.bannedAt(id), fx.sessionCount(id))
-		}
-
-		fx.exec("UPDATE `user` SET bannedAt = ? WHERE id = ?", time.Now().UTC(), id)
-		if err := account.Unsuspend(context.Background(), fx.db, id, time.Now().UTC(), &broken); err == nil {
-			t.Fatal("記録が書けないのに解除できた")
-		}
-		if fx.bannedAt(id) == nil {
-			t.Error("記録が無いのに停止が戻った")
-		}
-	})
-
 	t.Run("変えた操作は、何を・誰に・前後の値・いつを OpsAuditLog に残し、見るだけの操作は残さない（セキュリティ基準 H4）", func(t *testing.T) {
 		fx := newCLIFixture(t)
 		email, id := fx.account(2, "user", true)
@@ -286,7 +263,7 @@ func TestIncidentCommandDB(t *testing.T) {
 		email, id := fx.account(0, "user", true)
 		now := time.Now().UTC()
 		insert := func(age time.Duration) {
-			fx.exec("INSERT INTO OpsAuditLog (action, targetId, detail, host, createdAt) VALUES ('revoke', ?, '{}', 'test', ?)", id, now.Add(-age))
+			fx.Exec("INSERT INTO OpsAuditLog (action, targetId, detail, host, createdAt) VALUES ('revoke', ?, '{}', 'test', ?)", id, now.Add(-age))
 		}
 		insert(account.OpsAuditRetention + time.Hour)
 		insert(account.OpsAuditRetention - time.Hour)
@@ -336,15 +313,15 @@ func TestIncidentCommandDB(t *testing.T) {
 		fx := newCLIFixture(t)
 		email, id := fx.account(1, "admin", true)
 		now := time.Now().UTC()
-		fx.exec("INSERT INTO AuthTotp (userId, secret, createdAt, enabledAt) VALUES (?, 'v0:secret', ?, ?)", id, now, now)
+		fx.Exec("INSERT INTO AuthTotp (userId, secret, createdAt, enabledAt) VALUES (?, 'v0:secret', ?, ?)", id, now, now)
 		code := make([]byte, 32)
 		rand.Read(code)
-		fx.exec("INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", id, code)
+		fx.Exec("INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", id, code)
 
 		fx.mustRun("incident", "reset-2fa", email)
 
 		var left int
-		if err := fx.db.QueryRow("SELECT (SELECT COUNT(*) FROM AuthTotp WHERE userId = ?) + (SELECT COUNT(*) FROM AuthBackupCode WHERE userId = ?)", id, id).Scan(&left); err != nil {
+		if err := fx.DB.QueryRow("SELECT (SELECT COUNT(*) FROM AuthTotp WHERE userId = ?) + (SELECT COUNT(*) FROM AuthBackupCode WHERE userId = ?)", id, id).Scan(&left); err != nil {
 			t.Fatal(err)
 		}
 		if left != 0 || fx.sessionCount(id) != 0 {
@@ -355,7 +332,7 @@ func TestIncidentCommandDB(t *testing.T) {
 
 	t.Run("いないメールアドレスなら何もせず、終了コード 1 で知らせる", func(t *testing.T) {
 		fx := newCLIFixture(t)
-		email := "missing-" + testHex(8) + "@example.test"
+		email := "missing-" + dbtest.Hex(8) + "@example.test"
 		for _, op := range []string{"sessions", "revoke", "ban", "unban", "reset-2fa"} {
 			code, _, errOut := fx.run("incident", op, email)
 			if code != 1 || !strings.Contains(errOut, "見つかりません") {
@@ -386,7 +363,7 @@ func TestGrantAdminCommandDB(t *testing.T) {
 		out := fx.mustRun("grant-admin", email)
 
 		var role string
-		if err := fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
+		if err := fx.DB.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
 			t.Fatal(err)
 		}
 		if role != "admin" || !strings.Contains(out, "user → admin") || !strings.Contains(out, "2 件消しました") {
@@ -400,7 +377,7 @@ func TestGrantAdminCommandDB(t *testing.T) {
 		}
 
 		fx.mustRun("grant-admin", email, "--revoke")
-		if err := fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
+		if err := fx.DB.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
 			t.Fatal(err)
 		}
 		if role != "user" {
@@ -429,7 +406,7 @@ func TestGrantAdminCommandDB(t *testing.T) {
 		code, _, errOut := fx.run("grant-admin", email)
 
 		var role string
-		if err := fx.db.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
+		if err := fx.DB.QueryRow("SELECT role FROM `user` WHERE id = ?", id).Scan(&role); err != nil {
 			t.Fatal(err)
 		}
 		if code != 1 || !strings.Contains(errOut, "メール確認が済んでいない") || role != "user" || fx.sessionCount(id) != 1 {

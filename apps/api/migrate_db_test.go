@@ -27,6 +27,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
 const (
@@ -69,7 +70,7 @@ func newMigrateFixture(t *testing.T) migrateFixture {
 	// 接続先は TEST_DATABASE_URL と同じ MySQL の、別の DB・別のユーザー（db/test-db/config.ts と同じ作り方）。
 	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
-		base = defaultTestDatabaseURL
+		base = dbtest.DefaultURL
 	}
 	u, err := url.Parse(base)
 	if err != nil {
@@ -315,7 +316,7 @@ func TestMigrateDB(t *testing.T) {
 	t.Run("アプリのユーザー（DML だけ）では当てられない", func(t *testing.T) {
 		appURL := os.Getenv("TEST_DATABASE_URL")
 		if appURL == "" {
-			appURL = defaultTestDatabaseURL
+			appURL = dbtest.DefaultURL
 		}
 		_, err := applyMigrations(context.Background(), appURL, repoMigrationsDir, io.Discard)
 		var myErr *mysql.MySQLError

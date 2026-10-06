@@ -260,7 +260,7 @@ apps/api/
   ├ apischema/            OpenAPI から生成した型
   ├ spa/                  画面と SEO の配信
   ├ migrate/              マイグレーションの適用
-  └ dbtest/               DB テストの補助（テスト用の利用者・ルーターの組み立て）
+  └ dbtest/               DB テストの補助（テスト用 DB への接続・テスト用の利用者やデータ）
 ```
 
 `feature/` と `write/` の直下には Go のファイルを置かず、その下の `study` や `studyrecord` を
@@ -337,9 +337,9 @@ apps/api/
   - 入口：管理画面のハンドラは HTTP（守りの確認・404・応答の形）、CLI はメールアドレスから相手を引くことと出力を持つ。
   - 持ち主：トランザクション、書くための読み取り（止める前後の `bannedAt` を行を押さえて読む）、監査ログ。
     応答の `bannedAt` は、ハンドラが先に読んだ値ではなく、持ち主が書いた後に DB から読み直した値になった。
-  - テスト：持ち主のパッケージには、まだ DB テストを置けない。DB テストの補助が `package main` の `_test.go` にあり、
-    ほかのパッケージから import できないため。今は `account` の操作の DB テストも `package main`（`incident_db_test.go`）に
-    置いている。**次の持ち主へ進む前に、DB テストの補助を `internal/dbtest` へ出す（JUK-155 から先に切り出す）。**
+  - テスト：持ち主のパッケージに DB テストを置けなかった。DB テストの補助が `package main` の `_test.go` にあり、
+    ほかのパッケージから import できないため。補助を `internal/dbtest` へ出し（JUK-158）、`account` の操作の DB テストは
+    `internal/write/account/suspend_db_test.go` に置いた。管理画面・運用のコマンドを通した確認は入口側（`package main`）に残す。
   - 管理画面のストアの interface（DB を使わないテストで結果を作るため）は残し、その中身は `account` の操作を呼ぶだけになった。
   その前に、持ち主が使う DB の補助（`InTx`・`Placeholders`・`IsMySQLError` など）を
   `internal/database` へ移した（JUK-152）。`package main` は import できないので、これが無いと持ち主のパッケージが作れない。
@@ -479,8 +479,12 @@ Fastify の `inject()` で同じことをしていた。
   取り違え防止のため、DB 名が `_test` で終わらなければ何もせずに止まる。
 - ローカルでは `pnpm db:start` で DB コンテナを起動しておく必要がある。CI は `check` ジョブに
   MySQL サービスを持つ。
+- Go の DB テストは `dbtest` タグを付け、名前に `DB` を入れる（`TestSuspendDB` など）。CI と `pnpm test:go-db` は
+  `go test -tags dbtest -p 1 -run DB ./...` で、どのパッケージのものも拾う（JUK-158）。
+  `-p 1` でパッケージを1つずつ流す。DB 全体を数えるテスト（管理画面の概要）が、ほかのパッケージの
+  テストが同時に作った行を数えてしまうため。
 - テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる
-  （`db/test-db/fixtures.ts`、Go は `apps/api/dbtest_support_test.go`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
+  （`db/test-db/fixtures.ts`、Go は `apps/api/internal/dbtest`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
 - 往復（書いて読む）だけのテストでは時間帯の誤りが打ち消されて見えないので、
   `db/connection.test.ts` で DB 側の生の値と突き合わせている。CI（UTC）でもずれを検出できるよう、
   テストは `TZ=Asia/Tokyo` で動かす。
