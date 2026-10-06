@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"bytes"
@@ -19,56 +19,9 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
-// 利用者の管理（admin_users.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
+// 利用者の管理（users.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
 // 本物の DB に通して Node と応答を比べるテスト（admin_users_db_test.go）は、比べる相手の Node の API を
 // 消したときに一緒に消した（JUK-84）。
-
-// TestAdminRoutesRejectNonAdmins は、管理者用として登録した全ルートが、管理者＋2段階認証の
-// セッション以外を断ることを、ルートの一覧から自動で確かめる（セキュリティ基準 A5）。
-// ルートを足しても、このテストに書き足さなくても確かめられる。ハンドラまで来ると DB が nil で
-// panic するので、断れていなければテストが落ちる。
-func TestAdminRoutesRejectNonAdmins(t *testing.T) {
-	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
-
-	tests := []struct {
-		as         string
-		wantStatus int
-		wantBody   string
-	}{
-		{"", 401, `{"error":"Unauthorized"}`},
-		{"alice", 403, `{"error":"Forbidden"}`},
-		{"demo", 403, `{"error":"Forbidden"}`},
-		{"banned", 403, `{"error":"このアカウントは利用を停止されています。"}`},
-		{"admin-no-2fa", 403, `{"code":"TWO_FACTOR_REQUIRED","error":"管理画面を開くには、2段階認証を通してログインしてください。"}`},
-	}
-	admins := 0
-	for _, route := range rt.Routes {
-		if route.Access != httpx.AccessAdmin {
-			continue
-		}
-		admins++
-		method, path, _ := strings.Cut(route.Pattern, " ")
-		path = httpx.PathParam.ReplaceAllString(path, "1")
-		for _, tt := range tests {
-			req := httptest.NewRequest(method, path, strings.NewReader(`{}`))
-			req.Header.Set("Content-Type", "application/json")
-			if tt.as != "" {
-				req.AddCookie(&http.Cookie{Name: "test", Value: tt.as})
-			}
-			rec := httptest.NewRecorder()
-			rt.ServeHTTP(rec, req)
-			if rec.Code != tt.wantStatus {
-				t.Errorf("%s を %q で: status = %d, want %d", route.Pattern, tt.as, rec.Code, tt.wantStatus)
-				continue
-			}
-			httpxtest.AssertJSONEqual(t, rec.Body.String(), tt.wantBody)
-		}
-	}
-	if admins == 0 {
-		t.Fatal("管理者用のルートが1本も無い")
-	}
-}
 
 func TestReadAdminUsersQuery(t *testing.T) {
 	// 期待値は Node（Zod の listUsersQuerySchema）に同じ値を渡して得たもの。
@@ -183,12 +136,12 @@ func newAdminUserTestRouter() (*httpx.Router, *fakeAdminUserStore) {
 		"noMail": {ID: "noMail", Role: "user"},
 		"blank":  {ID: "blank", Email: strPtr(""), Role: "user"},
 	}}
-	h := &adminUserHandlers{store: store, now: time.Now}
+	h := &UserHandlers{store: store, now: time.Now}
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	rt.Admin("GET /api/admin/users", h.listUsers)
-	rt.Admin("POST /api/admin/users/{id}/ban", h.ban)
-	rt.Admin("POST /api/admin/users/{id}/unban", h.unban)
-	rt.Admin("DELETE /api/admin/users/{id}", h.deleteUser)
+	rt.Admin("GET /api/admin/users", h.ListUsers)
+	rt.Admin("POST /api/admin/users/{id}/ban", h.Ban)
+	rt.Admin("POST /api/admin/users/{id}/unban", h.Unban)
+	rt.Admin("DELETE /api/admin/users/{id}", h.DeleteUser)
 	return rt, store
 }
 

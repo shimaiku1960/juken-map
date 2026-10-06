@@ -110,7 +110,7 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
   Node のサーバーのコードは消した（JUK-121）ので、振り分けを外しても戻る先は無い
 - 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない。
   例外は大学の一覧で、全員に同じ 80KB なので、Go が1回だけ gzip にした形を持って返す
-- 大学の一覧は Go のメモリに10分持つ。管理画面で大学・学部を編集したら（`admin_universities.go`・`admin_faculties.go`）その場で捨てるので、
+- 大学の一覧は Go のメモリに10分持つ。管理画面で大学・学部を編集したら（`internal/feature/admin/universities.go`・`internal/feature/admin/faculties.go`）その場で捨てるので、
   編集はすぐ大学を探す画面に出る。10分の期限は、DB を直接書き換えたとき（seed など）の保険
 - RDS へは TLS で繋ぐ（`internal/database`。ホスト名が `.rds.amazonaws.com` のときだけ）。証明書は
   `rds-ca-ap-northeast-1.pem` を実行ファイルに埋め込む
@@ -271,11 +271,11 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `admin_users.go` | 利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） |
-| `admin_masters.go` | マスター編集の共通部分（使われている行は消さない決まり、断ったときの返し方、変更の記録、store の定義） |
-| `admin_universities.go` | マスター編集の大学（入口・入力・一覧の SQL。書き込みは `internal/write/university` を呼び、変えたら大学一覧のキャッシュを捨てる） |
-| `admin_faculties.go` | マスター編集の学部とタグ（入口・入力・タグの一覧。書き込みは `internal/write/university`） |
-| `admin_textbook_masters.go` | マスター編集の参考書（入口・入力・一覧の SQL。書き込みは `internal/write/textbookmaster`） |
+| `internal/feature/admin/users.go` | 利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） |
+| `internal/feature/admin/masters.go` | マスター編集の共通部分（使われている行は消さない決まり、断ったときの返し方、変更の記録、store の定義） |
+| `internal/feature/admin/universities.go` | マスター編集の大学（入口・入力・一覧の SQL。書き込みは `internal/write/university` を呼び、変えたら大学一覧のキャッシュを捨てる） |
+| `internal/feature/admin/faculties.go` | マスター編集の学部とタグ（入口・入力・タグの一覧。書き込みは `internal/write/university`） |
+| `internal/feature/admin/textbook_masters.go` | マスター編集の参考書（入口・入力・一覧の SQL。書き込みは `internal/write/textbookmaster`） |
 
 ### 画面の配信（JUK-111）
 

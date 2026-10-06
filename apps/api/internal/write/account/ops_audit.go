@@ -15,7 +15,7 @@ const OpsAuditRetention = 365 * 24 * time.Hour
 
 // OpsAudit は、運用のコマンド（incident.go・JUK-138、セキュリティ基準 H4）から操作したときに OpsAuditLog に残す記録。
 // 本番では `docker exec` で動き、出力が実行した人の端末にしか出ないので、DB に残す。
-// 管理画面からの操作は nil を渡す（管理画面はログに残す。admin_users.go の logAdminUserAction）。
+// 管理画面からの操作は nil を渡す（管理画面はログに残す。internal/feature/admin/users.go の logAdminUserAction）。
 type OpsAudit struct {
 	// Host は実行した場所（本番ではコンテナ ID）。
 	Host string

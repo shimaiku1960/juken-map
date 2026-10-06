@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
-// 管理者ページのマスター編集のうち、大学（/api/admin/universities）。共通の部品と全体の決まりは admin_masters.go。
+// 管理者ページのマスター編集のうち、大学（/api/admin/universities）。共通の部品と全体の決まりは masters.go。
 
 // ---- 入口 ----
 
@@ -31,8 +31,8 @@ var prefectures = []string{
 	"福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
 }
 
-// listUniversities は GET /api/admin/universities。
-func (h *adminMasterHandlers) listUniversities(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+// ListUniversities は GET /api/admin/universities。
+func (h *MasterHandlers) ListUniversities(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	query := httpx.ParseQuery(r.URL.RawQuery)
 	q, issue := readMasterSearchQuery(query)
 	if issue == nil {
@@ -51,8 +51,8 @@ func (h *adminMasterHandlers) listUniversities(w http.ResponseWriter, r *http.Re
 	issue.Write(w)
 }
 
-// universityDetail は GET /api/admin/universities/{id}。
-func (h *adminMasterHandlers) universityDetail(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+// UniversityDetail は GET /api/admin/universities/{id}。
+func (h *MasterHandlers) UniversityDetail(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	id, ok := masterID(w, r)
 	if !ok {
 		return
@@ -69,8 +69,8 @@ func (h *adminMasterHandlers) universityDetail(w http.ResponseWriter, r *http.Re
 	httpx.WriteJSON(w, http.StatusOK, detail)
 }
 
-// createUniversity は POST /api/admin/universities。
-func (h *adminMasterHandlers) createUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// CreateUniversity は POST /api/admin/universities。
+func (h *MasterHandlers) CreateUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -91,8 +91,8 @@ func (h *adminMasterHandlers) createUniversity(w http.ResponseWriter, r *http.Re
 	httpx.WriteJSON(w, http.StatusCreated, outcome.value)
 }
 
-// updateUniversity は PATCH /api/admin/universities/{id}。
-func (h *adminMasterHandlers) updateUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// UpdateUniversity は PATCH /api/admin/universities/{id}。
+func (h *MasterHandlers) UpdateUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -118,8 +118,8 @@ func (h *adminMasterHandlers) updateUniversity(w http.ResponseWriter, r *http.Re
 	httpx.WriteJSON(w, http.StatusOK, outcome.value.after)
 }
 
-// deleteUniversity は DELETE /api/admin/universities/{id}。
-func (h *adminMasterHandlers) deleteUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// DeleteUniversity は DELETE /api/admin/universities/{id}。
+func (h *MasterHandlers) DeleteUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	// 本文は使わないが、Node（Fastify）はハンドラより先に本文を読むので、受け付けない形なら同じく 415・413 にする。
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return

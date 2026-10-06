@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
-// マスター編集（admin_masters.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
+// マスター編集（masters.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
 // 本物の DB に通して Node と応答を比べるテスト（admin_masters_db_test.go）は、比べる相手の Node の API を
 // 消したときに一緒に消した（JUK-84）。
 
@@ -103,21 +103,21 @@ func textbookMasterOf(id int64, in textbookMasterInput) apischema.AdminTextbookM
 }
 
 func newAdminMasterTestRouter(store *fakeAdminMasterStore) *httpx.Router {
-	h := &adminMasterHandlers{store: store}
+	h := &MasterHandlers{store: store}
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	rt.Admin("GET /api/admin/universities", h.listUniversities)
-	rt.Admin("POST /api/admin/universities", h.createUniversity)
-	rt.Admin("GET /api/admin/universities/{id}", h.universityDetail)
-	rt.Admin("PATCH /api/admin/universities/{id}", h.updateUniversity)
-	rt.Admin("DELETE /api/admin/universities/{id}", h.deleteUniversity)
-	rt.Admin("GET /api/admin/tags", h.listTags)
-	rt.Admin("POST /api/admin/faculties", h.createFaculty)
-	rt.Admin("PATCH /api/admin/faculties/{id}", h.updateFaculty)
-	rt.Admin("DELETE /api/admin/faculties/{id}", h.deleteFaculty)
-	rt.Admin("GET /api/admin/textbook-masters", h.listTextbookMasters)
-	rt.Admin("POST /api/admin/textbook-masters", h.createTextbookMaster)
-	rt.Admin("PATCH /api/admin/textbook-masters/{id}", h.updateTextbookMaster)
-	rt.Admin("DELETE /api/admin/textbook-masters/{id}", h.deleteTextbookMaster)
+	rt.Admin("GET /api/admin/universities", h.ListUniversities)
+	rt.Admin("POST /api/admin/universities", h.CreateUniversity)
+	rt.Admin("GET /api/admin/universities/{id}", h.UniversityDetail)
+	rt.Admin("PATCH /api/admin/universities/{id}", h.UpdateUniversity)
+	rt.Admin("DELETE /api/admin/universities/{id}", h.DeleteUniversity)
+	rt.Admin("GET /api/admin/tags", h.ListTags)
+	rt.Admin("POST /api/admin/faculties", h.CreateFaculty)
+	rt.Admin("PATCH /api/admin/faculties/{id}", h.UpdateFaculty)
+	rt.Admin("DELETE /api/admin/faculties/{id}", h.DeleteFaculty)
+	rt.Admin("GET /api/admin/textbook-masters", h.ListTextbookMasters)
+	rt.Admin("POST /api/admin/textbook-masters", h.CreateTextbookMaster)
+	rt.Admin("PATCH /api/admin/textbook-masters/{id}", h.UpdateTextbookMaster)
+	rt.Admin("DELETE /api/admin/textbook-masters/{id}", h.DeleteTextbookMaster)
 	return rt
 }
 

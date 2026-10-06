@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/admin"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/study"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
@@ -313,33 +314,29 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfi
 	microcmsWebhook := &microcmsWebhookHandler{secret: microcms.secret, trigger: newDeployTrigger(microcms.deployer)}
 	rt.Webhook("POST /api/webhooks/microcms", microcmsWebhook.serve)
 
-	adminUsers := &adminUserHandlers{store: &sqlAdminUserStore{db: db}, now: time.Now}
-	rt.Admin("GET /api/admin/overview", adminUsers.overview)
-	rt.Admin("GET /api/admin/users", adminUsers.listUsers)
-	rt.Admin("POST /api/admin/users/{id}/ban", adminUsers.ban)
-	rt.Admin("POST /api/admin/users/{id}/unban", adminUsers.unban)
-	rt.Admin("DELETE /api/admin/users/{id}", adminUsers.deleteUser)
+	adminUsers := admin.NewUserHandlers(db)
+	rt.Admin("GET /api/admin/overview", adminUsers.Overview)
+	rt.Admin("GET /api/admin/users", adminUsers.ListUsers)
+	rt.Admin("POST /api/admin/users/{id}/ban", adminUsers.Ban)
+	rt.Admin("POST /api/admin/users/{id}/unban", adminUsers.Unban)
+	rt.Admin("DELETE /api/admin/users/{id}", adminUsers.DeleteUser)
 
 	// マスター編集。大学・学部を変えたら大学を探す画面の一覧（上の universities）の、参考書マスターを
 	// 変えたら GET /api/textbook-masters（上の textbookRoutes）のキャッシュを捨てる。
-	masters := &adminMasterHandlers{store: &sqlAdminMasterStore{
-		db:                     db,
-		universitiesChanged:    universityStore.explore.Invalidate,
-		textbookMastersChanged: textbookRoutes.InvalidateMasters,
-	}}
-	rt.Admin("GET /api/admin/universities", masters.listUniversities)
-	rt.Admin("POST /api/admin/universities", masters.createUniversity)
-	rt.Admin("GET /api/admin/universities/{id}", masters.universityDetail)
-	rt.Admin("PATCH /api/admin/universities/{id}", masters.updateUniversity)
-	rt.Admin("DELETE /api/admin/universities/{id}", masters.deleteUniversity)
-	rt.Admin("GET /api/admin/tags", masters.listTags)
-	rt.Admin("POST /api/admin/faculties", masters.createFaculty)
-	rt.Admin("PATCH /api/admin/faculties/{id}", masters.updateFaculty)
-	rt.Admin("DELETE /api/admin/faculties/{id}", masters.deleteFaculty)
-	rt.Admin("GET /api/admin/textbook-masters", masters.listTextbookMasters)
-	rt.Admin("POST /api/admin/textbook-masters", masters.createTextbookMaster)
-	rt.Admin("PATCH /api/admin/textbook-masters/{id}", masters.updateTextbookMaster)
-	rt.Admin("DELETE /api/admin/textbook-masters/{id}", masters.deleteTextbookMaster)
+	masters := admin.NewMasterHandlers(db, universityStore.explore.Invalidate, textbookRoutes.InvalidateMasters)
+	rt.Admin("GET /api/admin/universities", masters.ListUniversities)
+	rt.Admin("POST /api/admin/universities", masters.CreateUniversity)
+	rt.Admin("GET /api/admin/universities/{id}", masters.UniversityDetail)
+	rt.Admin("PATCH /api/admin/universities/{id}", masters.UpdateUniversity)
+	rt.Admin("DELETE /api/admin/universities/{id}", masters.DeleteUniversity)
+	rt.Admin("GET /api/admin/tags", masters.ListTags)
+	rt.Admin("POST /api/admin/faculties", masters.CreateFaculty)
+	rt.Admin("PATCH /api/admin/faculties/{id}", masters.UpdateFaculty)
+	rt.Admin("DELETE /api/admin/faculties/{id}", masters.DeleteFaculty)
+	rt.Admin("GET /api/admin/textbook-masters", masters.ListTextbookMasters)
+	rt.Admin("POST /api/admin/textbook-masters", masters.CreateTextbookMaster)
+	rt.Admin("PATCH /api/admin/textbook-masters/{id}", masters.UpdateTextbookMaster)
+	rt.Admin("DELETE /api/admin/textbook-masters/{id}", masters.DeleteTextbookMaster)
 
 	cron := &cronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, jobs.messenger), now: time.Now}
 	rt.Job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)

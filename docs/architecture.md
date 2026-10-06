@@ -170,7 +170,7 @@ Go の API は、1つの機能を1つのファイル（大きいものは数フ�
    `rt.user` や `rt.admin` のように種類を選んで登録し、種類を選ばずに登録する方法が無いので、書き忘れが起きない
 2. **ハンドラ**：本文と入力を確かめ（`readBody`・`readObject`）、自分の行かを確かめ、
    ストアの結果をステータスコードへ翻訳する（見つからない → 404、重複 → 409 など）
-3. **ストア**：SQL を流し、失敗は値（`admin_masters.go` の `masterOutcome`）か目印のエラー
+3. **ストア**：SQL を流し、失敗は値（`internal/feature/admin` の `masterOutcome`）か目印のエラー
    （`internal/write/studyrecord` の `ErrAlreadyCompleted`）で返す。ステータスコードは知らない。
    一意制約違反の判定（`database.IsMySQLError(err, database.DuplicateEntry)`、`internal/database`）もストアの中で済ませる
 

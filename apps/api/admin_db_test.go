@@ -188,7 +188,7 @@ func TestAdminUsersDB(t *testing.T) {
 		if real.Total != 2 || !slices.Equal(ids(real), []string{active, quiet}) {
 			t.Fatalf("real: total=%d ids=%v, want 2 [active quiet]（新しい順）", real.Total, ids(real))
 		}
-		if real.Page != 1 || real.PageSize != adminUsersPageSize {
+		if real.Page != 1 || real.PageSize != 50 {
 			t.Errorf("page=%d pageSize=%d", real.Page, real.PageSize)
 		}
 		got := real.Users[0]
@@ -246,8 +246,9 @@ func TestAdminUsersDB(t *testing.T) {
 		for _, k := range before.Kinds {
 			kinds = append(kinds, k.Kind)
 		}
-		if !slices.Equal(kinds, userKinds) {
-			t.Fatalf("kinds = %v, want %v（0人の種別も同じ順に並ぶ）", kinds, userKinds)
+		wantKinds := []apischema.UserKind{apischema.UserKindReal, apischema.UserKindSim, apischema.UserKindSeed, apischema.UserKindDemo}
+		if !slices.Equal(kinds, wantKinds) {
+			t.Fatalf("kinds = %v, want %v（0人の種別も同じ順に並ぶ）", kinds, wantKinds)
 		}
 
 		id := fx.adminUser("jk106-"+dbtest.Hex(6)+"@example.test", "user", time.Now(), nil)
@@ -350,10 +351,10 @@ func TestAdminUsersDB(t *testing.T) {
 			status                   int
 			message                  string
 		}{
-			{"自分自身の停止", "POST", "/api/admin/users/" + adminID + "/ban", "", 409, protectedMessages[protectedSelf]},
-			{"他の管理者の停止", "POST", "/api/admin/users/" + otherAdmin + "/ban", "", 409, protectedMessages[protectedAdmin]},
-			{"他の管理者の削除", "DELETE", "/api/admin/users/" + otherAdmin, `{"email":"x"}`, 409, protectedMessages[protectedAdmin]},
-			{"メールの無い利用者の削除", "DELETE", "/api/admin/users/" + noEmail, `{"email":" "}`, 409, protectedMessages[protectedNoEmail]},
+			{"自分自身の停止", "POST", "/api/admin/users/" + adminID + "/ban", "", 409, "自分自身は停止・削除できません"},
+			{"他の管理者の停止", "POST", "/api/admin/users/" + otherAdmin + "/ban", "", 409, "他の管理者は停止・削除できません（先に権限を外してください）"},
+			{"他の管理者の削除", "DELETE", "/api/admin/users/" + otherAdmin, `{"email":"x"}`, 409, "他の管理者は停止・削除できません（先に権限を外してください）"},
+			{"メールの無い利用者の削除", "DELETE", "/api/admin/users/" + noEmail, `{"email":" "}`, 409, "メールアドレスの無い利用者は、本人の確認ができないため削除できません"},
 			{"いない相手の解除", "POST", "/api/admin/users/no-such-user/unban", "", 404, "ユーザーが見つかりません"},
 		} {
 			t.Run(c.name, func(t *testing.T) {
@@ -412,7 +413,7 @@ func TestAdminMastersDB(t *testing.T) {
 			t.Fatal("作った大学が、大学を探す画面の一覧にすぐ出ない（キャッシュを捨てていない）")
 		}
 		app.expectError(app.send("POST", "/api/admin/universities", `{"name":"`+nameA+`","prefecture":"北海道","type":"私立"}`, adminID),
-			409, universityMessages.duplicate)
+			409, "同じ名前の大学がすでにあります")
 
 		var updated apischema.AdminUniversity
 		app.expect(app.send("PATCH", fmt.Sprintf("/api/admin/universities/%d", a.ID), `{"name":"`+nameA+`","prefecture":"東京都","type":"国立"}`, adminID), 200, &updated)
@@ -421,9 +422,9 @@ func TestAdminMastersDB(t *testing.T) {
 		}
 		// ほかの大学の名前に書き換えようとすると重なる
 		app.expectError(app.send("PATCH", fmt.Sprintf("/api/admin/universities/%d", a.ID), `{"name":"`+nameB+`","prefecture":"東京都","type":"国立"}`, adminID),
-			409, universityMessages.duplicate)
+			409, "同じ名前の大学がすでにあります")
 		app.expectError(app.send("PATCH", "/api/admin/universities/999999999", `{"name":"`+mark+`-x","prefecture":"東京都","type":"国立"}`, adminID),
-			404, universityMessages.notFound)
+			404, "大学が見つかりません")
 
 		var list apischema.AdminUniversityList
 		app.expect(app.send("GET", "/api/admin/universities?q="+mark, "", adminID), 200, &list)
@@ -438,12 +439,12 @@ func TestAdminMastersDB(t *testing.T) {
 		if faculty.Name != "法学部" || faculty.ExamDate != "2027-02-15" || faculty.UniversityID != a.ID || !slices.Equal(faculty.TagIds, []int64{tag1, tag2}) {
 			t.Fatalf("作った学部: %+v", faculty)
 		}
-		app.expectError(app.send("POST", "/api/admin/faculties", facultyBody, adminID), 409, facultyMessages.duplicate)
+		app.expectError(app.send("POST", "/api/admin/faculties", facultyBody, adminID), 409, "この大学に同じ名前の学部がすでにあります")
 		// 同じ名前でも別の大学なら作れる
 		var other apischema.AdminFacultySnapshot
 		app.expect(app.send("POST", "/api/admin/faculties", fmt.Sprintf(`{"name":"法学部","examDate":"2027-02-15","tagIds":[],"universityId":%d}`, b.ID), adminID), 201, &other)
 		app.expectError(app.send("POST", "/api/admin/faculties", `{"name":"法学部","examDate":"2027-02-15","tagIds":[],"universityId":999999999}`, adminID),
-			404, facultyMessages.notFound)
+			404, "学部（または大学）が見つかりません")
 		app.expectError(app.send("POST", "/api/admin/faculties", fmt.Sprintf(`{"name":"経済学部","examDate":"2027-02-15","tagIds":[%d,999999999],"universityId":%d}`, tag1, a.ID), adminID),
 			400, "存在しないタグが含まれています")
 		if n := fx.count("SELECT COUNT(*) FROM Faculty WHERE universityId = ?", a.ID); n != 1 {
@@ -471,22 +472,22 @@ func TestAdminMastersDB(t *testing.T) {
 		// 志望校に使われている学部・大学は消せない
 		user := fx.User()
 		fx.FinalGoal(user, faculty.ID)
-		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/faculties/%d", faculty.ID), "", adminID), 409, fmt.Sprintf(facultyMessages.inUse, 1))
-		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/universities/%d", a.ID), "", adminID), 409, fmt.Sprintf(universityMessages.inUse, 1))
+		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/faculties/%d", faculty.ID), "", adminID), 409, "この学部が志望校に1件使われているため削除できません")
+		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/universities/%d", a.ID), "", adminID), 409, "この大学の学部が志望校に1件使われているため削除できません")
 		fx.Exec("DELETE FROM FinalGoal WHERE userId = ?", user)
 
 		app.expect(app.send("DELETE", fmt.Sprintf("/api/admin/faculties/%d", faculty.ID), "", adminID), 204, nil)
 		if n := fx.count("SELECT COUNT(*) FROM _FacultyToTag WHERE A = ?", faculty.ID); n != 0 {
 			t.Errorf("学部のタグが CASCADE で消えていない: %d", n)
 		}
-		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/faculties/%d", faculty.ID), "", adminID), 404, facultyMessages.notFound)
+		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/faculties/%d", faculty.ID), "", adminID), 404, "学部（または大学）が見つかりません")
 		// 学部ごと消える（CASCADE）
 		app.expect(app.send("DELETE", fmt.Sprintf("/api/admin/universities/%d", b.ID), "", adminID), 204, nil)
 		if n := fx.count("SELECT COUNT(*) FROM Faculty WHERE id = ?", other.ID); n != 0 {
 			t.Errorf("大学を消しても学部が残っている")
 		}
 		app.expect(app.send("DELETE", fmt.Sprintf("/api/admin/universities/%d", a.ID), "", adminID), 204, nil)
-		app.expectError(app.send("GET", fmt.Sprintf("/api/admin/universities/%d", a.ID), "", adminID), 404, universityMessages.notFound)
+		app.expectError(app.send("GET", fmt.Sprintf("/api/admin/universities/%d", a.ID), "", adminID), 404, "大学が見つかりません")
 		if listed(nameA) {
 			t.Fatal("消した大学が、大学を探す画面の一覧に残っている（キャッシュを捨てていない）")
 		}
@@ -525,7 +526,7 @@ func TestAdminMastersDB(t *testing.T) {
 		if want := []apischema.AdminTextbookMasterMetric{{Unit: "page", TotalAmount: 300, IsDefault: true}, {Unit: "chapter", TotalAmount: 12}}; !slices.Equal(created.Metrics, want) {
 			t.Errorf("総量の候補: %+v, want %+v", created.Metrics, want)
 		}
-		app.expectError(app.send("POST", "/api/admin/textbook-masters", body(mark+"-dup", isbn), adminID), 409, textbookMasterMessages.duplicate)
+		app.expectError(app.send("POST", "/api/admin/textbook-masters", body(mark+"-dup", isbn), adminID), 409, "同じ ISBN の参考書がすでにあります")
 		if n := fx.count("SELECT COUNT(*) FROM TextbookMaster WHERE name = ?", mark+"-dup"); n != 0 {
 			t.Errorf("重なりで断ったのに行がある（トランザクションが戻っていない）")
 		}
@@ -534,7 +535,7 @@ func TestAdminMastersDB(t *testing.T) {
 		app.expect(app.send("POST", "/api/admin/textbook-masters", body(mark+"-other", isbn2), adminID), 201, &other)
 		// ほかの参考書の ISBN に書き換えようとすると重なり、総量の候補も元のまま
 		app.expectError(app.send("PATCH", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), body(name, isbn2), adminID),
-			409, textbookMasterMessages.duplicate)
+			409, "同じ ISBN の参考書がすでにあります")
 		if n := fx.count("SELECT COUNT(*) FROM TextbookMasterMetric WHERE masterId = ?", created.ID); n != 2 {
 			t.Errorf("断った書き換えで総量の候補が %d 行（2行のはず）", n)
 		}
@@ -549,7 +550,7 @@ func TestAdminMastersDB(t *testing.T) {
 		if m := listed(created.ID); m == nil || m.Edition == nil || *m.Edition != "第3版" || len(m.Metrics) != 1 {
 			t.Errorf("書き換えが利用者の一覧に出ない: %+v", m)
 		}
-		app.expectError(app.send("PATCH", "/api/admin/textbook-masters/999999999", body(name, isbn), adminID), 404, textbookMasterMessages.notFound)
+		app.expectError(app.send("PATCH", "/api/admin/textbook-masters/999999999", body(name, isbn), adminID), 404, "参考書が見つかりません")
 
 		// 名前でも ISBN でも探せる
 		for _, q := range []string{name, strings.ReplaceAll(isbn, "-", "")} {
@@ -568,14 +569,14 @@ func TestAdminMastersDB(t *testing.T) {
 		if len(used) != 1 || used[0].TextbookCount != 1 {
 			t.Errorf("使われている数: %+v", used)
 		}
-		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 409, fmt.Sprintf(textbookMasterMessages.inUse, 1))
+		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 409, "この参考書は利用者の1冊に使われているため削除できません")
 		fx.Exec("DELETE FROM Textbook WHERE userId = ?", user)
 
 		app.expect(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 204, nil)
 		if listed(created.ID) != nil {
 			t.Error("消した参考書が利用者の一覧に残っている")
 		}
-		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 404, textbookMasterMessages.notFound)
+		app.expectError(app.send("DELETE", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), "", adminID), 404, "参考書が見つかりません")
 		if n := fx.count("SELECT COUNT(*) FROM TextbookMasterMetric WHERE masterId = ?", created.ID); n != 0 {
 			t.Errorf("総量の候補が CASCADE で消えていない: %d", n)
 		}
