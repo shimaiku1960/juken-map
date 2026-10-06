@@ -256,12 +256,12 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig, mic
 	rt.user("GET /api/study-logs/daily", studyHandlers.listDaily)
 	rt.user("GET /api/study-plans", studyHandlers.listPlans)
 
-	studyLogWrites := &studyLogWriteHandlers{store: &studyLogWriteStore{db: db}, now: time.Now}
+	studyLogWrites := &studyLogWriteHandlers{db: db, now: time.Now}
 	rt.user("POST /api/study-logs", studyLogWrites.create)
 	rt.user("PATCH /api/study-logs/{id}", studyLogWrites.update)
 	rt.user("DELETE /api/study-logs/{id}", studyLogWrites.delete)
 
-	studyPlanWrites := &studyPlanWriteHandlers{store: &studyPlanWriteStore{db: db}}
+	studyPlanWrites := &studyPlanWriteHandlers{db: db}
 	rt.user("POST /api/study-plans", studyPlanWrites.create)
 	rt.user("PATCH /api/study-plans/{id}", studyPlanWrites.update)
 	rt.user("DELETE /api/study-plans/{id}", studyPlanWrites.delete)

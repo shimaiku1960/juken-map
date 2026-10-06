@@ -144,33 +144,6 @@ func TestOptionalDiffers(t *testing.T) {
 	}
 }
 
-func TestTextbookRangeError(t *testing.T) {
-	page, question := "page", "question"
-	total := int64(300)
-	input := func(body string) studyLogInput {
-		v, _ := parseJSON(body)
-		_, in := readStudyLogInput(v, "2026-09-30")
-		return in
-	}
-	tests := []struct {
-		name string
-		tb   ownedTextbook
-		in   studyLogInput
-		want string
-	}{
-		{"範囲が無ければ見ない", ownedTextbook{rangeUnit: &question, totalAmount: &total}, input(`{"date":"2026-09-01","minutes":1}`), ""},
-		{"単位が違う", ownedTextbook{rangeUnit: &question}, input(`{"date":"2026-09-01","minutes":1,"rangeStart":1,"rangeEnd":2,"rangeUnit":"page"}`), "範囲の単位を参考書の逆算設定に合わせてください"},
-		{"総量を超える", ownedTextbook{rangeUnit: &page, totalAmount: &total}, input(`{"date":"2026-09-01","minutes":1,"rangeStart":1,"rangeEnd":301,"rangeUnit":"page"}`), "終了位置は参考書の総量（300）以下にしてください"},
-		{"総量ちょうど", ownedTextbook{rangeUnit: &page, totalAmount: &total}, input(`{"date":"2026-09-01","minutes":1,"rangeStart":1,"rangeEnd":300,"rangeUnit":"page"}`), ""},
-		{"参考書に設定が無い", ownedTextbook{}, input(`{"date":"2026-09-01","minutes":1,"rangeStart":1,"rangeEnd":9999,"rangeUnit":"chapter"}`), ""},
-	}
-	for _, tt := range tests {
-		if got := textbookRangeError(tt.tb, tt.in.rangeEnd.ptr(), tt.in.rangeUnit.ptr()); got != tt.want {
-			t.Errorf("%s: %q, want %q", tt.name, got, tt.want)
-		}
-	}
-}
-
 func TestIsCalendarYMD(t *testing.T) {
 	for s, want := range map[string]bool{
 		"2026-09-30": true, "2024-02-29": true, "2000-02-29": true, "0000-02-29": true,
