@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
@@ -63,33 +64,15 @@ func (st *authStore) findUserByID(ctx context.Context, id string) (*authUser, er
 	return scanAuthUser(st.db.QueryRowContext(ctx, "SELECT "+authUserColumns+" WHERE u.id = ?", id))
 }
 
-// createUserWithPassword はメール＋パスワードの登録で、まだ確認していない利用者とパスワードを1つの
-// トランザクションで作る。
+// createUserWithPassword はメール＋パスワードの登録で、まだ確認していない利用者とパスワードを作る。
+// 利用者の行の作成・変更は持ち主の internal/write/account（JUK-154）。
 func (st *authStore) createUserWithPassword(ctx context.Context, id, email, hash string, now time.Time) error {
-	tx, err := st.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx,
-		"INSERT INTO `user` (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, false, ?, ?)",
-		id, email, email, now, now); err != nil {
-		return err
-	}
-	if err := setPassword(ctx, tx, id, hash, now); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return account.CreateUserWithPassword(ctx, st.db, id, email, hash, now)
 }
 
 // markEmailVerified はメールアドレスを確認済みにする。初めて確認済みにしたときだけ true。
 func (st *authStore) markEmailVerified(ctx context.Context, userID string, now time.Time) (bool, error) {
-	res, err := st.db.ExecContext(ctx, "UPDATE `user` SET emailVerified = true, updatedAt = ? WHERE id = ? AND emailVerified = false", now, userID)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	return n == 1, nil
+	return account.MarkEmailVerified(ctx, st.db, userID, now)
 }
 
 // deleteUser は退会で利用者とデータを消す。消し方は管理者の削除と同じ deleteUserAndData。
@@ -146,58 +129,25 @@ func (st *authStore) loginMethods(ctx context.Context, userID string) (hasPasswo
 // ---- パスワード ----
 
 // setPassword はパスワードのハッシュを保存する（無ければ作る）。
-func setPassword(ctx context.Context, q execer, userID, hash string, now time.Time) error {
-	_, err := q.ExecContext(ctx,
-		"INSERT INTO AuthPassword (userId, hash, updatedAt) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE hash = VALUES(hash), updatedAt = VALUES(updatedAt)",
-		userID, hash, now)
-	return err
-}
-
-// execer は *sql.DB と *sql.Tx の両方で使う書き込み。
-type execer interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-}
-
 func (st *authStore) setPassword(ctx context.Context, userID, hash string, now time.Time) error {
-	return setPassword(ctx, st.db, userID, hash, now)
+	return account.SetPassword(ctx, st.db, userID, hash, now)
 }
 
 // replacePassword はパスワードを置き換え、keepSessionID 以外のセッションと、まだ使われていない
 // 再設定・確認のトークン、2段階認証の途中の状態を消す（06 B6・10 E3）。
 func (st *authStore) replacePassword(ctx context.Context, userID, hash, keepSessionID string) error {
-	tx, err := st.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := setPassword(ctx, tx, userID, hash, st.clock()); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM AuthSession WHERE userId = ? AND id <> ?", userID, keepSessionID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM AuthToken WHERE userId = ?", userID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM AuthMfaChallenge WHERE userId = ?", userID); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return account.ReplacePassword(ctx, st.db, userID, hash, keepSessionID, st.clock())
 }
 
 // ---- メールで送るトークン（10 E1） ----
 
 // issueToken は用途つきのトークンを作る。同じ人・同じ用途の古いものと、期限の切れたものは消す。
 func (st *authStore) issueToken(ctx context.Context, userID, purpose string, ttl time.Duration) (string, error) {
-	now := st.clock()
-	if _, err := st.db.ExecContext(ctx, "DELETE FROM AuthToken WHERE userId = ? AND (purpose = ? OR expiresAt <= ?)", userID, purpose, now); err != nil {
+	raw, hash := newToken()
+	if err := account.IssueToken(ctx, st.db, userID, purpose, hash, ttl, st.clock()); err != nil {
 		return "", err
 	}
-	raw, hash := newToken()
-	_, err := st.db.ExecContext(ctx,
-		"INSERT INTO AuthToken (tokenHash, purpose, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?)",
-		hash, purpose, userID, now, now.Add(ttl))
-	return raw, err
+	return raw, nil
 }
 
 // peekToken はトークンを使わずに持ち主を返す（使う前にパスワードの規則を確かめたいとき）。
@@ -216,62 +166,33 @@ func (st *authStore) peekToken(ctx context.Context, raw, purpose string) (string
 }
 
 // consumeToken はトークンを使う。用途が違う・期限切れ・使用済みなら空を返す。
-// 消せたときだけ使えたことにするので、同じトークンが同時に2回送られても1回しか通らない。
 func (st *authStore) consumeToken(ctx context.Context, raw, purpose string) (string, error) {
-	userID, err := st.peekToken(ctx, raw, purpose)
-	if err != nil || userID == "" {
-		return "", err
+	hash := hashToken(raw)
+	if hash == nil {
+		return "", nil
 	}
-	res, err := st.db.ExecContext(ctx,
-		"DELETE FROM AuthToken WHERE tokenHash = ? AND purpose = ? AND expiresAt > ?", hashToken(raw), purpose, st.clock())
-	if err != nil {
-		return "", err
-	}
-	if n, err := res.RowsAffected(); err != nil || n != 1 {
-		return "", err
-	}
-	return userID, nil
+	return account.ConsumeToken(ctx, st.db, hash, purpose, st.clock())
 }
 
 // ---- 2段階認証の途中の状態（G3） ----
 
 // createMFAChallenge は途中の状態を作り、Cookie に入れる値を返す。同じ人の前のものと、期限の切れたものは消す。
 func (st *authStore) createMFAChallenge(ctx context.Context, userID string) (string, error) {
-	now := st.clock()
-	if _, err := st.db.ExecContext(ctx, "DELETE FROM AuthMfaChallenge WHERE userId = ? OR expiresAt <= ?", userID, now); err != nil {
-		return "", err
-	}
 	raw, hash := newToken()
-	if _, err := st.db.ExecContext(ctx,
-		"INSERT INTO AuthMfaChallenge (tokenHash, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?)",
-		hash, userID, now, now.Add(mfaChallengeTTL)); err != nil {
+	if err := account.CreateMFAChallenge(ctx, st.db, userID, hash, mfaChallengeTTL, st.clock()); err != nil {
 		return "", err
 	}
 	return raw, nil
 }
 
 // countMFAChallengeAttempt は途中の状態1つで試した数を1つ増やし、持ち主を返す（H1）。期限切れ・試行が
-// 上限に達した・無いなら空。数えてから確かめるので、同時に送られても上限を超えない。
+// 上限に達した・無いなら空。
 func (st *authStore) countMFAChallengeAttempt(ctx context.Context, tokenHash []byte) (string, error) {
-	res, err := st.db.ExecContext(ctx,
-		"UPDATE AuthMfaChallenge SET attempts = attempts + 1 WHERE tokenHash = ? AND expiresAt > ? AND attempts < ?",
-		tokenHash, st.clock(), mfaChallengeMaxAttempts)
-	if err != nil {
-		return "", err
-	}
-	if n, _ := res.RowsAffected(); n != 1 {
-		return "", nil
-	}
-	var userID string
-	if err := st.db.QueryRowContext(ctx, "SELECT userId FROM AuthMfaChallenge WHERE tokenHash = ?", tokenHash).Scan(&userID); err != nil {
-		return "", err
-	}
-	return userID, nil
+	return account.CountMFAChallengeAttempt(ctx, st.db, tokenHash, mfaChallengeMaxAttempts, st.clock())
 }
 
 func (st *authStore) deleteMFAChallenges(ctx context.Context, userID string) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM AuthMfaChallenge WHERE userId = ?", userID)
-	return err
+	return account.DeleteMFAChallenges(ctx, st.db, userID)
 }
 
 // ---- TOTP と予備コード（G1・G2） ----
