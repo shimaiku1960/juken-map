@@ -14,7 +14,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 )
 
-// シミュレーションの利用者の印を、本物の MySQL で確かめる。本文の読み方（400）は package main の sim_test.go にある。
+// シミュレーションの利用者の印を、本物の MySQL で確かめる。本文の読み方（400）は internal/feature/sim の sim_test.go にある。
 func TestSimulationDB(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)

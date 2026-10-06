@@ -100,7 +100,7 @@ func Config(databaseURL string) (*mysql.Config, error) {
 	cfg.InterpolateParams = true
 	// UPDATE の件数を「値が変わった行」ではなく「WHERE に当たった行」で数える。
 	// Node の mysql2 は既定でこの数え方（FOUND_ROWS）なので、同じ値で UPDATE しても 1 になる。
-	// 揃えないと、同じ日付をもう一度記録したときに Go だけが「見つからない（404）」を返す（JUK-80、sim.go）。
+	// 揃えないと、同じ日付をもう一度記録したときに Go だけが「見つからない（404）」を返す（JUK-80、internal/feature/sim）。
 	cfg.ClientFoundRows = true
 
 	// RDS へは TLS で繋ぎ、証明書とホスト名を確かめる（パスワードと利用者のデータが平文で流れない）。

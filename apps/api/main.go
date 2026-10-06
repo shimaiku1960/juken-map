@@ -29,6 +29,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/notifications"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/sim"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/study"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/universities"
@@ -321,10 +322,10 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 
 	// シミュレーションの API は SIMULATION_ENABLED=on のときだけ存在する（付けなければ 404）。
 	if jobs.simulationEnabled {
-		sim := &simHandlers{store: &simStore{db: db}}
-		rt.Job("GET /api/sim/state", jobs.simulationSecret, sim.state)
-		rt.Job("POST /api/sim/users", jobs.simulationSecret, sim.markUser)
-		rt.Job("PATCH /api/sim/users/{seq}", jobs.simulationSecret, sim.updateUser)
+		simRoutes := sim.New(db)
+		rt.Job("GET /api/sim/state", jobs.simulationSecret, simRoutes.State)
+		rt.Job("POST /api/sim/users", jobs.simulationSecret, simRoutes.MarkUser)
+		rt.Job("PATCH /api/sim/users/{seq}", jobs.simulationSecret, simRoutes.UpdateUser)
 	}
 }
 
