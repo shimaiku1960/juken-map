@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbookmaster"
 )
 
 // 管理者ページのマスター編集のうち、参考書マスター（/api/admin/textbook-masters）。
@@ -108,6 +108,15 @@ type textbookMasterInput struct {
 	publisher, edition *string
 	isbn               string
 	metrics            []AdminTextbookMasterMetric
+}
+
+// record は持ち主に渡す形にする。
+func (in textbookMasterInput) record() textbookmaster.Input {
+	metrics := make([]textbookmaster.Metric, len(in.metrics))
+	for i, m := range in.metrics {
+		metrics[i] = textbookmaster.Metric(m)
+	}
+	return textbookmaster.Input{Name: in.name, Publisher: in.publisher, Edition: in.edition, Isbn: in.isbn, Metrics: metrics}
 }
 
 // readTextbookMasterInput は textbookMasterInputSchema。
@@ -250,14 +259,6 @@ func selectAdminTextbookMasters(ctx context.Context, db database.Runner, where s
 	return masters, rows.Err()
 }
 
-func findAdminTextbookMaster(ctx context.Context, db database.Runner, id int64) (*AdminTextbookMaster, error) {
-	masters, err := selectAdminTextbookMasters(ctx, db, "WHERE tm.id = ?", id)
-	if err != nil || len(masters) == 0 {
-		return nil, err
-	}
-	return &masters[0], nil
-}
-
 func (st *sqlAdminMasterStore) listTextbookMasters(ctx context.Context, q string) ([]AdminTextbookMaster, error) {
 	if q == "" {
 		return selectAdminTextbookMasters(ctx, st.db, "")
@@ -266,95 +267,29 @@ func (st *sqlAdminMasterStore) listTextbookMasters(ctx context.Context, q string
 	return selectAdminTextbookMasters(ctx, st.db, "WHERE tm.name LIKE ? OR tm.publisher LIKE ? OR tm.isbn LIKE ?", pattern, pattern, pattern)
 }
 
-// replaceMetrics は総量の候補を送られたものに置き換える（入力チェックで1つ以上ある）。
-func replaceMetrics(ctx context.Context, tx *sql.Tx, masterID int64, metrics []AdminTextbookMasterMetric) error {
-	if _, err := tx.ExecContext(ctx, "DELETE FROM TextbookMasterMetric WHERE masterId = ?", masterID); err != nil {
-		return err
-	}
-	now := nowMillis()
-	args := make([]any, 0, len(metrics)*6)
-	for _, m := range metrics {
-		args = append(args, masterID, m.Unit, m.TotalAmount, m.IsDefault, now, now)
-	}
-	// #nosec G202 -- 埋め込むのは件数ぶん並べた (?, …) だけ。値は args で渡す
-	_, err := tx.ExecContext(ctx,
-		`INSERT INTO TextbookMasterMetric (masterId, unit, totalAmount, isDefault, createdAt, updatedAt)
-		 VALUES `+database.Placeholders(len(metrics), "(?, ?, ?, ?, ?, ?)"), args...)
-	return err
-}
-
 func (st *sqlAdminMasterStore) createTextbookMaster(ctx context.Context, in textbookMasterInput) (masterOutcome[AdminTextbookMaster], error) {
-	var outcome masterOutcome[AdminTextbookMaster]
-	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		now := nowMillis()
-		res, err := tx.ExecContext(ctx,
-			`INSERT INTO TextbookMaster (name, publisher, edition, isbn, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`,
-			in.name, in.publisher, in.edition, in.isbn, now, now)
-		if err != nil {
-			return err
-		}
-		id, err := res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		if err := replaceMetrics(ctx, tx, id, in.metrics); err != nil {
-			return err
-		}
-		outcome, err = foundOutcome(findAdminTextbookMaster(ctx, tx, id))
-		return err
-	})
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return masterOutcome[AdminTextbookMaster]{failure: masterDuplicate}, nil
-	}
-	if err == nil {
-		st.textbookMastersChanged()
-	}
-	return outcome, err
+	m, err := textbookmaster.Create(ctx, st.db, in.record(), nowMillis())
+	return masterOutcomeOf(adminTextbookMaster(m), err, st.textbookMastersChanged)
 }
 
-// updateTextbookMaster は参考書マスターを書き換える。利用者がすでに登録した参考書（Textbook）は総量を
-// 自分の行に写し取っているので、ここで総量を変えても既存の利用者の参考書は変わらない（これから登録する人から効く）。
 func (st *sqlAdminMasterStore) updateTextbookMaster(ctx context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[AdminTextbookMaster]], error) {
-	var outcome masterOutcome[masterChange[AdminTextbookMaster]]
-	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		before, err := findAdminTextbookMaster(ctx, tx, id)
-		if err != nil || before == nil {
-			outcome.failure = masterNotFound
-			return err
-		}
-		if _, err := tx.ExecContext(ctx,
-			"UPDATE TextbookMaster SET name = ?, publisher = ?, edition = ?, isbn = ?, updatedAt = ? WHERE id = ?",
-			in.name, in.publisher, in.edition, in.isbn, nowMillis(), id); err != nil {
-			return err
-		}
-		if err := replaceMetrics(ctx, tx, id, in.metrics); err != nil {
-			return err
-		}
-		after, err := foundOutcome(findAdminTextbookMaster(ctx, tx, id))
-		outcome.value = masterChange[AdminTextbookMaster]{before: *before, after: after.value}
-		return err
-	})
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return masterOutcome[masterChange[AdminTextbookMaster]]{failure: masterDuplicate}, nil
-	}
-	if err == nil && outcome.failure == masterOK {
-		st.textbookMastersChanged()
-	}
-	return outcome, err
+	c, err := textbookmaster.Update(ctx, st.db, id, in.record(), nowMillis())
+	change := masterChange[AdminTextbookMaster]{before: adminTextbookMaster(c.Before), after: adminTextbookMaster(c.After)}
+	return masterOutcomeOf(change, err, st.textbookMastersChanged)
 }
 
 func (st *sqlAdminMasterStore) deleteTextbookMaster(ctx context.Context, id int64) (masterOutcome[AdminTextbookMaster], error) {
-	master, err := findAdminTextbookMaster(ctx, st.db, id)
-	if err != nil || master == nil {
-		return masterOutcome[AdminTextbookMaster]{failure: masterNotFound}, err
+	m, err := textbookmaster.Delete(ctx, st.db, id)
+	return masterOutcomeOf(adminTextbookMaster(m), err, st.textbookMastersChanged)
+}
+
+// adminTextbookMaster は持ち主の行を応答の形にする（総量の候補は項目の並びが同じなので型の変換だけ）。
+func adminTextbookMaster(m textbookmaster.Master) AdminTextbookMaster {
+	metrics := make([]AdminTextbookMasterMetric, len(m.Metrics))
+	for i, metric := range m.Metrics {
+		metrics[i] = AdminTextbookMasterMetric(metric)
 	}
-	if master.TextbookCount > 0 {
-		return masterOutcome[AdminTextbookMaster]{failure: masterInUse, count: master.TextbookCount}, nil
+	return AdminTextbookMaster{
+		Edition: m.Edition, ID: m.ID, Isbn: m.Isbn, Metrics: metrics, Name: m.Name, Publisher: m.Publisher, TextbookCount: m.TextbookCount,
 	}
-	// 総量の候補は外部キーの CASCADE で一緒に消える。
-	if _, err := st.db.ExecContext(ctx, "DELETE FROM TextbookMaster WHERE id = ?", id); err != nil {
-		return masterOutcome[AdminTextbookMaster]{}, err
-	}
-	st.textbookMastersChanged()
-	return masterOutcome[AdminTextbookMaster]{value: *master}, nil
 }
