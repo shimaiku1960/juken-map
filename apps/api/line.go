@@ -20,6 +20,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
@@ -48,7 +49,7 @@ var lineConnectionCompletedMessage = strings.Join([]string{
 	"受験マップとのLINE連携が完了しました！",
 	"",
 	"朝・夜の通知は、受験マップのプロフィールから設定できます。",
-	siteURL + "/line/settings",
+	site.URL + "/line/settings",
 }, "\n")
 
 // accountLinkResult は Account Link の nonce で連携を確定した結果（持ち主の notification.LinkResult と同じ値）。
@@ -90,7 +91,7 @@ type lineHandlers struct {
 	store         lineStore
 	line          lineClient
 	channelSecret string // LINE_CHANNEL_SECRET（Webhook の署名）
-	// webOrigin は画面のオリジン。本番は nginx で API と同じ（siteURL）。手元は Vite（WEB_ORIGIN）。
+	// webOrigin は画面のオリジン。本番は nginx で API と同じ（site.URL）。手元は Vite（WEB_ORIGIN）。
 	webOrigin string
 }
 
@@ -177,7 +178,7 @@ func (h *lineHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *htt
 // oauthCallback は GET /api/line/oauth/callback。LINE の同意画面から戻ってくる。
 // 結果はプロフィール画面へ ?line=<結果> で知らせる（画面が文言を出し分ける）。
 func (h *lineHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
-	query := parseQuery(r.URL.RawQuery)
+	query := httpx.ParseQuery(r.URL.RawQuery)
 	// 利用者が同意画面でキャンセルすると、LINE は error を付けて戻す。
 	if _, ok := query["error"]; ok {
 		h.profileRedirect(w, r, "cancelled")
@@ -382,7 +383,7 @@ func (h *lineHandlers) sendLinkGuide(ctx context.Context, event lineEvent) error
 	}
 	if connected {
 		return h.line.replyText(ctx, event.ReplyToken,
-			"受験マップとはすでに連携済みです。\n通知設定を確認する → "+siteURL+"/line/settings")
+			"受験マップとはすでに連携済みです。\n通知設定を確認する → "+site.URL+"/line/settings")
 	}
 	linkToken, err := h.line.issueLinkToken(ctx, lineUserID)
 	if err != nil {
@@ -409,7 +410,7 @@ func (h *lineHandlers) completeAccountLink(ctx context.Context, event lineEvent)
 	case accountLinkExpired:
 		text = "連携リンクの期限が切れました。「連携」と送って、もう一度お試しください。"
 	case accountLinkLinked:
-		text = "受験マップとの連携が完了しました。\n通知設定を続ける → " + siteURL + "/line/settings"
+		text = "受験マップとの連携が完了しました。\n通知設定を続ける → " + site.URL + "/line/settings"
 	default:
 		text = "このLINEは別の受験マップアカウントに連携済みです。以前のアカウントでLINE連携を解除してから、もう一度お試しください。"
 	}

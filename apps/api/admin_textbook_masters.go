@@ -10,6 +10,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbookmaster"
 )
@@ -21,7 +22,7 @@ import (
 
 // listTextbookMasters は GET /api/admin/textbook-masters。
 func (h *adminMasterHandlers) listTextbookMasters(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
-	q, issue := readMasterSearchQuery(parseQuery(r.URL.RawQuery))
+	q, issue := readMasterSearchQuery(httpx.ParseQuery(r.URL.RawQuery))
 	if issue != nil {
 		issue.Write(w)
 		return
@@ -270,12 +271,12 @@ func (st *sqlAdminMasterStore) listTextbookMasters(ctx context.Context, q string
 }
 
 func (st *sqlAdminMasterStore) createTextbookMaster(ctx context.Context, in textbookMasterInput) (masterOutcome[apischema.AdminTextbookMaster], error) {
-	m, err := textbookmaster.Create(ctx, st.db, in.record(), nowMillis())
+	m, err := textbookmaster.Create(ctx, st.db, in.record(), dates.NowMillis())
 	return masterOutcomeOf(adminTextbookMaster(m), err, st.textbookMastersChanged)
 }
 
 func (st *sqlAdminMasterStore) updateTextbookMaster(ctx context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[apischema.AdminTextbookMaster]], error) {
-	c, err := textbookmaster.Update(ctx, st.db, id, in.record(), nowMillis())
+	c, err := textbookmaster.Update(ctx, st.db, id, in.record(), dates.NowMillis())
 	change := masterChange[apischema.AdminTextbookMaster]{before: adminTextbookMaster(c.Before), after: adminTextbookMaster(c.After)}
 	return masterOutcomeOf(change, err, st.textbookMastersChanged)
 }

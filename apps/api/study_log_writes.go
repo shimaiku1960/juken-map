@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
@@ -35,9 +36,6 @@ type studyLogInput struct {
 	memo       httpx.Optional[string]
 }
 
-// positiveIntRule は z.number().int().positive()（文言は Zod の既定）。
-var positiveIntRule = httpx.NumberRule{Int: true, Positive: true}
-
 // minutesRule は実績の時間（分）。実績の記録と予定の完了で同じ。
 var minutesRule = httpx.NumberRule{
 	TypeMessage:     "学習時間を入力してください",
@@ -58,9 +56,9 @@ func readStudyLogInput(body any, today string) (*httpx.ObjectInput, studyLogInpu
 		httpx.StringCheck{OK: func(s string) bool { return s <= today }, Code: "future_date", Message: "未来日は実績として記録できません"}))
 	v.minutes = int64(in.Number("minutes", minutesRule))
 	v.subject = in.OptionalString("subject", httpx.StringRule{Checks: []httpx.StringCheck{subjectCheck}}, true)
-	v.textbookID = in.OptionalInt("textbookId", positiveIntRule, true)
-	v.rangeStart = in.OptionalInt("rangeStart", positiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", positiveIntRule, true)
+	v.textbookID = in.OptionalInt("textbookId", httpx.PositiveIntRule, true)
+	v.rangeStart = in.OptionalInt("rangeStart", httpx.PositiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", httpx.PositiveIntRule, true)
 	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
 	v.memo = in.OptionalString("memo", memoRule, false)
 
@@ -71,7 +69,7 @@ func readStudyLogInput(body any, today string) (*httpx.ObjectInput, studyLogInpu
 // record は持ち主に渡す形にする。
 func (v studyLogInput) record() studyrecord.LogInput {
 	return studyrecord.LogInput{
-		Date: dateFromYMD(v.date), Minutes: v.minutes, Subject: v.subject.Field(), TextbookID: v.textbookID.Field(),
+		Date: dates.FromYMD(v.date), Minutes: v.minutes, Subject: v.subject.Field(), TextbookID: v.textbookID.Field(),
 		RangeStart: v.rangeStart.Field(), RangeEnd: v.rangeEnd.Field(), RangeUnit: v.rangeUnit.Field(), Memo: v.memo.Field(),
 	}
 }
@@ -92,13 +90,6 @@ func rangeRules(in *httpx.ObjectInput, start, end httpx.Optional[int64], unit ht
 	if (hasStart || hasEnd) && unit.IsNull() {
 		in.AddIssue("range_unit_required", "rangeUnit", "単位を選択してください")
 	}
-}
-
-// dateFromYMD は "YYYY-MM-DD"（暦にある日付だと確かめ済み）を、その日の 00:00 UTC にする。
-// Node の new Date("YYYY-MM-DD") と同じ値。
-func dateFromYMD(s string) time.Time {
-	t, _ := time.Parse(time.DateOnly, s)
-	return t
 }
 
 // writeStudyRecordError は学習記録の操作が断った理由を応答にする。想定外のエラーは op を付けて 500 にする。
@@ -122,7 +113,7 @@ type studyLogWriteHandlers struct {
 }
 
 func (h *studyLogWriteHandlers) today() string {
-	return ymd(dateOnTokyo(h.now()))
+	return dates.YMD(dates.OnTokyo(h.now()))
 }
 
 // create は POST /api/study-logs。
@@ -135,7 +126,7 @@ func (h *studyLogWriteHandlers) create(w http.ResponseWriter, r *http.Request, s
 	if in.Reject(w) {
 		return
 	}
-	created, err := studyrecord.CreateLog(r.Context(), h.db, s.UserID, input.record(), nowMillis())
+	created, err := studyrecord.CreateLog(r.Context(), h.db, s.UserID, input.record(), dates.NowMillis())
 	if err != nil {
 		writeStudyRecordError(w, r, "study-logs create", err)
 		return
@@ -173,7 +164,7 @@ func (h *studyLogWriteHandlers) update(w http.ResponseWriter, r *http.Request, s
 	if in.Reject(w) {
 		return
 	}
-	updated, err := studyrecord.UpdateLog(r.Context(), h.db, s.UserID, id, input.record(), nowMillis())
+	updated, err := studyrecord.UpdateLog(r.Context(), h.db, s.UserID, id, input.record(), dates.NowMillis())
 	if err != nil {
 		writeStudyRecordError(w, r, "study-logs update", err)
 		return

@@ -9,6 +9,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
@@ -32,7 +33,7 @@ var prefectures = []string{
 
 // listUniversities は GET /api/admin/universities。
 func (h *adminMasterHandlers) listUniversities(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
-	query := parseQuery(r.URL.RawQuery)
+	query := httpx.ParseQuery(r.URL.RawQuery)
 	q, issue := readMasterSearchQuery(query)
 	if issue == nil {
 		var page int
@@ -257,7 +258,7 @@ func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (
 }
 
 func (st *sqlAdminMasterStore) createUniversity(ctx context.Context, in universityInput) (masterOutcome[apischema.AdminUniversity], error) {
-	u, err := university.CreateUniversity(ctx, st.db, in.record(), nowMillis())
+	u, err := university.CreateUniversity(ctx, st.db, in.record(), dates.NowMillis())
 	return masterOutcomeOf(apischema.AdminUniversity(u), err, st.universitiesChanged)
 }
 

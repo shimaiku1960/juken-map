@@ -1,15 +1,11 @@
-package main
+package httpx
 
 import (
 	"context"
 	"errors"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 func TestMatchesETag(t *testing.T) {
@@ -45,15 +41,22 @@ func TestAcceptsGzip(t *testing.T) {
 		"":                        false,
 	}
 	for in, want := range tests {
-		if got := acceptsGzip(in); got != want {
-			t.Errorf("acceptsGzip(%q) = %v, want %v", in, got, want)
+		if got := AcceptsGzip(in); got != want {
+			t.Errorf("AcceptsGzip(%q) = %v, want %v", in, got, want)
 		}
 	}
 }
 
 func TestMarshalLikeJS(t *testing.T) {
 	// JSON.stringify と同じバイト列にする（ETag を Node と揃えるため）
-	got, err := marshalLikeJS([]exploreUniversityDTO{{ID: 1, Name: "A&B<大学>", Faculties: []exploreFacultyDTO{}}})
+	type university struct {
+		ID         int      `json:"id"`
+		Name       string   `json:"name"`
+		Prefecture string   `json:"prefecture"`
+		Type       string   `json:"type"`
+		Faculties  []string `json:"faculties"`
+	}
+	got, err := marshalLikeJS([]university{{ID: 1, Name: "A&B<大学>", Faculties: []string{}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,9 +67,9 @@ func TestMarshalLikeJS(t *testing.T) {
 }
 
 // countingCache は、load を呼んだ回数を数えるキャッシュ。時計は now で止めておく。
-func countingCache(now *time.Time, load func(n int) (any, error)) (*jsonSnapshotCache, *int) {
+func countingCache(now *time.Time, load func(n int) (any, error)) (*JSONSnapshotCache, *int) {
 	calls := 0
-	c := newJSONSnapshotCache(time.Minute, func(context.Context) (any, error) {
+	c := NewJSONSnapshotCache(time.Minute, func(context.Context) (any, error) {
 		calls++
 		return load(calls)
 	})
@@ -79,7 +82,7 @@ func TestJSONSnapshotCache(t *testing.T) {
 	c, calls := countingCache(&now, func(n int) (any, error) { return []int{n}, nil })
 	get := func() string {
 		t.Helper()
-		s, err := c.get(context.Background())
+		s, err := c.Get(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,7 +95,7 @@ func TestJSONSnapshotCache(t *testing.T) {
 	if got := get(); got != "[1]" || *calls != 1 {
 		t.Errorf("期限内なのに読み直した: %s, load %d 回", got, *calls)
 	}
-	c.invalidate()
+	c.Invalidate()
 	if got := get(); got != "[2]" {
 		t.Errorf("invalidate の後も古い中身: %s", got)
 	}
@@ -102,24 +105,24 @@ func TestJSONSnapshotCache(t *testing.T) {
 	}
 }
 
-// 読み込みの途中で invalidate されたら、その結果は返すが置かない（編集の前の DB から作ったかもしれない）。
+// 読み込みの途中で Invalidate されたら、その結果は返すが置かない（編集の前の DB から作ったかもしれない）。
 func TestJSONSnapshotCacheInvalidatedWhileLoading(t *testing.T) {
 	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
-	var c *jsonSnapshotCache
+	var c *JSONSnapshotCache
 	c, calls := countingCache(&now, func(n int) (any, error) {
 		if n == 1 {
-			c.invalidate() // 読んでいる間に管理画面で編集された
+			c.Invalidate() // 読んでいる間に管理画面で編集された
 		}
 		return []int{n}, nil
 	})
 
-	if s, err := c.get(context.Background()); err != nil || string(s.json) != "[1]" {
+	if s, err := c.Get(context.Background()); err != nil || string(s.json) != "[1]" {
 		t.Fatalf("get() = %v, %v", s, err)
 	}
 	if c.snapshot.Load() != nil {
 		t.Error("途中で捨てられた読み込みの結果が置かれた")
 	}
-	if s, _ := c.get(context.Background()); string(s.json) != "[2]" || *calls != 2 {
+	if s, _ := c.Get(context.Background()); string(s.json) != "[2]" || *calls != 2 {
 		t.Errorf("次の get で読み直していない: %s", s.json)
 	}
 }
@@ -128,7 +131,7 @@ func TestJSONSnapshotCacheLoadError(t *testing.T) {
 	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	boom := errors.New("boom")
 	c, _ := countingCache(&now, func(int) (any, error) { return nil, boom })
-	if _, err := c.get(context.Background()); !errors.Is(err, boom) {
+	if _, err := c.Get(context.Background()); !errors.Is(err, boom) {
 		t.Errorf("err = %v", err)
 	}
 	if c.snapshot.Load() != nil {
@@ -137,7 +140,7 @@ func TestJSONSnapshotCacheLoadError(t *testing.T) {
 }
 
 func TestWriteJSONSnapshot(t *testing.T) {
-	snap := &jsonSnapshot{json: []byte(`[]`), gzip: []byte("gz"), etag: `"x"`}
+	snap := &JSONSnapshot{json: []byte(`[]`), gzip: []byte("gz"), etag: `"x"`}
 	tests := []struct {
 		name, ifNoneMatch, acceptEncoding string
 		wantStatus                        int
@@ -153,7 +156,7 @@ func TestWriteJSONSnapshot(t *testing.T) {
 			req.Header.Set("If-None-Match", tt.ifNoneMatch)
 			req.Header.Set("Accept-Encoding", tt.acceptEncoding)
 			res := httptest.NewRecorder()
-			writeJSONSnapshot(res, req, snap)
+			WriteJSONSnapshot(res, req, snap)
 
 			if res.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", res.Code, tt.wantStatus)
@@ -170,22 +173,3 @@ func TestWriteJSONSnapshot(t *testing.T) {
 }
 
 // GET /api/textbook-masters もキャッシュから返す（db は nil なので、DB を引けば panic する）。
-func TestTextbookMastersFromCache(t *testing.T) {
-	st := newTextbookStore(nil)
-	snap, err := newJSONSnapshot([]apischema.TextbookMaster{}, time.Now().Add(time.Minute))
-	if err != nil {
-		t.Fatal(err)
-	}
-	st.masters.snapshot.Store(snap)
-	rt := httpx.NewRouter(fakeSessions(testSessions))
-	rt.User("GET /api/textbook-masters", (&textbookHandlers{store: st}).listMasters)
-
-	req := httptest.NewRequest("GET", "/api/textbook-masters", nil)
-	req.AddCookie(&http.Cookie{Name: "test", Value: "alice"})
-	req.Header.Set("If-None-Match", snap.etag)
-	res := httptest.NewRecorder()
-	rt.ServeHTTP(res, req)
-	if res.Code != http.StatusNotModified {
-		t.Errorf("status = %d, want 304", res.Code)
-	}
-}

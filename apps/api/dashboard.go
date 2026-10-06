@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
@@ -37,14 +38,14 @@ func (h *dashboardHandler) serve(w http.ResponseWriter, r *http.Request, s *http
 // get はダッシュボードの初回表示ぶんをまとめて返す。Node 側の getDashboard にあたる。
 // now を引数で受け取るのは、テストで「今日」を固定できるようにするため。
 func (h *dashboardHandler) get(ctx context.Context, userID string, now time.Time) (*apischema.Dashboard, error) {
-	today := dateOnTokyo(now)
-	start, end := monthStart(today), monthEnd(today)
+	today := dates.OnTokyo(now)
+	start, end := dates.MonthStart(today), dates.MonthEnd(today)
 
 	// 実績は過去だけ。直近7日が月の頭で前月へはみ出すぶんだけ前へ伸ばす。
-	logFrom, logTo := earlier(start, addDays(today, -(recentDays-1))), end
+	logFrom, logTo := dates.Earlier(start, dates.AddDays(today, -(recentDays-1))), end
 	// 予定は未来にもある。今週ぶんが月末をまたぐぶんだけ翌月へ伸ばす。
-	planFrom, planTo := start, later(end, addDays(today, upcomingDays-1))
-	dailyFrom := addDays(today, -(streakDays - 1))
+	planFrom, planTo := start, dates.Later(end, dates.AddDays(today, upcomingDays-1))
+	dailyFrom := dates.AddDays(today, -(streakDays - 1))
 
 	// 3本の SQL を同時に投げる（Node 側の Promise.all にあたる）。
 	// errgroup は、どれか1本が失敗したら ctx を取り消して残りを止め、最初のエラーを返す。
@@ -72,9 +73,9 @@ func (h *dashboardHandler) get(ctx context.Context, userID string, now time.Time
 
 	return &apischema.Dashboard{
 		Month:        today.Format("2006-01"),
-		LogRange:     apischema.DateRange{From: ymd(logFrom), To: ymd(logTo)},
+		LogRange:     apischema.DateRange{From: dates.YMD(logFrom), To: dates.YMD(logTo)},
 		Logs:         logs,
-		PlanRange:    apischema.DateRange{From: ymd(planFrom), To: ymd(planTo)},
+		PlanRange:    apischema.DateRange{From: dates.YMD(planFrom), To: dates.YMD(planTo)},
 		Plans:        plans,
 		DailyMinutes: daily,
 	}, nil

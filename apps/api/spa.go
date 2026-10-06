@@ -272,7 +272,7 @@ func (s *spaSite) serveAsset(w http.ResponseWriter, r *http.Request, a *staticAs
 	if a.gzip != nil {
 		// 同じ URL でも Accept-Encoding で本文の形が変わる、と途中のキャッシュに伝える。
 		h.Set("Vary", "Accept-Encoding")
-		if acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		if httpx.AcceptsGzip(r.Header.Get("Accept-Encoding")) {
 			// Content-Encoding を付けて返すと、nginx の gzip は圧縮し直さない。
 			h.Set("Content-Encoding", "gzip")
 			body, etag = a.gzip, a.gzipETag
@@ -288,7 +288,7 @@ func writeMaybeGzip(w http.ResponseWriter, r *http.Request, status int, body []b
 	h := w.Header()
 	if len(body) >= gzipMinSize {
 		h.Add("Vary", "Accept-Encoding")
-		if acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		if httpx.AcceptsGzip(r.Header.Get("Accept-Encoding")) {
 			h.Set("Content-Encoding", "gzip")
 			body = gzipBytes(body, gzip.DefaultCompression)
 		}

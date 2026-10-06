@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
@@ -63,7 +64,7 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "実績の書き換え", table: "StudyLog",
 			seed: func(fx dbFixture, holder string) int64 { return fx.StudyLog(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = studyrecord.UpdateLog(ctx, db, caller, id, studyrecord.LogInput{Date: dateFromYMD("2027-01-01"), Minutes: 99}, now)
+				_, _ = studyrecord.UpdateLog(ctx, db, caller, id, studyrecord.LogInput{Date: dates.FromYMD("2027-01-01"), Minutes: 99}, now)
 			},
 		},
 		{

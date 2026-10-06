@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
@@ -98,7 +99,7 @@ func readTextbookInput(body any) (textbookInput, *httpx.ValidationIssue) {
 
 	// 2つ目の選択肢：参考書マスターから作る。
 	masterValue, _ := get("masterId")
-	masterID, masterIssue := httpx.CheckNumber("masterId", masterValue, positiveIntRule)
+	masterID, masterIssue := httpx.CheckNumber("masterId", masterValue, httpx.PositiveIntRule)
 	if masterIssue == nil {
 		return textbookInput{fromMaster: true, masterID: int64(masterID)}, nil
 	}
@@ -158,7 +159,7 @@ type textbookProgress struct {
 func (p textbookProgress) record() textbook.Progress {
 	targetDate := opt.Field[time.Time]{Present: p.targetDate.Present}
 	if v := p.targetDate.Ptr(); v != nil {
-		day := dateFromYMD(*v)
+		day := dates.FromYMD(*v)
 		targetDate.Value = &day
 	}
 	return textbook.Progress{
@@ -181,10 +182,10 @@ func (h *textbookHandlers) create(w http.ResponseWriter, r *http.Request, s *htt
 	var created textbook.Textbook
 	var err error
 	if input.fromMaster {
-		created, err = textbook.CreateFromMaster(r.Context(), h.store.db, s.UserID, input.masterID, nowMillis())
+		created, err = textbook.CreateFromMaster(r.Context(), h.store.db, s.UserID, input.masterID, dates.NowMillis())
 	} else {
 		created, err = textbook.Create(r.Context(), h.store.db, s.UserID,
-			textbook.New{Name: input.name, RangeUnit: input.rangeUnit.Ptr(), Subject: input.subject.Ptr()}, nowMillis())
+			textbook.New{Name: input.name, RangeUnit: input.rangeUnit.Ptr(), Subject: input.subject.Ptr()}, dates.NowMillis())
 	}
 	switch {
 	case errors.Is(err, textbook.ErrMasterNotFound):
@@ -214,7 +215,7 @@ func (h *textbookHandlers) updateProgress(w http.ResponseWriter, r *http.Request
 	if in.Reject(w) {
 		return
 	}
-	updated, err := textbook.UpdateProgress(r.Context(), h.store.db, s.UserID, id, progress.record(), nowMillis())
+	updated, err := textbook.UpdateProgress(r.Context(), h.store.db, s.UserID, id, progress.record(), dates.NowMillis())
 	switch {
 	case errors.Is(err, textbook.ErrNotFound):
 		httpx.WriteError(w, http.StatusNotFound, err.Error())

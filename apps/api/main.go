@@ -24,6 +24,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -89,7 +90,7 @@ func run() error {
 		return err
 	}
 	m := newMetrics()
-	webOrigin := envOr("WEB_ORIGIN", siteURL)
+	webOrigin := envOr("WEB_ORIGIN", site.URL)
 	authHandlers := newAuthHandlers(db, authConfig{
 		webOrigin:       webOrigin,
 		totpKeys:        totpKeys,
@@ -125,7 +126,7 @@ func run() error {
 		},
 	}, lineConfig{
 		channelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
-		webOrigin:     envOr("WEB_ORIGIN", siteURL),
+		webOrigin:     envOr("WEB_ORIGIN", site.URL),
 		client: &httpLineClient{
 			client:         telemetry.NewOutboundClient(tp),
 			botBase:        envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
@@ -324,8 +325,8 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfi
 	// 変えたら GET /api/textbook-masters（上の textbooks）のキャッシュを捨てる。
 	masters := &adminMasterHandlers{store: &sqlAdminMasterStore{
 		db:                     db,
-		universitiesChanged:    universityStore.explore.invalidate,
-		textbookMastersChanged: textbookStore.masters.invalidate,
+		universitiesChanged:    universityStore.explore.Invalidate,
+		textbookMastersChanged: textbookStore.masters.Invalidate,
 	}}
 	rt.Admin("GET /api/admin/universities", masters.listUniversities)
 	rt.Admin("POST /api/admin/universities", masters.createUniversity)

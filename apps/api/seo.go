@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 )
 
 // SPA は誰が来ても同じ index.html を返すため、クローラーと SNS が読む head をサーバー側で作り直す（JUK-111）。
@@ -17,7 +20,7 @@ import (
 const siteName = "受験マップ"
 
 // ogImage は記事以外の OGP 画像。Node の src/shared/pageMeta.ts の OG_IMAGE と同じ値。
-const ogImage = siteURL + "/opengraph-image.png"
+const ogImage = site.URL + "/opengraph-image.png"
 
 const defaultDescription = "学習の開始から時間記録、予定と実績の確認、科目別の振り返りまでをひとつにつなぐ、大学受験生向け学習管理アプリです。"
 
@@ -87,7 +90,7 @@ func defaultMeta(pathname string) pageMeta {
 	if preset, ok := staticMeta[pathname]; ok {
 		title = preset.title
 		description = preset.description
-		canonical = siteURL
+		canonical = site.URL
 		if pathname != "/" {
 			canonical += pathname
 		}
@@ -287,14 +290,14 @@ func buildSitemap(articles []sitemapArticle) []byte {
 		priority                           float64
 	}
 	entries := []entry{
-		{url: siteURL, changeFrequency: "weekly", priority: 1},
-		{url: siteURL + "/blog", changeFrequency: "weekly", priority: 0.6},
-		{url: siteURL + "/terms", changeFrequency: "yearly", priority: 0.3},
-		{url: siteURL + "/privacy", changeFrequency: "yearly", priority: 0.3},
+		{url: site.URL, changeFrequency: "weekly", priority: 1},
+		{url: site.URL + "/blog", changeFrequency: "weekly", priority: 0.6},
+		{url: site.URL + "/terms", changeFrequency: "yearly", priority: 0.3},
+		{url: site.URL + "/privacy", changeFrequency: "yearly", priority: 0.3},
 	}
 	for _, a := range articles {
 		entries = append(entries, entry{
-			url:             siteURL + a.pathname,
+			url:             site.URL + a.pathname,
 			lastModified:    sitemapLastModified(a.lastModified),
 			changeFrequency: "monthly",
 			priority:        0.5,
@@ -325,7 +328,7 @@ func sitemapLastModified(v string) string {
 	if err != nil {
 		return ""
 	}
-	return isoMillis(t)
+	return dates.ISOMillis(t)
 }
 
 // spaRoutes は SPA が描けるパスの一覧。src/shared/routes.ts の SPA_ROUTES と同じ並び

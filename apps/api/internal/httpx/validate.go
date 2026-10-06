@@ -222,6 +222,9 @@ type NumberRule struct {
 	MaxMessage string
 }
 
+// PositiveIntRule は z.number().int().positive()（文言は Zod の既定）。ID を受ける項目で使う。
+var PositiveIntRule = NumberRule{Int: true, Positive: true}
+
 // Number は必須の z.number() と NumberRule のチェック。
 func (in *ObjectInput) Number(key string, rule NumberRule) float64 {
 	v, ok := in.Value(key)
@@ -470,7 +473,7 @@ func YMDDateRule(minMessage string, extra ...StringCheck) StringRule {
 }
 
 // YMDPattern は Node の ymdField（z.string().regex(/^\d{4}-\d{2}-\d{2}$/)）と同じ形。
-// 形だけを見て、13月や2月30日は通す（下の parseYMD で扱う）。
+// 形だけを見て、13月や2月30日は通す（dates.ParseYMD で扱う）。
 var YMDPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 const YMDMessage = "日付は YYYY-MM-DD で指定してください"

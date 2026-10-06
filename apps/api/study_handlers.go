@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
@@ -31,8 +32,8 @@ func (h *studyHandlers) listLogs(w http.ResponseWriter, r *http.Request, s *http
 	if !ok {
 		return
 	}
-	today := dateOnTokyo(time.Now())
-	rng, ok := q.resolve(addDays(today, -(defaultLogDays-1)), nil)
+	today := dates.OnTokyo(time.Now())
+	rng, ok := q.resolve(dates.AddDays(today, -(defaultLogDays-1)), nil)
 	if !ok {
 		httpx.WriteJSON(w, http.StatusOK, []apischema.StudyLog{})
 		return
@@ -51,8 +52,8 @@ func (h *studyHandlers) listDaily(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
-	today := dateOnTokyo(time.Now())
-	rng, ok := q.resolve(addDays(today, -(defaultDailyDays-1)), nil)
+	today := dates.OnTokyo(time.Now())
+	rng, ok := q.resolve(dates.AddDays(today, -(defaultDailyDays-1)), nil)
 	if !ok {
 		httpx.WriteJSON(w, http.StatusOK, []apischema.DailyStudyMinutes{})
 		return
@@ -71,9 +72,9 @@ func (h *studyHandlers) listPlans(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
-	today := dateOnTokyo(time.Now())
-	defaultTo := addDays(today, defaultPlanFutureDays)
-	rng, ok := q.resolve(addDays(today, -defaultPlanPastDays), &defaultTo)
+	today := dates.OnTokyo(time.Now())
+	defaultTo := dates.AddDays(today, defaultPlanFutureDays)
+	rng, ok := q.resolve(dates.AddDays(today, -defaultPlanPastDays), &defaultTo)
 	if !ok {
 		httpx.WriteJSON(w, http.StatusOK, []apischema.StudyPlan{})
 		return

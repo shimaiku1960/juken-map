@@ -17,6 +17,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
@@ -133,7 +134,7 @@ func (h *adminUserHandlers) overview(w http.ResponseWriter, r *http.Request, _ *
 
 // listUsers は GET /api/admin/users。
 func (h *adminUserHandlers) listUsers(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
-	kind, q, page, issue := readAdminUsersQuery(parseQuery(r.URL.RawQuery))
+	kind, q, page, issue := readAdminUsersQuery(httpx.ParseQuery(r.URL.RawQuery))
 	if issue != nil {
 		issue.Write(w)
 		return
@@ -162,7 +163,7 @@ func (h *adminUserHandlers) ban(w http.ResponseWriter, r *http.Request, s *httpx
 	}
 
 	// 押し直しても最初に止めた日時を保つ（Node の COALESCE と同じ。account.Suspend が DB の値を返す）。
-	banned, err := h.store.ban(r.Context(), id, nowMillis())
+	banned, err := h.store.ban(r.Context(), id, dates.NowMillis())
 	if errors.Is(err, account.ErrNotFound) {
 		httpx.WriteError(w, http.StatusNotFound, "ユーザーが見つかりません")
 		return
@@ -194,7 +195,7 @@ func (h *adminUserHandlers) unban(w http.ResponseWriter, r *http.Request, s *htt
 		httpx.WriteError(w, http.StatusNotFound, "ユーザーが見つかりません")
 		return
 	}
-	err = h.store.unban(r.Context(), id, nowMillis())
+	err = h.store.unban(r.Context(), id, dates.NowMillis())
 	if errors.Is(err, account.ErrNotFound) {
 		httpx.WriteError(w, http.StatusNotFound, "ユーザーが見つかりません")
 		return
@@ -392,11 +393,6 @@ func jsonNumberOf(f float64) any {
 		return json.Number("-Inf")
 	}
 	return json.Number(strconv.FormatFloat(f, 'g', -1, 64))
-}
-
-// isoMillis は時刻を Node の Date#toISOString と同じ形にする。
-func isoMillis(t time.Time) string {
-	return t.UTC().Format("2006-01-02T15:04:05.000Z")
 }
 
 // ここから下は本物の DB。

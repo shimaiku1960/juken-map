@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
@@ -103,7 +104,7 @@ func TestReadAdminUsersQuery(t *testing.T) {
 		{"page=0&kind=x", "", "", 0, `invalid_value kind Invalid option: expected one of "real"|"sim"|"seed"|"demo"`},
 	}
 	for _, tt := range tests {
-		kind, q, page, issue := readAdminUsersQuery(parseQuery(tt.raw))
+		kind, q, page, issue := readAdminUsersQuery(httpx.ParseQuery(tt.raw))
 		got := ""
 		if issue != nil {
 			got = issue.Code + " " + issue.Field + " " + issue.Message
@@ -155,7 +156,7 @@ func (f *fakeAdminUserStore) findTarget(_ context.Context, id string) (*adminTar
 
 func (f *fakeAdminUserStore) ban(_ context.Context, id string, now time.Time) (account.Suspension, error) {
 	f.banned = append(f.banned, id)
-	bannedAt := isoMillis(now)
+	bannedAt := dates.ISOMillis(now)
 	if u := f.users[id]; u != nil && u.BannedAt != nil {
 		bannedAt = *u.BannedAt
 	}

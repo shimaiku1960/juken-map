@@ -235,7 +235,7 @@ func (t *deployTrigger) dispatchQueued() {
 	t.last = t.now()
 	t.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), externalTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), httpx.ExternalTimeout)
 	defer cancel()
 	if err := t.deployer.dispatch(ctx); err != nil {
 		slog.Error("[microcms-webhook] Failed to dispatch queued deploy.", "err", err.Error())
@@ -258,7 +258,7 @@ func (g *githubWorkflowDispatcher) dispatch(ctx context.Context) error {
 	if g.token == "" {
 		return errors.New("GITHUB_DEPLOY_TOKEN is not configured")
 	}
-	ctx, cancel := context.WithTimeout(ctx, externalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
 	url := fmt.Sprintf("%s/repos/%s/actions/workflows/%s/dispatches", g.apiBase, g.repo, g.workflow)
 	body := fmt.Sprintf(`{"ref":%q}`, g.ref)
