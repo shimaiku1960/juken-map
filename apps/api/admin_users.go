@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 // 管理者ページ（/admin）の利用者の管理（JUK-78）。Node の routes/admin.ts と services/admin-service.ts にあたる。
@@ -97,8 +98,9 @@ type adminUserStore interface {
 	listUsers(ctx context.Context, kind UserKind, q string, page int) (AdminUserList, error)
 	// findTarget は相手を引く。いなければ nil。
 	findTarget(ctx context.Context, id string) (*adminTarget, error)
-	// ban は bannedAt を書き（すでに止まっていれば最初の日時のまま）、その人の session を消す。消した数を返す。
-	ban(ctx context.Context, id string, now time.Time) (sessionsRemoved int, err error)
+	// ban は bannedAt を書き（すでに止まっていれば最初の日時のまま）、その人の session を消す（account.Suspend）。
+	// 相手がいなければ account.ErrNotFound。
+	ban(ctx context.Context, id string, now time.Time) (account.Suspension, error)
 	unban(ctx context.Context, id string, now time.Time) error
 	// deleteUser は利用者を消し、一緒に消える行の数を返す（数えるのは記録のためだけ）。
 	deleteUser(ctx context.Context, id string) (removedCounts, error)
@@ -157,19 +159,19 @@ func (h *adminUserHandlers) ban(w http.ResponseWriter, r *http.Request, s *sessi
 		return
 	}
 
-	now := nowMillis()
-	removed, err := h.store.ban(r.Context(), id, now)
+	// 押し直しても最初に止めた日時を保つ（Node の COALESCE と同じ。account.Suspend が DB の値を返す）。
+	banned, err := h.store.ban(r.Context(), id, nowMillis())
+	if errors.Is(err, account.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
+		return
+	}
 	if err != nil {
 		internalError(w, r, fmt.Errorf("admin ban: %w", err))
 		return
 	}
-	// 押し直しても最初に止めた日時を保つ（Node の COALESCE と同じ）。
-	bannedAt := isoMillis(now)
-	if target.BannedAt != nil {
-		bannedAt = *target.BannedAt
-	}
+	removed := int(banned.SessionsRemoved)
 	logAdminUserAction(r.Context(), s.UserID, "ban", target, "sessionsRemoved", removed)
-	writeJSON(w, http.StatusOK, AdminBanResult{ID: id, Email: target.Email, BannedAt: bannedAt, SessionsRemoved: removed})
+	writeJSON(w, http.StatusOK, AdminBanResult{ID: id, Email: target.Email, BannedAt: banned.BannedAt, SessionsRemoved: removed})
 }
 
 // unban は POST /api/admin/users/{id}/unban。守りは見ない（Node と同じ。止まっていなければ何も変わらない）。
@@ -190,7 +192,12 @@ func (h *adminUserHandlers) unban(w http.ResponseWriter, r *http.Request, s *ses
 		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
 		return
 	}
-	if err := h.store.unban(r.Context(), id, nowMillis()); err != nil {
+	err = h.store.unban(r.Context(), id, nowMillis())
+	if errors.Is(err, account.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
+		return
+	}
+	if err != nil {
 		internalError(w, r, fmt.Errorf("admin unban: %w", err))
 		return
 	}
@@ -551,29 +558,13 @@ func (st *sqlAdminUserStore) findTarget(ctx context.Context, id string) (*adminT
 	return &t, nil
 }
 
-// ban は停止の印と、今つながっている画面を落とすためのセッションの削除を1つのトランザクションで行う。
-// 両方そろって初めて「止まった」と言える（次のログインは auth_handlers.go・auth_mfa.go・auth_oauth.go が
-// bannedAt を見て断る）。認証基準 10 の C5 の「ある利用者の全端末」にあたる。
-func (st *sqlAdminUserStore) ban(ctx context.Context, id string, now time.Time) (int, error) {
-	var removed int64
-	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			"UPDATE `user` SET bannedAt = COALESCE(bannedAt, ?), updatedAt = ? WHERE id = ?", now, now, id); err != nil {
-			return err
-		}
-		res, err := tx.ExecContext(ctx, "DELETE FROM AuthSession WHERE userId = ?", id)
-		if err != nil {
-			return err
-		}
-		removed, err = res.RowsAffected()
-		return err
-	})
-	return int(removed), err
+// ban・unban は account の操作を呼ぶだけ。interface にしているのは、DB を使わないテストで結果を作るため。
+func (st *sqlAdminUserStore) ban(ctx context.Context, id string, now time.Time) (account.Suspension, error) {
+	return account.Suspend(ctx, st.db, id, now, nil)
 }
 
 func (st *sqlAdminUserStore) unban(ctx context.Context, id string, now time.Time) error {
-	_, err := st.db.ExecContext(ctx, "UPDATE `user` SET bannedAt = NULL, updatedAt = ? WHERE id = ?", now, id)
-	return err
+	return account.Unsuspend(ctx, st.db, id, now, nil)
 }
 
 // deleteUser は利用者を消す。消し方は本人の退会と同じ deleteUserAndData（auth_delete_account.go）。

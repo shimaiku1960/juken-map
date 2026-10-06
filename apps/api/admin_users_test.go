@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 // 利用者の管理（admin_users.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
@@ -149,9 +151,13 @@ func (f *fakeAdminUserStore) findTarget(_ context.Context, id string) (*adminTar
 	return f.users[id], nil
 }
 
-func (f *fakeAdminUserStore) ban(_ context.Context, id string, _ time.Time) (int, error) {
+func (f *fakeAdminUserStore) ban(_ context.Context, id string, now time.Time) (account.Suspension, error) {
 	f.banned = append(f.banned, id)
-	return 2, nil
+	bannedAt := isoMillis(now)
+	if u := f.users[id]; u != nil && u.BannedAt != nil {
+		bannedAt = *u.BannedAt
+	}
+	return account.Suspension{BannedAt: bannedAt, SessionsRemoved: 2}, nil
 }
 
 func (f *fakeAdminUserStore) unban(context.Context, string, time.Time) error { return nil }

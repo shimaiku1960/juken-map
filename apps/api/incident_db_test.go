@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 type cliFixture struct {
@@ -210,6 +211,30 @@ func TestIncidentCommandDB(t *testing.T) {
 		}
 	})
 
+	t.Run("停止・解除は、記録が書けなければ取り消す（停止とセッションの削除と記録を1つのトランザクションで行う）", func(t *testing.T) {
+		fx := newCLIFixture(t)
+		_, id := fx.account(2, "user", true)
+		// host は VARCHAR(255)。長すぎる値で記録の INSERT だけを失敗させる。
+		broken := account.OpsAudit{Host: strings.Repeat("h", 256)}
+
+		_, err := account.Suspend(context.Background(), fx.db, id, time.Now().UTC(), &broken)
+
+		if err == nil || !strings.Contains(err.Error(), "止めていません") {
+			t.Fatalf("err = %v", err)
+		}
+		if fx.bannedAt(id) != nil || fx.sessionCount(id) != 2 {
+			t.Errorf("記録が無いのに変わった: bannedAt=%v sessions=%d", fx.bannedAt(id), fx.sessionCount(id))
+		}
+
+		fx.exec("UPDATE `user` SET bannedAt = ? WHERE id = ?", time.Now().UTC(), id)
+		if err := account.Unsuspend(context.Background(), fx.db, id, time.Now().UTC(), &broken); err == nil {
+			t.Fatal("記録が書けないのに解除できた")
+		}
+		if fx.bannedAt(id) == nil {
+			t.Error("記録が無いのに停止が戻った")
+		}
+	})
+
 	t.Run("変えた操作は、何を・誰に・前後の値・いつを OpsAuditLog に残し、見るだけの操作は残さない（セキュリティ基準 H4）", func(t *testing.T) {
 		fx := newCLIFixture(t)
 		email, id := fx.account(2, "user", true)
@@ -263,8 +288,8 @@ func TestIncidentCommandDB(t *testing.T) {
 		insert := func(age time.Duration) {
 			fx.exec("INSERT INTO OpsAuditLog (action, targetId, detail, host, createdAt) VALUES ('revoke', ?, '{}', 'test', ?)", id, now.Add(-age))
 		}
-		insert(opsAuditRetention + time.Hour)
-		insert(opsAuditRetention - time.Hour)
+		insert(account.OpsAuditRetention + time.Hour)
+		insert(account.OpsAuditRetention - time.Hour)
 
 		fx.mustRun("incident", "revoke", email)
 
