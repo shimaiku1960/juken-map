@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/simulation"
 )
 
 // シミュレーション（sim/）専用の API（JUK-80）。Node の routes/sim.ts と services/simulation-service.ts にあたる。
@@ -26,9 +29,10 @@ import (
 //
 // 登録・確認メール・ログイン・学習記録などは、実際の利用者と同じ API と同じメールの経路を通る。
 // ここにあるのは、シミュレーションの管理情報（連番・続き方の型・来なくなった日）の読み書きだけ。
+// 書き込みは持ち主の internal/write/simulation にある（JUK-154）。
 
 // simEmailLike は SQL の LIKE で「シミュレーションの利用者」だけを選ぶ条件。src/shared/synthetic.ts と同じ。
-const simEmailLike = "delivered+sim%@resend.dev"
+const simEmailLike = simulation.EmailLike
 
 var simEmailPattern = regexp.MustCompile(`^delivered\+sim\d+@resend\.dev$`)
 
@@ -73,53 +77,18 @@ func (st *simStore) state(ctx context.Context) (SimulationState, error) {
 	return state, rows.Err()
 }
 
-// markUser は登録を済ませた合成ユーザーに連番と続き方の型を付ける。
-// 該当するユーザーがいなければ notFound、連番（UNIQUE）が使用済みなら duplicate。
-func (st *simStore) markUser(ctx context.Context, m SimulationUserMark) (notFound, duplicate bool, err error) {
-	res, err := st.db.ExecContext(ctx,
-		"UPDATE `user` SET simSeq = ?, simCohort = ?, updatedAt = ? WHERE email = ? AND email LIKE ?",
-		m.Seq, m.Cohort, time.Now().UTC(), m.Email, simEmailLike)
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return false, true, nil
-	}
-	if err != nil {
-		return false, false, err
-	}
-	n, err := res.RowsAffected()
-	return n == 0, false, err
-}
-
 // simUpdate は PATCH の本文。キーが無い項目は変えない（set が false）。値が nil なら NULL にする。
 type simUpdate struct {
 	lastActedOn, dormantFrom       *string
 	setLastActedOn, setDormantFrom bool
 }
 
-// updateUser は最後に操作した日・来なくなった日を記録する。見つからなければ false。
-// 変える項目が無ければ、その連番が無くても true（Node と同じく SQL を流さない）。
-func (st *simStore) updateUser(ctx context.Context, seq int64, u simUpdate) (bool, error) {
-	var sets []string
-	var args []any
-	if u.setLastActedOn {
-		sets = append(sets, "simLastActedOn = ?")
-		args = append(args, u.lastActedOn)
+// activity は持ち主に渡す形にする。
+func (u simUpdate) activity() simulation.Activity {
+	return simulation.Activity{
+		LastActedOn: opt.Field[string]{Present: u.setLastActedOn, Value: u.lastActedOn},
+		DormantFrom: opt.Field[string]{Present: u.setDormantFrom, Value: u.dormantFrom},
 	}
-	if u.setDormantFrom {
-		sets = append(sets, "simDormantFrom = ?")
-		args = append(args, u.dormantFrom)
-	}
-	if len(sets) == 0 {
-		return true, nil
-	}
-	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（sets）。値は args で ? として渡す
-	res, err := st.db.ExecContext(ctx,
-		"UPDATE `user` SET "+strings.Join(sets, ", ")+" WHERE simSeq = ? AND email LIKE ?",
-		append(args, seq, simEmailLike)...)
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	return n > 0, err
 }
 
 // ここから下は、本文とパスの値を Node（Zod と Number()）と同じ規則で読む部分。
@@ -232,15 +201,8 @@ func (h *simHandlers) markUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, invalidInput)
 		return
 	}
-	notFound, duplicate, err := h.store.markUser(r.Context(), m)
-	switch {
-	case err != nil:
-		internalError(w, r, fmt.Errorf("sim mark user: %w", err))
-	case notFound:
-		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
-	case duplicate:
-		writeError(w, http.StatusConflict, "この連番はすでに使われています")
-	default:
+	err := simulation.Mark(r.Context(), h.store.db, m.Email, m.Seq, string(m.Cohort), time.Now().UTC())
+	if !writeSimError(w, r, "sim mark user", err) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -257,13 +219,23 @@ func (h *simHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, invalidInput)
 		return
 	}
-	found, err := h.store.updateUser(r.Context(), seq, u)
-	switch {
-	case err != nil:
-		internalError(w, r, fmt.Errorf("sim update user: %w", err))
-	case !found:
-		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
-	default:
+	err := simulation.RecordActivity(r.Context(), h.store.db, seq, u.activity())
+	if !writeSimError(w, r, "sim update user", err) {
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// writeSimError は持ち主の失敗を返して true を返す。失敗でなければ false。
+func writeSimError(w http.ResponseWriter, r *http.Request, op string, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, simulation.ErrNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, simulation.ErrDuplicate):
+		writeError(w, http.StatusConflict, err.Error())
+	default:
+		internalError(w, r, fmt.Errorf("%s: %w", op, err))
+	}
+	return true
 }

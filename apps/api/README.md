@@ -316,7 +316,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `tracing.go` | OpenTelemetry のトレース（リクエスト・SQL・外部 API の呼び出し）。URL のパスとクエリは入れない（JUK-126） |
 | `analytics.go` | 本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80） |
 | `csp_report.go` | ブラウザが送る CSP の違反の報告をログに残す（認証なしの口なので件数と大きさに上限） |
-| `sim.go` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る |
+| `sim.go` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る。書き込みは `internal/write/simulation` |
 
 ### コマンド（引数を付けて起動したとき）
 
@@ -345,6 +345,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/write/university/` | 大学・学部のマスター（学部のタグを含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。志望校に使われている行は消さない（JUK-154） |
 | `internal/write/textbookmaster/` | 参考書マスター（総量の候補を含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154） |
 | `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |
+| `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
 | `internal/write/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `optional` を `.field()` で変換する |
 | `openapi.gen.go` | `openapi/openapi.yaml` から作った応答・リクエストの型（手で直さない。`pnpm openapi:generate`、設定は `oapi-codegen.yaml`） |
 
