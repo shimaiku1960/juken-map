@@ -342,6 +342,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
 | `internal/write/authguard/` | ログインの守り（回数の制限・メールの送信の上限・外部ログインの state）への書き込みの持ち主。試行を先に数えてから判定し、メールは数えてから記録するまでを名前付きロックで1件ずつ通す（JUK-154） |
 | `internal/write/expired/` | 期限の切れた行の消し方（主キーで選んで主キーで消す）。消す表は持ち主（account・authguard・notification）が渡す。書き込みの SQL は `internal/write/` の下だけに置く決まり（JUK-157）のため、`internal/database` から移した |
+| `internal/write/sql_boundary_test.go` | 書き込みの SQL（INSERT・UPDATE・DELETE・REPLACE）が `internal/write/` の下（と `internal/migrate`・`internal/dbtest`）にしか無いことを確かめるテスト（JUK-157） |
 | `internal/write/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `optional` を `.field()` で変換する |
 | `internal/apischema/` | `openapi/openapi.yaml` から作った応答・リクエストの型（`openapi.gen.go`。手で直さない。`pnpm openapi:generate`、設定は同じディレクトリの `oapi-codegen.yaml`）。入口と持ち主の両方が使う（JUK-155） |
 
