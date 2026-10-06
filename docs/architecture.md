@@ -255,6 +255,7 @@ apps/api/
   │ ├ account/  authguard/  studyrecord/  textbook/  goal/
   │ └ university/  textbookmaster/  notification/  simulation/   （一覧は下の「持ち主の一覧」）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
+  │ └ httpxtest/          入口を使うテストの補助（偽のセッション・JSON の比べ方）
   ├ dates/                日付と時刻（日本時間の今日・Node の Date と同じ値へのそろえ方）
   ├ site/                 サイトの URL
   ├ database/             DB 接続

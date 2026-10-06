@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 func TestExploreTypesMatchOpenAPI(t *testing.T) {
@@ -25,5 +26,5 @@ func TestExploreTypesMatchOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertJSONEqual(t, string(hand), string(generated))
+	httpxtest.AssertJSONEqual(t, string(hand), string(generated))
 }

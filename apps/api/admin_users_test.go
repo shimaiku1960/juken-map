@@ -15,6 +15,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -27,7 +28,7 @@ import (
 // ルートを足しても、このテストに書き足さなくても確かめられる。ハンドラまで来ると DB が nil で
 // panic するので、断れていなければテストが落ちる。
 func TestAdminRoutesRejectNonAdmins(t *testing.T) {
-	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	tests := []struct {
@@ -61,7 +62,7 @@ func TestAdminRoutesRejectNonAdmins(t *testing.T) {
 				t.Errorf("%s を %q で: status = %d, want %d", route.Pattern, tt.as, rec.Code, tt.wantStatus)
 				continue
 			}
-			assertJSONEqual(t, rec.Body.String(), tt.wantBody)
+			httpxtest.AssertJSONEqual(t, rec.Body.String(), tt.wantBody)
 		}
 	}
 	if admins == 0 {
@@ -183,7 +184,7 @@ func newAdminUserTestRouter() (*httpx.Router, *fakeAdminUserStore) {
 		"blank":  {ID: "blank", Email: strPtr(""), Role: "user"},
 	}}
 	h := &adminUserHandlers{store: store, now: time.Now}
-	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	rt.Admin("GET /api/admin/users", h.listUsers)
 	rt.Admin("POST /api/admin/users/{id}/ban", h.ban)
 	rt.Admin("POST /api/admin/users/{id}/unban", h.unban)
@@ -257,7 +258,7 @@ func TestAdminUserActions(t *testing.T) {
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d（本文 %s）", rec.Code, tt.wantStatus, rec.Body.String())
 			}
-			assertJSONEqual(t, rec.Body.String(), tt.wantBody)
+			httpxtest.AssertJSONEqual(t, rec.Body.String(), tt.wantBody)
 		})
 	}
 

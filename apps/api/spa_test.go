@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 // 画面の配信のテスト（Node の spa.test.ts・seo.test.ts・security-headers.test.ts から移した）。
@@ -65,7 +66,7 @@ func newSPATestRouter(t *testing.T, scripts pageScripts) *httpx.Router {
 	if err != nil || site == nil {
 		t.Fatalf("loadSPA: %v", err)
 	}
-	rt := httpx.NewRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	rt.Public("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})

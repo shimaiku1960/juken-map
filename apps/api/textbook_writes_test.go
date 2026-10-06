@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 // 期待値は、Node の Zod（createTextbookSchema・updateTextbookProgressSchema、zod 4.5.4）に
@@ -31,17 +33,17 @@ func TestReadTextbookInput(t *testing.T) {
 		{"名前が誤りならマスターで作る", `{"name":"","masterId":1}`, "", true, "1"},
 
 		// どちらにも当たらない：型の誤りを含まない選択肢がちょうど1つなら、その issue
-		{"名前が空", `{"name":""}`, issueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
-		{"名前が空白だけ", `{"name":"  "}`, issueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
-		{"名前が全角空白だけ", `{"name":"　"}`, issueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
-		{"名前が101文字", `{"name":"` + strings.Repeat("a", 101) + `"}`, issueJSON("100文字以内で入力してください", "too_big", "name"), false, ""},
-		{"名前が空・科目は null・単位は正しい", `{"name":"","subject":null,"rangeUnit":"page"}`, issueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
-		{"名前が空・マスターが小数", `{"name":"","masterId":1.5}`, issueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
-		{"マスターが0", `{"masterId":0}`, issueJSON("Too small: expected number to be >0", "too_small", "masterId"), false, ""},
-		{"マスターが0・名前が数", `{"masterId":0,"name":1}`, issueJSON("Too small: expected number to be >0", "too_small", "masterId"), false, ""},
-		{"マスターが0・科目が不正", `{"masterId":0,"subject":"x"}`, issueJSON("Too small: expected number to be >0", "too_small", "masterId"), false, ""},
-		{"マスターが大きすぎる", `{"masterId":1e20}`, issueJSON("Too big: expected int to be <=9007199254740991", "too_big", "masterId"), false, ""},
-		{"マスターが 2^53", `{"masterId":9007199254740992}`, issueJSON("Too big: expected int to be <=9007199254740991", "too_big", "masterId"), false, ""},
+		{"名前が空", `{"name":""}`, httpxtest.IssueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
+		{"名前が空白だけ", `{"name":"  "}`, httpxtest.IssueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
+		{"名前が全角空白だけ", `{"name":"　"}`, httpxtest.IssueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
+		{"名前が101文字", `{"name":"` + strings.Repeat("a", 101) + `"}`, httpxtest.IssueJSON("100文字以内で入力してください", "too_big", "name"), false, ""},
+		{"名前が空・科目は null・単位は正しい", `{"name":"","subject":null,"rangeUnit":"page"}`, httpxtest.IssueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
+		{"名前が空・マスターが小数", `{"name":"","masterId":1.5}`, httpxtest.IssueJSON("参考書名を入力してください", "too_small", "name"), false, ""},
+		{"マスターが0", `{"masterId":0}`, httpxtest.IssueJSON("Too small: expected number to be >0", "too_small", "masterId"), false, ""},
+		{"マスターが0・名前が数", `{"masterId":0,"name":1}`, httpxtest.IssueJSON("Too small: expected number to be >0", "too_small", "masterId"), false, ""},
+		{"マスターが0・科目が不正", `{"masterId":0,"subject":"x"}`, httpxtest.IssueJSON("Too small: expected number to be >0", "too_small", "masterId"), false, ""},
+		{"マスターが大きすぎる", `{"masterId":1e20}`, httpxtest.IssueJSON("Too big: expected int to be <=9007199254740991", "too_big", "masterId"), false, ""},
+		{"マスターが 2^53", `{"masterId":9007199254740992}`, httpxtest.IssueJSON("Too big: expected int to be <=9007199254740991", "too_big", "masterId"), false, ""},
 
 		// どちらにも当たらない：それ以外は invalid_union
 		{"空", `{}`, invalidUnionJSON, false, ""},
@@ -59,14 +61,14 @@ func TestReadTextbookInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			input, issue := readTextbookInput(parse(t, tt.body))
+			input, issue := readTextbookInput(httpxtest.ParseBody(t, tt.body))
 			if tt.want != "" {
 				if issue == nil {
 					t.Fatalf("通ってしまった: %+v", input)
 				}
 				res := httptest.NewRecorder()
 				issue.Write(res)
-				assertJSONEqual(t, res.Body.String(), tt.want)
+				httpxtest.AssertJSONEqual(t, res.Body.String(), tt.want)
 				return
 			}
 			if issue != nil {
@@ -89,28 +91,28 @@ func TestReadTextbookProgress(t *testing.T) {
 		{"全部", `{"totalAmount":100000,"rangeUnit":"page","targetDate":"2024-02-29","subject":null}`, ""},
 		{"目標日は null で消せる", `{"targetDate":null}`, ""},
 		{"0000年のうるう日", `{"targetDate":"0000-02-29"}`, ""},
-		{"総量が0", `{"totalAmount":0}`, issueJSON("1以上で入力してください", "too_small", "totalAmount")},
-		{"総量が負", `{"totalAmount":-5}`, issueJSON("1以上で入力してください", "too_small", "totalAmount")},
-		{"総量が小数", `{"totalAmount":1.5}`, issueJSON("整数で入力してください", "invalid_type", "totalAmount")},
-		{"総量が文字列", `{"totalAmount":"1"}`, issueJSON("Invalid input: expected number, received string", "invalid_type", "totalAmount")},
-		{"総量が多すぎる", `{"totalAmount":100001}`, issueJSON("100000以下で入力してください", "too_big", "totalAmount")},
-		{"総量が安全な整数を超える", `{"totalAmount":1e20}`, issueJSON("整数で入力してください", "too_big", "totalAmount")},
-		{"総量が負に大きすぎる", `{"totalAmount":-1e20}`, issueJSON("整数で入力してください", "too_small", "totalAmount")},
-		{"単位が null", `{"rangeUnit":null}`, issueJSON(rangeUnitIssue, "invalid_value", "rangeUnit")},
-		{"暦に無い日付", `{"targetDate":"2026-02-30"}`, issueJSON("Invalid ISO date", "invalid_format", "targetDate")},
-		{"1900年はうるう年でない", `{"targetDate":"1900-02-29"}`, issueJSON("Invalid ISO date", "invalid_format", "targetDate")},
-		{"月が1桁", `{"targetDate":"2026-1-01"}`, issueJSON("Invalid ISO date", "invalid_format", "targetDate")},
-		{"13月", `{"targetDate":"2026-13-01"}`, issueJSON("Invalid ISO date", "invalid_format", "targetDate")},
-		{"目標日が空", `{"targetDate":""}`, issueJSON("Invalid ISO date", "invalid_format", "targetDate")},
-		{"目標日の前に空白", `{"targetDate":" 2026-01-01"}`, issueJSON("Invalid ISO date", "invalid_format", "targetDate")},
-		{"目標日が数", `{"targetDate":1}`, issueJSON("Invalid input: expected string, received number", "invalid_type", "targetDate")},
-		{"科目が不正", `{"subject":"x"}`, issueJSON(subjectIssue, "invalid_value", "subject")},
-		{"総量の誤りが科目より先", `{"subject":"x","totalAmount":0}`, issueJSON("1以上で入力してください", "too_small", "totalAmount")},
+		{"総量が0", `{"totalAmount":0}`, httpxtest.IssueJSON("1以上で入力してください", "too_small", "totalAmount")},
+		{"総量が負", `{"totalAmount":-5}`, httpxtest.IssueJSON("1以上で入力してください", "too_small", "totalAmount")},
+		{"総量が小数", `{"totalAmount":1.5}`, httpxtest.IssueJSON("整数で入力してください", "invalid_type", "totalAmount")},
+		{"総量が文字列", `{"totalAmount":"1"}`, httpxtest.IssueJSON("Invalid input: expected number, received string", "invalid_type", "totalAmount")},
+		{"総量が多すぎる", `{"totalAmount":100001}`, httpxtest.IssueJSON("100000以下で入力してください", "too_big", "totalAmount")},
+		{"総量が安全な整数を超える", `{"totalAmount":1e20}`, httpxtest.IssueJSON("整数で入力してください", "too_big", "totalAmount")},
+		{"総量が負に大きすぎる", `{"totalAmount":-1e20}`, httpxtest.IssueJSON("整数で入力してください", "too_small", "totalAmount")},
+		{"単位が null", `{"rangeUnit":null}`, httpxtest.IssueJSON(rangeUnitIssue, "invalid_value", "rangeUnit")},
+		{"暦に無い日付", `{"targetDate":"2026-02-30"}`, httpxtest.IssueJSON("Invalid ISO date", "invalid_format", "targetDate")},
+		{"1900年はうるう年でない", `{"targetDate":"1900-02-29"}`, httpxtest.IssueJSON("Invalid ISO date", "invalid_format", "targetDate")},
+		{"月が1桁", `{"targetDate":"2026-1-01"}`, httpxtest.IssueJSON("Invalid ISO date", "invalid_format", "targetDate")},
+		{"13月", `{"targetDate":"2026-13-01"}`, httpxtest.IssueJSON("Invalid ISO date", "invalid_format", "targetDate")},
+		{"目標日が空", `{"targetDate":""}`, httpxtest.IssueJSON("Invalid ISO date", "invalid_format", "targetDate")},
+		{"目標日の前に空白", `{"targetDate":" 2026-01-01"}`, httpxtest.IssueJSON("Invalid ISO date", "invalid_format", "targetDate")},
+		{"目標日が数", `{"targetDate":1}`, httpxtest.IssueJSON("Invalid input: expected string, received number", "invalid_type", "targetDate")},
+		{"科目が不正", `{"subject":"x"}`, httpxtest.IssueJSON(subjectIssue, "invalid_value", "subject")},
+		{"総量の誤りが科目より先", `{"subject":"x","totalAmount":0}`, httpxtest.IssueJSON("1以上で入力してください", "too_small", "totalAmount")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			in, _ := readTextbookProgress(parse(t, tt.body))
-			checkIssue(t, in, tt.want)
+			in, _ := readTextbookProgress(httpxtest.ParseBody(t, tt.body))
+			httpxtest.CheckIssue(t, in, tt.want)
 		})
 	}
 }

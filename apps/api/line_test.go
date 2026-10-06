@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 // LINE 連携のテスト。DB と LINE の API は偽物にする（Go の CI には DB が無い）。
@@ -221,7 +222,7 @@ type lineTestEnv struct {
 func newLineTestEnv() *lineTestEnv {
 	env := &lineTestEnv{store: newFakeLineStore(), client: &fakeLineClient{friend: true}}
 	h := &lineHandlers{store: env.store, line: env.client, channelSecret: testChannelSecret, webOrigin: "https://juken-map.com"}
-	env.rt = httpx.NewRouter(fakeSessions(testSessions))
+	env.rt = httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	env.rt.User("GET /api/line/connection", h.connection)
 	env.rt.User("DELETE /api/line/connection", h.disconnect)
 	env.rt.User("POST /api/line/account-link", h.accountLink)
@@ -279,7 +280,7 @@ func TestLineWebhookSignature(t *testing.T) {
 			if rec.Code != http.StatusUnauthorized {
 				t.Fatalf("status = %d, want 401", rec.Code)
 			}
-			assertJSONEqual(t, rec.Body.String(), `{"error":"Invalid signature"}`)
+			httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"error":"Invalid signature"}`)
 			if len(env.client.replies) != 0 || len(env.store.events) != 0 {
 				t.Errorf("署名が合わないのに処理した: replies=%v events=%v", env.client.replies, env.store.events)
 			}
@@ -426,7 +427,7 @@ func TestLineConnection(t *testing.T) {
 	env.store.connections["u1"] = "U1"
 
 	rec := env.do("GET", "/api/line/connection", "alice", "", nil)
-	assertJSONEqual(t, rec.Body.String(), `{"connected":true}`)
+	httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"connected":true}`)
 
 	// デモは解除できない（書き込み）
 	if rec := env.do("DELETE", "/api/line/connection", "demo", "", nil); rec.Code != http.StatusForbidden {
@@ -440,9 +441,9 @@ func TestLineConnection(t *testing.T) {
 	}
 
 	rec = env.do("DELETE", "/api/line/connection", "alice", "", nil)
-	assertJSONEqual(t, rec.Body.String(), `{"connected":false}`)
+	httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"connected":false}`)
 	rec = env.do("GET", "/api/line/connection", "alice", "", nil)
-	assertJSONEqual(t, rec.Body.String(), `{"connected":false}`)
+	httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"connected":false}`)
 }
 
 func TestLineAccountLink(t *testing.T) {
@@ -452,7 +453,7 @@ func TestLineAccountLink(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("body %q: status = %d, want 400", body, rec.Code)
 		}
-		assertJSONEqual(t, rec.Body.String(), `{"error":"連携情報が正しくありません"}`)
+		httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"error":"連携情報が正しくありません"}`)
 	}
 
 	env := newLineTestEnv()
@@ -461,7 +462,7 @@ func TestLineAccountLink(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	redirect, _ := url.Parse(decodeJSON(t, rec.Body.String())["redirectUrl"].(string))
+	redirect, _ := url.Parse(httpxtest.DecodeJSON(t, rec.Body.String())["redirectUrl"].(string))
 	if redirect.Host != "access.line.me" || redirect.Path != "/dialog/bot/accountLink" || redirect.Query().Get("linkToken") != "T1" {
 		t.Fatalf("redirectUrl = %s", redirect)
 	}

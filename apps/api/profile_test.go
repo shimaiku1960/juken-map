@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 func TestNicknameRule(t *testing.T) {
@@ -60,7 +61,7 @@ func TestNicknameRule(t *testing.T) {
 				if !rejected {
 					t.Fatalf("通ってしまった（%q）", got)
 				}
-				assertJSONEqual(t, res.Body.String(), tt.issue)
+				httpxtest.AssertJSONEqual(t, res.Body.String(), tt.issue)
 				return
 			}
 			if rejected {

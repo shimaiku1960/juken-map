@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -33,7 +34,7 @@ func logLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	var lines []map[string]any
 	sc := bufio.NewScanner(bytes.NewReader(buf.Bytes()))
 	for sc.Scan() {
-		lines = append(lines, decodeJSON(t, sc.Text()))
+		lines = append(lines, httpxtest.DecodeJSON(t, sc.Text()))
 	}
 	return lines
 }
@@ -179,7 +180,7 @@ func TestNotFoundBody(t *testing.T) {
 	h, _ := newTestServer(newMetrics(), 10)
 
 	res := serve(h, "GET", "/api/nothing", "")
-	body := decodeJSON(t, res.Body.String())
+	body := httpxtest.DecodeJSON(t, res.Body.String())
 	// Node の spa.ts と同じ形。reqId は応答ヘッダーと同じ値。
 	if body["code"] != string(httpx.CodeNotFound) || body["error"] != httpx.FallbackClientMessage || body["reqId"] != res.Header().Get("X-Request-Id") {
 		t.Errorf("本文 = %v", body)
@@ -191,7 +192,7 @@ func TestNotFoundBody(t *testing.T) {
 
 func TestRecoverPanic(t *testing.T) {
 	buf := captureLogs(t)
-	rt := httpx.NewRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	rt.Public("GET /api/boom", func(w http.ResponseWriter, r *http.Request) {
 		panic("SELECT * FROM secret_table")
 	})
@@ -206,7 +207,7 @@ func TestRecoverPanic(t *testing.T) {
 	if strings.Contains(res.Body.String(), "secret_table") {
 		t.Errorf("原因が応答に出ている: %s", res.Body)
 	}
-	body := decodeJSON(t, res.Body.String())
+	body := httpxtest.DecodeJSON(t, res.Body.String())
 	if body["code"] != string(httpx.CodeInternal) || body["error"] != httpx.ServerMessage {
 		t.Errorf("本文 = %v", body)
 	}
@@ -223,7 +224,7 @@ func TestRecoverPanic(t *testing.T) {
 func TestLimitInFlight(t *testing.T) {
 	buf := captureLogs(t)
 	entered, release := make(chan struct{}), make(chan struct{})
-	rt := httpx.NewRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	rt.Public("GET /api/slow", func(w http.ResponseWriter, r *http.Request) {
 		entered <- struct{}{}
 		<-release
@@ -247,7 +248,7 @@ func TestLimitInFlight(t *testing.T) {
 	if res.Code != http.StatusServiceUnavailable || res.Header().Get("Retry-After") != "1" {
 		t.Fatalf("status = %d, Retry-After = %q", res.Code, res.Header().Get("Retry-After"))
 	}
-	body := decodeJSON(t, res.Body.String())
+	body := httpxtest.DecodeJSON(t, res.Body.String())
 	if body["code"] != string(httpx.CodeOverloaded) || body["error"] != httpx.OverloadedMessage {
 		t.Errorf("本文 = %v", body)
 	}
@@ -279,7 +280,7 @@ func TestRequestDeadline(t *testing.T) {
 	captureLogs(t)
 	var deadline time.Time
 	var ok bool
-	rt := httpx.NewRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	rt.Public("GET /api/check", func(w http.ResponseWriter, r *http.Request) {
 		deadline, ok = r.Context().Deadline()
 	})
