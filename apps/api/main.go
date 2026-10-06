@@ -24,6 +24,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/admin"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/analytics"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
@@ -276,8 +277,8 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 	rt.User("GET /api/universities", universityRoutes.List)
 	rt.User("GET /api/universities/{id}", universityRoutes.Detail)
 
-	analytics := &analyticsHandlers{store: &analyticsStore{db: db}}
-	rt.User("POST /api/analytics/registration", analytics.registration)
+	analyticsRoutes := analytics.New(db)
+	rt.User("POST /api/analytics/registration", analyticsRoutes.Registration)
 	rt.AnonymousWrite("POST /api/csp-report", cspReport)
 
 	lineRoutes := line.New(db, lineCfg)
