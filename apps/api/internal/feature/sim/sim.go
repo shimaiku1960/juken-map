@@ -1,4 +1,16 @@
-package main
+// Package sim はシミュレーション（sim/）専用の API（JUK-80）。Node の routes/sim.ts と services/simulation-service.ts にあたる。
+//
+// 守りは3重：
+//  1. SIMULATION_ENABLED=on のときだけ登録する。付けなければ存在しない（404）。
+//  2. SIMULATION_SECRET の Bearer が必須。未設定なら常に 401（ルーターの job が確かめる）。
+//  3. 触れる相手はシミュレーション用のメールアドレス（delivered+simNNNNN@resend.dev）だけ。
+//     どの SQL もアドレスの形を WHERE に入れる。simSeq が付いているかだけで絞ると、何かの間違いで
+//     実ユーザーに simSeq が付いたときに触ってしまうので、二重に絞る。
+//
+// 登録・確認メール・ログイン・学習記録などは、実際の利用者と同じ API と同じメールの経路を通る。
+// ここにあるのは、シミュレーションの管理情報（連番・続き方の型・来なくなった日）の読み書きだけ。
+// 書き込みは持ち主の internal/write/simulation にある（JUK-154）。
+package sim
 
 import (
 	"context"
@@ -20,19 +32,6 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/simulation"
 )
 
-// シミュレーション（sim/）専用の API（JUK-80）。Node の routes/sim.ts と services/simulation-service.ts にあたる。
-//
-// 守りは3重：
-//  1. SIMULATION_ENABLED=on のときだけ登録する。付けなければ存在しない（404）。
-//  2. SIMULATION_SECRET の Bearer が必須。未設定なら常に 401（ルーターの job が確かめる）。
-//  3. 触れる相手はシミュレーション用のメールアドレス（delivered+simNNNNN@resend.dev）だけ。
-//     どの SQL もアドレスの形を WHERE に入れる。simSeq が付いているかだけで絞ると、何かの間違いで
-//     実ユーザーに simSeq が付いたときに触ってしまうので、二重に絞る。
-//
-// 登録・確認メール・ログイン・学習記録などは、実際の利用者と同じ API と同じメールの経路を通る。
-// ここにあるのは、シミュレーションの管理情報（連番・続き方の型・来なくなった日）の読み書きだけ。
-// 書き込みは持ち主の internal/write/simulation にある（JUK-154）。
-
 // simEmailLike は SQL の LIKE で「シミュレーションの利用者」だけを選ぶ条件。src/shared/synthetic.ts と同じ。
 const simEmailLike = simulation.EmailLike
 
@@ -48,12 +47,12 @@ var simDatePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 const invalidInput = "入力が不正です"
 
-type simStore struct {
+type store struct {
 	db *sql.DB
 }
 
-// state は合成ユーザーの一覧（連番の昇順）と、次に使う連番。
-func (st *simStore) state(ctx context.Context) (apischema.SimulationState, error) {
+// State は合成ユーザーの一覧（連番の昇順）と、次に使う連番。
+func (st *store) state(ctx context.Context) (apischema.SimulationState, error) {
 	// DATE 列はタイムゾーンの解釈を挟まないよう、文字列のまま返す（Node と同じ）。
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT simSeq, email, simCohort, createdAt,"+
@@ -175,12 +174,16 @@ func parseSeq(s string) (int64, bool) {
 	return int64(f), true
 }
 
-type simHandlers struct {
-	store *simStore
+type Handlers struct {
+	store *store
 }
 
-// state は GET /api/sim/state。
-func (h *simHandlers) state(w http.ResponseWriter, r *http.Request) {
+func New(db *sql.DB) *Handlers {
+	return &Handlers{store: &store{db: db}}
+}
+
+// State は GET /api/sim/state。
+func (h *Handlers) State(w http.ResponseWriter, r *http.Request) {
 	state, err := h.store.state(r.Context())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("sim state: %w", err))
@@ -189,8 +192,8 @@ func (h *simHandlers) state(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, state)
 }
 
-// markUser は POST /api/sim/users。
-func (h *simHandlers) markUser(w http.ResponseWriter, r *http.Request) {
+// MarkUser は POST /api/sim/users。
+func (h *Handlers) MarkUser(w http.ResponseWriter, r *http.Request) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -206,8 +209,8 @@ func (h *simHandlers) markUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// updateUser は PATCH /api/sim/users/{seq}。
-func (h *simHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
+// UpdateUser は PATCH /api/sim/users/{seq}。
+func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return

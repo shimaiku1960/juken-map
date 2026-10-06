@@ -308,7 +308,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | --- | --- |
 | `analytics.go` | 本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80） |
 | `csp_report.go` | ブラウザが送る CSP の違反の報告をログに残す（認証なしの口なので件数と大きさに上限） |
-| `sim.go` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る。書き込みは `internal/write/simulation` |
+| `internal/feature/sim/` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る。書き込みは `internal/write/simulation` |
 
 ### コマンド（引数を付けて起動したとき）
 
