@@ -1,4 +1,4 @@
-package main
+package telemetry
 
 import (
 	"bytes"
@@ -33,7 +33,7 @@ func TestRedactEmails(t *testing.T) {
 
 func TestLoggerRedactsEmails(t *testing.T) {
 	var buf bytes.Buffer
-	newLogger(&buf, slog.LevelInfo).Error("sign-up failed for taro@example.com",
+	NewLogger(&buf, slog.LevelInfo).Error("sign-up failed for taro@example.com",
 		"err", errors.New(dupEntry), "detail", "to=hanako@example.com",
 		slog.Group("req", "note", "jiro@example.com"))
 

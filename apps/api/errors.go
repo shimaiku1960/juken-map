@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
 // エラー応答は Node（apps/api/src/error-handling.ts）と同じ2つの形にする。
@@ -56,7 +57,7 @@ func newErrorBody(status int, code apischema.ServerErrorCode, reqID string) apis
 
 // writeErrorBody は code と reqId の付いたエラーを返す。
 func writeErrorBody(w http.ResponseWriter, r *http.Request, status int, code apischema.ServerErrorCode) {
-	writeJSON(w, status, newErrorBody(status, code, requestIDFrom(r.Context())))
+	writeJSON(w, status, newErrorBody(status, code, telemetry.RequestIDFrom(r.Context())))
 }
 
 // writeError はルートが自分で断るときの {"error": "文言"} を返す。

@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
 // requestTimeout は1リクエストにかけてよい時間（middleware.go の withDeadline）。
@@ -34,12 +35,12 @@ func main() {
 	if len(os.Args) > 1 {
 		os.Exit(runCommand(os.Args[1:], os.Stdout, os.Stderr))
 	}
-	logOut, err := logOutput(os.Stdout, os.Getenv("LOG_FILE"))
+	logOut, err := telemetry.LogOutput(os.Stdout, os.Getenv("LOG_FILE"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "LOG_FILE を開けません:", err)
 		os.Exit(1)
 	}
-	slog.SetDefault(newLogger(logOut, parseLevel(os.Getenv("LOG_LEVEL"))))
+	slog.SetDefault(telemetry.NewLogger(logOut, telemetry.ParseLevel(os.Getenv("LOG_LEVEL"))))
 	if err := run(); err != nil {
 		slog.Error("api stopped", "err", err.Error())
 		os.Exit(1)
@@ -58,7 +59,7 @@ func run() error {
 		return err
 	}
 	// トレースは DB より先に用意する。database.Open の SQL の計測が、ここで決めた送り先を使うため。
-	tp, shutdownTracing, err := setupTracing(context.Background())
+	tp, shutdownTracing, err := telemetry.SetupTracing(context.Background())
 	if err != nil {
 		return err
 	}
@@ -95,7 +96,7 @@ func run() error {
 		metrics:         m,
 		adminTo:         os.Getenv("ADMIN_NOTIFICATION_EMAIL"),
 		sender: &resendSender{
-			client: newOutboundClient(tp),
+			client: telemetry.NewOutboundClient(tp),
 			base:   envOr("RESEND_BASE_URL", "https://api.resend.com"),
 			key:    os.Getenv("RESEND_API_KEY"),
 		},
@@ -108,14 +109,14 @@ func run() error {
 	registerBlogRoutes(rt, blogConfig{
 		serviceDomain: os.Getenv("MICROCMS_SERVICE_DOMAIN"),
 		apiKey:        os.Getenv("MICROCMS_API_KEY"),
-		client:        newOutboundClient(tp),
+		client:        telemetry.NewOutboundClient(tp),
 	})
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
 		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
 		simulationSecret:        os.Getenv("SIMULATION_SECRET"),
 		messenger: &httpMessenger{
-			client:     newOutboundClient(tp),
+			client:     telemetry.NewOutboundClient(tp),
 			resendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
 			resendKey:  os.Getenv("RESEND_API_KEY"),
 			lineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
@@ -125,7 +126,7 @@ func run() error {
 		channelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
 		webOrigin:     envOr("WEB_ORIGIN", siteURL),
 		client: &httpLineClient{
-			client:         newOutboundClient(tp),
+			client:         telemetry.NewOutboundClient(tp),
 			botBase:        envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
 			accessToken:    os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
 			loginBase:      envOr("LINE_LOGIN_API_BASE", "https://api.line.me"),
@@ -136,7 +137,7 @@ func run() error {
 	}, microcmsWebhookConfig{
 		secret: os.Getenv("MICROCMS_WEBHOOK_SECRET"),
 		deployer: &githubWorkflowDispatcher{
-			client:   newOutboundClient(tp),
+			client:   telemetry.NewOutboundClient(tp),
 			apiBase:  envOr("GITHUB_API_BASE", "https://api.github.com"),
 			repo:     "shimaiku1960/juken-map",
 			workflow: "deploy.yml",
@@ -165,7 +166,7 @@ func run() error {
 			maxInFlight: maxInFlight,
 			// 本番は reqId を UUID のまま、開発は短くする（Node と同じ）。
 			shortRequestIDs: os.Getenv("NODE_ENV") != "production",
-			tracer:          tp.Tracer(serviceName),
+			tracer:          tp.Tracer(telemetry.ServiceName),
 		}),
 		// 既定はどれも無制限。遅いクライアントに接続を握られ続けないよう上限を付ける。
 		ReadHeaderTimeout: 5 * time.Second,
@@ -174,10 +175,10 @@ func run() error {
 	}
 	servers := []*http.Server{srv}
 
-	// /metrics はアプリと別のポートで出す（metrics.go）。指定したときだけ起動する。
+	// /metrics はアプリと別のポートで出す（internal/telemetry/metrics.go）。指定したときだけ起動する。
 	if port := os.Getenv("METRICS_PORT"); port != "" {
 		mux := http.NewServeMux()
-		mux.Handle("GET /metrics", m.handler())
+		mux.Handle("GET /metrics", m.Handler())
 		servers = append(servers, &http.Server{Addr: ":" + port, Handler: mux, ReadHeaderTimeout: 5 * time.Second})
 	}
 
@@ -383,7 +384,7 @@ type serverOptions struct {
 //  6. ルーター       入口の種類ごとの拒否（router.go）→ ハンドラ
 //
 // 順番は Node の server.ts と同じ考え方（メトリクス → エラー処理 → 過負荷 → 認証）。
-func newServerHandler(rt *router, m *metrics, opts serverOptions) http.Handler {
+func newServerHandler(rt *router, m *telemetry.Metrics, opts serverOptions) http.Handler {
 	var h http.Handler = rt
 	h = withDeadline(requestTimeout, h)
 	h = limitInFlight(opts.maxInFlight, h)

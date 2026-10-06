@@ -38,7 +38,7 @@ func Open(databaseURL string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	// SQL 1本ずつのトレース（下の tracedSpanOptions）。送り先はアプリ全体の設定（tracing.go の setupTracing）を使い、
+	// SQL 1本ずつのトレース（下の tracedSpanOptions）。送り先はアプリ全体の設定（internal/telemetry/tracing.go の SetupTracing）を使い、
 	// その前やコマンドで動くときは何もしない。
 	db := otelsql.OpenDB(connector, tracedSpanOptions)
 	// Node 側の connectionLimit（既定 15）に揃える。比べるときに条件を同じにするため。

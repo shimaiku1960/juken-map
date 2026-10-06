@@ -14,6 +14,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
 // recordSpans は送らずに手元へ溜めるトレースの設定を作る。終わったスパンを sr.Ended() で読める。
@@ -131,7 +133,7 @@ func TestOutboundClientSpan(t *testing.T) {
 	}))
 	defer srv.Close()
 	tp, sr := recordSpans()
-	client := newOutboundClient(tp)
+	client := telemetry.NewOutboundClient(tp)
 
 	// リクエストの外（親のスパンが無い）では、スパンを作らない。
 	get(t, client, context.Background(), srv.URL)
@@ -178,18 +180,18 @@ func get(t *testing.T, client *http.Client, ctx context.Context, url string) {
 
 func TestLogOutput(t *testing.T) {
 	var stdout bytes.Buffer
-	if w, err := logOutput(&stdout, ""); err != nil || w != &stdout {
+	if w, err := telemetry.LogOutput(&stdout, ""); err != nil || w != &stdout {
 		t.Fatalf("LOG_FILE が空なら標準出力だけにする: %v, %v", w, err)
 	}
 
 	// 無いディレクトリは作る（手元の logs/ は gitignore 済みで、clone した直後は無い）。
 	path := filepath.Join(t.TempDir(), "logs", "api.log")
 	for _, msg := range []string{"first", "second"} {
-		w, err := logOutput(&stdout, path)
+		w, err := telemetry.LogOutput(&stdout, path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		newLogger(w, 0).Info(msg)
+		telemetry.NewLogger(w, 0).Info(msg)
 	}
 
 	got, _ := os.ReadFile(path)
@@ -205,8 +207,8 @@ func TestLogOutput(t *testing.T) {
 func TestWebSpansAreNotSent(t *testing.T) {
 	buf := captureLogs(t)
 	sr := tracetest.NewSpanRecorder()
-	// 本番と同じく、送る手前に skipWebSpans を挟む。
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(skipWebSpans{sr}))
+	// 本番と同じく、送る手前に telemetry.SkipWebSpans を挟む。
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(telemetry.SkipWebSpans{SpanProcessor: sr}))
 	h := newServerHandler(newSPATestRouter(t, pageScripts{}), newMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
 
 	serve(h, "GET", "/", "")

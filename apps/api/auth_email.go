@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
@@ -48,6 +49,15 @@ var emailKinds = []emailKind{
 	emailMFAEnabled, emailAccountLinked, emailAccountDeleted, emailAdminNewUser,
 }
 
+// newMetrics はメールの種類ごとの系列を 0 で用意した計測（internal/telemetry）。
+func newMetrics() *telemetry.Metrics {
+	kinds := make([]string, len(emailKinds))
+	for i, kind := range emailKinds {
+		kinds[i] = string(kind)
+	}
+	return telemetry.NewMetrics(kinds)
+}
+
 const (
 	authEmailFrom = "受験マップ <noreply@juken-map.com>"
 	// authEmailTimeout は、応答を返したあとに送る1通にかける時間の上限。
@@ -62,7 +72,7 @@ type emailSender interface {
 type authMailer struct {
 	db      *sql.DB
 	sender  emailSender
-	metrics *metrics
+	metrics *telemetry.Metrics
 	adminTo string
 	now     func() time.Time
 	// async は送る処理を動かす。本番は goroutine、テストはその場で動かして結果を確かめる。
@@ -87,20 +97,20 @@ func (m *authMailer) sendLater(kind emailKind, to, subject, body string) {
 func (m *authMailer) send(ctx context.Context, kind emailKind, to, subject, body string) error {
 	allowed, err := m.reserve(ctx, kind, to)
 	if err != nil {
-		m.metrics.countEmail(kind, "failed")
+		countEmail(m.metrics, kind, "failed")
 		return err
 	}
 	if !allowed {
-		m.metrics.countEmail(kind, "blocked")
+		countEmail(m.metrics, kind, "blocked")
 		return nil
 	}
 	headers, err := m.sender.send(ctx, to, subject, body)
 	if err != nil {
-		m.metrics.countEmail(kind, "failed")
+		countEmail(m.metrics, kind, "failed")
 		return err
 	}
-	m.metrics.observeResendQuota(headers, m.now())
-	m.metrics.countEmail(kind, "sent")
+	observeResendQuota(m.metrics, headers, m.now())
+	countEmail(m.metrics, kind, "sent")
 	return nil
 }
 
@@ -246,17 +256,17 @@ func (s *resendSender) send(ctx context.Context, to, subject, body string) (http
 // resendQuotaHeaders は Resend の応答ヘッダーのうち、送信枠を使った数（日の分は無料プランにだけ付く）。
 var resendQuotaHeaders = map[string]string{"daily": "X-Resend-Daily-Quota", "monthly": "X-Resend-Monthly-Quota"}
 
-func (m *metrics) observeResendQuota(headers http.Header, now time.Time) {
+func observeResendQuota(m *telemetry.Metrics, headers http.Header, now time.Time) {
 	for period, name := range resendQuotaHeaders {
 		used, err := strconv.ParseFloat(headers.Get(name), 64)
 		if err != nil {
 			continue
 		}
-		m.resendQuotaUsed.WithLabelValues(period).Set(used)
-		m.resendQuotaObservedAt.WithLabelValues(period).Set(float64(now.UnixMilli()) / 1000)
+		m.ResendQuotaUsed.WithLabelValues(period).Set(used)
+		m.ResendQuotaObservedAt.WithLabelValues(period).Set(float64(now.UnixMilli()) / 1000)
 	}
 }
 
-func (m *metrics) countEmail(kind emailKind, result string) {
-	m.emailSends.WithLabelValues(string(kind), result).Inc()
+func countEmail(m *telemetry.Metrics, kind emailKind, result string) {
+	m.EmailSends.WithLabelValues(string(kind), result).Inc()
 }

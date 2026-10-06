@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
@@ -97,7 +98,7 @@ func (h *authHandlers) forgotPassword(w http.ResponseWriter, r *http.Request, _ 
 
 // later は応答を返したあとに f を動かす（メールの async と同じ仕組み）。失敗はログにだけ残す。
 func (h *authHandlers) later(r *http.Request, name string, f func(ctx context.Context) error) {
-	reqID := requestIDFrom(r.Context())
+	reqID := telemetry.RequestIDFrom(r.Context())
 	h.mailer.async(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), authEmailTimeout)
 		defer cancel()

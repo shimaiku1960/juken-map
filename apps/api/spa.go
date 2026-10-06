@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
 // 画面（apps/web のビルド成果物 dist/）の配信（JUK-111。Node の apps/api/src/spa.ts から移した）。
@@ -199,20 +201,20 @@ func (s *spaSite) serveSitemap(w http.ResponseWriter, r *http.Request) {
 
 // serve は、API にも sitemap にも当たらなかった GET。実ファイルがあればそれを、無ければ画面の HTML を返す。
 func (s *spaSite) serve(w http.ResponseWriter, r *http.Request) {
-	info := requestInfoFrom(r.Context())
+	info := telemetry.RequestInfoFrom(r.Context())
 	pathname := r.URL.Path
 
 	// API の 404 まで index.html を返すと、JSON を期待しているクライアントが壊れる。存在しない API は API のまま 404。
 	if strings.HasPrefix(pathname, "/api/") {
 		if info != nil {
-			info.route = "(unmatched)"
+			info.Route = "(unmatched)"
 		}
 		notFound(w, r)
 		return
 	}
 	// メトリクスの route は Node と同じく、API 以外をまとめて "(web)" にする（ファイルごとに分けると種類が増えすぎる）。
 	if info != nil {
-		info.route = webRoute
+		info.Route = telemetry.WebRoute
 	}
 
 	if a, ok := s.assets[pathname]; ok {

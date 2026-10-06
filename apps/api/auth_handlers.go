@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
@@ -446,7 +447,7 @@ type authConfig struct {
 	webOrigin       string
 	totpKeys        *totpKeyring
 	hashConcurrency int
-	metrics         *metrics
+	metrics         *telemetry.Metrics
 	adminTo         string
 	sender          emailSender
 	oauth           map[string]*oauthProvider

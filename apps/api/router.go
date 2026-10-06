@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
 // 全ルートに「誰が呼んでよいか（入口の種類）」を持たせ、認証・管理者・デモの拒否を
@@ -307,8 +309,8 @@ func (rt *router) handle(pattern string, a access, h http.HandlerFunc) {
 	rt.routes = append(rt.routes, routeEntry{Pattern: pattern, Access: a})
 	rt.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		// 外側の observe がメトリクスの route ラベルに使う。
-		if info := requestInfoFrom(r.Context()); info != nil {
-			info.route = label
+		if info := telemetry.RequestInfoFrom(r.Context()); info != nil {
+			info.Route = label
 		}
 		h(w, r)
 	})
