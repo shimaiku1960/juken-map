@@ -3,15 +3,17 @@
 // 利用者の持ち物を変えるストアの関数が、渡された userID の人の行しか変えないことを確かめる（JUK-54）。
 //
 // TestA3OwnershipDB は入口（ハンドラーが先に持ち主を確かめる）を通して確かめる。こちらはその確かめを通らずに
-// ストアを直接呼び、確かめを書き忘れたルートがあっても SQL の WHERE userId = ? で他人の行が守られることを見る。
+// ストアや持ち主（internal/write）の操作を直接呼び、確かめを書き忘れたルートがあっても SQL の WHERE userId = ? で他人の行が守られることを見る。
 package main
 
 import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
 
 func TestA3StoreScopedByUserDB(t *testing.T) {
@@ -20,9 +22,8 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 	ctx := context.Background()
 	goals := &goalStore{db: db}
 	textbooks := &textbookStore{db: db}
-	logs := &studyLogWriteStore{db: db}
-	plans := &studyPlanWriteStore{db: db}
 	note := "書き換え"
+	now := time.Now().UTC().Truncate(time.Millisecond)
 
 	cases := []struct {
 		name  string
@@ -60,40 +61,32 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 		{
 			name: "実績の書き換え", table: "StudyLog",
 			seed: func(fx dbFixture, holder string) int64 { return fx.StudyLog(holder) },
-			write: func(_ dbFixture, caller, holder string, id int64) {
-				current, err := findStudyLog(ctx, db, id, holder)
-				if err != nil || current == nil {
-					t.Fatalf("実績が読めない: %v", err)
-				}
-				_, _ = logs.update(ctx, caller, current, studyLogInput{date: "2027-01-01", minutes: 99})
+			write: func(_ dbFixture, caller, _ string, id int64) {
+				_, _ = studyrecord.UpdateLog(ctx, db, caller, id, studyrecord.LogInput{Date: dateFromYMD("2027-01-01"), Minutes: 99}, now)
 			},
 		},
 		{
 			name: "実績の削除", table: "StudyLog",
 			seed:  func(fx dbFixture, holder string) int64 { return fx.StudyLog(holder) },
-			write: func(_ dbFixture, caller, _ string, id int64) { _ = logs.delete(ctx, caller, id) },
+			write: func(_ dbFixture, caller, _ string, id int64) { _ = studyrecord.DeleteLog(ctx, db, caller, id) },
 		},
 		{
 			name: "予定の書き換え", table: "StudyPlan",
 			seed: func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = plans.update(ctx, caller, id, studyPlanUpdate{content: optional[string]{present: true, value: &note}})
+				_, _ = studyrecord.UpdatePlan(ctx, db, caller, id, studyrecord.PlanPatch{Content: studyrecord.Opt[string]{Present: true, Value: &note}}, now)
 			},
 		},
 		{
 			name: "予定の削除", table: "StudyPlan",
 			seed:  func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
-			write: func(_ dbFixture, caller, _ string, id int64) { _ = plans.delete(ctx, caller, id) },
+			write: func(_ dbFixture, caller, _ string, id int64) { _ = studyrecord.DeletePlan(ctx, db, caller, id) },
 		},
 		{
 			name: "予定の完了", table: "StudyPlan",
 			seed: func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
-			write: func(_ dbFixture, caller, holder string, id int64) {
-				plan, err := findStudyPlan(ctx, db, id, holder)
-				if err != nil || plan == nil {
-					t.Fatalf("予定が読めない: %v", err)
-				}
-				_, _ = plans.complete(ctx, caller, *plan, 30, nil, nil, nil, nil)
+			write: func(_ dbFixture, caller, _ string, id int64) {
+				_, _ = studyrecord.CompletePlan(ctx, db, caller, id, studyrecord.Completion{Minutes: 30}, now)
 			},
 		},
 	}
