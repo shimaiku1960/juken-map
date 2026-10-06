@@ -355,6 +355,7 @@ DB テストは名前に `DB` を入れる。`pnpm test:go-db`（CI も同じ）
 | --- | --- |
 | `ownership_db_test.go`・`ownership_store_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3。入口からと、ストアを直接呼んで）と禁止項目（A4）を確かめる |
 | `internal/dbtest/` | DB テストの補助。テスト用 DB への接続（名前が `_test` で終わる DB にだけ繋ぐ）と、テスト用の利用者・データの作り方。どのパッケージの DB テストからも使う（JUK-158）。ルーターを組んで叩く `dbTestApp` は `registerRoutes` を使うので `dbtest_support_test.go` に残す |
+| `internal/httpx/httpxtest/` | 入口と入力チェックを使うテストの補助。Cookie で選ぶ偽のセッション（`FakeSessions`・`Sessions`）、JSON の比べ方、入力チェックの 400 の本文。feature のテストが共通で使う（JUK-156）。本番のコードからは import しない |
 | `list_limits_db_test.go` | 学習記録・予定の一覧が 1000 件で切り詰められることを確かめる（06 E2） |
 
 ## Node と揃えていること

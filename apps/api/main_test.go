@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 func TestRegisteredRoutes(t *testing.T) {
@@ -95,7 +96,7 @@ func TestRegisteredRoutes(t *testing.T) {
 	}
 
 	// ハンドラは呼ばないので、DB は nil のままでよい。
-	rt := httpx.NewRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
 	registerBlogRoutes(rt, blogConfig{})
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
@@ -119,7 +120,7 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	//
 	// 認証の入口（auth）はセッションが無くても呼べるが、書き込みは同じく断る。ログイン・登録・ログアウト・
 	// 2段階認証の確認を別のサイトから送らせない（ログインの CSRF。認証基準 10 の D2）。
-	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
 	registerBlogRoutes(rt, blogConfig{})
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
@@ -166,7 +167,7 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 				if res.Code != http.StatusForbidden {
 					t.Fatalf("status = %d, want 403（本文 %s）", res.Code, res.Body)
 				}
-				assertJSONEqual(t, res.Body.String(), `{"error":"`+httpx.CrossOriginMessage+`"}`)
+				httpxtest.AssertJSONEqual(t, res.Body.String(), `{"error":"`+httpx.CrossOriginMessage+`"}`)
 			})
 		}
 		checked++

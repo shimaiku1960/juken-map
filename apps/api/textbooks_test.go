@@ -10,6 +10,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 func TestTextbookMasterJSON(t *testing.T) {
@@ -19,7 +20,7 @@ func TestTextbookMasterJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := decodeJSON(t, string(raw))
+	got := httpxtest.DecodeJSON(t, string(raw))
 	if list, ok := got["metrics"].([]any); !ok || len(list) != 0 {
 		t.Errorf("metrics = %v, want []", got["metrics"])
 	}
@@ -37,7 +38,7 @@ func TestTextbookMastersFromCache(t *testing.T) {
 		loads++
 		return []apischema.TextbookMaster{}, nil
 	})
-	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	rt.User("GET /api/textbook-masters", (&textbookHandlers{store: st}).listMasters)
 
 	get := func(etag string) *httptest.ResponseRecorder {

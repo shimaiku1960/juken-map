@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -79,7 +80,7 @@ func TestRequestSpanUsesRouteTemplate(t *testing.T) {
 func TestRequestSpanStatus(t *testing.T) {
 	captureLogs(t)
 	tp, sr := recordSpans()
-	rt := httpx.NewRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	rt.Public("GET /api/boom", func(w http.ResponseWriter, r *http.Request) {
 		panic("boom")
 	})

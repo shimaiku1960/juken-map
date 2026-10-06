@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 // ブログの中継のテスト。microCMS は httptest の偽物にする（本物の API キーは要らない）。
@@ -16,7 +17,7 @@ func newBlogTestRouter(t *testing.T, upstream http.HandlerFunc) *httpx.Router {
 	t.Helper()
 	srv := httptest.NewServer(upstream)
 	t.Cleanup(srv.Close)
-	rt := httpx.NewRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	registerBlogRoutes(rt, blogConfig{apiBase: srv.URL + "/api/v1", apiKey: "key"})
 	return rt
 }
@@ -58,14 +59,14 @@ func TestBlogDetail(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("missing: status = %d", rec.Code)
 	}
-	assertJSONEqual(t, rec.Body.String(), `{"error":"Not found"}`)
+	httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"error":"Not found"}`)
 
 	// microCMS の障害は 404 にせず 502（記事が無いことにしない）
 	rec = getBlog(rt, "/api/blog/broken")
 	if rec.Code != http.StatusBadGateway {
 		t.Fatalf("broken: status = %d", rec.Code)
 	}
-	assertJSONEqual(t, rec.Body.String(), `{"error":"Bad Gateway"}`)
+	httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"error":"Bad Gateway"}`)
 }
 
 func TestBlogDetailEscapesID(t *testing.T) {
@@ -113,7 +114,7 @@ func TestBlogUpstreamFailures(t *testing.T) {
 	}
 
 	// 設定が無ければ microCMS を呼ばずに 502
-	rt = httpx.NewRouter(fakeSessions(nil))
+	rt = httpx.NewRouter(httpxtest.FakeSessions(nil))
 	registerBlogRoutes(rt, blogConfig{})
 	if rec := getBlog(rt, "/api/blog"); rec.Code != http.StatusBadGateway {
 		t.Fatalf("未設定: status = %d, want 502", rec.Code)

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 const testMicrocmsSecret = "microcms-test-secret"
@@ -46,7 +47,7 @@ func microcmsSign(body string) string {
 }
 
 func newMicrocmsTestRouter(secret string, d deployer) *httpx.Router {
-	rt := httpx.NewRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	registerRoutes(rt, nil, jobConfig{}, lineConfig{}, microcmsWebhookConfig{secret: secret, deployer: d})
 	return rt
 }
@@ -92,7 +93,7 @@ func TestMicrocmsWebhookSignature(t *testing.T) {
 			if rec.Code != http.StatusUnauthorized {
 				t.Fatalf("status = %d, want 401", rec.Code)
 			}
-			assertJSONEqual(t, rec.Body.String(), `{"error":"Invalid signature"}`)
+			httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"error":"Invalid signature"}`)
 			if d.count() != 0 {
 				t.Errorf("署名が合わないのにデプロイを動かした（%d 回）", d.count())
 			}
@@ -161,7 +162,7 @@ func TestMicrocmsWebhookDecidesDeploy(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want 200（%s）", rec.Code, rec.Body.String())
 			}
-			assertJSONEqual(t, rec.Body.String(), `{"deploy":"`+tt.want+`"}`)
+			httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"deploy":"`+tt.want+`"}`)
 			wantCalls := 0
 			if tt.want == "dispatched" {
 				wantCalls = 1
@@ -180,14 +181,14 @@ func TestMicrocmsWebhookDispatchFailed(t *testing.T) {
 	if rec.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want 502", rec.Code)
 	}
-	assertJSONEqual(t, rec.Body.String(), `{"error":"Failed to dispatch deploy"}`)
+	httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"error":"Failed to dispatch deploy"}`)
 
 	// 失敗したら間引かず、次の通知ですぐ動かし直す。
 	d.mu.Lock()
 	d.err = nil
 	d.mu.Unlock()
 	rec = postMicrocms(rt, publishedEdit, microcmsSign(publishedEdit))
-	assertJSONEqual(t, rec.Body.String(), `{"deploy":"dispatched"}`)
+	httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"deploy":"dispatched"}`)
 	if d.count() != 2 {
 		t.Errorf("デプロイを %d 回動かした、want 2", d.count())
 	}
@@ -280,7 +281,7 @@ func TestGithubWorkflowDispatcher(t *testing.T) {
 	if gotAuth != "Bearer github-token" || gotAccept != "application/vnd.github+json" || gotVersion != "2022-11-28" {
 		t.Errorf("headers: auth=%q accept=%q version=%q", gotAuth, gotAccept, gotVersion)
 	}
-	assertJSONEqual(t, gotBody, `{"ref":"main"}`)
+	httpxtest.AssertJSONEqual(t, gotBody, `{"ref":"main"}`)
 
 	t.Run("GitHub が断ったら失敗を返す", func(t *testing.T) {
 		status = http.StatusUnauthorized

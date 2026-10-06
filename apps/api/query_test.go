@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 func TestDateRangeWhere(t *testing.T) {
@@ -32,7 +33,7 @@ func TestDateRangeWhere(t *testing.T) {
 
 func TestStudyListQueryErrors(t *testing.T) {
 	// DB に届く前に返る場面だけを見る（store は nil のまま）。DB を使う場面は E2E（nginx を通して Go に届く、JUK-96）が通す。
-	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	h := &studyHandlers{}
 	rt.User("GET /api/study-logs", h.listLogs)
 	rt.User("GET /api/study-logs/daily", h.listDaily)
@@ -72,7 +73,7 @@ func TestStudyListQueryErrors(t *testing.T) {
 			if res.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d（本文 %s）", res.Code, tt.wantStatus, res.Body)
 			}
-			assertJSONEqual(t, res.Body.String(), tt.wantBody)
+			httpxtest.AssertJSONEqual(t, res.Body.String(), tt.wantBody)
 		})
 	}
 }

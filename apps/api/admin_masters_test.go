@@ -14,6 +14,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 // マスター編集（admin_masters.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
@@ -103,7 +104,7 @@ func textbookMasterOf(id int64, in textbookMasterInput) apischema.AdminTextbookM
 
 func newAdminMasterTestRouter(store *fakeAdminMasterStore) *httpx.Router {
 	h := &adminMasterHandlers{store: store}
-	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	rt.Admin("GET /api/admin/universities", h.listUniversities)
 	rt.Admin("POST /api/admin/universities", h.createUniversity)
 	rt.Admin("GET /api/admin/universities/{id}", h.universityDetail)
@@ -256,7 +257,7 @@ func TestAdminMasterValidation(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want 400（本文 %s）", rec.Code, rec.Body.String())
 			}
-			assertJSONEqual(t, rec.Body.String(), tt.want)
+			httpxtest.AssertJSONEqual(t, rec.Body.String(), tt.want)
 			if len(store.universities)+len(store.faculties)+len(store.textbookMasters)+len(store.deleted) != 0 {
 				t.Error("弾いた入力が DB に届いた")
 			}
@@ -296,7 +297,7 @@ func TestAdminMasterInputValues(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d（%s）", rec.Code, rec.Body.String())
 		}
-		assertJSONEqual(t, rec.Body.String(), `{"id":3,"universityId":1,"name":"学部","examDate":"2027-02-01","tagIds":[]}`)
+		httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"id":3,"universityId":1,"name":"学部","examDate":"2027-02-01","tagIds":[]}`)
 	})
 
 	t.Run("参考書：ISBN を整え、空の出版社・版は null にする", func(t *testing.T) {
@@ -366,7 +367,7 @@ func TestAdminMasterFailures(t *testing.T) {
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d（本文 %s）", rec.Code, tt.wantStatus, rec.Body.String())
 			}
-			assertJSONEqual(t, rec.Body.String(), tt.wantBody)
+			httpxtest.AssertJSONEqual(t, rec.Body.String(), tt.wantBody)
 		})
 	}
 
@@ -408,7 +409,7 @@ func TestAdminMasterChangeLog(t *testing.T) {
 
 	var lines []map[string]any
 	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
-		m := decodeJSON(t, line)
+		m := httpxtest.DecodeJSON(t, line)
 		if m["msg"] == "admin master change" {
 			lines = append(lines, m)
 		}

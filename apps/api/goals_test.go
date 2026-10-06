@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 func TestGoalJSONTags(t *testing.T) {
@@ -23,7 +24,7 @@ func TestGoalJSONTags(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			faculty := decodeJSON(t, string(raw))["faculty"].(map[string]any)
+			faculty := httpxtest.DecodeJSON(t, string(raw))["faculty"].(map[string]any)
 			tags, has := faculty["tags"]
 			if has != tt.wantKey {
 				t.Fatalf("tags のキーの有無 = %v, want %v（%s）", has, tt.wantKey, raw)

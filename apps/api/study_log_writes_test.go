@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
 
 // 期待値は、Node（Zod 4.5.4）に同じ本文を送って返ってきた 400（2026-09-30 に手元で確かめた）。
@@ -99,7 +100,7 @@ func TestReadStudyLogInput(t *testing.T) {
 			if !rejected {
 				t.Fatal("通ってしまった")
 			}
-			assertJSONEqual(t, res.Body.String(), tt.want)
+			httpxtest.AssertJSONEqual(t, res.Body.String(), tt.want)
 		})
 	}
 }
