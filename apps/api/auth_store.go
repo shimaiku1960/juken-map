@@ -75,11 +75,14 @@ func (st *authStore) markEmailVerified(ctx context.Context, userID string, now t
 	return account.MarkEmailVerified(ctx, st.db, userID, now)
 }
 
-// deleteUser は退会で利用者とデータを消す。消し方は管理者の削除と同じ deleteUserAndData。
+// deleteUser は退会で利用者とデータを消す。消し方は管理者の削除と同じ account.DeleteUser。
+// 同時に2回送られて先に消えていたら、消せたことにする。
 func (st *authStore) deleteUser(ctx context.Context, userID string) error {
-	return database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		return deleteUserAndData(ctx, tx, userID)
-	})
+	_, err := account.DeleteUser(ctx, st.db, userID)
+	if errors.Is(err, account.ErrNotFound) {
+		return nil
+	}
+	return err
 }
 
 // sessionUser は GET /api/auth/session の利用者と、セッションの期限（DB の DATETIME の文字列）。
@@ -281,62 +284,8 @@ func (st *authStore) identityUser(ctx context.Context, provider, subject string)
 }
 
 // linkOAuthIdentity は、確認済みのメールアドレス email の利用者に外部ログインを結びつける（resolveOAuthUser の
-// 3〜5）。同じメールアドレスの利用者の行をロックして（FOR UPDATE）、1つのトランザクションで次のどれかをする。
-//
-//   - いなければ新しく作る（event は "created"）
-//   - いて確認済みなら、そのまま結びつける（"linked"）
-//   - いて未確認なら、パスワード・セッション・トークンを消してから結びつけ、確認済みにする（"claimed_unverified"）
-func (st *authStore) linkOAuthIdentity(ctx context.Context, provider, email string, ident *oauthIdentity, now time.Time) (userID, event string, err error) {
-	tx, err := st.db.BeginTx(ctx, nil)
-	if err != nil {
-		return "", "", err
-	}
-	defer tx.Rollback()
-	var verified bool
-	err = tx.QueryRowContext(ctx, "SELECT id, emailVerified FROM `user` WHERE email = ? FOR UPDATE", email).Scan(&userID, &verified)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		userID = newUserID()
-		name := ident.Name
-		if name == "" {
-			name = email
-		}
-		var image any
-		if ident.Image != "" {
-			image = truncate(ident.Image, 191)
-		}
-		if _, err := tx.ExecContext(ctx,
-			"INSERT INTO `user` (id, name, email, image, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, true, ?, ?)",
-			userID, truncate(name, 191), email, image, now, now); err != nil {
-			return "", "", err
-		}
-		event = "created"
-	case err != nil:
-		return "", "", err
-	case verified:
-		event = "linked"
-	default:
-		for _, q := range []string{
-			"DELETE FROM AuthPassword WHERE userId = ?",
-			"DELETE FROM AuthSession WHERE userId = ?",
-			"DELETE FROM AuthToken WHERE userId = ?",
-		} {
-			if _, err := tx.ExecContext(ctx, q, userID); err != nil {
-				return "", "", err
-			}
-		}
-		if _, err := tx.ExecContext(ctx, "UPDATE `user` SET emailVerified = true, updatedAt = ? WHERE id = ?", now, userID); err != nil {
-			return "", "", err
-		}
-		event = "claimed_unverified"
-	}
-	if _, err := tx.ExecContext(ctx,
-		"INSERT INTO AuthIdentity (provider, providerUserId, userId, createdAt) VALUES (?, ?, ?, ?)",
-		provider, ident.Subject, userID, now); err != nil {
-		return "", "", err
-	}
-	if err := tx.Commit(); err != nil {
-		return "", "", err
-	}
-	return userID, event, nil
+// 3〜5。作る・結びつける・未確認の人から取り戻すの区別は account.LinkOAuthIdentity）。
+func (st *authStore) linkOAuthIdentity(ctx context.Context, provider, email string, ident *oauthIdentity, now time.Time) (string, account.LinkEvent, error) {
+	return account.LinkOAuthIdentity(ctx, st.db, account.Identity{
+		Provider: provider, Subject: ident.Subject, Email: email, Name: ident.Name, Image: ident.Image}, now)
 }

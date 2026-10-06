@@ -567,24 +567,8 @@ func (st *sqlAdminUserStore) unban(ctx context.Context, id string, now time.Time
 	return account.Unsuspend(ctx, st.db, id, now, nil)
 }
 
-// deleteUser は利用者を消す。消し方は本人の退会と同じ deleteUserAndData（auth_delete_account.go）。
+// deleteUser は利用者を消す。消し方は本人の退会と同じ account.DeleteUser。
 func (st *sqlAdminUserStore) deleteUser(ctx context.Context, id string) (removedCounts, error) {
-	var c removedCounts
-	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		if err := tx.QueryRowContext(ctx,
-			`SELECT (SELECT COUNT(*) FROM StudyLog WHERE userId = ?),
-			        (SELECT COUNT(*) FROM StudyPlan WHERE userId = ?),
-			        (SELECT COUNT(*) FROM Textbook WHERE userId = ?),
-			        (SELECT COUNT(*) FROM FinalGoal WHERE userId = ?)`,
-			id, id, id, id,
-		).Scan(&c.StudyLogs, &c.StudyPlans, &c.Textbooks, &c.FinalGoals); err != nil {
-			return err
-		}
-		var email string
-		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(email, '') FROM `user` WHERE id = ?", id).Scan(&email); err != nil {
-			return err
-		}
-		return deleteUserAndData(ctx, tx, id)
-	})
-	return c, err
+	removed, err := account.DeleteUser(ctx, st.db, id)
+	return removedCounts(removed), err
 }

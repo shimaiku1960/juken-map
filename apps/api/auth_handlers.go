@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
@@ -83,10 +83,6 @@ func validEmail(email string) bool {
 	local, domain, ok := strings.Cut(email, "@")
 	return ok && local != "" && strings.Contains(domain, ".") && !strings.ContainsAny(email, " \t\r\n<>\"") &&
 		len(email) <= 191 && !strings.Contains(domain, "@")
-}
-
-func newUserID() string {
-	return hex.EncodeToString(randomBytes(16))
 }
 
 // ---- 応答とログ ----
@@ -258,7 +254,7 @@ func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *session
 	now := h.clock()
 	switch {
 	case existing == nil:
-		id := newUserID()
+		id := account.NewUserID()
 		if err := h.store.createUserWithPassword(ctx, id, email, hash, now); err != nil {
 			internalError(w, r, fmt.Errorf("sign-up: %w", err))
 			return
