@@ -20,9 +20,9 @@
 | LINE（Messaging API） | サーバー（`internal/feature/line/api.go`・`internal/feature/notifications/notifications.go`） | 宛先の LINE のユーザー ID、本文。本文は、連携の案内と完了の知らせ、学習通知（表示名・予定の内容と教材名・学習時間） | 含む（利用者が LINE 通知を選んだときだけ） | LINE への通知 |
 | LINE（LINE Login） | サーバー（`internal/feature/line/api.go`） | 認可コード・ID トークンの確認、友だち追加の状態の問い合わせ。受け取るのは LINE のユーザー ID（scope は `openid profile`） | 送るのは LINE が発行した値だけ | LINE アカウントの連携 |
 | Google・GitHub（OAuth） | サーバー（`internal/feature/auth/oauth.go`）とブラウザのリダイレクト | 認可コード・クライアントの ID と秘密・戻り先の URL。受け取るのは ID とメールアドレス（scope は Google が `openid email`、GitHub が `user:email`） | 送るのは各社が発行した値だけ | 外部アカウントでのログイン |
-| microCMS | サーバー（`blog.go`） | API キー、記事の ID と取得条件 | 含まない | ブログ記事の取得 |
+| microCMS | サーバー（`apps/api/internal/feature/blog/blog.go`） | API キー、記事の ID と取得条件 | 含まない | ブログ記事の取得 |
 | microCMS（画像の CDN）・Google Fonts | ブラウザ | 画像・フォントの取得（IP アドレス、User-Agent、Referer は自分のオリジンだけ） | 含まない | 記事の画像とフォントの表示 |
-| GitHub（API） | サーバー（`microcms_webhook.go`） | デプロイのワークフローを動かす要求（ブランチ名だけ） | 含まない | 記事を公開したときの作り直し |
+| GitHub（API） | サーバー（`apps/api/internal/feature/blog/microcms_webhook.go`） | デプロイのワークフローを動かす要求（ブランチ名だけ） | 含まない | 記事を公開したときの作り直し |
 | Amazon Web Services（東京） | — | アプリと DB（EC2・RDS）、秘密情報（Secrets Manager）、コンテナのイメージ（ECR） | すべてのデータを置く | 本サービスの運用 |
 
 ## 伏せ方と、送らないと決めたもの

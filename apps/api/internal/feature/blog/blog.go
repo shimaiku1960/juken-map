@@ -1,4 +1,6 @@
-package main
+// Package blog はブログ（microCMS の記事）の入口。記事の中継（blog.go）と、記事を公開したときに
+// 画面を作り直す Webhook（microcms_webhook.go）。
+package blog
 
 import (
 	"context"
@@ -23,12 +25,12 @@ const microcmsTimeout = 3 * time.Second
 // maxBlogBody は microCMS の応答として読む大きさの上限。記事の一覧は本文込みで10件なので、数MB あれば足りる。
 const maxBlogBody = 8 << 20
 
-type blogConfig struct {
-	serviceDomain string // MICROCMS_SERVICE_DOMAIN（xxx.microcms.io の xxx）
-	apiKey        string // MICROCMS_API_KEY
-	// apiBase は microCMS の API の根元。空なら https://<serviceDomain>.microcms.io/api/v1。テストで差し替える。
-	apiBase string
-	client  *http.Client
+type Config struct {
+	ServiceDomain string // MICROCMS_SERVICE_DOMAIN（xxx.microcms.io の xxx）
+	APIKey        string // MICROCMS_API_KEY
+	// APIBase は microCMS の API の根元。空なら https://<serviceDomain>.microcms.io/api/v1。テストで差し替える。
+	APIBase string
+	Client  *http.Client
 }
 
 type blogHandlers struct {
@@ -37,16 +39,23 @@ type blogHandlers struct {
 	client *http.Client
 }
 
-func newBlogHandlers(c blogConfig) *blogHandlers {
-	base := c.apiBase
-	if base == "" && c.serviceDomain != "" {
-		base = "https://" + c.serviceDomain + ".microcms.io/api/v1"
+func newBlogHandlers(c Config) *blogHandlers {
+	base := c.APIBase
+	if base == "" && c.ServiceDomain != "" {
+		base = "https://" + c.ServiceDomain + ".microcms.io/api/v1"
 	}
-	client := c.client
+	client := c.Client
 	if client == nil {
 		client = &http.Client{}
 	}
-	return &blogHandlers{base: base, apiKey: c.apiKey, client: client}
+	return &blogHandlers{base: base, apiKey: c.APIKey, client: client}
+}
+
+// RegisterRoutes はブログの記事の中継を登録する。
+func RegisterRoutes(rt *httpx.Router, c Config) {
+	blog := newBlogHandlers(c)
+	rt.Public("GET /api/blog", blog.list)
+	rt.Public("GET /api/blog/{id}", blog.detail)
 }
 
 // errBlogNotFound は microCMS が 404 を返したこと（記事が存在しない）。

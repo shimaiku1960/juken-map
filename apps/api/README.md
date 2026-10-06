@@ -8,7 +8,7 @@ Node から消した（JUK-84）。ダッシュボード・学習記録と予定
 ログイン（`/api/auth/*`）も Better Auth（Node）から移し、Go で自作した（JUK-115、`auth_*.go`）。
 判定の基準は dev-standards の `targets/10_authentication.md`（認証 基準）で、コメントの B1・C3 などはその項目。
 画面（SPA・SSG の HTML・静的ファイル）・sitemap・ブログの中継（`/api/blog`）・`/line/settings` も Node から移した
-（JUK-111、`internal/spa/`・`blog.go`）。本番で動くアプリのコンテナは Go だけ（JUK-109 で Node のコンテナを外した）。
+（JUK-111、`internal/spa/`・`internal/feature/blog/`）。本番で動くアプリのコンテナは Go だけ（JUK-109 で Node のコンテナを外した）。
 
 どのファイルに何があるかは、下の「[ファイルの分け方](#ファイルの分け方)」にまとめた。
 
@@ -283,7 +283,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | --- | --- |
 | `internal/spa/spa.go` | 画面の配信（dist を起動時にメモリへ読み、gzip を作り置く。SSG の HTML、知らないパスの 404、sitemap） |
 | `internal/spa/seo.go` | ページごとの meta・GA4・Faro の差し込み、画面の CSP、sitemap の中身、SPA のルートの一覧 |
-| `blog.go` | ブログの記事の中継（microCMS、3秒で打ち切り、障害は 502） |
+| `internal/feature/blog/blog.go` | ブログの記事の中継（microCMS、3秒で打ち切り、障害は 502） |
 
 ### 外部サービスとの連携
 
@@ -291,7 +291,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | --- | --- |
 | `internal/feature/line/` | LINE 連携の入口（連携の確認・解除、トークからの Account Link、プロフィールからの LINE Login、Webhook）。書き込みは `internal/write/notification` |
 | `internal/feature/line/api.go` | LINE の API を呼ぶ部分（Messaging API・LINE Login、Webhook の署名の確かめ）。テストでは偽物に差し替える |
-| `microcms_webhook.go` | microCMS の記事の公開・更新・削除を受け、署名を確かめてから GitHub の API でデプロイを動かす（JUK-112） |
+| `internal/feature/blog/microcms_webhook.go` | microCMS の記事の公開・更新・削除を受け、署名を確かめてから GitHub の API でデプロイを動かす（JUK-112） |
 
 ### 毎日の通知
 

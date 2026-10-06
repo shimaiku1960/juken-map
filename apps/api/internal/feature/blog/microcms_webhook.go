@@ -1,4 +1,4 @@
-package main
+package blog
 
 import (
 	"bytes"
@@ -33,21 +33,25 @@ const microcmsWebhookBodyLimit = 1 << 20
 // 間が明けたときの1回にまとめる（記事をまとめて直すと、記事の数だけ通知が来るため）。
 const deployCoalesceWindow = time.Minute
 
-// microcmsWebhookConfig は microCMS の Webhook の設定。
-type microcmsWebhookConfig struct {
-	secret   string // MICROCMS_WEBHOOK_SECRET。空なら Webhook は必ず 401
-	deployer deployer
+// WebhookConfig は microCMS の Webhook の設定。
+type WebhookConfig struct {
+	Secret   string // MICROCMS_WEBHOOK_SECRET。空なら Webhook は必ず 401
+	Deployer Deployer
 }
 
-// deployer は本番のデプロイ（deploy.yml）を動かす。テストでは偽物に差し替える。
-type deployer interface {
+// Deployer は本番のデプロイ（deploy.yml）を動かす。テストでは偽物に差し替える。
+type Deployer interface {
 	dispatch(ctx context.Context) error
 }
 
-// microcmsWebhookHandler は POST /api/webhooks/microcms。
-type microcmsWebhookHandler struct {
+// WebhookHandler は POST /api/webhooks/microcms。
+type WebhookHandler struct {
 	secret  string
 	trigger *deployTrigger
+}
+
+func NewWebhookHandler(c WebhookConfig) *WebhookHandler {
+	return &WebhookHandler{secret: c.Secret, trigger: newDeployTrigger(c.Deployer)}
 }
 
 // microcmsPayload は microCMS の Webhook の本文のうち、作り直すかを決めるのに使う項目。
@@ -70,7 +74,7 @@ type microcmsContent struct {
 	PublishValue json.RawMessage `json:"publishValue"`
 }
 
-func (h *microcmsWebhookHandler) serve(w http.ResponseWriter, r *http.Request) {
+func (h *WebhookHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, microcmsWebhookBodyLimit))
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
@@ -181,7 +185,7 @@ func verifyMicrocmsSignature(body []byte, signature string, secret string) bool 
 // 予約はこのプロセスのメモリにだけある。動かしてから間が明けるまで（1分）にデプロイで Go が入れ替わることは
 // 無い（ビルドに数分かかる）が、ほかの理由で落ちれば予約は消える。そのときは deploy.yml を手で動かす。
 type deployTrigger struct {
-	deployer deployer
+	deployer Deployer
 	window   time.Duration
 	now      func() time.Time
 	// afterFunc は time.AfterFunc。テストでは、時間を待たずに予約を動かせるものに差し替える。
@@ -192,7 +196,7 @@ type deployTrigger struct {
 	pending bool      // 間が明けたときに動かす予約があるか
 }
 
-func newDeployTrigger(d deployer) *deployTrigger {
+func newDeployTrigger(d Deployer) *deployTrigger {
 	return &deployTrigger{
 		deployer:  d,
 		window:    deployCoalesceWindow,
@@ -242,35 +246,35 @@ func (t *deployTrigger) dispatchQueued() {
 	}
 }
 
-// githubWorkflowDispatcher は GitHub の API で、main の deploy.yml を workflow_dispatch で動かす。
+// GitHubWorkflowDispatcher は GitHub の API で、main の deploy.yml を workflow_dispatch で動かす。
 // トークンは fine-grained で、このリポジトリの「Actions: Read and write」だけを持たせる。
-type githubWorkflowDispatcher struct {
-	client *http.Client
-	// apiBase は GitHub の API の根元（既定 https://api.github.com）。テストでは偽のサーバーへ向ける。
-	apiBase  string
-	repo     string // owner/name
-	workflow string // ワークフローのファイル名
-	ref      string
-	token    string // GITHUB_DEPLOY_TOKEN
+type GitHubWorkflowDispatcher struct {
+	Client *http.Client
+	// APIBase は GitHub の API の根元（既定 https://api.github.com）。テストでは偽のサーバーへ向ける。
+	APIBase  string
+	Repo     string // owner/name
+	Workflow string // ワークフローのファイル名
+	Ref      string
+	Token    string // GITHUB_DEPLOY_TOKEN
 }
 
-func (g *githubWorkflowDispatcher) dispatch(ctx context.Context) error {
-	if g.token == "" {
+func (g *GitHubWorkflowDispatcher) dispatch(ctx context.Context) error {
+	if g.Token == "" {
 		return errors.New("GITHUB_DEPLOY_TOKEN is not configured")
 	}
 	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
-	url := fmt.Sprintf("%s/repos/%s/actions/workflows/%s/dispatches", g.apiBase, g.repo, g.workflow)
-	body := fmt.Sprintf(`{"ref":%q}`, g.ref)
+	url := fmt.Sprintf("%s/repos/%s/actions/workflows/%s/dispatches", g.APIBase, g.Repo, g.Workflow)
+	body := fmt.Sprintf(`{"ref":%q}`, g.Ref)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+g.token)
+	req.Header.Set("Authorization", "Bearer "+g.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("Content-Type", "application/json")
-	res, err := g.client.Do(req)
+	res, err := g.Client.Do(req)
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-package main
+package blog
 
 import (
 	"net/http"
@@ -18,7 +18,7 @@ func newBlogTestRouter(t *testing.T, upstream http.HandlerFunc) *httpx.Router {
 	srv := httptest.NewServer(upstream)
 	t.Cleanup(srv.Close)
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
-	registerBlogRoutes(rt, blogConfig{apiBase: srv.URL + "/api/v1", apiKey: "key"})
+	RegisterRoutes(rt, Config{APIBase: srv.URL + "/api/v1", APIKey: "key"})
 	return rt
 }
 
@@ -115,7 +115,7 @@ func TestBlogUpstreamFailures(t *testing.T) {
 
 	// 設定が無ければ microCMS を呼ばずに 502
 	rt = httpx.NewRouter(httpxtest.FakeSessions(nil))
-	registerBlogRoutes(rt, blogConfig{})
+	RegisterRoutes(rt, Config{})
 	if rec := getBlog(rt, "/api/blog"); rec.Code != http.StatusBadGateway {
 		t.Fatalf("未設定: status = %d, want 502", rec.Code)
 	}
