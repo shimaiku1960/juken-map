@@ -25,6 +25,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/admin"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/notifications"
@@ -116,10 +117,10 @@ func run() error {
 	})
 	rt := httpx.NewRouter(authHandlers.LoadSession)
 	auth.RegisterRoutes(rt, authHandlers)
-	registerBlogRoutes(rt, blogConfig{
-		serviceDomain: os.Getenv("MICROCMS_SERVICE_DOMAIN"),
-		apiKey:        os.Getenv("MICROCMS_API_KEY"),
-		client:        telemetry.NewOutboundClient(tp),
+	blog.RegisterRoutes(rt, blog.Config{
+		ServiceDomain: os.Getenv("MICROCMS_SERVICE_DOMAIN"),
+		APIKey:        os.Getenv("MICROCMS_API_KEY"),
+		Client:        telemetry.NewOutboundClient(tp),
 	})
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
@@ -144,15 +145,15 @@ func run() error {
 			LoginChannelID: os.Getenv("LINE_LOGIN_CHANNEL_ID"),
 			LoginSecret:    os.Getenv("LINE_LOGIN_CHANNEL_SECRET"),
 		},
-	}, microcmsWebhookConfig{
-		secret: os.Getenv("MICROCMS_WEBHOOK_SECRET"),
-		deployer: &githubWorkflowDispatcher{
-			client:   telemetry.NewOutboundClient(tp),
-			apiBase:  envOr("GITHUB_API_BASE", "https://api.github.com"),
-			repo:     "shimaiku1960/juken-map",
-			workflow: "deploy.yml",
-			ref:      "main",
-			token:    os.Getenv("GITHUB_DEPLOY_TOKEN"),
+	}, blog.WebhookConfig{
+		Secret: os.Getenv("MICROCMS_WEBHOOK_SECRET"),
+		Deployer: &blog.GitHubWorkflowDispatcher{
+			Client:   telemetry.NewOutboundClient(tp),
+			APIBase:  envOr("GITHUB_API_BASE", "https://api.github.com"),
+			Repo:     "shimaiku1960/juken-map",
+			Workflow: "deploy.yml",
+			Ref:      "main",
+			Token:    os.Getenv("GITHUB_DEPLOY_TOKEN"),
 		},
 	})
 
@@ -227,17 +228,10 @@ func run() error {
 	return errors.Join(errs...)
 }
 
-// registerBlogRoutes はブログの記事の中継（blog.go）を登録する。
-func registerBlogRoutes(rt *httpx.Router, c blogConfig) {
-	blog := newBlogHandlers(c)
-	rt.Public("GET /api/blog", blog.list)
-	rt.Public("GET /api/blog/{id}", blog.detail)
-}
-
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
-func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.Config, microcms microcmsWebhookConfig) {
+func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.Config, microcms blog.WebhookConfig) {
 	studyRoutes := study.New(db)
 
 	rt.Public("GET /api/health", healthHandler(db))
@@ -295,8 +289,8 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 	rt.PublicWithSession("GET /line/settings", lineRoutes.Settings)
 
 	// microCMS で記事を変えたら、記事を作り直すデプロイを動かす（JUK-112）。
-	microcmsWebhook := &microcmsWebhookHandler{secret: microcms.secret, trigger: newDeployTrigger(microcms.deployer)}
-	rt.Webhook("POST /api/webhooks/microcms", microcmsWebhook.serve)
+	microcmsWebhook := blog.NewWebhookHandler(microcms)
+	rt.Webhook("POST /api/webhooks/microcms", microcmsWebhook.Serve)
 
 	adminUsers := admin.NewUserHandlers(db)
 	rt.Admin("GET /api/admin/overview", adminUsers.Overview)

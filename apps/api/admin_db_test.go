@@ -30,6 +30,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
@@ -49,7 +50,7 @@ func newDBAdminApp(t *testing.T, db *sql.DB) dbAdminApp {
 		}
 		return &httpx.Session{UserID: c.Value, Email: c.Value + "@example.test", Role: "admin", TwoFactorVerified: true}, nil
 	})
-	registerRoutes(rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
+	registerRoutes(rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{})
 	return dbAdminApp{t: t, rt: rt}
 }
 

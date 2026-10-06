@@ -1,4 +1,4 @@
-package main
+package blog
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
@@ -47,9 +46,9 @@ func microcmsSign(body string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func newMicrocmsTestRouter(secret string, d deployer) *httpx.Router {
+func newMicrocmsTestRouter(secret string, d Deployer) *httpx.Router {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
-	registerRoutes(rt, nil, jobConfig{}, line.Config{}, microcmsWebhookConfig{secret: secret, deployer: d})
+	rt.Webhook("POST /api/webhooks/microcms", NewWebhookHandler(WebhookConfig{Secret: secret, Deployer: d}).Serve)
 	return rt
 }
 
@@ -269,9 +268,9 @@ func TestGithubWorkflowDispatcher(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	g := &githubWorkflowDispatcher{
-		client: srv.Client(), apiBase: srv.URL, repo: "shimaiku1960/juken-map",
-		workflow: "deploy.yml", ref: "main", token: "github-token",
+	g := &GitHubWorkflowDispatcher{
+		Client: srv.Client(), APIBase: srv.URL, Repo: "shimaiku1960/juken-map",
+		Workflow: "deploy.yml", Ref: "main", Token: "github-token",
 	}
 	if err := g.dispatch(context.Background()); err != nil {
 		t.Fatal(err)
@@ -295,7 +294,7 @@ func TestGithubWorkflowDispatcher(t *testing.T) {
 	t.Run("トークンが未設定なら呼ばない", func(t *testing.T) {
 		gotPath = ""
 		empty := *g
-		empty.token = ""
+		empty.Token = ""
 		if err := empty.dispatch(context.Background()); err == nil {
 			t.Fatal("トークンが空なのに失敗しなかった")
 		}

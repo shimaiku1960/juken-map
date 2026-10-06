@@ -939,7 +939,7 @@ paths:
           application/json:
             schema:
               type: object
-              description: microCMS の Webhook の本文（使う項目は apps/api/microcms_webhook.go の microcmsPayload）
+              description: microCMS の Webhook の本文（使う項目は apps/api/internal/feature/blog/microcms_webhook.go の microcmsPayload）
       responses:
         "200":
           description: 受け取った。dispatched はすぐ動かした、queued は予約した、skipped は動かさなかった

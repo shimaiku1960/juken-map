@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
@@ -100,8 +101,8 @@ func TestRegisteredRoutes(t *testing.T) {
 	// ハンドラは呼ばないので、DB は nil のままでよい。
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	auth.RegisterRoutes(rt, auth.New(nil, auth.Config{}))
-	registerBlogRoutes(rt, blogConfig{})
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, microcmsWebhookConfig{})
+	blog.RegisterRoutes(rt, blog.Config{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, blog.WebhookConfig{})
 
 	if len(rt.Routes) != len(want) {
 		t.Fatalf("routes = %v\nwant %v", rt.Routes, want)
@@ -124,8 +125,8 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	// 2段階認証の確認を別のサイトから送らせない（ログインの CSRF。認証基準 10 の D2）。
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	auth.RegisterRoutes(rt, auth.New(nil, auth.Config{}))
-	registerBlogRoutes(rt, blogConfig{})
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, microcmsWebhookConfig{})
+	blog.RegisterRoutes(rt, blog.Config{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, blog.WebhookConfig{})
 
 	checked := 0
 	for _, route := range rt.Routes {
