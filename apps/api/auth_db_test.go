@@ -30,6 +30,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
 const authTestPassword = "a long passphrase for tests"
@@ -148,13 +149,13 @@ func (e *authEnv) cleanup() {
 	for _, email := range e.emails {
 		e.fx.Exec("DELETE FROM `user` WHERE email = ?", email)
 		e.fx.Exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(email))
-		for _, rule := range []throttleRule{throttleSignInAccount} {
-			e.fx.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, email))
+		for _, rule := range []authguard.Rule{authguard.SignInAccount} {
+			e.fx.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(rule, email))
 		}
 	}
 	for _, ip := range e.ips {
-		for _, rule := range []throttleRule{throttleSignInIP, throttleAnonymousIP} {
-			e.fx.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(rule, ip))
+		for _, rule := range []authguard.Rule{authguard.SignInIP, authguard.AnonymousIP} {
+			e.fx.Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(rule, ip))
 		}
 	}
 }
@@ -353,7 +354,7 @@ func TestAuthDBSignInThrottlePerAccount(t *testing.T) {
 	e := newAuthEnv(t)
 	email := e.newEmail()
 	e.signUpVerified(email, authTestPassword)
-	for i := range throttleSignInAccount.max {
+	for i := range authguard.SignInAccount.Max {
 		// ブラウザ（IP）を変えながら試しても数える（IP 単位では止まらない攻撃）。
 		expectStatus(t, e.browser().do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": "wrong passphrase " + fmt.Sprint(i)}), 401, "")
 	}
@@ -362,7 +363,7 @@ func TestAuthDBSignInThrottlePerAccount(t *testing.T) {
 	if rec.Header().Get("Retry-After") == "" {
 		t.Fatal("Retry-After が無い")
 	}
-	e.clock.Advance(throttleSignInAccount.window + time.Second)
+	e.clock.Advance(authguard.SignInAccount.Window + time.Second)
 	expectStatus(t, e.browser().do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword}), 200, "")
 }
 
@@ -701,7 +702,7 @@ func TestAuthDBMFA(t *testing.T) {
 			expectStatus(t, p.do("POST", "/api/auth/mfa/verify", map[string]string{"code": "000000"}), 401, "INVALID_CODE")
 		}
 		expectStatus(t, p.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 401, "MFA_CHALLENGE_EXPIRED")
-		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
+		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.MFAAccount, id))
 
 		p.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 		code := totpCode(secret, totpStep(e.clock.Now()))
@@ -913,8 +914,8 @@ func TestAuthDBEmailLimitPerRecipient(t *testing.T) {
 	for range 6 {
 		expectStatus(t, b.do("POST", "/api/auth/password/forgot", map[string]string{"email": email}), 200, "")
 	}
-	if got := e.mails.count(email, ""); got != emailPerRecipientPerHour {
-		t.Fatalf("送った数 = %d, want %d", got, emailPerRecipientPerHour)
+	if got := e.mails.count(email, ""); got != authguard.EmailPerRecipientPerHour {
+		t.Fatalf("送った数 = %d, want %d", got, authguard.EmailPerRecipientPerHour)
 	}
 }
 
@@ -924,7 +925,7 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 
 	t.Run("ログインしていない入口（メールのトークンなど）は IP ごとに10分20回まで", func(t *testing.T) {
 		b := e.browser()
-		for range throttleAnonymousIP.max {
+		for range authguard.AnonymousIP.Max {
 			expectStatus(t, b.do("POST", "/api/auth/verify-email", map[string]string{"token": strings.Repeat("a", 43)}), 400, "INVALID_TOKEN")
 		}
 		expectStatus(t, b.do("POST", "/api/auth/verify-email", map[string]string{"token": strings.Repeat("a", 43)}), 429, "TOO_MANY_REQUESTS")
@@ -936,11 +937,11 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 		email := e.newEmail()
 		e.signUpVerified(email, authTestPassword)
 		b := e.signedIn(email, authTestPassword)
-		for i := range throttleReauthAccount.max {
+		for i := range authguard.ReauthAccount.Max {
 			expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": fmt.Sprint("wrong passphrase ", i), "newPassword": "a brand new passphrase"}), 400, "INVALID_PASSWORD")
 		}
 		expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": authTestPassword, "newPassword": "a brand new passphrase"}), 429, "TOO_MANY_REQUESTS")
-		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleReauthAccount, e.userID(email)))
+		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.ReauthAccount, e.userID(email)))
 	})
 
 	t.Run("2段階認証のコードは、途中の状態を作り直してもアカウントごとに15分10回まで", func(t *testing.T) {
@@ -957,7 +958,7 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 		b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 		e.clock.Advance(totpPeriod)
 		expectStatus(t, b.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 429, "TOO_MANY_MFA_ATTEMPTS")
-		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleMFAAccount, id))
+		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.MFAAccount, id))
 	})
 }
 
@@ -1066,7 +1067,7 @@ func TestAuthDBH2SignInTiming(t *testing.T) {
 			start := time.Now()
 			b.do("POST", "/api/auth/sign-in", map[string]string{"email": target, "password": fmt.Sprint("wrong passphrase ", i)})
 			out = append(out, time.Since(start))
-			newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", throttleBucket(throttleSignInAccount, target))
+			newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.SignInAccount, target))
 		}
 		slices.Sort(out)
 		return out

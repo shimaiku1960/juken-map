@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
 // 本人の退会（06 G3、JUK-123）。管理者の削除（admin_users.go の deleteUser）と同じ消し方で、
@@ -96,7 +98,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 // 当てずっぽうを繰り返せないよう、再認証と同じ回数制限を通す。
 func (h *authHandlers) confirmEmail(w http.ResponseWriter, r *http.Request, u *authUser, typed string) bool {
 	ctx := r.Context()
-	ok, retry, err := h.throttle.hit(ctx, throttleReauthAccount, u.ID)
+	ok, retry, err := h.throttle.hit(ctx, authguard.ReauthAccount, u.ID)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("delete-account: %w", err))
 		return false
@@ -112,7 +114,7 @@ func (h *authHandlers) confirmEmail(w http.ResponseWriter, r *http.Request, u *a
 		writeAuthError(w, http.StatusBadRequest, "EMAIL_MISMATCH", "メールアドレスが一致しません")
 		return false
 	}
-	if err := h.throttle.clear(ctx, throttleReauthAccount, u.ID); err != nil {
+	if err := h.throttle.clear(ctx, authguard.ReauthAccount, u.ID); err != nil {
 		internalError(w, r, fmt.Errorf("delete-account: %w", err))
 		return false
 	}

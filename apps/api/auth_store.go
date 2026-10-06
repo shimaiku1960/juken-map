@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
 // authStore はログイン（/api/auth/*）の SQL をまとめる（JUK-134）。入口（auth_handlers.go・auth_mfa.go・
@@ -370,47 +371,18 @@ func (st *authStore) countBackupCodes(ctx context.Context, userID string) (int, 
 
 // ---- 外部ログイン（F1・F2） ----
 
-type savedOAuthState struct {
-	verifier, nonce, redirectTo string
-}
-
 // saveOAuthState は外部ログインを始めるときの state を保存する。期限の切れたものは消す。
-func (st *authStore) saveOAuthState(ctx context.Context, stateHash []byte, provider string, s savedOAuthState) error {
-	now := st.clock()
-	if _, err := st.db.ExecContext(ctx, "DELETE FROM AuthOAuthState WHERE expiresAt <= ?", now); err != nil {
-		return err
-	}
-	_, err := st.db.ExecContext(ctx,
-		"INSERT INTO AuthOAuthState (stateHash, provider, codeVerifier, nonce, redirectTo, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		stateHash, provider, s.verifier, s.nonce, s.redirectTo, now, now.Add(oauthStateTTL))
-	return err
+func (st *authStore) saveOAuthState(ctx context.Context, stateHash []byte, provider string, s authguard.OAuthState) error {
+	return authguard.SaveOAuthState(ctx, st.db, stateHash, provider, s, st.clock())
 }
 
 // consumeOAuthState は state の行を読んで消す（1回だけ使える）。プロバイダーが違えば使わない。
-func (st *authStore) consumeOAuthState(ctx context.Context, state, provider string) (*savedOAuthState, error) {
+func (st *authStore) consumeOAuthState(ctx context.Context, state, provider string) (*authguard.OAuthState, error) {
 	hash := hashToken(state)
 	if hash == nil {
 		return nil, nil
 	}
-	now := st.clock()
-	var s savedOAuthState
-	err := st.db.QueryRowContext(ctx,
-		"SELECT codeVerifier, nonce, redirectTo FROM AuthOAuthState WHERE stateHash = ? AND provider = ? AND expiresAt > ?",
-		hash, provider, now).Scan(&s.verifier, &s.nonce, &s.redirectTo)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	res, err := st.db.ExecContext(ctx, "DELETE FROM AuthOAuthState WHERE stateHash = ?", hash)
-	if err != nil {
-		return nil, err
-	}
-	if n, _ := res.RowsAffected(); n != 1 {
-		return nil, nil
-	}
-	return &s, nil
+	return authguard.ConsumeOAuthState(ctx, st.db, hash, provider, st.clock())
 }
 
 // identityUser は、プロバイダーとプロバイダー側の ID の組に結びついた利用者。無ければ空。

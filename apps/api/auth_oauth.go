@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
 // 外部ログイン（Google・GitHub、認証基準 10 の F1〜F3、06 の C4）。
@@ -33,7 +35,7 @@ import (
 // 戻り先の URL（redirect_uri）は「自分のオリジン + /api/auth/callback/{provider}」に固定する。
 // Google・GitHub の設定に登録してある URL と同じ（Better Auth と同じパスなので、設定は変えない）。
 
-const oauthStateTTL = 10 * time.Minute
+// state の寿命（cookie と DB の行）は authguard.OAuthStateTTL。保存と消費は持ち主の internal/write/authguard（JUK-154）。
 
 var errOAuthEmailNotVerified = errors.New("プロバイダーがメールアドレスを確認済みと示していない")
 
@@ -121,11 +123,11 @@ func (h *authHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *ses
 	verifier := oauth2.GenerateVerifier()
 	nonce := base64.RawURLEncoding.EncodeToString(randomBytes(16))
 	if err := h.store.saveOAuthState(r.Context(), stateHash, p.name,
-		savedOAuthState{verifier: verifier, nonce: nonce, redirectTo: safeRedirectPath(in.CallbackURL, "/")}); err != nil {
+		authguard.OAuthState{Verifier: verifier, Nonce: nonce, RedirectTo: safeRedirectPath(in.CallbackURL, "/")}); err != nil {
 		internalError(w, r, fmt.Errorf("oauth start: %w", err))
 		return
 	}
-	setCookie(w, oauthCookieName, state, oauthStateTTL, http.SameSiteLaxMode)
+	setCookie(w, oauthCookieName, state, authguard.OAuthStateTTL, http.SameSiteLaxMode)
 	opts := []oauth2.AuthCodeOption{oauth2.S256ChallengeOption(verifier)}
 	if p.usesNonce {
 		opts = append(opts, oauth2.SetAuthURLParam("nonce", nonce))
@@ -163,12 +165,12 @@ func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, pre
 		fail("state_unknown", "oauth", err)
 		return
 	}
-	token, err := p.config.Exchange(ctx, q.Get("code"), oauth2.VerifierOption(saved.verifier))
+	token, err := p.config.Exchange(ctx, q.Get("code"), oauth2.VerifierOption(saved.Verifier))
 	if err != nil {
 		fail("exchange", "oauth", err)
 		return
 	}
-	ident, err := p.identify(ctx, p.config, token, saved.nonce, h.clock())
+	ident, err := p.identify(ctx, p.config, token, saved.Nonce, h.clock())
 	if err != nil {
 		fail("identity", "oauth", err)
 		return
@@ -194,7 +196,7 @@ func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, pre
 			fail("mfa_challenge", "oauth", err)
 			return
 		}
-		http.Redirect(w, r, "/login?mfa=required&callbackURL="+url.QueryEscape(saved.redirectTo), http.StatusFound)
+		http.Redirect(w, r, "/login?mfa=required&callbackURL="+url.QueryEscape(saved.RedirectTo), http.StatusFound)
 		return
 	}
 	if err := h.startSession(w, r, u, false, previous); err != nil {
@@ -202,7 +204,7 @@ func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, pre
 		return
 	}
 	logAuthEvent(r, slog.LevelInfo, "sign_in_success", u.ID, "method", p.name)
-	http.Redirect(w, r, saved.redirectTo, http.StatusFound)
+	http.Redirect(w, r, saved.RedirectTo, http.StatusFound)
 }
 
 // resolveOAuthUser は外部ログインの利用者を決める（F2）。
