@@ -28,8 +28,8 @@
 # シミュレーション（sim/）がログイン状態（Cookie）を覚えておく場所
 /sim/.state/
 *.pem
-# RDS のルート証明書（公開されているもの）。Go の API が埋め込んで TLS の確認に使う（apps/api/db.go）。
-!/apps/api/rds-ca-ap-northeast-1.pem
+# RDS のルート証明書（公開されているもの）。Go の API が埋め込んで TLS の確認に使う（apps/api/internal/database）。
+!/apps/api/internal/database/rds-ca-ap-northeast-1.pem
 
 # debug
 npm-debug.log*

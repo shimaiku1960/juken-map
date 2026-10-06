@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"database/sql/driver"
 	"log/slog"
 	"net/http"
 	"os"
 
-	"github.com/XSAM/otelsql"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -23,7 +21,7 @@ import (
 // Node の instrumentation.ts にあたる（JUK-126）。
 //
 // Node は import を横取りしてライブラリに計測を仕込んだが、Go にその仕組みは無いので、
-// 計測する場所を自分で包む。リクエストは observe（middleware.go）、SQL は openDB の otelsql、
+// 計測する場所を自分で包む。リクエストは observe（middleware.go）、SQL は database.Open の otelsql、
 // 外部 API は newOutboundClient。
 //
 // トークンを残さないため、スパンには URL のパスも ? 以降も入れない。リクエストはルートの型
@@ -52,7 +50,7 @@ func setupTracing(ctx context.Context) (trace.TracerProvider, func(context.Conte
 		sdktrace.WithSpanProcessor(skipWebSpans{sdktrace.NewBatchSpanProcessor(redactingExporter{exporter})}),
 		sdktrace.WithResource(resource.NewSchemaless(attribute.String("service.name", serviceName))),
 	)
-	// openDB の otelsql は、指定が無ければこの全体の設定を使う。
+	// database.Open の otelsql は、指定が無ければこの全体の設定を使う。
 	otel.SetTracerProvider(tp)
 	// 送れなかったとき（Alloy の入れ替え中など）の誤りは、既定だと JSON でない素の文で標準エラーに出る。
 	// ほかのログと同じ形にして、Loki で拾えるようにする。
@@ -61,19 +59,6 @@ func setupTracing(ctx context.Context) (trace.TracerProvider, func(context.Conte
 	}))
 	return tp, tp.Shutdown, nil
 }
-
-// tracedDBOptions は SQL のスパンの出し方。1本の照会につき1つのスパンにして、SQL の文（? のまま。
-// 値はドライバが後で埋めるので入らない）を属性に残す。
-var tracedDBOptions = otelsql.WithSpanOptions(otelsql.SpanOptions{
-	// 結果を読む時間・接続の使い回しの準備は、照会のスパンと別に出すと数が倍になる割に読むことが無い。
-	OmitRows:             true,
-	OmitConnResetSession: true,
-	OmitConnPrepare:      true,
-	// リクエストの外（起動時の確認など）の SQL は、親の無いスパンになって一覧を埋めるので出さない。
-	SpanFilter: func(ctx context.Context, _ otelsql.Method, _ string, _ []driver.NamedValue) bool {
-		return trace.SpanContextFromContext(ctx).IsValid()
-	},
-})
 
 // webRoute は API 以外（画面の HTML・JS・CSS・画像）をまとめたルート（spa.go）。
 const webRoute = "(web)"

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // authStore はログイン（/api/auth/*）の SQL をまとめる（JUK-134）。入口（auth_handlers.go・auth_mfa.go・
@@ -91,7 +93,7 @@ func (st *authStore) markEmailVerified(ctx context.Context, userID string, now t
 
 // deleteUser は退会で利用者とデータを消す。消し方は管理者の削除と同じ deleteUserAndData。
 func (st *authStore) deleteUser(ctx context.Context, userID string) error {
-	return inTx(ctx, st.db, func(tx *sql.Tx) error {
+	return database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		return deleteUserAndData(ctx, tx, userID)
 	})
 }
@@ -115,7 +117,7 @@ func (st *authStore) sessionUser(ctx context.Context, sessionID string) (*Sessio
 		return nil, "", err
 	}
 	u.Name = name.String
-	u.CreatedAt = isoFromDatetime(createdAt)
+	u.CreatedAt = database.ISOFromDatetime(createdAt)
 	return &u, expiresAt, nil
 }
 

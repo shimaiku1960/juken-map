@@ -154,7 +154,7 @@ Next.js 時代に同じ変換が画面3箇所と API に重複していたのを
 SPA に分けたあとは、変換を使うのが予定と実績の一覧の GET の2か所だけになった。
 流れを追うときに開くファイルが1つ増えるだけだったので、ファイルを消し、
 SQL を読むところで最初から画面の形に組み立てるようにした。Go でも同じで、日時は `time.Time` にせず
-DB の文字列のまま受けて ISO 文字列に直す（`apps/api/db.go` の `ParseTime = false`）。
+DB の文字列のまま受けて ISO 文字列に直す（`apps/api/internal/database` の `ParseTime = false`）。
 
 **見直す条件:** 日時を時刻の値のまま計算したい呼び出し元が増えたとき。そのときは読む型を
 `time.Time` に戻し、画面の形への変換を呼び出し元へ分ける。
@@ -172,7 +172,7 @@ Go の API は、1つの機能を1つのファイル（大きいものは数フ�
    ストアの結果をステータスコードへ翻訳する（見つからない → 404、重複 → 409 など）
 3. **ストア**：SQL を流し、失敗は値（`admin_masters.go` の `masterOutcome`）か目印のエラー
    （`study_plan_writes.go` の `errAlreadyCompleted`）で返す。ステータスコードは知らない。
-   一意制約違反の判定（`isMySQLError(err, mysqlDuplicateEntry)`、`db.go`）もストアの中で済ませる
+   一意制約違反の判定（`database.IsMySQLError(err, database.DuplicateEntry)`、`internal/database`）もストアの中で済ませる
 
 **この順番に意味がある。** 誰か分からない人に入力の良し悪しを教えないため、
 入口の拒否 → 入力の順で門番を並べている。入力の確認は「自分の行か」より先に行う（Node と同じ応答にするため）。
@@ -330,9 +330,8 @@ apps/api/
 #### 移し方
 
 - **最初は account の利用停止で試す（JUK-151）。** 入口・持ち主・テストの分担がうまく分かれるかを確かめてから、
-  ほかへ広げる。その前に、持ち主が使う DB の補助（`inTx` は `line.go`、`placeholders` は `admin_masters.go`、
-  `isMySQLError` は `db.go` に散っている）を `internal/database` へ移す。`package main` は import できないので、
-  これが無いと持ち主のパッケージが作れない。
+  ほかへ広げる。その前に、持ち主が使う DB の補助（`InTx`・`Placeholders`・`IsMySQLError` など）を
+  `internal/database` へ移した（JUK-152）。`package main` は import できないので、これが無いと持ち主のパッケージが作れない。
 - **移動だけの PR と、中身を変える PR を分ける。** 1回の PR で1パッケージにする。挙動は変えないので、
   `go build`・`go vet`・golangci-lint・`go test`・DB テスト・E2E と、ルート一覧が前と同じことで確かめる。
   多くのファイルを動かす PR は、ほかの worktree の作業とぶつかるので、並行する作業が無いときに出す。
@@ -396,7 +395,7 @@ Go の自作に替えた（JUK-115）。いま Node の mysql2 を使うのは�
   （応答に出る列なら `openapi/openapi.yaml` も）を合わせて直す。当てたあとの migration.sql は書き換えない（変えても DB には
   反映されず、警告だけが出る）。直すときは新しいマイグレーションを足す。
 
-ORM を外すと、次のことを自分で持つことになる。どれも Go の `apps/api/db.go`、seed とテスト用の `db/connection.ts` とテストで押さえている。
+ORM を外すと、次のことを自分で持つことになる。どれも Go の `apps/api/internal/database`、seed とテスト用の `db/connection.ts` とテストで押さえている。
 
 - **日時の時間帯。** MySQL の `DATETIME` は時間帯を持たない。Prisma は UTC として読み書き
   していたが、ドライバの既定はプロセスのローカル時刻で、Mac（JST）では9時間ずれる。
@@ -406,7 +405,7 @@ ORM を外すと、次のことを自分で持つことになる。どれも Go 
 - **`updatedAt`。** Prisma の `@updatedAt` は DB の機能ではなく Prisma が毎回値を足していた。
   列に既定値は無いので、INSERT / UPDATE で必ず書く。
 - **一意制約違反。** Prisma の `P2002` の代わりに MySQL の `ER_DUP_ENTRY`（1062）で判定する
-  （Go は `db.go` の `isMySQLError(err, mysqlDuplicateEntry)`）。
+  （Go は `internal/database` の `IsMySQLError(err, DuplicateEntry)`）。
 - **型。** Prisma の型推論は失われた。Go の行の型は struct に手で書いており、列を足しても
   直し忘れはコンパイルでは分からない（SELECT の列と Scan の受け皿の数が合わなければ、DB に流すテストで落ちる）。
 - **入れ子の組み立てと SQL の本数。** `include` は JOIN ではなく、親を取ってから子を

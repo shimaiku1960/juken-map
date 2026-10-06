@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 const (
@@ -62,7 +64,7 @@ func deleteExpired(ctx context.Context, db *sql.DB, now time.Time, batch int) (m
 			// 選んだ行は消すまでのあいだも期限切れのまま。
 			// #nosec G202 -- 表名と列名は expiredTables に書いた固定の名前、ほかは件数ぶん並べた ? だけ。値は keys で渡す
 			res, err := db.ExecContext(ctx,
-				"DELETE FROM `"+table.name+"` WHERE `"+table.key+"` IN ("+placeholders(len(keys), "?")+")", keys...)
+				"DELETE FROM `"+table.name+"` WHERE `"+table.key+"` IN ("+database.Placeholders(len(keys), "?")+")", keys...)
 			if err != nil {
 				return removed, fmt.Errorf("delete expired %s: %w", table.name, err)
 			}

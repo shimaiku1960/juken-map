@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // db/test-db/config.ts と同じ既定値。
@@ -34,14 +36,14 @@ func openTestDB(t *testing.T) *sql.DB {
 		url = defaultTestDatabaseURL
 	}
 	// 取り違えの防止。本番や開発の DB に向いていたら、何かする前に止める。
-	cfg, err := dbConfig(url)
+	cfg, err := database.Config(url)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(cfg.DBName, "_test") {
 		t.Fatalf("テスト用 DB の名前は _test で終わる必要があります（%s）", cfg.DBName)
 	}
-	db, err := openDB(url)
+	db, err := database.Open(url)
 	if err != nil {
 		t.Fatalf("テスト用の MySQL に繋げません。`pnpm db:start` と `pnpm --filter @juken-map/db test-db:prepare` を先に動かしてください: %v", err)
 	}

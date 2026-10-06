@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 管理者ページのマスター編集のうち、参考書マスター（/api/admin/textbook-masters）。
@@ -211,7 +213,7 @@ func readMetrics(in *objectInput) []AdminTextbookMasterMetric {
 // ---- DB ----
 
 // selectAdminTextbookMasters は参考書マスターを、総量の候補と利用者の参考書の数をつけて引く（先頭200件まで）。
-func selectAdminTextbookMasters(ctx context.Context, db sqlRunner, where string, args ...any) ([]AdminTextbookMaster, error) {
+func selectAdminTextbookMasters(ctx context.Context, db database.Runner, where string, args ...any) ([]AdminTextbookMaster, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT tm.id, tm.name, tm.publisher, tm.edition, tm.isbn,
 		        (SELECT COUNT(*) FROM Textbook t WHERE t.masterId = tm.id) AS textbookCount,
@@ -248,7 +250,7 @@ func selectAdminTextbookMasters(ctx context.Context, db sqlRunner, where string,
 	return masters, rows.Err()
 }
 
-func findAdminTextbookMaster(ctx context.Context, db sqlRunner, id int64) (*AdminTextbookMaster, error) {
+func findAdminTextbookMaster(ctx context.Context, db database.Runner, id int64) (*AdminTextbookMaster, error) {
 	masters, err := selectAdminTextbookMasters(ctx, db, "WHERE tm.id = ?", id)
 	if err != nil || len(masters) == 0 {
 		return nil, err
@@ -277,13 +279,13 @@ func replaceMetrics(ctx context.Context, tx *sql.Tx, masterID int64, metrics []A
 	// #nosec G202 -- 埋め込むのは件数ぶん並べた (?, …) だけ。値は args で渡す
 	_, err := tx.ExecContext(ctx,
 		`INSERT INTO TextbookMasterMetric (masterId, unit, totalAmount, isDefault, createdAt, updatedAt)
-		 VALUES `+placeholders(len(metrics), "(?, ?, ?, ?, ?, ?)"), args...)
+		 VALUES `+database.Placeholders(len(metrics), "(?, ?, ?, ?, ?, ?)"), args...)
 	return err
 }
 
 func (st *sqlAdminMasterStore) createTextbookMaster(ctx context.Context, in textbookMasterInput) (masterOutcome[AdminTextbookMaster], error) {
 	var outcome masterOutcome[AdminTextbookMaster]
-	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
+	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		now := nowMillis()
 		res, err := tx.ExecContext(ctx,
 			`INSERT INTO TextbookMaster (name, publisher, edition, isbn, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -301,7 +303,7 @@ func (st *sqlAdminMasterStore) createTextbookMaster(ctx context.Context, in text
 		outcome, err = foundOutcome(findAdminTextbookMaster(ctx, tx, id))
 		return err
 	})
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return masterOutcome[AdminTextbookMaster]{failure: masterDuplicate}, nil
 	}
 	if err == nil {
@@ -314,7 +316,7 @@ func (st *sqlAdminMasterStore) createTextbookMaster(ctx context.Context, in text
 // 自分の行に写し取っているので、ここで総量を変えても既存の利用者の参考書は変わらない（これから登録する人から効く）。
 func (st *sqlAdminMasterStore) updateTextbookMaster(ctx context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[AdminTextbookMaster]], error) {
 	var outcome masterOutcome[masterChange[AdminTextbookMaster]]
-	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
+	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		before, err := findAdminTextbookMaster(ctx, tx, id)
 		if err != nil || before == nil {
 			outcome.failure = masterNotFound
@@ -332,7 +334,7 @@ func (st *sqlAdminMasterStore) updateTextbookMaster(ctx context.Context, id int6
 		outcome.value = masterChange[AdminTextbookMaster]{before: *before, after: after.value}
 		return err
 	})
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return masterOutcome[masterChange[AdminTextbookMaster]]{failure: masterDuplicate}, nil
 	}
 	if err == nil && outcome.failure == masterOK {

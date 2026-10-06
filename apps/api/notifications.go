@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 毎日の学習通知の送信（JUK-74）。Node の routes/cron.ts と services/sendDailyNotifications.ts にあたる。
@@ -333,7 +335,7 @@ func (st *sqlNotificationStore) markDelivery(ctx context.Context, userID string,
 	res, err := st.db.ExecContext(ctx,
 		`INSERT INTO NotificationDelivery (userId, date, slot, channel, createdAt) VALUES (?, ?, ?, ?, ?)`,
 		userID, date, slot, channel, time.Now().UTC())
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return 0, true, nil
 	}
 	if err != nil {

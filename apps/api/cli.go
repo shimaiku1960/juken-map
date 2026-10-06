@@ -8,6 +8,8 @@ import (
 	"os"
 	"slices"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // 引数を付けて起動したときのコマンド（JUK-122）。サーバーとしては起動せず、DB に繋いで1つの操作をして終わる。
@@ -45,7 +47,7 @@ func runCommand(args []string, stdout, stderr io.Writer) int {
 	if args[0] == "migrate" {
 		return runMigrate(stdout, stderr)
 	}
-	db, err := openDB(os.Getenv("DATABASE_URL"))
+	db, err := database.Open(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

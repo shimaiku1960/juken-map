@@ -17,6 +17,8 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // LINE 連携（JUK-79）。Node の routes/line.ts と services/line-connection-service.ts にあたる。
@@ -457,7 +459,7 @@ func (st *sqlLineStore) exists(ctx context.Context, query string, arg any) (bool
 
 // issueLinkNonce は連携開始用の nonce を1つだけ持たせる（古いものは捨てる）。
 func (st *sqlLineStore) issueLinkNonce(ctx context.Context, userID, nonce string) error {
-	return inTx(ctx, st.db, func(tx *sql.Tx) error {
+	return database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM LineLinkNonce WHERE userId = ?", userID); err != nil {
 			return err
 		}
@@ -473,7 +475,7 @@ func (st *sqlLineStore) issueLinkNonce(ctx context.Context, userID, nonce string
 // 1つのトランザクションで行う。分けると、確認と書き込みの間に別の連携が割り込んで上書きされうる。
 func (st *sqlLineStore) completeAccountLink(ctx context.Context, nonce, lineUserID string) (accountLinkResult, error) {
 	var result accountLinkResult
-	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
+	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		// FOR UPDATE で nonce の行を押さえる。同じ nonce が同時に届いても、2つ目は1つ目の COMMIT を待ち、
 		// そのときには行が消えているので期限切れ扱いになる。
 		var userID string
@@ -508,7 +510,7 @@ func (st *sqlLineStore) completeAccountLink(ctx context.Context, nonce, lineUser
 
 // disconnect は連携を解除する。連携が消えたのに LINE 通知だけ ON のままだと、送り先の無い通知が残るので一緒に落とす。
 func (st *sqlLineStore) disconnect(ctx context.Context, userID string) error {
-	return inTx(ctx, st.db, func(tx *sql.Tx) error {
+	return database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		for _, q := range []struct {
 			query string
 			args  []any
@@ -529,7 +531,7 @@ func (st *sqlLineStore) disconnect(ctx context.Context, userID string) error {
 
 // startOAuthAttempt は LINE Login の進行中の試行を1つだけ持たせる。
 func (st *sqlLineStore) startOAuthAttempt(ctx context.Context, state string, a oauthAttempt) error {
-	return inTx(ctx, st.db, func(tx *sql.Tx) error {
+	return database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM LineOAuthAttempt WHERE userId = ?", a.UserID); err != nil {
 			return err
 		}
@@ -566,7 +568,7 @@ func (st *sqlLineStore) discardOAuthAttempt(ctx context.Context, state string) e
 
 func (st *sqlLineStore) linkVerifiedLineUser(ctx context.Context, userID, lineUserID string) (bool, error) {
 	linked := false
-	err := inTx(ctx, st.db, func(tx *sql.Tx) error {
+	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
 		taken, err := linkedToOtherUser(ctx, tx, lineUserID, userID)
 		if err != nil || taken {
 			return err
@@ -585,7 +587,7 @@ func (st *sqlLineStore) markWebhookEvent(ctx context.Context, eventID string) (b
 		return false, fmt.Errorf("clean line webhook events: %w", err)
 	}
 	_, err := st.db.ExecContext(ctx, "INSERT INTO LineWebhookEvent (webhookEventId) VALUES (?)", eventID)
-	if isMySQLError(err, mysqlDuplicateEntry) {
+	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return true, nil
 	}
 	if err != nil {
@@ -634,17 +636,4 @@ func linkConnection(ctx context.Context, tx *sql.Tx, userID, lineUserID string) 
 		"INSERT INTO LineConnection (userId, lineUserId, linkedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)",
 		userID, lineUserID, now, now, now)
 	return err
-}
-
-// inTx は fn をトランザクションの中で動かす。fn がエラーを返したら取り消す。
-func inTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
 }

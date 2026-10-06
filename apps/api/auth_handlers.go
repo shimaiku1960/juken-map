@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 // ログイン（/api/auth/*）。Better Auth（Node）が受けていたものを Go で自作した（JUK-115）。
@@ -206,7 +208,7 @@ func (h *authHandlers) session(w http.ResponseWriter, r *http.Request, s *sessio
 	}
 	writeJSON(w, http.StatusOK, SessionResponse{
 		User:    *u,
-		Session: SessionInfo{ID: s.ID, ExpiresAt: isoFromDatetime(expiresAt), TwoFactorVerified: s.TwoFactorVerified},
+		Session: SessionInfo{ID: s.ID, ExpiresAt: database.ISOFromDatetime(expiresAt), TwoFactorVerified: s.TwoFactorVerified},
 	})
 }
 

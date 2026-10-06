@@ -25,6 +25,8 @@ import (
 	"testing"
 
 	"github.com/go-sql-driver/mysql"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
 const (
@@ -45,7 +47,7 @@ func newMigrateFixture(t *testing.T) migrateFixture {
 	if adminURL == "" {
 		adminURL = "mysql://root:rootpassword@127.0.0.1:3306"
 	}
-	admin, err := openDB(adminURL)
+	admin, err := database.Open(adminURL)
 	if err != nil {
 		t.Fatalf("テスト用の MySQL に繋げません: %v", err)
 	}

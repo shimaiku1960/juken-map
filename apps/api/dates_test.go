@@ -26,9 +26,3 @@ func TestMonthEnd(t *testing.T) {
 		}
 	}
 }
-
-func TestIsoFromDatetime(t *testing.T) {
-	if got := isoFromDatetime("2026-09-27 00:00:00.000"); got != "2026-09-27T00:00:00.000Z" {
-		t.Errorf("isoFromDatetime = %s", got)
-	}
-}
