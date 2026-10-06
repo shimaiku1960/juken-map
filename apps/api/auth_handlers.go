@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
 // ログイン（/api/auth/*）。Better Auth（Node）が受けていたものを Go で自作した（JUK-115）。
@@ -301,13 +302,13 @@ func (h *authHandlers) sendVerification(ctx context.Context, userID, email, call
 
 // allowAnonymous はログインしていなくても呼べる入口の、IP 単位の回数制限（H1）。止めたら 429 を返して false。
 func (h *authHandlers) allowAnonymous(w http.ResponseWriter, r *http.Request) bool {
-	ok, retry, err := h.throttle.hit(r.Context(), throttleAnonymousIP, clientIP(r))
+	ok, retry, err := h.throttle.hit(r.Context(), authguard.AnonymousIP, clientIP(r))
 	if err != nil {
 		internalError(w, r, fmt.Errorf("throttle: %w", err))
 		return false
 	}
 	if !ok {
-		logAuthEvent(r, slog.LevelWarn, "throttled", "", "rule", throttleAnonymousIP.name, "path", r.URL.Path)
+		logAuthEvent(r, slog.LevelWarn, "throttled", "", "rule", authguard.AnonymousIP.Name, "path", r.URL.Path)
 		writeTooMany(w, "TOO_MANY_REQUESTS", retry)
 		return false
 	}
@@ -328,9 +329,9 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 
 	// IP 単位とアカウント単位の両方で数える（06 B4）。デモアカウントはパスワードを画面に載せていて
 	// 守る意味が無く、わざと失敗させれば面接官が入れなくなるので、アカウント単位では数えない。
-	ok, retry, err := h.throttle.hit(ctx, throttleSignInIP, clientIP(r))
+	ok, retry, err := h.throttle.hit(ctx, authguard.SignInIP, clientIP(r))
 	if err == nil && ok && email != demoEmail {
-		ok, retry, err = h.throttle.hit(ctx, throttleSignInAccount, email)
+		ok, retry, err = h.throttle.hit(ctx, authguard.SignInAccount, email)
 	}
 	if err != nil {
 		internalError(w, r, fmt.Errorf("sign-in: %w", err))
@@ -369,7 +370,7 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 		return
 	}
 	// パスワードが合ったら数を消す。メール未確認・停止中で断るのも、パスワードを確かめたあとなので同じ扱い。
-	if err := h.throttle.clear(ctx, throttleSignInAccount, email); err != nil {
+	if err := h.throttle.clear(ctx, authguard.SignInAccount, email); err != nil {
 		internalError(w, r, fmt.Errorf("sign-in: %w", err))
 		return
 	}

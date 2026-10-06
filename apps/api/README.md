@@ -250,7 +250,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `auth_recovery.go` | メールの確認・確認メールの再送・再設定・パスワードの変更 |
 | `auth_mfa.go`・`auth_totp.go` | 2段階認証（TOTP・予備コード・秘密の暗号化） |
 | `auth_oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
-| `auth_throttle.go`・`auth_email.go` | 回数制限と、上限つきのメール送信 |
+| `auth_throttle.go`・`auth_email.go` | 回数制限と、上限つきのメール送信（数え方と上限は `internal/write/authguard`） |
 | `auth_delete_account.go` | 本人の退会（確かめ直してから、利用者とぶら下がるデータをすべて消す。JUK-123） |
 | `expired_cleanup.go` | 期限の切れたセッション・トークン・ログインの途中の値・LINE 連携の途中の値を、起動時と1時間ごとに500行ずつ消す（06 G1、JUK-140） |
 
@@ -346,6 +346,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/write/textbookmaster/` | 参考書マスター（総量の候補を含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154） |
 | `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |
 | `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
+| `internal/write/authguard/` | ログインの守り（回数の制限・メールの送信の上限・外部ログインの state）への書き込みの持ち主。試行を先に数えてから判定し、メールは数えてから記録するまでを名前付きロックで1件ずつ通す（JUK-154） |
 | `internal/write/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `optional` を `.field()` で変換する |
 | `openapi.gen.go` | `openapi/openapi.yaml` から作った応答・リクエストの型（手で直さない。`pnpm openapi:generate`、設定は `oapi-codegen.yaml`） |
 

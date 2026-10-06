@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -16,6 +15,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
 // 認証のメール（確認・再設定・本人への知らせ・運営者への通知）。Node の infra/email.ts と
@@ -38,7 +39,7 @@ const (
 	emailMFAEnabled        emailKind = "mfa-enabled"
 	emailAccountLinked     emailKind = "account-linked"
 	emailAccountDeleted    emailKind = "account-deleted"
-	emailAdminNewUser      emailKind = "admin-new-user"
+	emailAdminNewUser      emailKind = authguard.KindAdminNewUser
 )
 
 // emailKinds はメトリクスを 0 で作っておく種類の一覧。
@@ -48,14 +49,7 @@ var emailKinds = []emailKind{
 }
 
 const (
-	// emailPerRecipientPerHour は同じ宛先へ1時間に送る数の上限。再設定を何度か頼み直す本人は困らない数。
-	emailPerRecipientPerHour = 5
-	// emailGlobalPerDay はアプリ全体で24時間に送る数の上限。Resend の無料枠は1日100通で、毎日の通知と分け合う。
-	emailGlobalPerDay = 80
-	// emailSendLock は「数えてから記録する」までを1件ずつ通す MySQL の名前付きロック（Node と同じ名前）。
-	emailSendLock        = "juken-map:email-send"
-	emailLockWaitSeconds = 5
-	authEmailFrom        = "受験マップ <noreply@juken-map.com>"
+	authEmailFrom = "受験マップ <noreply@juken-map.com>"
 	// authEmailTimeout は、応答を返したあとに送る1通にかける時間の上限。
 	authEmailTimeout = 30 * time.Second
 )
@@ -111,93 +105,19 @@ func (m *authMailer) send(ctx context.Context, kind emailKind, to, subject, body
 }
 
 // reserve は送ってよければ記録して true、上限を超えるなら記録せず false を返す。
-// 数えてから記録するまでを名前付きロックで1件ずつ通す（同時に来た送信がどれも「まだ上限前」を見て
-// 超えないように。JUK-107）。ロックは接続に付くので、1本の接続を借りて最後まで同じ接続で流す。
+// 上限の数え方（宛先ごと・全体、名前付きロックで1件ずつ通す）は持ち主の internal/write/authguard にある（JUK-154）。
 func (m *authMailer) reserve(ctx context.Context, kind emailKind, to string) (bool, error) {
-	conn, err := m.db.Conn(ctx)
-	if err != nil {
-		return false, err
-	}
-	locked := false
-	defer func() {
-		if locked {
-			if _, err := conn.ExecContext(context.WithoutCancel(ctx), "DO RELEASE_LOCK(?)", emailSendLock); err != nil {
-				// 解けなかった接続はロックを持ったまま残りうるので、プールへ戻さずに捨てる
-				// （接続が切れれば MySQL がロックを解く）。
-				_ = conn.Raw(func(any) error { return driver.ErrBadConn })
-			}
-		}
-		conn.Close()
-	}()
-
-	var acquired sql.NullInt64
-	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, ?)", emailSendLock, emailLockWaitSeconds).Scan(&acquired); err != nil {
-		return false, err
-	}
 	recipient := recipientHash(to)
-	if acquired.Int64 != 1 {
-		slog.Warn("[email-limits] Email not sent: send limit reached.", "kind", string(kind), "reason", "lock", "recipient", recipient[:12])
-		return false, nil
-	}
-	locked = true
-
-	now := m.clock()
-	if err := sweepEmailSends(ctx, conn, now.Add(-24*time.Hour)); err != nil {
-		return false, err
-	}
-	var global int
-	if err := conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM EmailSend WHERE sentAt > ?", now.Add(-24*time.Hour)).Scan(&global); err != nil {
-		return false, err
-	}
-	reason := ""
-	if global >= emailGlobalPerDay {
-		reason = "global"
-	} else if kind != emailAdminNewUser {
-		// 運営者への通知は宛先が1つなので、宛先ごとの上限にはかけない（全体の数には入れる）。
-		var perRecipient int
-		if err := conn.QueryRowContext(ctx,
-			"SELECT COUNT(*) FROM EmailSend WHERE recipientHash = ? AND sentAt > ? AND kind <> 'admin-new-user'",
-			recipient, now.Add(-time.Hour)).Scan(&perRecipient); err != nil {
-			return false, err
-		}
-		if perRecipient >= emailPerRecipientPerHour {
-			reason = "recipient"
-		}
-	}
-	if reason != "" {
-		// 宛先そのものはログに出さない（誰が狙われたかは、ハッシュの先頭で突き合わせられれば足りる）。
-		slog.Warn("[email-limits] Email not sent: send limit reached.", "kind", string(kind), "reason", reason, "recipient", recipient[:12])
-		return false, nil
-	}
-	_, err = conn.ExecContext(ctx, "INSERT INTO EmailSend (recipientHash, kind, sentAt) VALUES (?, ?, ?)", recipient, string(kind), now)
-	return err == nil, err
-}
-
-// sweepEmailSends は1日より古い行を少しずつ消す（主キーで消し、索引の隙間をロックしない）。
-func sweepEmailSends(ctx context.Context, conn *sql.Conn, cutoff time.Time) error {
-	rows, err := conn.QueryContext(ctx, "SELECT id FROM EmailSend WHERE sentAt <= ? LIMIT 100", cutoff)
+	block, err := authguard.ReserveEmail(ctx, m.db, recipient, string(kind), m.clock())
 	if err != nil {
-		return err
+		return false, err
 	}
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
-		}
-		ids = append(ids, id)
+	if block != authguard.EmailAllowed {
+		// 宛先そのものはログに出さない（誰が狙われたかは、ハッシュの先頭で突き合わせられれば足りる）。
+		slog.Warn("[email-limits] Email not sent: send limit reached.", "kind", string(kind), "reason", string(block), "recipient", recipient[:12])
+		return false, nil
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, id := range ids {
-		if _, err := conn.ExecContext(ctx, "DELETE FROM EmailSend WHERE id = ?", id); err != nil {
-			return err
-		}
-	}
-	return nil
+	return true, nil
 }
 
 // recipientHash は宛先を小文字にした SHA-256（宛先をそのまま DB に残さない）。Node と同じ値になる。

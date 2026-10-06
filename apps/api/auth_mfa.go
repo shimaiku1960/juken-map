@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
 // 2段階認証の入口（認証基準 10 の G1〜G4）。TOTP の計算と暗号化は auth_totp.go。
@@ -91,7 +93,7 @@ func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *ses
 		internalError(w, r, fmt.Errorf("mfa confirm: %w (user=%v)", err, u != nil))
 		return
 	}
-	if err := h.throttle.clear(ctx, throttleMFAAccount, u.ID); err != nil {
+	if err := h.throttle.clear(ctx, authguard.MFAAccount, u.ID); err != nil {
 		internalError(w, r, fmt.Errorf("mfa confirm: %w", err))
 		return
 	}
@@ -165,7 +167,7 @@ func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previou
 		internalError(w, r, fmt.Errorf("mfa verify: %w", err))
 		return
 	}
-	if err := h.throttle.clear(ctx, throttleMFAAccount, userID); err != nil {
+	if err := h.throttle.clear(ctx, authguard.MFAAccount, userID); err != nil {
 		internalError(w, r, fmt.Errorf("mfa verify: %w", err))
 		return
 	}
@@ -200,7 +202,7 @@ func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previou
 
 // allowMFAAttempt は2段階認証のコードの、アカウント単位の回数制限（H1）。止めたら 429 を返して false。
 func (h *authHandlers) allowMFAAttempt(w http.ResponseWriter, r *http.Request, userID string) bool {
-	ok, retry, err := h.throttle.hit(r.Context(), throttleMFAAccount, userID)
+	ok, retry, err := h.throttle.hit(r.Context(), authguard.MFAAccount, userID)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("mfa throttle: %w", err))
 		return false

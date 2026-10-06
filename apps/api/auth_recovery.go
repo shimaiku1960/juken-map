@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
 // メールアドレスの確認・パスワードの再設定・変更（認証基準 10 の E1〜E5、06 の B5・B6）。
@@ -223,7 +225,7 @@ func (h *authHandlers) requireUser(w http.ResponseWriter, r *http.Request, s *se
 // アカウント単位で回数を数える（H1）。合わなければ応答を返して false。
 func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s *session, password string) (*authUser, bool) {
 	ctx := r.Context()
-	ok, retry, err := h.throttle.hit(ctx, throttleReauthAccount, s.UserID)
+	ok, retry, err := h.throttle.hit(ctx, authguard.ReauthAccount, s.UserID)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("reauth: %w", err))
 		return nil, false
@@ -253,7 +255,7 @@ func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s 
 		writeAuthError(w, http.StatusBadRequest, "INVALID_PASSWORD", "今のパスワードが違います")
 		return nil, false
 	}
-	if err := h.throttle.clear(ctx, throttleReauthAccount, s.UserID); err != nil {
+	if err := h.throttle.clear(ctx, authguard.ReauthAccount, s.UserID); err != nil {
 		internalError(w, r, fmt.Errorf("reauth: %w", err))
 		return nil, false
 	}
