@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 // プロフィールの更新（JUK-75）。Node の routes/profile.ts と services/user-service.ts の updateProfile にあたる。
@@ -29,10 +30,7 @@ type userStore struct {
 
 // updateProfile はニックネームを書き換え、更新後の行を返す（Node と同じく UPDATE の後に SELECT し直す）。
 func (st *userStore) updateProfile(ctx context.Context, userID string, in ProfileInput) (User, error) {
-	if _, err := st.db.ExecContext(ctx,
-		"UPDATE `user` SET nickname = ?, updatedAt = ? WHERE id = ?",
-		in.Nickname, nowMillis(), userID,
-	); err != nil {
+	if err := account.SetNickname(ctx, st.db, userID, in.Nickname, nowMillis()); err != nil {
 		return User{}, err
 	}
 

@@ -323,7 +323,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `cli.go` | 引数の読み取りと振り分け：`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）・`migrate`。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
-| `incident.go` | `incident`・`grant-admin` が使う SQL（セッションの取り消し・停止・2段階認証の解除・役割の付け外し）と、変えたことの記録（`OpsAuditLog`、書くのは `internal/write/account`。`incident log` で見る。JUK-138）。手順は `docs/incident-response.md` |
+| `incident.go` | `incident`・`grant-admin` が使う読み取りと、`internal/write/account` の操作（セッションの取り消し・停止・2段階認証の解除・役割の付け外し。変えたことは `OpsAuditLog` に残り、`incident log` で見る。JUK-138）の呼び出し。手順は `docs/incident-response.md` |
 | `migrate.go` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
 
 ### 共通の部品
@@ -338,7 +338,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
 | `logger.go` | pino と同じ形の JSON ログ。reqId・trace_id を足し、`LOG_FILE` にも書く |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
-| `internal/write/account/` | アカウントへの書き込みの持ち主。今は利用停止・解除（`Suspend`・`Unsuspend`）、セッションの作成・取り消し（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）と運用の記録（`OpsAuditLog`）。管理画面と `incident` の両方が呼ぶ（JUK-151、構成は `docs/architecture.md`「バックエンドの構成」） |
+| `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `internal/write/studyrecord/` | 学習記録（実績・予定・初回記録の日時）への書き込みの持ち主。実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |
 | `internal/write/textbook/` | 利用者の参考書への書き込みの持ち主。名前・参考書マスターからの登録と、逆算設定の変更（JUK-154） |
 | `internal/write/goal/` | 志望校への書き込みの持ち主。登録・学部の差し替え・第一志望やメモの変更・削除。第一志望の付け替えを1つのトランザクションで行う（JUK-154） |

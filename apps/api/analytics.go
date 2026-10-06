@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 // 本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80）。
@@ -18,17 +20,9 @@ type analyticsStore struct {
 }
 
 // markSignUpTracked は「計測済み」の印を付ける。付けられたら（初回なら）true。
-// 印が無い行だけを UPDATE するので、同時に2回来ても true になるのは1回だけ。
+// 同時に2回来ても true になるのは1回だけ（account.MarkSignUpTracked）。
 func (st *analyticsStore) markSignUpTracked(ctx context.Context, userID string) (bool, error) {
-	now := time.Now().UTC()
-	res, err := st.db.ExecContext(ctx,
-		"UPDATE `user` SET analyticsSignUpTrackedAt = ?, updatedAt = ? WHERE id = ? AND analyticsSignUpTrackedAt IS NULL",
-		now, now, userID)
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	return n > 0, err
+	return account.MarkSignUpTracked(ctx, st.db, userID, time.Now().UTC())
 }
 
 // findSignUpMethod は登録に使われた認証方法を判定する。登録と同時（1分以内）に作られた外部ログインの結びつきが

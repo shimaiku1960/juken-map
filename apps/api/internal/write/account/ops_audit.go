@@ -21,17 +21,6 @@ type OpsAudit struct {
 	Host string
 }
 
-// RecordOps は、操作とは別に OpsAuditLog に1行書く。利用停止・解除以外の運用の操作が account へ移るまでの
-// つなぎ（JUK-154）で、移ったら操作と同じトランザクションで書く形（Suspend と同じ）にする。
-// 変えた後に書くので、書けなかったときはエラーを返してコマンドを失敗（終了コード 1）にし、
-// 記録が無いことに実行した人が気づけるようにする。
-func RecordOps(ctx context.Context, db *sql.DB, audit OpsAudit, action, targetID string, detail map[string]any, now time.Time) error {
-	if err := audit.insert(ctx, db, action, targetID, detail, now); err != nil {
-		return fmt.Errorf("操作はしましたが、%w", err)
-	}
-	return audit.prune(ctx, db, now)
-}
-
 // insert は記録を1行書く。audit が nil（管理画面からの操作）なら何もしない。
 func (a *OpsAudit) insert(ctx context.Context, run database.Runner, action, targetID string, detail map[string]any, now time.Time) error {
 	if a == nil {

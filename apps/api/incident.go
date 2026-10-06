@@ -65,12 +65,6 @@ func (st incidentStore) findByEmail(ctx context.Context, email string) (incident
 	return u, nil
 }
 
-// deleteSessions はその人のセッションをすべて消し、消した数を返す（認証基準 10 の C5 の3）。記録は書かない
-// （2段階認証のリセットと権限の変更が、それぞれの記録を別に書く）。
-func (st incidentStore) deleteSessions(ctx context.Context, userID string) (int64, error) {
-	return account.RevokeUserSessions(ctx, st.db, userID, st.now(), nil)
-}
-
 // listSessions はその人のログイン中のセッションを、作られた順に返す（どこから入られたかを見るため）。
 func (st incidentStore) listSessions(ctx context.Context, email string) (incidentTarget, []incidentSession, error) {
 	u, err := st.findByEmail(ctx, email)
@@ -94,13 +88,6 @@ func (st incidentStore) listSessions(ctx context.Context, email string) (inciden
 		sessions = append(sessions, s)
 	}
 	return u, sessions, rows.Err()
-}
-
-// recordOps は、コマンドが変えたことを OpsAuditLog に1行書く（JUK-138、セキュリティ基準 H4）。見るだけの操作
-// （sessions・grant-admin --list）は書かない。停止・解除は account の操作が同じトランザクションで書くので、
-// ここを通らない。
-func (st incidentStore) recordOps(ctx context.Context, action, targetID string, detail map[string]any) error {
-	return account.RecordOps(ctx, st.db, opsAudit(), action, targetID, detail, st.now())
 }
 
 // opsAudit は運用のコマンドの記録に付ける実行場所。
@@ -210,38 +197,15 @@ func (st incidentStore) resetTwoFactor(ctx context.Context, email string) (int64
 	return account.ResetTwoFactor(ctx, st.db, u.ID, st.now(), &audit)
 }
 
-// errUnverified は、メール確認前の人を管理者にしようとしたとき。
-var errUnverified = errors.New("email not verified")
-
-// setRole はメールアドレスで利用者を探して role を付け替える（grant-admin）。前の role と、消したセッションの数を返す。
-//
-// メール確認前の人には admin を付けない。他人のアドレスで登録されただけのアカウントを、確認前に管理者にして
-// しまわないため。付け替えたら、その人のセッションをすべて消す（認証基準 10 の C4：権限の変更のたびに作り直す）。
-// セッションの期限は role で決まる（一般30日・管理者24時間、auth_session.go）ので、ログインし直してもらう。
+// setRole はメールアドレスで利用者を探して role を付け替え、記録を残す（grant-admin。account.SetRole）。
+// 前の role と、消したセッションの数を返す。メール確認前の人には admin を付けない（account.ErrUnverified）。
 func (st incidentStore) setRole(ctx context.Context, email, role string) (previous string, removed int64, err error) {
-	var (
-		id       string
-		verified bool
-	)
-	err = st.db.QueryRowContext(ctx, "SELECT id, emailVerified, role FROM `user` WHERE email = ?", email).
-		Scan(&id, &verified, &previous)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", 0, errUserNotFound
-	}
+	u, err := st.findByEmail(ctx, email)
 	if err != nil {
 		return "", 0, err
 	}
-	if role == "admin" && !verified {
-		return "", 0, errUnverified
-	}
-	if _, err := st.db.ExecContext(ctx, "UPDATE `user` SET role = ?, updatedAt = ? WHERE id = ?", role, st.now().UTC(), id); err != nil {
-		return "", 0, err
-	}
-	if removed, err = st.deleteSessions(ctx, id); err != nil {
-		return "", 0, err
-	}
-	return previous, removed, st.recordOps(ctx, "set-role", id, map[string]any{
-		"before": map[string]any{"role": previous}, "after": map[string]any{"role": role}, "sessionsRemoved": removed})
+	audit := opsAudit()
+	return account.SetRole(ctx, st.db, u.ID, role, st.now().UTC(), &audit)
 }
 
 type adminSummary struct {

@@ -212,7 +212,7 @@ func runGrantAdmin(ctx context.Context, st incidentStore, args []string, out io.
 		role = "user"
 	}
 	previous, removed, err := st.setRole(ctx, email, role)
-	if errors.Is(err, errUnverified) {
+	if errors.Is(err, account.ErrUnverified) {
 		return fmt.Errorf("%s はメール確認が済んでいないため、管理者にしません", email)
 	}
 	if err != nil {

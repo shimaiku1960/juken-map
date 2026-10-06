@@ -18,6 +18,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
@@ -241,9 +242,9 @@ func (h *authHandlers) resolveOAuthUser(r *http.Request, provider string, ident 
 	}
 	logAuthEvent(r, slog.LevelInfo, "oauth_linked", u.ID, "provider", provider, "how", event)
 	switch event {
-	case "created":
+	case account.LinkCreated:
 		h.mailer.notifyAdminOfNewUser(u.Name, u.Email, now)
-	case "linked":
+	case account.LinkLinked:
 		h.mailer.sendAccountLinked(u.Email, provider, h.webOrigin)
 	}
 	return u, nil

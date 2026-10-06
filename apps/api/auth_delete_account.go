@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -119,13 +117,4 @@ func (h *authHandlers) confirmEmail(w http.ResponseWriter, r *http.Request, u *a
 		return false
 	}
 	return true
-}
-
-// deleteUserAndData は利用者を消す。本人の退会と管理者の削除の両方が使う。
-//
-// 利用者を指す表は、すべて外部キーの ON DELETE CASCADE で一緒に消える。すべての表に本人の行が
-// 残らないことは TestAuthDBDeleteLeavesNoRows が確かめる。
-func deleteUserAndData(ctx context.Context, tx *sql.Tx, id string) error {
-	_, err := tx.ExecContext(ctx, "DELETE FROM `user` WHERE id = ?", id)
-	return err
 }
