@@ -1,6 +1,6 @@
 //go:build dbtest
 
-// LINE 連携の SQL（sqlLineStore）を本物の DB に流して確かめる。ふだんの go test では動かない
+// LINE 連携の SQL（sqlLineStore と、その書き込みが呼ぶ持ち主の internal/write/notification）を本物の DB に流して確かめる。ふだんの go test では動かない
 // （dbtest タグ。`pnpm test:go-db` と CI の check のジョブが動かす）。
 // 利用者はテストごとに作り、最後に消す（LINE の表は user の削除で一緒に消える）。
 package main
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
 func TestLineStoreDB(t *testing.T) {
@@ -190,7 +191,7 @@ func TestLineStoreDB(t *testing.T) {
 
 		// 保持期間を過ぎた印は、次の Webhook のときに消える
 		old := "test-old-" + randomHex(8)
-		newDBFixture(t, db).Exec("INSERT INTO LineWebhookEvent (webhookEventId, createdAt) VALUES (?, ?)", old, time.Now().Add(-lineWebhookEventRetention-time.Hour))
+		newDBFixture(t, db).Exec("INSERT INTO LineWebhookEvent (webhookEventId, createdAt) VALUES (?, ?)", old, time.Now().Add(-notification.WebhookEventRetention-time.Hour))
 		if _, err := st.markWebhookEvent(ctx, "test-"+randomHex(8)); err != nil {
 			t.Fatal(err)
 		}

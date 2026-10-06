@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
 // 通知設定の読み取り（JUK-73）と保存（JUK-75）。Node の routes/notification-preferences.ts と、
 // services/notification-service.ts の findNotificationPreference・findLineConnection・saveNotificationPreference にあたる。
+// 保存（LINE と連携していなければ LINE 通知を ON にできない、も含む）は持ち主の internal/write/notification にある（JUK-154）。
 
 type notificationPreferenceStore struct {
 	db *sql.DB
@@ -27,39 +30,6 @@ func (st *notificationPreferenceStore) find(ctx context.Context, userID string) 
 		return NotificationPreference{}, nil
 	}
 	return p, err
-}
-
-// hasLineConnection は LINE と連携済みか。
-func (st *notificationPreferenceStore) hasLineConnection(ctx context.Context, userID string) (bool, error) {
-	var id int64
-	err := st.db.QueryRowContext(ctx, "SELECT id FROM LineConnection WHERE userId = ?", userID).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
-// save は通知設定を保存し（無ければ作る）、保存した後の値を返す。
-// 「無ければ INSERT、あれば UPDATE」を1文で行う（userId に UNIQUE 制約がある）。SQL は Node と同じ。
-// new は「INSERT しようとした行」の別名で、createdAt は更新しない。
-func (st *notificationPreferenceStore) save(ctx context.Context, userID string, p NotificationPreference) (NotificationPreference, error) {
-	now := nowMillis()
-	if _, err := st.db.ExecContext(ctx,
-		`INSERT INTO NotificationPreference
-		   (userId, morningEnabled, eveningEnabled, lineMorningEnabled, lineEveningEnabled,
-		    createdAt, updatedAt)
-		 VALUES (?, ?, ?, ?, ?, ?, ?) AS new
-		 ON DUPLICATE KEY UPDATE
-		   morningEnabled = new.morningEnabled,
-		   eveningEnabled = new.eveningEnabled,
-		   lineMorningEnabled = new.lineMorningEnabled,
-		   lineEveningEnabled = new.lineEveningEnabled,
-		   updatedAt = new.updatedAt`,
-		userID, p.EmailMorningEnabled, p.EmailEveningEnabled, p.LineMorningEnabled, p.LineEveningEnabled, now, now,
-	); err != nil {
-		return NotificationPreference{}, err
-	}
-	return st.find(ctx, userID)
 }
 
 type notificationPreferenceHandlers struct {
@@ -93,19 +63,16 @@ func (h *notificationPreferenceHandlers) save(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if input.LineMorningEnabled || input.LineEveningEnabled {
-		connected, err := h.store.hasLineConnection(r.Context(), s.UserID)
-		if err != nil {
-			internalError(w, r, fmt.Errorf("notification-preferences: %w", err))
-			return
-		}
-		if !connected {
-			writeError(w, http.StatusBadRequest, "LINEと連携してからLINE通知を選択してください")
-			return
-		}
+	err := notification.SavePreference(r.Context(), h.store.db, s.UserID, notification.Preference(input), nowMillis())
+	if errors.Is(err, notification.ErrLineNotConnected) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-
-	saved, err := h.store.save(r.Context(), s.UserID, input)
+	if err != nil {
+		internalError(w, r, fmt.Errorf("notification-preferences: %w", err))
+		return
+	}
+	saved, err := h.store.find(r.Context(), s.UserID)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("notification-preferences: %w", err))
 		return
