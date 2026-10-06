@@ -122,5 +122,5 @@ func upstreamFailed(w http.ResponseWriter, r *http.Request, err error) {
 // 一覧は本文込みで大きいので、受け付けるなら gzip にする。
 func writeRawJSON(w http.ResponseWriter, r *http.Request, body []byte) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	writeMaybeGzip(w, r, http.StatusOK, body)
+	httpx.WriteMaybeGzip(w, r, http.StatusOK, body)
 }

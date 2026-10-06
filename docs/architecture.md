@@ -110,13 +110,13 @@ Fastify を 3000 番で待ち受けさせれば、nginx は
 **2026-10、JUK-111 で配る役目を Go（`apps/api`）へ移した。** 考え方は同じで、Go のコンテナが API と画面の
 両方を配る。画面のビルド成果物は Node のイメージから写して Go のイメージに入れるので、画面と API の版がずれない
 ことも、デプロイのスモークテストが両方を守ることも変わらない。dist は起動時にメモリへ読み、圧縮できるものは
-gzip を作り置く（`apps/api/spa.go`）。
+gzip を作り置く（`apps/api/internal/spa/spa.go`）。
 
 ### SPA 化で失う SEO を、サーバー側で作り直した
 
 SPA は誰が来ても同じ `index.html` を返す。JS を実行する前の HTML しか読まないクローラーと
 SNS には、中身が空に見える。Next.js が黙って担っていた分をサーバー側で作り直した
-（はじめは Node の `seo.ts`、JUK-111 から Go の `apps/api/seo.go`）。
+（はじめは Node の `seo.ts`、JUK-111 から Go の `apps/api/internal/spa/seo.go`）。
 
 - `robots.txt` と OGP 画像は `apps/web/public` の実ファイル
 - `sitemap.xml` は SSG した記事から起動時に作るので API サーバーのルート
@@ -128,7 +128,7 @@ SNS には、中身が空に見える。Next.js が黙って担っていた分�
 
 **放置すると `/robots.txt` が 200 で HTML を返す**という、404 より質の悪い状態になっていた。
 
-なお `/` も、ほかの画面と同じく head を差し込んでから返す（`apps/api/spa.go`）。Node の頃は
+なお `/` も、ほかの画面と同じく head を差し込んでから返す（`apps/api/internal/spa/spa.go`）。Node の頃は
 `fastify-static` の `index` を切って同じことをしていた。切らないと `/` に `index.html` が直接返り、
 一番 SEO が要るトップページだけ meta が入らなかった。
 

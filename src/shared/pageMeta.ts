@@ -1,6 +1,6 @@
 import { SITE_URL } from "./site";
 
-// ページの head（title・description・OGP）の中身。サーバー（apps/api/seo.go）が index.html に差し込む。
+// ページの head（title・description・OGP）の中身。サーバー（apps/api/internal/spa/seo.go）が index.html に差し込む。
 // 記事の meta は、ビルドで記事を SSG するとき（apps/web/scripts/prerender.mjs）に作って
 // dist/ssg/meta.json に書き出し、サーバーはそれを読むだけにする（JUK-110）。両方から使うので shared に置く。
 

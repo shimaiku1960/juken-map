@@ -29,7 +29,7 @@
 
 - **URL のトークン**（`?token=…`・`?linkToken=…`）。メールや LINE のリンクで開く画面は、読み込んだらすぐ
   URL から消す（`useTokenFromLink.ts`）。消す前に GA4 が URL を読まないよう、URL にトークンがあるときは
-  最初の page_view を送らない（`apps/api/seo.go` の `analyticsInlineScript`）。Faro は送る前に、
+  最初の page_view を送らない（`apps/api/internal/spa/seo.go` の `analyticsInlineScript`）。Faro は送る前に、
   エンコードされた形（`linkToken%3D…`）も含めて伏せる（`redactSecrets`）
 - **ログインの戻り先**（`/login?callbackURL=…`）にトークンを載せない。LINE 連携は同じタブの sessionStorage で
   持ち回る（`useLineLinkToken`）

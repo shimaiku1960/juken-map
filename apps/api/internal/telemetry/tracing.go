@@ -60,7 +60,7 @@ func SetupTracing(ctx context.Context) (trace.TracerProvider, func(context.Conte
 	return tp, tp.Shutdown, nil
 }
 
-// WebRoute は API 以外（画面の HTML・JS・CSS・画像）をまとめたルート（apps/api/spa.go）。
+// WebRoute は API 以外（画面の HTML・JS・CSS・画像）をまとめたルート（apps/api/internal/spa/spa.go）。
 const WebRoute = "(web)"
 
 // TracedRoute は、そのルートのトレースを送るか。画面のファイル配信は SQL も外部 API も呼ばず、
