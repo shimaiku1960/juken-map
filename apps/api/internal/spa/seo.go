@@ -219,7 +219,7 @@ func (p Scripts) injectMeta(html string, meta pageMeta) string {
 //
 // 2026-09-19 から2日ほど Report-Only で流し、本番の主要画面を実ブラウザでひと通り踏んでも違反が0件だったため、
 // 2026-09-21 に止めるモードへ切り替えた（Node の security-headers.ts から移した）。許可の漏れがあると画面が壊れるので、
-// 一覧を増やすときは先に Report-Only で確かめること。違反は csp_report.go が受けて Loki に `csp violation` で残る。
+// 一覧を増やすときは先に Report-Only で確かめること。違反は internal/feature/cspreport が受けて Loki に `csp violation` で残る。
 func (p Scripts) pageCSP() string {
 	// GA4 の計測の送り先。gtag.js は地域ごとのサブドメインへ送る。
 	googleAnalytics := []string{
@@ -262,7 +262,7 @@ func (p Scripts) pageCSP() string {
 	return strings.Join(parts, "; ")
 }
 
-// cspReportPath は CSP の違反の報告を受ける先（csp_report.go）。
+// cspReportPath は CSP の違反の報告を受ける先（internal/feature/cspreport）。
 const cspReportPath = "/api/csp-report"
 
 // urlOrigin は URL のオリジン（scheme://host[:port]）。読めなければ空。
