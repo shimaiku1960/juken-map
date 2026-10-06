@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
@@ -16,7 +17,7 @@ func TestRegisteredRoutesAreRateLimited(t *testing.T) {
 	// ログインの入口（auth）は auth_throttle.go が IP とアカウントで別に数えるので対象外。
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, microcmsWebhookConfig{})
 	rt.UseUp(httpxtest.Sessions["alice"].UserID, httpxtest.Sessions["admin"].UserID)
 
 	checked := 0
@@ -64,7 +65,7 @@ func TestRegisteredRoutesAreRateLimited(t *testing.T) {
 // panic するので、断れていなければテストが落ちる。
 func TestAdminRoutesRejectNonAdmins(t *testing.T) {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, microcmsWebhookConfig{})
 
 	tests := []struct {
 		as         string

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
@@ -99,7 +100,7 @@ func TestRegisteredRoutes(t *testing.T) {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
 	registerBlogRoutes(rt, blogConfig{})
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, microcmsWebhookConfig{})
 
 	if len(rt.Routes) != len(want) {
 		t.Fatalf("routes = %v\nwant %v", rt.Routes, want)
@@ -123,7 +124,7 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
 	registerBlogRoutes(rt, blogConfig{})
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
+	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, microcmsWebhookConfig{})
 
 	checked := 0
 	for _, route := range rt.Routes {

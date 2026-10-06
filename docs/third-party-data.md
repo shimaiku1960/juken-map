@@ -17,8 +17,8 @@
 | Grafana Cloud（Loki） | サーバー（Alloy が Go のコンテナの標準出力を読む） | リクエストのメソッド・パス（クエリは含めない）・状態コード・時間。認証の出来事（`[auth] …`）に利用者の ID・IP アドレス・User-Agent・失敗の種類。メール送信の上限に当たった宛先は SHA-256 の先頭12文字だけ | 利用者の ID（ランダムな文字列）・IP アドレスを含む。メールアドレス・学習の中身は出さない | 障害と不正の検知・調査（06 H1・H4） |
 | Grafana Cloud（Prometheus） | サーバー（Alloy が Go の `/metrics` を読む） | ルートのひな形・メソッド・状態コードごとの件数と時間、メールの送信数、Resend の送信枠の使用数 | 含まない | 監視とアラート |
 | Resend | サーバー（`auth_email.go`・`notifications.go`） | 宛先のメールアドレス、件名、本文。本文は、確認・再設定のリンク（トークンを含む）、アカウントの変更のお知らせ、学習通知（表示名・その日の予定の内容と教材名・学習時間）。運営者への新規登録の知らせ（新しい利用者の表示名とメールアドレス。宛先は運営者） | 含む（メールを届けるのに要る） | メールの送信 |
-| LINE（Messaging API） | サーバー（`line_api.go`・`notifications.go`） | 宛先の LINE のユーザー ID、本文。本文は、連携の案内と完了の知らせ、学習通知（表示名・予定の内容と教材名・学習時間） | 含む（利用者が LINE 通知を選んだときだけ） | LINE への通知 |
-| LINE（LINE Login） | サーバー（`line_api.go`） | 認可コード・ID トークンの確認、友だち追加の状態の問い合わせ。受け取るのは LINE のユーザー ID（scope は `openid profile`） | 送るのは LINE が発行した値だけ | LINE アカウントの連携 |
+| LINE（Messaging API） | サーバー（`internal/feature/line/api.go`・`notifications.go`） | 宛先の LINE のユーザー ID、本文。本文は、連携の案内と完了の知らせ、学習通知（表示名・予定の内容と教材名・学習時間） | 含む（利用者が LINE 通知を選んだときだけ） | LINE への通知 |
+| LINE（LINE Login） | サーバー（`internal/feature/line/api.go`） | 認可コード・ID トークンの確認、友だち追加の状態の問い合わせ。受け取るのは LINE のユーザー ID（scope は `openid profile`） | 送るのは LINE が発行した値だけ | LINE アカウントの連携 |
 | Google・GitHub（OAuth） | サーバー（`auth_oauth.go`）とブラウザのリダイレクト | 認可コード・クライアントの ID と秘密・戻り先の URL。受け取るのは ID とメールアドレス（scope は Google が `openid email`、GitHub が `user:email`） | 送るのは各社が発行した値だけ | 外部アカウントでのログイン |
 | microCMS | サーバー（`blog.go`） | API キー、記事の ID と取得条件 | 含まない | ブログ記事の取得 |
 | microCMS（画像の CDN）・Google Fonts | ブラウザ | 画像・フォントの取得（IP アドレス、User-Agent、Referer は自分のオリジンだけ） | 含まない | 記事の画像とフォントの表示 |

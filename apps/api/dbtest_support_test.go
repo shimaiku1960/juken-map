@@ -22,6 +22,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
@@ -51,7 +52,7 @@ func newDBTestApp(db *sql.DB) dbTestApp {
 		}
 		return &httpx.Session{UserID: c.Value, Email: c.Value + "@example.test", Role: "user"}, nil
 	})
-	registerRoutes(rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
+	registerRoutes(rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
 	return dbTestApp{rt: rt}
 }
 

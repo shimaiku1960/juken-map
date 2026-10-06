@@ -12,7 +12,7 @@ import (
 )
 
 // 通知の設定と送った印の操作を、本物の MySQL で確かめる。LINE の連携の操作は、
-// 読み取りと一緒に package main の line_db_test.go（sqlLineStore）が確かめる。
+// 読み取りと一緒に internal/feature/line の line_db_test.go（sqlLineStore）が確かめる。
 func TestNotificationDB(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)

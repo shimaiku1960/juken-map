@@ -1,4 +1,4 @@
-package main
+package line
 
 import (
 	"context"
@@ -21,7 +21,7 @@ import (
 // LINE の API を呼ぶ部分（JUK-79）。Node の infra/line.ts（Messaging API）と infra/lineLogin.ts（LINE Login）にあたる。
 // DB も HTTP の入口も知らない。ハンドラ（line.go）はこの interface を通して呼ぶので、テストでは偽物を渡せる。
 
-type lineClient interface {
+type Client interface {
 	// Messaging API（公式アカウントのトーク）
 	issueLinkToken(ctx context.Context, lineUserID string) (string, error)
 	replyText(ctx context.Context, replyToken, text string) error
@@ -68,21 +68,21 @@ func lineAccountLinkURL(linkToken string) string {
 	return site.URL + "/line/link?" + url.Values{"linkToken": {linkToken}}.Encode()
 }
 
-// httpLineClient は LINE の API を直接呼ぶ（SDK は使わない。Node も同じ）。
-type httpLineClient struct {
-	client *http.Client
-	// botBase は Messaging API の根元（既定 https://api.line.me/v2/bot）。
+// HTTPClient は LINE の API を直接呼ぶ（SDK は使わない。Node も同じ）。
+type HTTPClient struct {
+	HTTP *http.Client
+	// BotBase は Messaging API の根元（既定 https://api.line.me/v2/bot）。
 	// 毎日の通知と同じ LINE_API_BASE で、手元の比較やテストでは偽のサーバーへ向ける。
-	botBase     string
-	accessToken string // LINE_CHANNEL_ACCESS_TOKEN
-	// loginBase は LINE Login の API の根元（既定 https://api.line.me）。authorizeURL は利用者のブラウザが開く同意画面。
-	loginBase      string
-	authorizeURL   string
-	loginChannelID string // LINE_LOGIN_CHANNEL_ID
-	loginSecret    string // LINE_LOGIN_CHANNEL_SECRET
+	BotBase     string
+	AccessToken string // LINE_CHANNEL_ACCESS_TOKEN
+	// LoginBase は LINE Login の API の根元（既定 https://api.line.me）。AuthorizeURL は利用者のブラウザが開く同意画面。
+	LoginBase      string
+	AuthorizeURL   string
+	LoginChannelID string // LINE_LOGIN_CHANNEL_ID
+	LoginSecret    string // LINE_LOGIN_CHANNEL_SECRET
 }
 
-func (c *httpLineClient) issueLinkToken(ctx context.Context, lineUserID string) (string, error) {
+func (c *HTTPClient) issueLinkToken(ctx context.Context, lineUserID string) (string, error) {
 	var res struct {
 		LinkToken string `json:"linkToken"`
 	}
@@ -90,21 +90,21 @@ func (c *httpLineClient) issueLinkToken(ctx context.Context, lineUserID string) 
 	return res.LinkToken, err
 }
 
-func (c *httpLineClient) replyText(ctx context.Context, replyToken, text string) error {
+func (c *HTTPClient) replyText(ctx context.Context, replyToken, text string) error {
 	return c.botRequest(ctx, "/message/reply", map[string]any{
 		"replyToken": replyToken, "messages": []map[string]string{{"type": "text", "text": text}},
 	}, nil)
 }
 
-func (c *httpLineClient) pushText(ctx context.Context, lineUserID, text string) error {
+func (c *HTTPClient) pushText(ctx context.Context, lineUserID, text string) error {
 	return c.botRequest(ctx, "/message/push", map[string]any{
 		"to": lineUserID, "messages": []map[string]string{{"type": "text", "text": text}},
 	}, nil)
 }
 
 // botRequest は Messaging API へ POST する。body が nil なら本文なし、out が nil なら応答を読み捨てる。
-func (c *httpLineClient) botRequest(ctx context.Context, path string, body, out any) error {
-	if c.accessToken == "" {
+func (c *HTTPClient) botRequest(ctx context.Context, path string, body, out any) error {
+	if c.AccessToken == "" {
 		return errors.New("LINE_CHANNEL_ACCESS_TOKEN is not configured")
 	}
 	var reader io.Reader
@@ -117,30 +117,30 @@ func (c *httpLineClient) botRequest(ctx context.Context, path string, body, out 
 	}
 	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.botBase+path, reader)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BotBase+path, reader)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 	return c.do(req, out)
 }
 
 // oauthConfig は LINE Login の OAuth 2.0 の設定。redirectURI は開始のときに DB へ残した値を使う
 // （開始と戻りで同じ値でないと、LINE がトークンの交換を断る）。
-func (c *httpLineClient) oauthConfig(redirectURI string) (*oauth2.Config, error) {
-	if c.loginChannelID == "" {
+func (c *HTTPClient) oauthConfig(redirectURI string) (*oauth2.Config, error) {
+	if c.LoginChannelID == "" {
 		return nil, errors.New("LINE_LOGIN_CHANNEL_ID is not configured")
 	}
-	if c.loginSecret == "" {
+	if c.LoginSecret == "" {
 		return nil, errors.New("LINE_LOGIN_CHANNEL_SECRET is not configured")
 	}
 	return &oauth2.Config{
-		ClientID:     c.loginChannelID,
-		ClientSecret: c.loginSecret,
+		ClientID:     c.LoginChannelID,
+		ClientSecret: c.LoginSecret,
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  c.authorizeURL,
-			TokenURL: c.loginBase + "/oauth2/v2.1/token",
+			AuthURL:  c.AuthorizeURL,
+			TokenURL: c.LoginBase + "/oauth2/v2.1/token",
 			// LINE は client_id と client_secret を本文で受け取る（Basic 認証のヘッダーではない）。
 			// 決めておかないと、oauth2 は両方の形を試すために1回余計に呼ぶ。
 			AuthStyle: oauth2.AuthStyleInParams,
@@ -152,7 +152,7 @@ func (c *httpLineClient) oauthConfig(redirectURI string) (*oauth2.Config, error)
 
 // authCodeURL は LINE の同意画面の URL。PKCE（S256）と nonce を付ける。
 // bot_prompt=aggressive は、同意画面で公式アカウントの友だち追加も勧める指定（友だちでないと通知を送れない）。
-func (c *httpLineClient) authCodeURL(state, nonce, codeVerifier, redirectURI string) (string, error) {
+func (c *HTTPClient) authCodeURL(state, nonce, codeVerifier, redirectURI string) (string, error) {
 	cfg, err := c.oauthConfig(redirectURI)
 	if err != nil {
 		return "", err
@@ -164,7 +164,7 @@ func (c *httpLineClient) authCodeURL(state, nonce, codeVerifier, redirectURI str
 	), nil
 }
 
-func (c *httpLineClient) exchangeCode(ctx context.Context, code, codeVerifier, redirectURI string) (lineTokens, error) {
+func (c *HTTPClient) exchangeCode(ctx context.Context, code, codeVerifier, redirectURI string) (lineTokens, error) {
 	cfg, err := c.oauthConfig(redirectURI)
 	if err != nil {
 		return lineTokens{}, err
@@ -172,7 +172,7 @@ func (c *httpLineClient) exchangeCode(ctx context.Context, code, codeVerifier, r
 	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
 	// oauth2 は ctx に入れた *http.Client で呼ぶ（入れなければ http.DefaultClient）。
-	ctx = context.WithValue(ctx, oauth2.HTTPClient, c.client)
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, c.HTTP)
 	token, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(codeVerifier))
 	if err != nil {
 		return lineTokens{}, fmt.Errorf("LINE Login token: %w", err)
@@ -187,15 +187,15 @@ func (c *httpLineClient) exchangeCode(ctx context.Context, code, codeVerifier, r
 
 // verifyIDToken は ID トークンの署名・期限・宛先（client_id）・nonce を LINE に確かめてもらう。
 // 自分で JWT を検証せず LINE の verify を呼ぶのは Node と同じ（鍵の取得と更新を持たずに済む）。
-func (c *httpLineClient) verifyIDToken(ctx context.Context, idToken, nonce string) (lineIdentity, error) {
+func (c *HTTPClient) verifyIDToken(ctx context.Context, idToken, nonce string) (lineIdentity, error) {
 	var identity lineIdentity
-	if c.loginChannelID == "" {
+	if c.LoginChannelID == "" {
 		return identity, errors.New("LINE_LOGIN_CHANNEL_ID is not configured")
 	}
-	form := url.Values{"id_token": {idToken}, "client_id": {c.loginChannelID}, "nonce": {nonce}}
+	form := url.Values{"id_token": {idToken}, "client_id": {c.LoginChannelID}, "nonce": {nonce}}
 	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.loginBase+"/oauth2/v2.1/verify", strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.LoginBase+"/oauth2/v2.1/verify", strings.NewReader(form.Encode()))
 	if err != nil {
 		return identity, err
 	}
@@ -204,10 +204,10 @@ func (c *httpLineClient) verifyIDToken(ctx context.Context, idToken, nonce strin
 }
 
 // isFriend は、その利用者が公式アカウントを友だちにしているか（ブロック中も false）。
-func (c *httpLineClient) isFriend(ctx context.Context, accessToken string) (bool, error) {
+func (c *HTTPClient) isFriend(ctx context.Context, accessToken string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.loginBase+"/friendship/v1/status", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.LoginBase+"/friendship/v1/status", nil)
 	if err != nil {
 		return false, err
 	}
@@ -220,8 +220,8 @@ func (c *httpLineClient) isFriend(ctx context.Context, accessToken string) (bool
 }
 
 // do は送って、2xx でなければ本文の先頭をエラーに入れる。out が nil なら応答を読み捨てる。
-func (c *httpLineClient) do(req *http.Request, out any) error {
-	res, err := c.client.Do(req)
+func (c *HTTPClient) do(req *http.Request, out any) error {
+	res, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
 	}

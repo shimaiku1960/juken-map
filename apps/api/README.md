@@ -193,7 +193,7 @@ pnpm test:go-db                      # リポジトリのルートから。先�
 
 セキュリティ基準 06 の A3（他人の持ち物の ID を断る）と A4（禁止項目を混ぜても書き換わらない）を、
 本物の MySQL に流して確かめる（JUK-97。Node の `ownership.test.ts`・`forbidden-fields.test.ts` を移したもの）。
-LINE 連携の SQL（`line_db_test.go` の `TestLineStore`）も同じ仕組みで流す。
+LINE 連携の SQL（`internal/feature/line/line_db_test.go` の `TestLineStoreDB`）も同じ仕組みで流す。
 `registerRoutes` の user のルートを全件、表と突き合わせるので、ルートを足して表に書かなければ落ちる。
 
 - `dbtest` タグのテスト（`*_db_test.go` のうち `//go:build dbtest` のもの）。ふだんの `go test` では動かない
@@ -289,8 +289,8 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `line.go` | LINE 連携の入口（連携の確認・解除、トークからの Account Link、プロフィールからの LINE Login、Webhook）。書き込みは `internal/write/notification` |
-| `line_api.go` | LINE の API を呼ぶ部分（Messaging API・LINE Login、Webhook の署名の確かめ）。テストでは偽物に差し替える |
+| `internal/feature/line/` | LINE 連携の入口（連携の確認・解除、トークからの Account Link、プロフィールからの LINE Login、Webhook）。書き込みは `internal/write/notification` |
+| `internal/feature/line/api.go` | LINE の API を呼ぶ部分（Messaging API・LINE Login、Webhook の署名の確かめ）。テストでは偽物に差し替える |
 | `microcms_webhook.go` | microCMS の記事の公開・更新・削除を受け、署名を確かめてから GitHub の API でデプロイを動かす（JUK-112） |
 
 ### 毎日の通知

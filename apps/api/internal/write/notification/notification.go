@@ -1,7 +1,7 @@
 // Package notification は通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。
 // 持ち主の一覧と決まりは docs/architecture.md「バックエンドの構成」（JUK-148・JUK-150）。
 //
-//   - line.go：LINE の連携（Account Link の nonce・LINE Login の試行・連携・解除・Webhook の処理済みの印）
+//   - internal/feature/line：LINE の連携（Account Link の nonce・LINE Login の試行・連携・解除・Webhook の処理済みの印）
 //   - このファイル：通知の設定と、毎日の通知を送った印
 //
 // 「LINE 通知は連携しているときだけ ON にできる」はここで守る。設定の保存は連携の行を共有ロックで読んでから書き、

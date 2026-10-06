@@ -1,4 +1,7 @@
-package main
+// Package line は LINE 連携の入口（/api/line/*・GET /line/settings）。連携の確認・解除、トークからの Account Link、
+// プロフィールからの LINE Login、Webhook を受ける。書き込みは internal/write/notification に任せる（JUK-156）。
+// LINE の API を呼ぶ部分は api.go にあり、テストでは偽物に差し替える。
+package line
 
 import (
 	"context"
@@ -28,7 +31,7 @@ import (
 //
 //   - 連携の確認・解除：GET・DELETE /api/line/connection
 //   - トークからの連携（Account Link）：Webhook で「連携」と届く → リンクを返信 → 画面で
-//     POST /api/line/account-link → LINE の画面 → Webhook の accountLink イベントで確定
+//     POST /api/line/account-link → LINE の画面 → Webhook の AccountLink イベントで確定
 //   - プロフィールからの連携（LINE Login）：GET /api/line/oauth/start → LINE の同意画面 → /callback
 //
 // /line/settings（LINE のメッセージが案内する行き先）はページの振り分けなので Node に残す。
@@ -87,16 +90,27 @@ type lineStore interface {
 	unmarkWebhookEvent(ctx context.Context, eventID string) error
 }
 
-type lineHandlers struct {
+// Config は LINE 連携の設定。
+type Config struct {
+	ChannelSecret string // Webhook の署名を確かめる。空なら Webhook は必ず 401
+	WebOrigin     string // 画面のオリジン。OAuth の戻り先とリダイレクト先に使う
+	Client        Client
+}
+
+func New(db *sql.DB, cfg Config) *Handlers {
+	return &Handlers{store: &sqlLineStore{db: db}, line: cfg.Client, channelSecret: cfg.ChannelSecret, webOrigin: cfg.WebOrigin}
+}
+
+type Handlers struct {
 	store         lineStore
-	line          lineClient
+	line          Client
 	channelSecret string // LINE_CHANNEL_SECRET（Webhook の署名）
-	// webOrigin は画面のオリジン。本番は nginx で API と同じ（site.URL）。手元は Vite（WEB_ORIGIN）。
+	// WebOrigin は画面のオリジン。本番は nginx で API と同じ（site.URL）。手元は Vite（WEB_ORIGIN）。
 	webOrigin string
 }
 
-// connection は GET /api/line/connection。プロフィール画面が連携の有無を出すのに使う。
-func (h *lineHandlers) connection(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Connection は GET /api/line/connection。プロフィール画面が連携の有無を出すのに使う。
+func (h *Handlers) Connection(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	connected, err := h.store.isConnected(r.Context(), s.UserID)
 	if err != nil {
 		httpx.InternalError(w, r, err)
@@ -105,8 +119,8 @@ func (h *lineHandlers) connection(w http.ResponseWriter, r *http.Request, s *htt
 	httpx.WriteJSON(w, http.StatusOK, apischema.LineConnectionStatus{Connected: connected})
 }
 
-// disconnect は DELETE /api/line/connection。LINE 通知の設定も一緒に落とす。
-func (h *lineHandlers) disconnect(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Disconnect は DELETE /api/line/connection。LINE 通知の設定も一緒に落とす。
+func (h *Handlers) Disconnect(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if err := h.store.disconnect(r.Context(), s.UserID); err != nil {
 		httpx.InternalError(w, r, err)
 		return
@@ -114,10 +128,10 @@ func (h *lineHandlers) disconnect(w http.ResponseWriter, r *http.Request, s *htt
 	httpx.WriteJSON(w, http.StatusOK, apischema.LineConnectionStatus{Connected: false})
 }
 
-// accountLink は POST /api/line/account-link。トークのリンクから開いた画面が、ログインしたあとに呼ぶ。
+// AccountLink は POST /api/line/account-link。トークのリンクから開いた画面が、ログインしたあとに呼ぶ。
 // 使い捨ての nonce をこの利用者に結びつけ、LINE の連携画面の URL を返す。
-// LINE はそのあと Webhook の accountLink イベントで同じ nonce を送ってくる（completeAccountLink）。
-func (h *lineHandlers) accountLink(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// LINE はそのあと Webhook の AccountLink イベントで同じ nonce を送ってくる（completeAccountLink）。
+func (h *Handlers) AccountLink(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var body struct {
 		LinkToken *string `json:"linkToken"`
 	}
@@ -141,9 +155,9 @@ func (h *lineHandlers) accountLink(w http.ResponseWriter, r *http.Request, s *ht
 // notificationSettingsPath はプロフィールの通知設定の場所。
 const notificationSettingsPath = "/profile#notification-settings"
 
-// settings は GET /line/settings。LINE のメッセージ本文が案内する入口で、画面を持たずにログイン状態で行き先を変えるだけ
+// Settings は GET /line/settings。LINE のメッセージ本文が案内する入口で、画面を持たずにログイン状態で行き先を変えるだけ
 // （JUK-111 で Node の routes/line.ts から移した）。SPA のルートにしないのは、描画が要らず、画面で判定すると一瞬ちらつくため。
-func (h *lineHandlers) settings(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) Settings(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s != nil {
 		http.Redirect(w, r, h.webOrigin+notificationSettingsPath, http.StatusFound)
 		return
@@ -151,8 +165,8 @@ func (h *lineHandlers) settings(w http.ResponseWriter, r *http.Request, s *httpx
 	http.Redirect(w, r, h.webOrigin+"/login?"+url.Values{"callbackURL": {notificationSettingsPath}}.Encode(), http.StatusFound)
 }
 
-// oauthStart は GET /api/line/oauth/start。プロフィールの「LINE と連携する」から画面遷移で来る。
-func (h *lineHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// OauthStart は GET /api/line/oauth/start。プロフィールの「LINE と連携する」から画面遷移で来る。
+func (h *Handlers) OauthStart(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s == nil {
 		http.Redirect(w, r, h.webOrigin+"/login?callbackURL=%2Fprofile%23line-connection", http.StatusFound)
 		return
@@ -175,9 +189,9 @@ func (h *lineHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *htt
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
-// oauthCallback は GET /api/line/oauth/callback。LINE の同意画面から戻ってくる。
+// OauthCallback は GET /api/line/oauth/callback。LINE の同意画面から戻ってくる。
 // 結果はプロフィール画面へ ?line=<結果> で知らせる（画面が文言を出し分ける）。
-func (h *lineHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) OauthCallback(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	query := httpx.ParseQuery(r.URL.RawQuery)
 	// 利用者が同意画面でキャンセルすると、LINE は error を付けて戻す。
 	if _, ok := query["error"]; ok {
@@ -227,7 +241,7 @@ func (h *lineHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, s *
 }
 
 // completeOAuth はコードをトークンに換え、LINE のアカウントを確かめて連携する。戻り値は画面へ知らせる結果。
-func (h *lineHandlers) completeOAuth(ctx context.Context, s *httpx.Session, attempt *oauthAttempt, code string) (string, error) {
+func (h *Handlers) completeOAuth(ctx context.Context, s *httpx.Session, attempt *oauthAttempt, code string) (string, error) {
 	tokens, err := h.line.exchangeCode(ctx, code, attempt.CodeVerifier, attempt.RedirectURI)
 	if err != nil {
 		return "", err
@@ -273,7 +287,7 @@ func (h *lineHandlers) completeOAuth(ctx context.Context, s *httpx.Session, atte
 	return "connected", nil
 }
 
-func (h *lineHandlers) profileRedirect(w http.ResponseWriter, r *http.Request, result string) {
+func (h *Handlers) profileRedirect(w http.ResponseWriter, r *http.Request, result string) {
 	http.Redirect(w, r, h.webOrigin+"/profile?line="+result+"#line-connection", http.StatusFound)
 }
 
@@ -295,12 +309,12 @@ type lineEvent struct {
 	} `json:"link"`
 }
 
-// webhook は POST /api/line/webhook。LINE のサーバーが、友だち追加・メッセージ・連携の結果を送ってくる。
+// Webhook は POST /api/line/webhook。LINE のサーバーが、友だち追加・メッセージ・連携の結果を送ってくる。
 //
 // 署名は、JSON として読む前の本文で確かめる（C1）。同じイベントの再送は webhookEventId で見分けて、
 // 2回目は何もしない。イベントごとの失敗はログに残して 200 を返す（Node と同じ。LINE に再送させても、
 // 返信のトークンは1回しか使えないので、やり直しにならない）。
-func (h *lineHandlers) webhook(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, lineWebhookBodyLimit))
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
@@ -335,7 +349,7 @@ func (h *lineHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleEvent はイベント1つを、印を入れてから処理する。失敗したら印を消し、再送されたときにやり直せるようにする。
-func (h *lineHandlers) handleEvent(ctx context.Context, event lineEvent) error {
+func (h *Handlers) handleEvent(ctx context.Context, event lineEvent) error {
 	// webhookEventId は LINE が必ず付ける。無いものは見分けられないので、そのまま処理する。
 	if event.WebhookEventID != "" {
 		duplicate, err := h.store.markWebhookEvent(ctx, event.WebhookEventID)
@@ -358,7 +372,7 @@ func (h *lineHandlers) handleEvent(ctx context.Context, event lineEvent) error {
 	return err
 }
 
-func (h *lineHandlers) dispatch(ctx context.Context, event lineEvent) error {
+func (h *Handlers) dispatch(ctx context.Context, event lineEvent) error {
 	switch {
 	case event.Type == "accountLink":
 		return h.completeAccountLink(ctx, event)
@@ -372,7 +386,7 @@ func (h *lineHandlers) dispatch(ctx context.Context, event lineEvent) error {
 }
 
 // sendLinkGuide は、友だち追加や「連携」のメッセージに、連携用のリンクを返信する。
-func (h *lineHandlers) sendLinkGuide(ctx context.Context, event lineEvent) error {
+func (h *Handlers) sendLinkGuide(ctx context.Context, event lineEvent) error {
 	lineUserID := event.Source.UserID
 	if lineUserID == "" || event.ReplyToken == "" {
 		return nil
@@ -393,8 +407,8 @@ func (h *lineHandlers) sendLinkGuide(ctx context.Context, event lineEvent) error
 		"受験マップとLINEを連携します。次のリンクを10分以内に開いてログインしてください。\n"+lineAccountLinkURL(linkToken))
 }
 
-// completeAccountLink は、LINE の連携画面を通ったあとに届く accountLink イベントで連携を確定する。
-func (h *lineHandlers) completeAccountLink(ctx context.Context, event lineEvent) error {
+// completeAccountLink は、LINE の連携画面を通ったあとに届く AccountLink イベントで連携を確定する。
+func (h *Handlers) completeAccountLink(ctx context.Context, event lineEvent) error {
 	if event.Link.Result != "ok" || event.Link.Nonce == "" || event.Source.UserID == "" {
 		return nil
 	}

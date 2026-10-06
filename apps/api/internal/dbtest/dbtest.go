@@ -128,6 +128,16 @@ func (fx Fixture) LineConnection(userID string) {
 		userID, "U"+Hex(16), now, now, now)
 }
 
+// Count は COUNT(*) の照会の結果を返す。
+func (fx Fixture) Count(query string, args ...any) int {
+	fx.T.Helper()
+	var n int
+	if err := fx.DB.QueryRow(query, args...).Scan(&n); err != nil {
+		fx.T.Fatalf("%s: %v", query, err)
+	}
+	return n
+}
+
 // Rows は照会の結果を、1行ずつ JSON の文字列にして返す（列名で並ぶので比べやすい）。NULL は null になる。
 // 並び順に頼らないよう、文字列で並べ替えて返す。
 func (fx Fixture) Rows(query string, args ...any) []string {
