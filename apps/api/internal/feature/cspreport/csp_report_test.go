@@ -1,24 +1,35 @@
-package main
+package cspreport
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"log/slog"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
 // postCSP は CSP の報告を送り、ステータスと "csp violation" のログの csp の中身を返す。
 func postCSP(t *testing.T, body, contentType string) (int, []map[string]any) {
 	t.Helper()
-	buf := captureLogs(t)
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(telemetry.NewLogger(&buf, slog.LevelDebug))
+	t.Cleanup(func() { slog.SetDefault(prev) })
 	req := httptest.NewRequest("POST", "/api/csp-report", strings.NewReader(body))
 	req.Header.Set("Content-Type", contentType)
 	res := httptest.NewRecorder()
-	cspReport(res, req)
+	Handle(res, req)
 
 	var reports []map[string]any
-	for _, line := range logLines(t, buf) {
+	sc := bufio.NewScanner(&buf)
+	for sc.Scan() {
+		line := httpxtest.DecodeJSON(t, sc.Text())
 		if line["msg"] == "csp violation" {
 			reports = append(reports, line["csp"].(map[string]any))
 		}

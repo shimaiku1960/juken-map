@@ -1,4 +1,11 @@
-package main
+// Package cspreport は、ブラウザが送ってくる CSP の違反の報告を、ログ（本番は Grafana の Loki）に残す（JUK-80）。
+// Node の routes/csp-report.ts にあたる。CSP は止めるモードなので、ここに出たものは
+// 「実際にブラウザが読み込みを拒んだ箇所」になる。
+//
+// 報告の形は2種類ある。
+//   - report-uri: application/csp-report、{"csp-report": {"document-uri": ...}}（今使っているのはこちら）
+//   - report-to（Reporting API）: application/reports+json、[{"type": "csp-violation", "body": {"documentURL": ...}}]
+package cspreport
 
 import (
 	"encoding/json"
@@ -11,14 +18,6 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
-
-// ブラウザが送ってくる CSP の違反の報告を、ログ（本番は Grafana の Loki）に残す（JUK-80）。
-// Node の routes/csp-report.ts にあたる。CSP は止めるモードなので、ここに出たものは
-// 「実際にブラウザが読み込みを拒んだ箇所」になる。
-//
-// 報告の形は2種類ある。
-//   - report-uri: application/csp-report、{"csp-report": {"document-uri": ...}}（今使っているのはこちら）
-//   - report-to（Reporting API）: application/reports+json、[{"type": "csp-violation", "body": {"documentURL": ...}}]
 
 // 認証なしで誰でも送れる口なので、1回で読む件数と大きさに上限を置く。
 const (
@@ -119,9 +118,9 @@ func parseCSPReports(body any) []cspViolation {
 	return out
 }
 
-// cspReport は POST /api/csp-report。ブラウザは中身を読まないので、報告の形が崩れていても、
+// Handle は POST /api/csp-report。ブラウザは中身を読まないので、報告の形が崩れていても、
 // 送り直させないよう常に 204（Content-Type が違う・大きすぎるときは、本文を読む前に 415・413）。
-func cspReport(w http.ResponseWriter, r *http.Request) {
+func Handle(w http.ResponseWriter, r *http.Request) {
 	body, ok := httpx.ReadBody(w, r, cspBodyLimit)
 	if !ok {
 		return
