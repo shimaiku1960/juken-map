@@ -1,4 +1,4 @@
-package main
+package study
 
 import (
 	"context"
@@ -150,12 +150,12 @@ func findStudyLogWithTextbook(ctx context.Context, q database.QueryRower, id int
 	return l, nil
 }
 
-type studyPlanWriteHandlers struct {
+type PlanWriteHandlers struct {
 	db *sql.DB
 }
 
-// create は POST /api/study-plans。
-func (h *studyPlanWriteHandlers) create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Create は POST /api/study-plans。
+func (h *PlanWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -179,8 +179,8 @@ func (h *studyPlanWriteHandlers) create(w http.ResponseWriter, r *http.Request, 
 	httpx.WriteJSON(w, http.StatusCreated, apischema.CreatedCount{Count: count})
 }
 
-// update は PATCH /api/study-plans/{id}。Node と同じく、入力チェックは自分の予定かを確かめるより先。
-func (h *studyPlanWriteHandlers) update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Update は PATCH /api/study-plans/{id}。Node と同じく、入力チェックは自分の予定かを確かめるより先。
+func (h *PlanWriteHandlers) Update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -211,8 +211,8 @@ func (h *studyPlanWriteHandlers) update(w http.ResponseWriter, r *http.Request, 
 	httpx.WriteJSON(w, http.StatusOK, apischema.StudyPlanRow(updated))
 }
 
-// delete は DELETE /api/study-plans/{id}。
-func (h *studyPlanWriteHandlers) delete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Delete は DELETE /api/study-plans/{id}。
+func (h *PlanWriteHandlers) Delete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
@@ -227,8 +227,8 @@ func (h *studyPlanWriteHandlers) delete(w http.ResponseWriter, r *http.Request, 
 	httpx.WriteJSON(w, http.StatusOK, apischema.Deleted{Message: apischema.DeletedMessageDeleted})
 }
 
-// complete は POST /api/study-plans/{id}/complete。
-func (h *studyPlanWriteHandlers) complete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Complete は POST /api/study-plans/{id}/complete。
+func (h *PlanWriteHandlers) Complete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return

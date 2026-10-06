@@ -1,4 +1,4 @@
-package main
+package study
 
 import (
 	"net/http"
@@ -34,10 +34,10 @@ func TestDateRangeWhere(t *testing.T) {
 func TestStudyListQueryErrors(t *testing.T) {
 	// DB に届く前に返る場面だけを見る（store は nil のまま）。DB を使う場面は E2E（nginx を通して Go に届く、JUK-96）が通す。
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	h := &studyHandlers{}
-	rt.User("GET /api/study-logs", h.listLogs)
-	rt.User("GET /api/study-logs/daily", h.listDaily)
-	rt.User("GET /api/study-plans", h.listPlans)
+	h := &ReadHandlers{}
+	rt.User("GET /api/study-logs", h.ListLogs)
+	rt.User("GET /api/study-logs/daily", h.ListDaily)
+	rt.User("GET /api/study-plans", h.ListPlans)
 
 	// 本文は Node（routes/validation-error.ts）が返すものと同じ「文言・コード・項目」
 	formatError := func(key string) string {

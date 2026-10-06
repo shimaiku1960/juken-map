@@ -1,4 +1,4 @@
-package main
+package study
 
 import (
 	"context"
@@ -20,13 +20,13 @@ const (
 	streakDays   = 365 // 連続記録日数をさかのぼる日数
 )
 
-// 応答の形（src/shared/dto/study.ts の Dashboard）。学習記録・予定の型は study.go にある。
+// 応答の形は apischema.Dashboard（src/shared/dto/study.ts の Dashboard）。
 
-type dashboardHandler struct {
-	store *studyStore
+type DashboardHandler struct {
+	store *store
 }
 
-func (h *dashboardHandler) serve(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *DashboardHandler) Serve(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	dashboard, err := h.get(r.Context(), s.UserID, time.Now())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("dashboard: %w", err))
@@ -37,7 +37,7 @@ func (h *dashboardHandler) serve(w http.ResponseWriter, r *http.Request, s *http
 
 // get はダッシュボードの初回表示ぶんをまとめて返す。Node 側の getDashboard にあたる。
 // now を引数で受け取るのは、テストで「今日」を固定できるようにするため。
-func (h *dashboardHandler) get(ctx context.Context, userID string, now time.Time) (*apischema.Dashboard, error) {
+func (h *DashboardHandler) get(ctx context.Context, userID string, now time.Time) (*apischema.Dashboard, error) {
 	today := dates.OnTokyo(now)
 	start, end := dates.MonthStart(today), dates.MonthEnd(today)
 

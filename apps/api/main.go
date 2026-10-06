@@ -24,6 +24,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/study"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
@@ -252,25 +253,22 @@ func registerBlogRoutes(rt *httpx.Router, c blogConfig) {
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
 func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfig, microcms microcmsWebhookConfig) {
-	study := &studyStore{db: db}
-	studyHandlers := &studyHandlers{store: study}
+	studyRoutes := study.New(db)
 
 	rt.Public("GET /api/health", healthHandler(db))
-	rt.User("GET /api/dashboard", (&dashboardHandler{store: study}).serve)
-	rt.User("GET /api/study-logs", studyHandlers.listLogs)
-	rt.User("GET /api/study-logs/daily", studyHandlers.listDaily)
-	rt.User("GET /api/study-plans", studyHandlers.listPlans)
+	rt.User("GET /api/dashboard", studyRoutes.Dashboard.Serve)
+	rt.User("GET /api/study-logs", studyRoutes.Reads.ListLogs)
+	rt.User("GET /api/study-logs/daily", studyRoutes.Reads.ListDaily)
+	rt.User("GET /api/study-plans", studyRoutes.Reads.ListPlans)
 
-	studyLogWrites := &studyLogWriteHandlers{db: db, now: time.Now}
-	rt.User("POST /api/study-logs", studyLogWrites.create)
-	rt.User("PATCH /api/study-logs/{id}", studyLogWrites.update)
-	rt.User("DELETE /api/study-logs/{id}", studyLogWrites.delete)
+	rt.User("POST /api/study-logs", studyRoutes.Logs.Create)
+	rt.User("PATCH /api/study-logs/{id}", studyRoutes.Logs.Update)
+	rt.User("DELETE /api/study-logs/{id}", studyRoutes.Logs.Delete)
 
-	studyPlanWrites := &studyPlanWriteHandlers{db: db}
-	rt.User("POST /api/study-plans", studyPlanWrites.create)
-	rt.User("PATCH /api/study-plans/{id}", studyPlanWrites.update)
-	rt.User("DELETE /api/study-plans/{id}", studyPlanWrites.delete)
-	rt.User("POST /api/study-plans/{id}/complete", studyPlanWrites.complete)
+	rt.User("POST /api/study-plans", studyRoutes.Plans.Create)
+	rt.User("PATCH /api/study-plans/{id}", studyRoutes.Plans.Update)
+	rt.User("DELETE /api/study-plans/{id}", studyRoutes.Plans.Delete)
+	rt.User("POST /api/study-plans/{id}/complete", studyRoutes.Plans.Complete)
 
 	goalRoutes := goals.New(db)
 	rt.User("GET /api/goals", goalRoutes.List)
