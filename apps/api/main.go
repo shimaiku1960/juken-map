@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
@@ -278,12 +279,11 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfi
 	rt.User("PATCH /api/goals/{id}", goals.update)
 	rt.User("DELETE /api/goals/{id}", goals.delete)
 
-	textbookStore := newTextbookStore(db)
-	textbooks := &textbookHandlers{store: textbookStore}
-	rt.User("GET /api/textbooks", textbooks.list)
-	rt.User("GET /api/textbook-masters", textbooks.listMasters)
-	rt.User("POST /api/textbooks", textbooks.create)
-	rt.User("PATCH /api/textbooks/{id}", textbooks.updateProgress)
+	textbookRoutes := textbooks.New(db)
+	rt.User("GET /api/textbooks", textbookRoutes.List)
+	rt.User("GET /api/textbook-masters", textbookRoutes.ListMasters)
+	rt.User("POST /api/textbooks", textbookRoutes.Create)
+	rt.User("PATCH /api/textbooks/{id}", textbookRoutes.UpdateProgress)
 
 	prefs := &notificationPreferenceHandlers{store: &notificationPreferenceStore{db: db}}
 	rt.User("GET /api/notification-preferences", prefs.get)
@@ -322,11 +322,11 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfi
 	rt.Admin("DELETE /api/admin/users/{id}", adminUsers.deleteUser)
 
 	// マスター編集。大学・学部を変えたら大学を探す画面の一覧（上の universities）の、参考書マスターを
-	// 変えたら GET /api/textbook-masters（上の textbooks）のキャッシュを捨てる。
+	// 変えたら GET /api/textbook-masters（上の textbookRoutes）のキャッシュを捨てる。
 	masters := &adminMasterHandlers{store: &sqlAdminMasterStore{
 		db:                     db,
 		universitiesChanged:    universityStore.explore.Invalidate,
-		textbookMastersChanged: textbookStore.masters.Invalidate,
+		textbookMastersChanged: textbookRoutes.InvalidateMasters,
 	}}
 	rt.Admin("GET /api/admin/universities", masters.listUniversities)
 	rt.Admin("POST /api/admin/universities", masters.createUniversity)

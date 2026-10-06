@@ -1,4 +1,4 @@
-package main
+package textbooks
 
 import (
 	"net/http/httptest"
