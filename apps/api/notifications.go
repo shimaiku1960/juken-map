@@ -17,7 +17,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
 // 毎日の学習通知の送信（JUK-74）。Node の routes/cron.ts と services/sendDailyNotifications.ts にあたる。
@@ -331,23 +331,14 @@ func (st *sqlNotificationStore) findRecipients(ctx context.Context, slot Notific
 	return users, logRows.Err()
 }
 
+// 送った印の書き込みは持ち主（internal/write/notification）の操作を呼ぶ（JUK-154）。
 func (st *sqlNotificationStore) markDelivery(ctx context.Context, userID string, date time.Time, slot NotificationSlot, channel deliveryChannel) (int64, bool, error) {
-	res, err := st.db.ExecContext(ctx,
-		`INSERT INTO NotificationDelivery (userId, date, slot, channel, createdAt) VALUES (?, ?, ?, ?, ?)`,
-		userID, date, slot, channel, time.Now().UTC())
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return 0, true, nil
-	}
-	if err != nil {
-		return 0, false, err
-	}
-	id, err := res.LastInsertId()
-	return id, false, err
+	return notification.MarkDelivery(ctx, st.db,
+		notification.Delivery{UserID: userID, Date: date, Slot: string(slot), Channel: string(channel)}, time.Now().UTC())
 }
 
 func (st *sqlNotificationStore) unmarkDelivery(ctx context.Context, id int64) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM NotificationDelivery WHERE id = ?", id)
-	return err
+	return notification.UnmarkDelivery(ctx, st.db, id)
 }
 
 // httpMessenger は Resend と LINE の API を直接呼ぶ（どちらも SDK は使わない）。

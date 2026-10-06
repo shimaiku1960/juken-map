@@ -18,7 +18,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
 // LINE 連携（JUK-79）。Node の routes/line.ts と services/line-connection-service.ts にあたる。
@@ -29,19 +29,17 @@ import (
 //   - プロフィールからの連携（LINE Login）：GET /api/line/oauth/start → LINE の同意画面 → /callback
 //
 // /line/settings（LINE のメッセージが案内する行き先）はページの振り分けなので Node に残す。
+//
+// DB の書き込み（連携・解除・nonce・試行・Webhook の印）は持ち主の internal/write/notification にある（JUK-154）。
 
 const (
 	// lineCallbackPath は LINE Login の戻り先。LINE Developers に登録した URL と同じでないと LINE が断る。
 	lineCallbackPath = "/api/line/oauth/callback"
-	// lineAttemptTTL は OAuth の state と Account Link の nonce の寿命（セキュリティ基準 C4）。
-	lineAttemptTTL = 10 * time.Minute
 	// lineConfirmationTimeout は、連携できたことを LINE へ送るのを待つ上限。
 	// 送れなくても連携は済んでいるので、利用者を待たせ続けない。
 	lineConfirmationTimeout = 3 * time.Second
 	// lineWebhookBodyLimit は Webhook の本文の上限。LINE は1回に複数のイベントをまとめて送るが、1MB あれば十分。
 	lineWebhookBodyLimit = 1 << 20
-	// lineWebhookEventRetention は処理済みイベントの印を残す期間。LINE の再送はこれより短い。
-	lineWebhookEventRetention = 7 * 24 * time.Hour
 )
 
 var lineConnectionCompletedMessage = strings.Join([]string{
@@ -51,13 +49,13 @@ var lineConnectionCompletedMessage = strings.Join([]string{
 	siteURL + "/line/settings",
 }, "\n")
 
-// accountLinkResult は Account Link の nonce で連携を確定した結果。
+// accountLinkResult は Account Link の nonce で連携を確定した結果（持ち主の notification.LinkResult と同じ値）。
 type accountLinkResult string
 
 const (
-	accountLinkLinked  accountLinkResult = "linked"
-	accountLinkTaken   accountLinkResult = "taken"   // その LINE は別のアカウントに連携済み
-	accountLinkExpired accountLinkResult = "expired" // nonce が無い・期限切れ・使用済み
+	accountLinkLinked  = accountLinkResult(notification.Linked)
+	accountLinkTaken   = accountLinkResult(notification.Taken)   // その LINE は別のアカウントに連携済み
+	accountLinkExpired = accountLinkResult(notification.Expired) // nonce が無い・期限切れ・使用済み
 )
 
 // oauthAttempt は LINE Login を始めたときに DB へ残す値。戻ってきたときに state で引き当てる。
@@ -457,91 +455,23 @@ func (st *sqlLineStore) exists(ctx context.Context, query string, arg any) (bool
 	return true, nil
 }
 
-// issueLinkNonce は連携開始用の nonce を1つだけ持たせる（古いものは捨てる）。
 func (st *sqlLineStore) issueLinkNonce(ctx context.Context, userID, nonce string) error {
-	return database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM LineLinkNonce WHERE userId = ?", userID); err != nil {
-			return err
-		}
-		now := time.Now()
-		_, err := tx.ExecContext(ctx,
-			"INSERT INTO LineLinkNonce (nonce, userId, expiresAt, createdAt) VALUES (?, ?, ?, ?)",
-			nonce, userID, now.Add(lineAttemptTTL), now)
-		return err
-	})
+	return notification.IssueLinkNonce(ctx, st.db, userID, nonce, time.Now())
 }
 
-// completeAccountLink は nonce の消費、「その LINE が別のアカウントに連携済みでないか」の確認、連携の書き込みを
-// 1つのトランザクションで行う。分けると、確認と書き込みの間に別の連携が割り込んで上書きされうる。
 func (st *sqlLineStore) completeAccountLink(ctx context.Context, nonce, lineUserID string) (accountLinkResult, error) {
-	var result accountLinkResult
-	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		// FOR UPDATE で nonce の行を押さえる。同じ nonce が同時に届いても、2つ目は1つ目の COMMIT を待ち、
-		// そのときには行が消えているので期限切れ扱いになる。
-		var userID string
-		var expired bool
-		err := tx.QueryRowContext(ctx,
-			"SELECT userId, expiresAt <= UTC_TIMESTAMP(3) FROM LineLinkNonce WHERE nonce = ? FOR UPDATE", nonce,
-		).Scan(&userID, &expired)
-		if errors.Is(err, sql.ErrNoRows) || (err == nil && expired) {
-			result = accountLinkExpired
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		// nonce は使い捨て。別のアカウントに連携済みで断るときも消す。
-		if _, err := tx.ExecContext(ctx, "DELETE FROM LineLinkNonce WHERE nonce = ?", nonce); err != nil {
-			return err
-		}
-		taken, err := linkedToOtherUser(ctx, tx, lineUserID, userID)
-		if err != nil {
-			return err
-		}
-		if taken {
-			result = accountLinkTaken
-			return nil
-		}
-		result = accountLinkLinked
-		return linkConnection(ctx, tx, userID, lineUserID)
-	})
-	return result, err
+	r, err := notification.CompleteAccountLink(ctx, st.db, nonce, lineUserID, time.Now())
+	return accountLinkResult(r), err
 }
 
-// disconnect は連携を解除する。連携が消えたのに LINE 通知だけ ON のままだと、送り先の無い通知が残るので一緒に落とす。
 func (st *sqlLineStore) disconnect(ctx context.Context, userID string) error {
-	return database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		for _, q := range []struct {
-			query string
-			args  []any
-		}{
-			{"UPDATE NotificationPreference SET lineMorningEnabled = FALSE, lineEveningEnabled = FALSE, updatedAt = ? WHERE userId = ?",
-				[]any{time.Now(), userID}},
-			{"DELETE FROM LineConnection WHERE userId = ?", []any{userID}},
-			{"DELETE FROM LineLinkNonce WHERE userId = ?", []any{userID}},
-			{"DELETE FROM LineOAuthAttempt WHERE userId = ?", []any{userID}},
-		} {
-			if _, err := tx.ExecContext(ctx, q.query, q.args...); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return notification.Disconnect(ctx, st.db, userID, time.Now())
 }
 
-// startOAuthAttempt は LINE Login の進行中の試行を1つだけ持たせる。
 func (st *sqlLineStore) startOAuthAttempt(ctx context.Context, state string, a oauthAttempt) error {
-	return database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM LineOAuthAttempt WHERE userId = ?", a.UserID); err != nil {
-			return err
-		}
-		now := time.Now()
-		_, err := tx.ExecContext(ctx,
-			`INSERT INTO LineOAuthAttempt (state, userId, nonce, codeVerifier, redirectUri, expiresAt, createdAt)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			state, a.UserID, a.Nonce, a.CodeVerifier, a.RedirectURI, now.Add(lineAttemptTTL), now)
-		return err
-	})
+	return notification.StartOAuthAttempt(ctx, st.db, state, notification.Attempt{
+		UserID: a.UserID, Nonce: a.Nonce, CodeVerifier: a.CodeVerifier, RedirectURI: a.RedirectURI,
+	}, time.Now())
 }
 
 func (st *sqlLineStore) findOAuthAttempt(ctx context.Context, state string) (*oauthAttempt, error) {
@@ -559,81 +489,18 @@ func (st *sqlLineStore) findOAuthAttempt(ctx context.Context, state string) (*oa
 	return &a, nil
 }
 
-// discardOAuthAttempt は使い終わった・使えなかった state を捨てる。
-// 取得と削除の間に別のリクエストが消していても、0行の削除で終わるだけで落ちない。
 func (st *sqlLineStore) discardOAuthAttempt(ctx context.Context, state string) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM LineOAuthAttempt WHERE state = ?", state)
-	return err
+	return notification.DiscardOAuthAttempt(ctx, st.db, state)
 }
 
 func (st *sqlLineStore) linkVerifiedLineUser(ctx context.Context, userID, lineUserID string) (bool, error) {
-	linked := false
-	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		taken, err := linkedToOtherUser(ctx, tx, lineUserID, userID)
-		if err != nil || taken {
-			return err
-		}
-		linked = true
-		return linkConnection(ctx, tx, userID, lineUserID)
-	})
-	return linked, err
+	return notification.LinkVerifiedLineUser(ctx, st.db, userID, lineUserID, time.Now())
 }
 
-// markWebhookEvent は処理済みの印を入れる。ついでに古い印を少しずつ消す（1回に100行まで）。
 func (st *sqlLineStore) markWebhookEvent(ctx context.Context, eventID string) (bool, error) {
-	if _, err := st.db.ExecContext(ctx,
-		"DELETE FROM LineWebhookEvent WHERE createdAt < ? LIMIT 100", time.Now().Add(-lineWebhookEventRetention),
-	); err != nil {
-		return false, fmt.Errorf("clean line webhook events: %w", err)
-	}
-	_, err := st.db.ExecContext(ctx, "INSERT INTO LineWebhookEvent (webhookEventId) VALUES (?)", eventID)
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return true, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("mark line webhook event: %w", err)
-	}
-	return false, nil
+	return notification.MarkWebhookEvent(ctx, st.db, eventID, time.Now())
 }
 
 func (st *sqlLineStore) unmarkWebhookEvent(ctx context.Context, eventID string) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM LineWebhookEvent WHERE webhookEventId = ?", eventID)
-	return err
-}
-
-// linkedToOtherUser は、その LINE が自分以外のアカウントに連携済みか。
-func linkedToOtherUser(ctx context.Context, tx *sql.Tx, lineUserID, userID string) (bool, error) {
-	var owner string
-	err := tx.QueryRowContext(ctx, "SELECT userId FROM LineConnection WHERE lineUserId = ?", lineUserID).Scan(&owner)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return owner != userID, nil
-}
-
-// linkConnection は userID の連携を lineUserID に向ける。無ければ作る。
-//
-// INSERT ... ON DUPLICATE KEY UPDATE は使わない。このテーブルは userId と lineUserId の2つが UNIQUE で、
-// ON DUPLICATE KEY はどちらの重複でも発動する。lineUserId が別ユーザーの行とぶつかると、エラーにならず、
-// その他人の行を更新してしまう。userId で UPDATE し、1行も変わらなければ INSERT する（Node と同じ）。
-// INSERT 側で lineUserId がぶつかれば ER_DUP_ENTRY になり、トランザクションごと取り消される。
-func linkConnection(ctx context.Context, tx *sql.Tx, userID, lineUserID string) error {
-	now := time.Now()
-	res, err := tx.ExecContext(ctx,
-		"UPDATE LineConnection SET lineUserId = ?, linkedAt = ?, updatedAt = ? WHERE userId = ?",
-		lineUserID, now, now, userID)
-	if err != nil {
-		return err
-	}
-	// MySQL の affectedRows は「値が変わった行」の数。同じ LINE への付け直しでも linkedAt が変わるので 1 になる。
-	if n, err := res.RowsAffected(); err != nil || n > 0 {
-		return err
-	}
-	_, err = tx.ExecContext(ctx,
-		"INSERT INTO LineConnection (userId, lineUserId, linkedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)",
-		userID, lineUserID, now, now, now)
-	return err
+	return notification.UnmarkWebhookEvent(ctx, st.db, eventID)
 }
