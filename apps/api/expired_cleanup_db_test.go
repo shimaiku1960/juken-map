@@ -11,6 +11,9 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
+// expiredTables は掃除の対象の表（持ち主ごとの DeleteExpired が消す表のすべて）。
+var expiredTables = []string{"AuthSession", "AuthToken", "AuthMfaChallenge", "AuthOAuthState", "LineLinkNonce", "LineOAuthAttempt"}
+
 // 期限は2000年にする。ほかのテストやほかの worktree が同じ DB に作る行（期限は今より後）を消さない。
 var (
 	expiredAt = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -46,11 +49,11 @@ func remaining(t *testing.T, fx dbFixture, userID string, expiresAt time.Time) m
 	t.Helper()
 	got := map[string]int{}
 	for _, table := range expiredTables {
-		if table.name == "AuthOAuthState" {
-			got[table.name] = count(t, fx.DB, "SELECT COUNT(*) FROM AuthOAuthState WHERE expiresAt = ?", expiresAt)
+		if table == "AuthOAuthState" {
+			got[table] = count(t, fx.DB, "SELECT COUNT(*) FROM AuthOAuthState WHERE expiresAt = ?", expiresAt)
 			continue
 		}
-		got[table.name] = count(t, fx.DB, "SELECT COUNT(*) FROM `"+table.name+"` WHERE userId = ? AND expiresAt = ?", userID, expiresAt)
+		got[table] = count(t, fx.DB, "SELECT COUNT(*) FROM `"+table+"` WHERE userId = ? AND expiresAt = ?", userID, expiresAt)
 	}
 	return got
 }
@@ -73,8 +76,8 @@ func TestExpiredCleanupDB(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, table := range expiredTables {
-			if removed[table.name] != 3 {
-				t.Errorf("%s: 消した行 = %d, want 3", table.name, removed[table.name])
+			if removed[table] != 3 {
+				t.Errorf("%s: 消した行 = %d, want 3", table, removed[table])
 			}
 		}
 		for table, n := range remaining(t, fx, userID, expiredAt) {

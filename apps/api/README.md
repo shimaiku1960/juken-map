@@ -252,7 +252,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `auth_oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
 | `auth_throttle.go`・`auth_email.go` | 回数制限と、上限つきのメール送信（数え方と上限は `internal/write/authguard`） |
 | `auth_delete_account.go` | 本人の退会（確かめ直してから、利用者とぶら下がるデータをすべて消す。JUK-123） |
-| `expired_cleanup.go` | 期限の切れたセッション・トークン・ログインの途中の値・LINE 連携の途中の値を、起動時と1時間ごとに500行ずつ消す（06 G1、JUK-140） |
+| `expired_cleanup.go` | 期限の切れたセッション・トークン・ログインの途中の値・LINE 連携の途中の値を、起動時と1時間ごとに500行ずつ消す（06 G1、JUK-140）。どの表を消すかは持ち主（`internal/write/account`・`authguard`・`notification` の `expired.go`）が決め、このジョブはそれを順に呼ぶ（JUK-154） |
 
 テストは `auth_unit_test.go`（DB なし）と `auth_db_test.go`・`auth_delete_account_db_test.go`・`expired_cleanup_db_test.go`（本物の MySQL）。
 
@@ -337,7 +337,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
 | `logger.go` | pino と同じ形の JSON ログ。reqId・trace_id を足し、`LOG_FILE` にも書く |
-| `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
+| `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする、期限の切れた行の消し方（`expired.go`。消す表は持ち主が渡す）。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `internal/write/studyrecord/` | 学習記録（実績・予定・初回記録の日時）への書き込みの持ち主。実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |
 | `internal/write/textbook/` | 利用者の参考書への書き込みの持ち主。名前・参考書マスターからの登録と、逆算設定の変更（JUK-154） |

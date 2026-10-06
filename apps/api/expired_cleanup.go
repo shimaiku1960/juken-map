@@ -6,20 +6,22 @@
 //
 //   - 外のタイマー（infra/systemd）に載せなかったのは、入口・秘密の値・nginx の設定が要らず、
 //     開発環境でも同じように動くから。台が増えて同時に動いても、消す対象が同じなので害は無い。
-//   - 消す行は先に主キーで選び、主キーで消す（internal/write/authguard の sweepEmailSends と同じ）。expiresAt の範囲で DELETE すると
-//     索引の隙間までロックし、空に近い表では新しい行の INSERT がそのあいだ待たされる。
-//   - 管理者のセッションの「使わないときの期限」（1時間）が切れた行は、上限の期限（24時間）で消える。
-//     上限の期限だけで選ぶのは、expiresAt の索引で選ぶ行の範囲だけを読むため。
+//   - どの表を消すかは表の持ち主（internal/write/account・authguard・notification）が決め、それぞれの
+//     DeleteExpired を順に呼ぶ（JUK-154）。表ごとに別々に消してよく、まとめて確定させる必要は無い。
+//     消し方（主キーで選んで主キーで消す）は internal/database の DeleteExpired。
 package main
 
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"time"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
 const (
@@ -28,85 +30,24 @@ const (
 	expiredCleanupBatch = 500
 )
 
-// expiringTable は expiresAt（索引あり）を過ぎたら要らなくなる表。
-type expiringTable struct {
-	name      string
-	key       string // 主キーの列
-	binaryKey bool   // 主キーが BINARY（トークンのハッシュ）。文字列の列に []byte を渡すと索引が効かないので分ける
+// expiredCleanups は期限の切れた行を消す、持ち主ごとの操作。
+var expiredCleanups = []func(ctx context.Context, db *sql.DB, now time.Time, batch int) (map[string]int64, error){
+	account.DeleteExpired,
+	authguard.DeleteExpired,
+	notification.DeleteExpired,
 }
 
-// expiredTables は expiresAt を持つ表のすべて。
-// 2段階認証の途中（AuthMfaChallenge）と Google / GitHub ログインの途中（AuthOAuthState）は、
-// 次のログインのたびにも消しているが、ログインが無い間は残るので一緒に消す。
-var expiredTables = []expiringTable{
-	{name: "AuthSession", key: "id"},
-	{name: "AuthToken", key: "tokenHash", binaryKey: true},
-	{name: "AuthMfaChallenge", key: "tokenHash", binaryKey: true},
-	{name: "AuthOAuthState", key: "stateHash", binaryKey: true},
-	{name: "LineLinkNonce", key: "nonce"},
-	{name: "LineOAuthAttempt", key: "state"},
-}
-
-// deleteExpired は expiresAt が now 以前の行を、batch 行ずつ消す。表ごとに消した行数を返す。
+// deleteExpired は持ち主ごとの操作を順に呼び、表ごとに消した行数をまとめて返す。
 func deleteExpired(ctx context.Context, db *sql.DB, now time.Time, batch int) (map[string]int64, error) {
-	removed := make(map[string]int64, len(expiredTables))
-	for _, table := range expiredTables {
-		for {
-			keys, err := expiredKeys(ctx, db, table, now, batch)
-			if err != nil {
-				return removed, fmt.Errorf("select expired %s: %w", table.name, err)
-			}
-			if len(keys) == 0 {
-				break
-			}
-			// 条件は主キーだけにする。expiresAt も条件に入れると、小さい表では MySQL が expiresAt の索引を選び、
-			// 範囲でロックしてしまう（手元の EXPLAIN で確かめた）。expiresAt を後から延ばすコードは無いので、
-			// 選んだ行は消すまでのあいだも期限切れのまま。
-			// #nosec G202 -- 表名と列名は expiredTables に書いた固定の名前、ほかは件数ぶん並べた ? だけ。値は keys で渡す
-			res, err := db.ExecContext(ctx,
-				"DELETE FROM `"+table.name+"` WHERE `"+table.key+"` IN ("+database.Placeholders(len(keys), "?")+")", keys...)
-			if err != nil {
-				return removed, fmt.Errorf("delete expired %s: %w", table.name, err)
-			}
-			n, err := res.RowsAffected()
-			if err != nil {
-				return removed, fmt.Errorf("delete expired %s: %w", table.name, err)
-			}
-			removed[table.name] += n
-			if len(keys) < batch {
-				break
-			}
+	removed := map[string]int64{}
+	for _, cleanup := range expiredCleanups {
+		got, err := cleanup(ctx, db, now, batch)
+		maps.Copy(removed, got)
+		if err != nil {
+			return removed, err
 		}
 	}
 	return removed, nil
-}
-
-// expiredKeys は期限の切れた行の主キーを batch 個まで返す（ロックしない読み取り）。
-func expiredKeys(ctx context.Context, db *sql.DB, table expiringTable, now time.Time, batch int) ([]any, error) {
-	// #nosec G202 -- 表名と列名は expiredTables に書いた固定の名前だけ。値は ? で渡す
-	rows, err := db.QueryContext(ctx,
-		"SELECT `"+table.key+"` FROM `"+table.name+"` WHERE expiresAt <= ? LIMIT ?", now, batch)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var keys []any
-	for rows.Next() {
-		if table.binaryKey {
-			var key []byte
-			if err := rows.Scan(&key); err != nil {
-				return nil, err
-			}
-			keys = append(keys, key)
-		} else {
-			var key string
-			if err := rows.Scan(&key); err != nil {
-				return nil, err
-			}
-			keys = append(keys, key)
-		}
-	}
-	return keys, rows.Err()
 }
 
 // runExpiredCleanup は起動したときと、その後1時間ごとに期限の切れた行を消す。ctx が取り消されたら戻る。
@@ -120,9 +61,9 @@ func runExpiredCleanup(ctx context.Context, db *sql.DB, now func() time.Time) {
 		case err != nil && ctx.Err() == nil:
 			slog.Error("[expired-cleanup] Failed to delete expired rows.", "err", err.Error())
 		case err == nil:
-			attrs := make([]any, 0, len(expiredTables)*2)
-			for _, table := range expiredTables {
-				attrs = append(attrs, table.name, removed[table.name])
+			attrs := make([]any, 0, len(removed)*2)
+			for _, table := range slices.Sorted(maps.Keys(removed)) {
+				attrs = append(attrs, table, removed[table])
 			}
 			slog.Info("[expired-cleanup] Deleted expired rows.", attrs...)
 		}
