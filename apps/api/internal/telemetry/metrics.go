@@ -17,7 +17,7 @@ type Metrics struct {
 	registry *prometheus.Registry
 	Requests *prometheus.CounterVec
 	duration *prometheus.HistogramVec
-	// emailSends はアプリが送ろうとした認証のメールの数（06 H1。auth_email.go）。送信量の急増と、上限で止めたことを
+	// emailSends はアプリが送ろうとした認証のメールの数（06 H1。internal/feature/auth/email.go）。送信量の急増と、上限で止めたことを
 	// アラートで知らせる（terraform/grafana/alerting.tf）。Node から移したので名前とラベルは同じ。
 	EmailSends *prometheus.CounterVec
 	// resendQuotaUsed は Resend の送信枠のうち使った数（06 E1）。送らないあいだは古い値が残るので、

@@ -11,7 +11,7 @@ import (
 )
 
 // 登録・パスワード・トークン・2段階認証の途中の状態の操作を、本物の MySQL で確かめる。
-// 入口からの流れ（登録・確認・再設定・2段階認証）は package main の auth_db_test.go にある。
+// 入口からの流れ（登録・確認・再設定・2段階認証）は internal/feature/auth の auth_db_test.go にある。
 func TestCredentialDB(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 10, 6, 1, 2, 3, 4_000_000, time.UTC)

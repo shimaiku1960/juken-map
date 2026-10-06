@@ -9,7 +9,7 @@ import { notifyDemoReadOnly } from "@/web/lib/demo-client";
 import { useHasPassword } from "@/web/hooks/useTwoFactor";
 
 // プロフィールの「退会」（06 G3、JUK-123）。取り消せないので、最初はボタンだけを出し、押したら
-// 本人の確認の欄を開く。確認の中身は API（apps/api の auth_delete_account.go）と同じで、
+// 本人の確認の欄を開く。確認の中身は API（apps/api/internal/feature/auth/delete_account.go）と同じで、
 // パスワードがあればパスワード、無ければメールアドレスの打ち込み、2段階認証が有効ならそのコードも。
 
 type Props = {

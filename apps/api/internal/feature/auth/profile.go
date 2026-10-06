@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -58,12 +58,17 @@ func (st *userStore) updateProfile(ctx context.Context, userID string, in apisch
 	return u, nil
 }
 
-type profileHandlers struct {
+type ProfileHandlers struct {
 	store *userStore
 }
 
-// update は PUT /api/profile。
-func (h *profileHandlers) update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// NewProfileHandlers はプロフィールの入口を組み立てる。
+func NewProfileHandlers(db *sql.DB) *ProfileHandlers {
+	return &ProfileHandlers{store: &userStore{db: db}}
+}
+
+// Update は PUT /api/profile。
+func (h *ProfileHandlers) Update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return

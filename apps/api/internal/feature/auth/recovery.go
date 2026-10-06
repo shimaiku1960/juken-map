@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 // verifyEmail は POST /api/auth/verify-email。メールのリンクは確認の画面（/verify-email/confirm）を開くだけで、
 // トークンを使うのはその画面のボタンからのこの POST（E2）。メールのセキュリティ製品やプレビューがリンクを
 // 先に開いても、トークンは使われない。確認できてもログインはさせない（ログインの画面へ案内する）。
-func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+func (h *Handlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Token string `json:"token"`
 	}
@@ -52,7 +52,7 @@ func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *ht
 
 // resendVerification は POST /api/auth/verify-email/resend。
 // 応答は、宛先があってもなくても、確認済みでも同じ。調べて送るのは応答のあと（10 H2）。
-func (h *authHandlers) resendVerification(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+func (h *Handlers) resendVerification(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Email       string `json:"email"`
 		CallbackURL string `json:"callbackURL"`
@@ -74,7 +74,7 @@ func (h *authHandlers) resendVerification(w http.ResponseWriter, r *http.Request
 
 // forgotPassword は POST /api/auth/password/forgot。応答は宛先の有無で変えず、調べて送るのは応答のあと（H2）。
 // パスワードを持たない利用者（Google・GitHub だけ）にも送る。パスワードを作る道がこれだけなので（A1 の回復）。
-func (h *authHandlers) forgotPassword(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+func (h *Handlers) forgotPassword(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Email string `json:"email"`
 	}
@@ -97,8 +97,8 @@ func (h *authHandlers) forgotPassword(w http.ResponseWriter, r *http.Request, _ 
 	writeOK(w)
 }
 
-// later は応答を返したあとに f を動かす（メールの async と同じ仕組み）。失敗はログにだけ残す。
-func (h *authHandlers) later(r *http.Request, name string, f func(ctx context.Context) error) {
+// later は応答を返したあとに f を動かす（メールの Async と同じ仕組み）。失敗はログにだけ残す。
+func (h *Handlers) later(r *http.Request, name string, f func(ctx context.Context) error) {
 	reqID := telemetry.RequestIDFrom(r.Context())
 	h.mailer.async(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), authEmailTimeout)
@@ -117,7 +117,7 @@ func (h *authHandlers) later(r *http.Request, name string, f func(ctx context.Co
 //   - 2段階認証は外さない
 //
 // メールのリンクを受け取れたことは、そのアドレスを持っていることの確認になるので、未確認なら確認済みにする。
-func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+func (h *Handlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Token    string `json:"token"`
 		Password string `json:"password"`
@@ -176,7 +176,7 @@ func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *
 
 // changePassword は POST /api/auth/password/change。今のパスワードを入れ直してもらい（06 B6・10 E4）、
 // ほかの端末のセッションをすべて消して、本人へ知らせる。今の端末はログインしたまま。
-func (h *authHandlers) changePassword(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) changePassword(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		CurrentPassword string `json:"currentPassword"`
 		NewPassword     string `json:"newPassword"`
@@ -209,7 +209,7 @@ func (h *authHandlers) changePassword(w http.ResponseWriter, r *http.Request, s 
 
 // requireUser は、ログインが要る認証の入口（パスワードの変更・2段階認証の設定）で、未ログインは 401、
 // 停止中とデモアカウントは 403 にする。止めたら false。
-func (h *authHandlers) requireUser(w http.ResponseWriter, r *http.Request, s *httpx.Session) bool {
+func (h *Handlers) requireUser(w http.ResponseWriter, r *http.Request, s *httpx.Session) bool {
 	switch {
 	case s == nil:
 		httpx.WriteError(w, http.StatusUnauthorized, "Unauthorized")
@@ -225,7 +225,7 @@ func (h *authHandlers) requireUser(w http.ResponseWriter, r *http.Request, s *ht
 
 // reauthenticate は重要な操作の直前に、今のパスワードを入れ直してもらう（10 E4）。
 // アカウント単位で回数を数える（H1）。合わなければ応答を返して false。
-func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s *httpx.Session, password string) (*authUser, bool) {
+func (h *Handlers) reauthenticate(w http.ResponseWriter, r *http.Request, s *httpx.Session, password string) (*authUser, bool) {
 	ctx := r.Context()
 	ok, retry, err := h.throttle.hit(ctx, authguard.ReauthAccount, s.UserID)
 	if err != nil {

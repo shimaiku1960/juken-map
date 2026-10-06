@@ -43,7 +43,7 @@ const DemoEmail = "demo@juken-map.com"
 // 管理者だが2段階認証を通していないときの 403 の印。Node の src/shared/admin.ts と同じ値。
 const TwoFactorRequired = "TWO_FACTOR_REQUIRED"
 
-// Session はログイン中の利用者。auth_session.go が Cookie のトークンで DB（AuthSession）から読む。
+// Session はログイン中の利用者。internal/feature/auth/session.go が Cookie のトークンで DB（AuthSession）から読む。
 type Session struct {
 	// ID はセッションの番号（トークンではない）。ログアウトや「ほかの端末を消す」で、このセッションを指す。
 	ID     string

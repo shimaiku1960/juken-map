@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-// ログインの API（/api/auth/*、apps/api の auth_handlers.go）を呼ぶ唯一の入口（JUK-115）。
+// ログインの API（/api/auth/*、apps/api/internal/feature/auth/handlers.go）を呼ぶ唯一の入口（JUK-115）。
 // Better Auth のクライアントを置き換えた。呼び出し側が分岐しやすいよう、どの関数も
 // { data, error } を返し、例外は投げない（通信そのものの失敗も error にする）。
 //

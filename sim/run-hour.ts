@@ -96,7 +96,7 @@ async function main() {
     // 手元で API に直接送るときも SIM_ORIGIN は付けない（sim/README.md）
     origin: env("SIM_ORIGIN", baseUrl).replace(/\/$/, ""),
     runId,
-    // ログインの IP 単位の制限は 10 分 30 回（apps/api の auth_throttle.go）。同じ IP から出るので
+    // ログインの IP 単位の制限は 10 分 30 回（apps/api/internal/feature/auth/throttle.go）。同じ IP から出るので
     // 全員の合計に掛かる。20 秒に1回なら超えない（セッションは30日もつので、ログインし直しは少ない）。
     authIntervalMs: Number(env("AUTH_INTERVAL_MS", isLocal ? "0" : "20000")),
     requestIntervalMs: Number(env("REQUEST_INTERVAL_MS", isLocal ? "0" : "200")),

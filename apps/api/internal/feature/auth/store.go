@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
-// authStore はログイン（/api/auth/*）の SQL をまとめる（JUK-134）。入口（auth_handlers.go・auth_mfa.go・
-// auth_oauth.go・auth_recovery.go・auth_delete_account.go）は、リクエストを読み、ここを呼び、応答を書く。
+// authStore はログイン（/api/auth/*）の SQL をまとめる（JUK-134）。入口（handlers.go・mfa.go・
+// oauth.go・recovery.go・delete_account.go）は、リクエストを読み、ここを呼び、応答を書く。
 // セッション・回数制限・メールの送信記録は、それぞれ sessionStore・throttle・authMailer が持つ。
 //
 // 1回だけ使えるもの（トークン・予備コード・2段階認証の途中の状態・TOTP のステップ）は、条件つきの DELETE か

@@ -24,6 +24,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/admin"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/notifications"
@@ -86,34 +87,34 @@ func run() error {
 	}
 	defer db.Close()
 
-	hashConcurrency, err := envInt("AUTH_HASH_CONCURRENCY", defaultHashConcurrency)
+	hashConcurrency, err := envInt("AUTH_HASH_CONCURRENCY", auth.DefaultHashConcurrency)
 	if err != nil {
 		return err
 	}
-	// TOTP の秘密を暗号化する鍵（auth_totp.go）。AUTH_TOTP_KEYS が無ければ BETTER_AUTH_SECRET から導く。
-	totpKeys, err := newTOTPKeyring(os.Getenv("AUTH_TOTP_KEYS"), secret)
+	// TOTP の秘密を暗号化する鍵（internal/feature/auth/totp.go）。AUTH_TOTP_KEYS が無ければ BETTER_AUTH_SECRET から導く。
+	totpKeys, err := auth.NewTOTPKeyring(os.Getenv("AUTH_TOTP_KEYS"), secret)
 	if err != nil {
 		return err
 	}
-	m := newMetrics()
+	m := auth.NewMetrics()
 	webOrigin := envOr("WEB_ORIGIN", site.URL)
-	authHandlers := newAuthHandlers(db, authConfig{
-		webOrigin:       webOrigin,
-		totpKeys:        totpKeys,
-		hashConcurrency: hashConcurrency,
-		metrics:         m,
-		adminTo:         os.Getenv("ADMIN_NOTIFICATION_EMAIL"),
-		sender: &resendSender{
-			client: telemetry.NewOutboundClient(tp),
-			base:   envOr("RESEND_BASE_URL", "https://api.resend.com"),
-			key:    os.Getenv("RESEND_API_KEY"),
+	authHandlers := auth.New(db, auth.Config{
+		WebOrigin:       webOrigin,
+		TOTPKeys:        totpKeys,
+		HashConcurrency: hashConcurrency,
+		Metrics:         m,
+		AdminTo:         os.Getenv("ADMIN_NOTIFICATION_EMAIL"),
+		Sender: &auth.ResendSender{
+			Client: telemetry.NewOutboundClient(tp),
+			Base:   envOr("RESEND_BASE_URL", "https://api.resend.com"),
+			Key:    os.Getenv("RESEND_API_KEY"),
 		},
-		oauth: newOAuthProviders(webOrigin, defaultOAuthEndpoints,
+		OAuth: auth.NewOAuthProviders(webOrigin, auth.DefaultOAuthEndpoints,
 			os.Getenv("AUTH_GOOGLE_ID"), os.Getenv("AUTH_GOOGLE_SECRET"),
 			os.Getenv("AUTH_GITHUB_ID"), os.Getenv("AUTH_GITHUB_SECRET")),
 	})
-	rt := httpx.NewRouter((&sessionAuth{store: authHandlers.sessions}).load)
-	registerAuthRoutes(rt, authHandlers)
+	rt := httpx.NewRouter(authHandlers.LoadSession)
+	auth.RegisterRoutes(rt, authHandlers)
 	registerBlogRoutes(rt, blogConfig{
 		serviceDomain: os.Getenv("MICROCMS_SERVICE_DOMAIN"),
 		apiKey:        os.Getenv("MICROCMS_API_KEY"),
@@ -224,27 +225,6 @@ func run() error {
 	return errors.Join(errs...)
 }
 
-// registerAuthRoutes はログインの入口（auth_handlers.go の一覧）を登録する。本番では /api/auth/ で始まるものを
-// すべて Go へ送る（infra/nginx/juken-map-go-routes.conf）。
-func registerAuthRoutes(rt *httpx.Router, h *authHandlers) {
-	rt.Auth("GET /api/auth/session", h.session)
-	rt.Auth("POST /api/auth/sign-up", h.signUp)
-	rt.Auth("POST /api/auth/sign-in", h.signIn)
-	rt.Auth("POST /api/auth/sign-out", h.signOut)
-	rt.Auth("POST /api/auth/verify-email", h.verifyEmail)
-	rt.Auth("POST /api/auth/verify-email/resend", h.resendVerification)
-	rt.Auth("POST /api/auth/password/forgot", h.forgotPassword)
-	rt.Auth("POST /api/auth/password/reset", h.resetPassword)
-	rt.Auth("POST /api/auth/password/change", h.changePassword)
-	rt.Auth("GET /api/auth/accounts", h.accounts)
-	rt.Auth("POST /api/auth/delete-account", h.deleteAccount)
-	rt.Auth("POST /api/auth/mfa/setup", h.mfaSetup)
-	rt.Auth("POST /api/auth/mfa/confirm", h.mfaConfirm)
-	rt.Auth("POST /api/auth/mfa/verify", h.mfaVerify)
-	rt.Auth("POST /api/auth/oauth/{provider}", h.oauthStart)
-	rt.Auth("GET /api/auth/callback/{provider}", h.oauthCallback)
-}
-
 // registerBlogRoutes はブログの記事の中継（blog.go）を登録する。
 func registerBlogRoutes(rt *httpx.Router, c blogConfig) {
 	blog := newBlogHandlers(c)
@@ -291,8 +271,8 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 	rt.User("GET /api/notification-preferences", prefs.Get)
 	rt.User("PUT /api/notification-preferences", prefs.Save)
 
-	profile := &profileHandlers{store: &userStore{db: db}}
-	rt.User("PUT /api/profile", profile.update)
+	profile := auth.NewProfileHandlers(db)
+	rt.User("PUT /api/profile", profile.Update)
 
 	universityStore := newUniversityStore(db)
 	universities := &universityHandlers{store: universityStore}

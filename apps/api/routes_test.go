@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
@@ -14,9 +15,9 @@ import (
 func TestRegisteredRoutesAreRateLimited(t *testing.T) {
 	// 本番と同じルートの一覧で、ログインして呼ぶ入口（user・admin）がすべて回数制限を通ることを確かめる。
 	// 札を先に使い切っておき、どのルートもハンドラまで来ずに 429 になるかを見る。
-	// ログインの入口（auth）は auth_throttle.go が IP とアカウントで別に数えるので対象外。
+	// ログインの入口（auth）は internal/feature/auth/throttle.go が IP とアカウントで別に数えるので対象外。
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
+	auth.RegisterRoutes(rt, auth.New(nil, auth.Config{}))
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, microcmsWebhookConfig{})
 	rt.UseUp(httpxtest.Sessions["alice"].UserID, httpxtest.Sessions["admin"].UserID)
 

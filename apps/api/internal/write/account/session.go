@@ -11,7 +11,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
-// セッション（認証基準 10 の C1〜C5）の行。トークンを作る・期限を決める・Cookie に入れるのは入口（auth_session.go）。
+// セッション（認証基準 10 の C1〜C5）の行。トークンを作る・期限を決める・Cookie に入れるのは入口（internal/feature/auth/session.go）。
 
 // NewSession は作るセッション。TokenHash はトークンの SHA-256（トークンそのものは DB に残さない）。
 type NewSession struct {

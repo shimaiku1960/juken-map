@@ -1,7 +1,7 @@
 //go:build dbtest
 
 // 退会（06 G3、JUK-123）を本物の MySQL に流すテスト。
-package main
+package auth
 
 import (
 	"context"
@@ -135,7 +135,7 @@ func TestAuthDBDeleteLeavesNoRows(t *testing.T) {
 
 // fillEveryUserTable は、利用者を指す表すべてに id の行を作る。作ったあと、外部キーで user を指す表に
 // 1行も無いものがあれば落とす。
-func fillEveryUserTable(t *testing.T, fx dbFixture, id, email string, facultyID int64) {
+func fillEveryUserTable(t *testing.T, fx dbtest.Fixture, id, email string, facultyID int64) {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	later := now.Add(time.Hour)
@@ -167,7 +167,7 @@ func fillEveryUserTable(t *testing.T, fx dbFixture, id, email string, facultyID 
 type columnRef struct{ table, column string }
 
 // userReferences は外部キーで user を指す列の一覧。
-func userReferences(t *testing.T, fx dbFixture) []columnRef {
+func userReferences(t *testing.T, fx dbtest.Fixture) []columnRef {
 	t.Helper()
 	rows, err := fx.DB.Query(`SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
 		WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'user' ORDER BY 1, 2`)
@@ -191,7 +191,7 @@ func userReferences(t *testing.T, fx dbFixture) []columnRef {
 
 // expectNoTrace は、すべての表の文字列の列に id とメールアドレスが含まれていないことを確かめる。
 // 外部キーの無い表（回数制限・メールの記録など）も見る。そうした表は宛先や利用者を SHA-256 にして持つので当たらない。
-func expectNoTrace(t *testing.T, fx dbFixture, id, email string) {
+func expectNoTrace(t *testing.T, fx dbtest.Fixture, id, email string) {
 	t.Helper()
 	rows, err := fx.DB.Query(`SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = DATABASE() AND DATA_TYPE IN ('char', 'varchar', 'text', 'mediumtext', 'longtext') ORDER BY 1, 2`)

@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -167,4 +167,9 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return strings.ToValidUTF8(s[:n], "")
+}
+
+// LoadSession はルーター（httpx.NewRouter）に渡すセッションの読み方。
+func (h *Handlers) LoadSession(r *http.Request) (*httpx.Session, error) {
+	return (&sessionAuth{store: h.sessions}).load(r)
 }

@@ -7,7 +7,7 @@
 //     毎回ログインさせると、測っているのがパスワードのハッシュ（Argon2id）の重さになる。
 //
 // セッションの Cookie は 256 ビットの乱数のトークンで、DB にはその SHA-256 を置く
-// （apps/api の auth_session.go・auth_token.go と同じ作り方）。
+// （apps/api/internal/feature/auth の session.go・token.go と同じ作り方）。
 import { createHash, randomBytes } from "node:crypto";
 import { SEED_EMAIL_DOMAIN } from "../src/shared/synthetic";
 import { execute, runSeed, select } from "./seed-helpers";

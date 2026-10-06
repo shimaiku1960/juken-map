@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"bytes"
@@ -51,8 +51,8 @@ var emailKinds = []emailKind{
 	emailMFAEnabled, emailAccountLinked, emailAccountDeleted, emailAdminNewUser,
 }
 
-// newMetrics はメールの種類ごとの系列を 0 で用意した計測（internal/telemetry）。
-func newMetrics() *telemetry.Metrics {
+// NewMetrics はメールの種類ごとの系列を 0 で用意した計測（internal/telemetry）。
+func NewMetrics() *telemetry.Metrics {
 	kinds := make([]string, len(emailKinds))
 	for i, kind := range emailKinds {
 		kinds[i] = string(kind)
@@ -77,7 +77,7 @@ type authMailer struct {
 	metrics *telemetry.Metrics
 	adminTo string
 	now     func() time.Time
-	// async は送る処理を動かす。本番は goroutine、テストはその場で動かして結果を確かめる。
+	// Async は送る処理を動かす。本番は goroutine、テストはその場で動かして結果を確かめる。
 	async func(func())
 }
 
@@ -219,15 +219,15 @@ func providerLabel(provider string) string {
 
 // ---- Resend ----
 
-// resendSender は Resend の API を直接呼ぶ（SDK は使わない。internal/feature/notifications の HTTPMessenger と同じ）。
-type resendSender struct {
-	client *http.Client
-	base   string
-	key    string
+// ResendSender は Resend の API を直接呼ぶ（SDK は使わない。internal/feature/notifications の HTTPMessenger と同じ）。
+type ResendSender struct {
+	Client *http.Client
+	Base   string
+	Key    string
 }
 
-func (s *resendSender) send(ctx context.Context, to, subject, body string) (http.Header, error) {
-	if s.key == "" {
+func (s *ResendSender) send(ctx context.Context, to, subject, body string) (http.Header, error) {
+	if s.Key == "" {
 		return nil, errors.New("RESEND_API_KEY is not configured")
 	}
 	raw, err := json.Marshal(map[string]any{"from": authEmailFrom, "to": to, "subject": subject, "html": body})
@@ -236,13 +236,13 @@ func (s *resendSender) send(ctx context.Context, to, subject, body string) (http
 	}
 	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.base+"/emails", bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.Base+"/emails", bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+s.key)
+	req.Header.Set("Authorization", "Bearer "+s.Key)
 	req.Header.Set("Content-Type", "application/json")
-	res, err := s.client.Do(req)
+	res, err := s.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}

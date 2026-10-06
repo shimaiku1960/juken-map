@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"bufio"
@@ -42,10 +42,10 @@ var currentArgon2 = argon2Params{memoryKiB: 19 * 1024, time: 2, threads: 1}
 const (
 	argon2KeyLen  = 32
 	argon2SaltLen = 16
-	// defaultHashConcurrency は同時にハッシュを計算する数の既定値。計算は CPU を使い切るので、
+	// DefaultHashConcurrency は同時にハッシュを計算する数の既定値。計算は CPU を使い切るので、
 	// vCPU の数（本番は2）より多く並べても速くならず、メモリ（1つ 19MiB）が増えるだけ。
 	// 待っているリクエストは、リクエストの上限時間（main.go の requestTimeout）で打ち切られる。
-	defaultHashConcurrency = 2
+	DefaultHashConcurrency = 2
 	// passwordMinRunes はパスワードの最低の長さ（A2）。パスワードだけでログインできるので 15 文字。
 	// 2段階認証を必須にしているのは管理者だけで、一般の利用者はパスワードだけで入れる。
 	passwordMinRunes = 15
@@ -65,7 +65,7 @@ type passwordHasher struct {
 
 func newPasswordHasher(concurrency int) *passwordHasher {
 	if concurrency < 1 {
-		concurrency = defaultHashConcurrency
+		concurrency = DefaultHashConcurrency
 	}
 	h := &passwordHasher{params: currentArgon2, slots: make(chan struct{}, concurrency)}
 	h.dummy = encodeArgon2(currentArgon2, randomBytes(argon2SaltLen), randomBytes(argon2KeyLen))
@@ -235,7 +235,7 @@ func checkNewPassword(password, email string) (message string, ok bool) {
 	return "", true
 }
 
-//go:embed auth_common_passwords.txt
+//go:embed common_passwords.txt
 var commonPasswordsText string
 
 // commonPasswords は一覧を初めて使うときに1回だけ読み込む（使わない起動ではメモリを取らない）。

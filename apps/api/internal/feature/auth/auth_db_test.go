@@ -5,7 +5,7 @@
 //
 // 時刻はテストの時計（authEnv.clock）で進める。メールは送らずに受け箱（fakeMailbox）へ入れる。
 // 利用者・回数制限・メールの記録は、テストごとに作った値だけを最後に消す。
-package main
+package auth
 
 import (
 	"bytes"
@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
@@ -108,8 +107,8 @@ func (s sentMail) token(t *testing.T) string {
 type authEnv struct {
 	t      *testing.T
 	db     *sql.DB
-	fx     dbFixture
-	h      *authHandlers
+	fx     dbtest.Fixture
+	h      *Handlers
 	rt     *httpx.Router
 	clock  *testClock
 	mails  *fakeMailbox
@@ -119,23 +118,28 @@ type authEnv struct {
 
 func newAuthEnv(t *testing.T) *authEnv {
 	db := dbtest.Open(t)
-	keys, err := newTOTPKeyring("", "test-secret")
+	keys, err := NewTOTPKeyring("", "test-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
 	e := &authEnv{
-		t: t, db: db, fx: newDBFixture(t, db),
+		t: t, db: db, fx: dbtest.Fixture{T: t, DB: db},
 		clock: &testClock{now: time.Now().UTC().Truncate(time.Millisecond)},
 		mails: &fakeMailbox{},
 	}
-	e.h = newAuthHandlers(db, authConfig{
-		webOrigin: "https://juken-map.com", totpKeys: keys, hashConcurrency: 2,
-		adminTo: e.newEmail(), sender: e.mails, now: e.clock.Now,
-		async: func(f func()) { f() },
+	e.h = New(db, Config{
+		WebOrigin: "https://juken-map.com", TOTPKeys: keys, HashConcurrency: 2,
+		AdminTo: e.newEmail(), Sender: e.mails, Now: e.clock.Now,
+		Async: func(f func()) { f() },
 	})
-	e.rt = httpx.NewRouter((&sessionAuth{store: e.h.sessions}).load)
-	registerAuthRoutes(e.rt, e.h)
-	registerRoutes(e.rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
+	e.rt = httpx.NewRouter(e.h.LoadSession)
+	RegisterRoutes(e.rt, e.h)
+	// ログイン以外の入口は、セッションで通るか断られるかだけを見る。本番と同じ入口の種類（利用者・管理者）で、
+	// 200 を返すだけのものを置く（本番のルートが入口の種類を合っているかは main_test.go の TestRegisteredRoutes が見る）。
+	ok := func(w http.ResponseWriter, _ *http.Request, _ *httpx.Session) { w.WriteHeader(http.StatusOK) }
+	e.rt.User("GET /api/dashboard", ok)
+	e.rt.User("POST /api/study-logs", ok)
+	e.rt.Admin("GET /api/admin/overview", ok)
 	t.Cleanup(e.cleanup)
 	return e
 }
@@ -704,7 +708,7 @@ func TestAuthDBMFA(t *testing.T) {
 			expectStatus(t, p.do("POST", "/api/auth/mfa/verify", map[string]string{"code": "000000"}), 401, "INVALID_CODE")
 		}
 		expectStatus(t, p.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 401, "MFA_CHALLENGE_EXPIRED")
-		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.MFAAccount, id))
+		(dbtest.Fixture{T: t, DB: e.db}).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.MFAAccount, id))
 
 		p.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 		code := totpCode(secret, totpStep(e.clock.Now()))
@@ -800,7 +804,7 @@ func (g *fakeGoogle) start(b *browser, callbackURL string) string {
 func TestAuthDBGoogleLogin(t *testing.T) {
 	e := newAuthEnv(t)
 	g := newFakeGoogle(t)
-	e.h.oauth = newOAuthProviders("https://juken-map.com", oauthEndpoints{googleAuth: g.server.URL + "/auth", googleToken: g.server.URL + "/token"},
+	e.h.oauth = NewOAuthProviders("https://juken-map.com", oauthEndpoints{googleAuth: g.server.URL + "/auth", googleToken: g.server.URL + "/token"},
 		"google-client", "google-secret", "", "")
 	callback := func(b *browser, state, code string) *httptest.ResponseRecorder {
 		return b.do("GET", "/api/auth/callback/google?code="+code+"&state="+url.QueryEscape(state), nil)
@@ -943,7 +947,7 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 			expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": fmt.Sprint("wrong passphrase ", i), "newPassword": "a brand new passphrase"}), 400, "INVALID_PASSWORD")
 		}
 		expectStatus(t, b.do("POST", "/api/auth/password/change", map[string]string{"currentPassword": authTestPassword, "newPassword": "a brand new passphrase"}), 429, "TOO_MANY_REQUESTS")
-		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.ReauthAccount, e.userID(email)))
+		(dbtest.Fixture{T: t, DB: e.db}).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.ReauthAccount, e.userID(email)))
 	})
 
 	t.Run("2段階認証のコードは、途中の状態を作り直してもアカウントごとに15分10回まで", func(t *testing.T) {
@@ -960,7 +964,7 @@ func TestAuthDBThrottledEntries(t *testing.T) {
 		b.do("POST", "/api/auth/sign-in", map[string]string{"email": email, "password": authTestPassword})
 		e.clock.Advance(totpPeriod)
 		expectStatus(t, b.do("POST", "/api/auth/mfa/verify", map[string]string{"code": totpCode(secret, totpStep(e.clock.Now()))}), 429, "TOO_MANY_MFA_ATTEMPTS")
-		newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.MFAAccount, id))
+		(dbtest.Fixture{T: t, DB: e.db}).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.MFAAccount, id))
 	})
 }
 
@@ -1035,7 +1039,7 @@ func TestAuthDBTOTPKeyRotation(t *testing.T) {
 	id := e.signUpVerified(email, authTestPassword)
 	secret, _ := e.enableMFA(e.signedIn(email, authTestPassword))
 
-	rotated, err := newTOTPKeyring("v1:"+base64.StdEncoding.EncodeToString(randomBytes(32)), "test-secret")
+	rotated, err := NewTOTPKeyring("v1:"+base64.StdEncoding.EncodeToString(randomBytes(32)), "test-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1069,7 +1073,7 @@ func TestAuthDBH2SignInTiming(t *testing.T) {
 			start := time.Now()
 			b.do("POST", "/api/auth/sign-in", map[string]string{"email": target, "password": fmt.Sprint("wrong passphrase ", i)})
 			out = append(out, time.Since(start))
-			newDBFixture(t, e.db).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.SignInAccount, target))
+			(dbtest.Fixture{T: t, DB: e.db}).Exec("DELETE FROM AuthThrottle WHERE bucket = ?", authguard.Bucket(authguard.SignInAccount, target))
 		}
 		slices.Sort(out)
 		return out
@@ -1088,7 +1092,7 @@ func TestAuthDBH2SignInTiming(t *testing.T) {
 			start := time.Now()
 			b.do("POST", "/api/auth/sign-up", map[string]string{"email": target, "password": "another long passphrase"})
 			out = append(out, time.Since(start))
-			newDBFixture(t, e.db).Exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(target))
+			(dbtest.Fixture{T: t, DB: e.db}).Exec("DELETE FROM EmailSend WHERE recipientHash = ?", recipientHash(target))
 		}
 		slices.Sort(out)
 		return out

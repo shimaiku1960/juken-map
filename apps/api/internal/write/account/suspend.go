@@ -26,7 +26,7 @@ type Suspension struct {
 }
 
 // Suspend は利用者を止め、その人のセッションをすべて消す。両方そろって初めて「止まった」と言える
-// （次のログインは auth_handlers.go・auth_mfa.go・auth_oauth.go が bannedAt を見て断る）。認証基準 10 の C5 の
+// （次のログインは internal/feature/auth/handlers.go・internal/feature/auth/mfa.go・internal/feature/auth/oauth.go が bannedAt を見て断る）。認証基準 10 の C5 の
 // 「ある利用者の全端末」にあたる。bannedAt を先に書くので、消している間に新しく入られても、そのログインは断られる。
 //
 // 管理画面（internal/feature/admin/users.go）と運用のコマンド（incident.go）の両方がこれを呼ぶ。audit を渡すと（運用のコマンド）、

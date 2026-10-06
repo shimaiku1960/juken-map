@@ -232,7 +232,7 @@ JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送�
 
 ## 注意
 
-- **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（当時は Better Auth、今は Go の `auth_throttle.go`）は
+- **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（当時は Better Auth、今は Go の `internal/feature/auth/throttle.go`）は
   ログインの回数制限を接続元 IP ごとに数えるが、IP をこのヘッダーからしか読まない。無いと全員が1つの枠で数えられる。
   `$proxy_add_x_forwarded_for`（届いた値に追記）ではなく `$remote_addr` で上書きし、
   利用者が送ってきた値をそのまま信用しないようにしている。変更前の設定は

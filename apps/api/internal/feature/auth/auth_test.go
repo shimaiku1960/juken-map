@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -182,7 +182,7 @@ func TestG1TOTPWindowAndReplay(t *testing.T) {
 }
 
 func TestG1KeyringSealAndRotate(t *testing.T) {
-	old, err := newTOTPKeyring("", "better-auth-secret")
+	old, err := NewTOTPKeyring("", "better-auth-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestG1KeyringSealAndRotate(t *testing.T) {
 		t.Fatal("別の利用者で復号できた")
 	}
 	// 新しい版の鍵を足す（古い版は BETTER_AUTH_SECRET から導いたまま残る）。古い値は読めて、書き直しが要ると分かる。
-	rotated, err := newTOTPKeyring("v1:"+base64.StdEncoding.EncodeToString(randomBytes(32)), "better-auth-secret")
+	rotated, err := NewTOTPKeyring("v1:"+base64.StdEncoding.EncodeToString(randomBytes(32)), "better-auth-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestG1KeyringSealAndRotate(t *testing.T) {
 	if !strings.HasPrefix(resealed, "v1:") || rotated.needsReseal(resealed) {
 		t.Fatalf("resealed = %s", resealed)
 	}
-	if _, err := newTOTPKeyring("v1:short", ""); err == nil {
+	if _, err := NewTOTPKeyring("v1:short", ""); err == nil {
 		t.Fatal("32 バイトでない鍵を受け付けた")
 	}
 }

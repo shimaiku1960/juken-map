@@ -7,7 +7,7 @@ import { Label } from "@/web/components/ui/label";
 import InlineFeedback from "@/web/components/feedback/InlineFeedback";
 
 // ログインでメール＋パスワード（か Google・GitHub）が通ったあと、2段階認証を有効にしている人に認証コードを求める。
-// 途中の状態は5分で切れ、コードは5回まで（apps/api の auth_mfa.go）。切れたら最初からログインし直す。
+// 途中の状態は5分で切れ、コードは5回まで（apps/api/internal/feature/auth/mfa.go）。切れたら最初からログインし直す。
 // 認証アプリの6桁のコードか、スマホを無くしたとき用の予備コード（1回ずつ使い捨て）で通れる。
 // 通るとセッションが作られるので、呼び出し側が行き先へ移る。
 

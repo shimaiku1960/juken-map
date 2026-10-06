@@ -13,6 +13,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
@@ -69,7 +70,7 @@ func newTestServer(m *telemetry.Metrics, maxInFlight int) (http.Handler, *httpx.
 
 func TestAccessLogIsPinoShaped(t *testing.T) {
 	buf := captureLogs(t)
-	h, _ := newTestServer(newMetrics(), 10)
+	h, _ := newTestServer(auth.NewMetrics(), 10)
 
 	res := serve(h, "GET", "/api/mine?token=secret-in-query", "alice")
 
@@ -108,7 +109,7 @@ func TestAccessLogIsPinoShaped(t *testing.T) {
 
 func TestAccessLogMarksSimulation(t *testing.T) {
 	buf := captureLogs(t)
-	h, _ := newTestServer(newMetrics(), 10)
+	h, _ := newTestServer(auth.NewMetrics(), 10)
 
 	serve(h, "GET", "/api/public", "", "X-Sim-Run", "run-1")
 
@@ -132,7 +133,7 @@ func TestRequestID(t *testing.T) {
 
 func TestMetricsUseRouteTemplate(t *testing.T) {
 	captureLogs(t)
-	m := newMetrics()
+	m := auth.NewMetrics()
 	h, _ := newTestServer(m, 10)
 
 	serve(h, "DELETE", "/api/mine/5", "alice")
@@ -158,7 +159,7 @@ func TestMetricsUseRouteTemplate(t *testing.T) {
 
 func TestSecurityHeaders(t *testing.T) {
 	captureLogs(t)
-	h, _ := newTestServer(newMetrics(), 10)
+	h, _ := newTestServer(auth.NewMetrics(), 10)
 
 	// 断った応答にも付くこと。
 	res := serve(h, "GET", "/api/nothing", "")
@@ -177,7 +178,7 @@ func TestSecurityHeaders(t *testing.T) {
 
 func TestNotFoundBody(t *testing.T) {
 	captureLogs(t)
-	h, _ := newTestServer(newMetrics(), 10)
+	h, _ := newTestServer(auth.NewMetrics(), 10)
 
 	res := serve(h, "GET", "/api/nothing", "")
 	body := httpxtest.DecodeJSON(t, res.Body.String())
@@ -196,7 +197,7 @@ func TestRecoverPanic(t *testing.T) {
 	rt.Public("GET /api/boom", func(w http.ResponseWriter, r *http.Request) {
 		panic("SELECT * FROM secret_table")
 	})
-	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 10})
+	h := newServerHandler(rt, auth.NewMetrics(), serverOptions{maxInFlight: 10})
 
 	res := serve(h, "GET", "/api/boom", "")
 
@@ -236,7 +237,7 @@ func TestLimitInFlight(t *testing.T) {
 	rt.Public("GET /assets/app.js", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 1})
+	h := newServerHandler(rt, auth.NewMetrics(), serverOptions{maxInFlight: 1})
 
 	// 1件目を処理中のまま止めておく。
 	done := make(chan *httptest.ResponseRecorder)
@@ -284,7 +285,7 @@ func TestRequestDeadline(t *testing.T) {
 	rt.Public("GET /api/check", func(w http.ResponseWriter, r *http.Request) {
 		deadline, ok = r.Context().Deadline()
 	})
-	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 10})
+	h := newServerHandler(rt, auth.NewMetrics(), serverOptions{maxInFlight: 10})
 
 	serve(h, "GET", "/api/check", "")
 

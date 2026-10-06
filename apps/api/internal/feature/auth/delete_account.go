@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ import (
 // デモアカウントは requireUser が断る。
 
 // deleteAccount は POST /api/auth/delete-account。
-func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
@@ -95,7 +95,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 
 // confirmEmail はパスワードの無い人の確認。打ち込んだメールアドレスが本人のものと一致しなければ断る。
 // 当てずっぽうを繰り返せないよう、再認証と同じ回数制限を通す。
-func (h *authHandlers) confirmEmail(w http.ResponseWriter, r *http.Request, u *authUser, typed string) bool {
+func (h *Handlers) confirmEmail(w http.ResponseWriter, r *http.Request, u *authUser, typed string) bool {
 	ctx := r.Context()
 	ok, retry, err := h.throttle.hit(ctx, authguard.ReauthAccount, u.ID)
 	if err != nil {

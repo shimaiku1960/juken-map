@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
-// 2段階認証の入口（認証基準 10 の G1〜G4）。TOTP の計算と暗号化は auth_totp.go。
+// 2段階認証の入口（認証基準 10 の G1〜G4）。TOTP の計算と暗号化は totp.go。
 //
 // 「この端末では省略する」（信頼済みの端末）は提供しない（G4 の迷ったら）。2段階認証を求めるのは
 // 有効にした人（実質は管理者）だけで、管理者には省略を提供しないため。端末を失ったときは、予備コードか、
@@ -17,7 +17,7 @@ import (
 
 // mfaSetup は POST /api/auth/mfa/setup。今のパスワードを入れ直してもらい（E4）、秘密と予備コードを作る。
 // この時点ではまだ有効にしない。認証アプリのコードを1回確かめてから有効にする（mfaConfirm、G1）。
-func (h *authHandlers) mfaSetup(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) mfaSetup(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		Password string `json:"password"`
 	}
@@ -51,7 +51,7 @@ func (h *authHandlers) mfaSetup(w http.ResponseWriter, r *http.Request, s *httpx
 
 // mfaConfirm は POST /api/auth/mfa/confirm。認証アプリのコードを1回確かめてから有効にし、
 // 2段階認証を通したセッションに作り直す（C4）。本人へ知らせる（E5）。
-func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		Code string `json:"code"`
 	}
@@ -110,7 +110,7 @@ func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *htt
 // mfaVerify は POST /api/auth/mfa/verify。ログインの途中（パスワードか外部ログインは通った状態）で、
 // 認証アプリのコードか予備コードを確かめ、通ったら2段階認証を済ませたセッションを作る（G3・C4）。
 // previous は同じブラウザに残っていた前のセッション（あれば、ログインの完了で消す。C4）。
-func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
+func (h *Handlers) mfaVerify(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
 	var in struct {
 		Code   string `json:"code"`
 		Method string `json:"method"`
@@ -202,7 +202,7 @@ func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previou
 }
 
 // allowMFAAttempt は2段階認証のコードの、アカウント単位の回数制限（H1）。止めたら 429 を返して false。
-func (h *authHandlers) allowMFAAttempt(w http.ResponseWriter, r *http.Request, userID string) bool {
+func (h *Handlers) allowMFAAttempt(w http.ResponseWriter, r *http.Request, userID string) bool {
 	ok, retry, err := h.throttle.hit(r.Context(), authguard.MFAAccount, userID)
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("mfa throttle: %w", err))
@@ -218,7 +218,7 @@ func (h *authHandlers) allowMFAAttempt(w http.ResponseWriter, r *http.Request, u
 
 // useTOTP は認証アプリのコードを確かめ、通ったステップを使用済みにする。同じコード（同じステップ以前）は
 // 二度と通さない。使用済みにするのは条件つきの UPDATE なので、同じコードを同時に2回送っても1回しか通らない。
-func (h *authHandlers) useTOTP(r *http.Request, userID, code string) (bool, error) {
+func (h *Handlers) useTOTP(r *http.Request, userID, code string) (bool, error) {
 	ctx := r.Context()
 	sealed, lastStep, err := h.store.enabledTOTP(ctx, userID)
 	if err != nil || sealed == "" {

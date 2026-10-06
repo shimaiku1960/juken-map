@@ -11,7 +11,7 @@ import (
 // メール＋パスワードでの登録と、メールアドレスの確認。
 
 // CreateUserWithPassword は、まだ確認していない利用者とパスワードを1つのトランザクションで作る。
-// hash はパスワードのハッシュ（ハッシュの作り方は入口の auth_password.go）。
+// hash はパスワードのハッシュ（ハッシュの作り方は入口の internal/feature/auth/password.go）。
 func CreateUserWithPassword(ctx context.Context, db *sql.DB, id, email, hash string, now time.Time) error {
 	return database.InTx(ctx, db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx,

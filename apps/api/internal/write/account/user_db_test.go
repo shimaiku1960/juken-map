@@ -12,7 +12,7 @@ import (
 )
 
 // 利用者の行の操作（外部ログインの連携・削除・権限）を、本物の MySQL で確かめる。入口からの流れは
-// package main の auth_db_test.go・admin_db_test.go・incident_db_test.go にある。
+// internal/feature/auth の auth_db_test.go と、package main の admin_db_test.go・incident_db_test.go にある。
 func TestUserDB(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 10, 6, 1, 2, 3, 4_000_000, time.UTC)

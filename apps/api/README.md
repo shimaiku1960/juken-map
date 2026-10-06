@@ -199,7 +199,7 @@ LINE 連携の SQL（`internal/feature/line/line_db_test.go` の `TestLineStoreD
 - `dbtest` タグのテスト（`*_db_test.go` のうち `//go:build dbtest` のもの）。ふだんの `go test` では動かない
 - DB は `db/` のテストと同じ `juken_map_test`。本番と同じマイグレーションが当たり、本番と同じ DML だけの権限で繋ぐ。
   `pnpm --filter @juken-map/db test-db:prepare`（`db/test-db/`）が用意する（`pnpm test:go-db` は先にこれを呼ぶ）
-- セッションは Cookie「test」の値を利用者 ID として読む（Better Auth の Cookie の確かめは `auth_test.go`）
+- セッションは Cookie「test」の値を利用者 ID として読む（Better Auth の Cookie の確かめは `internal/feature/auth/auth_test.go`）
 - CI は MySQL のある check のジョブで回す（go のジョブには DB が無い）
 - 守りを外すと落ちることは確かめた（参考書の持ち主の確認を外すと A3 が2本、プロフィールの更新で role を書くと A4 が1本落ちる）
 
@@ -242,17 +242,17 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `auth_handlers.go` | 入口の一覧、登録・ログイン・ログアウト・セッションの取得 |
-| `auth_session.go`・`auth_token.go` | セッション（期限・取り消し・Cookie、各ルートでの照会）とトークンの作り方。行の作成・消去は `internal/write/account` |
-| `auth_password.go` | パスワードのハッシュ（Argon2id）と規則（15文字以上・よくあるものの拒否。一覧は `auth_common_passwords.txt`） |
-| `auth_recovery.go` | メールの確認・確認メールの再送・再設定・パスワードの変更 |
-| `auth_mfa.go`・`auth_totp.go` | 2段階認証（TOTP・予備コード・秘密の暗号化） |
-| `auth_oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
-| `auth_throttle.go`・`auth_email.go` | 回数制限と、上限つきのメール送信（数え方と上限は `internal/write/authguard`） |
-| `auth_delete_account.go` | 本人の退会（確かめ直してから、利用者とぶら下がるデータをすべて消す。JUK-123） |
+| `internal/feature/auth/handlers.go` | 入口の一覧、登録・ログイン・ログアウト・セッションの取得 |
+| `internal/feature/auth/session.go`・`internal/feature/auth/token.go` | セッション（期限・取り消し・Cookie、各ルートでの照会）とトークンの作り方。行の作成・消去は `internal/write/account` |
+| `internal/feature/auth/password.go` | パスワードのハッシュ（Argon2id）と規則（15文字以上・よくあるものの拒否。一覧は `internal/feature/auth/common_passwords.txt`） |
+| `internal/feature/auth/recovery.go` | メールの確認・確認メールの再送・再設定・パスワードの変更 |
+| `internal/feature/auth/mfa.go`・`internal/feature/auth/totp.go` | 2段階認証（TOTP・予備コード・秘密の暗号化） |
+| `internal/feature/auth/oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
+| `internal/feature/auth/throttle.go`・`internal/feature/auth/email.go` | 回数制限と、上限つきのメール送信（数え方と上限は `internal/write/authguard`） |
+| `internal/feature/auth/delete_account.go` | 本人の退会（確かめ直してから、利用者とぶら下がるデータをすべて消す。JUK-123） |
 | `expired_cleanup.go` | 期限の切れたセッション・トークン・ログインの途中の値・LINE 連携の途中の値を、起動時と1時間ごとに500行ずつ消す（06 G1、JUK-140）。どの表を消すかは持ち主（`internal/write/account`・`authguard`・`notification` の `expired.go`）が決め、このジョブはそれを順に呼ぶ（JUK-154） |
 
-テストは `auth_unit_test.go`（DB なし）と `auth_db_test.go`・`auth_delete_account_db_test.go`・`expired_cleanup_db_test.go`（本物の MySQL）。
+テストは `internal/feature/auth/auth_test.go`（DB なし）と `internal/feature/auth/auth_db_test.go`・`internal/feature/auth/delete_account_db_test.go`・`expired_cleanup_db_test.go`（本物の MySQL）。
 
 ### 学習記録・志望校・参考書（利用者の画面の API）
 
@@ -264,7 +264,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/feature/goals/` | 志望校の一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除の入口（書き込みは `internal/write/goal`） |
 | `internal/feature/textbooks/` | 参考書の一覧と参考書マスター／参考書の追加（マスターからも）・進み具合の書き換えの入口（書き込みは `internal/write/textbook`） |
 | `universities.go` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 |
-| `profile.go` | プロフィールの更新 |
+| `internal/feature/auth/profile.go` | プロフィールの更新 |
 | `internal/feature/notifications/notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存（保存は `internal/write/notification`） |
 
 ### 管理画面（`/api/admin/*`）

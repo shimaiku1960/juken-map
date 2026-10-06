@@ -10,7 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
-// セッションの操作を、本物の MySQL で確かめる。ログイン・ログアウトの流れは package main の auth_db_test.go、
+// セッションの操作を、本物の MySQL で確かめる。ログイン・ログアウトの流れは internal/feature/auth の auth_db_test.go、
 // 運用のコマンド（revoke・revoke-all・revoke-admins）は incident_db_test.go にある。
 func TestSessionDB(t *testing.T) {
 	ctx := context.Background()

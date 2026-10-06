@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { login } from "./utils";
 
 // ログイン（Go の /api/auth/*、JUK-115）の画面の流れ。API の細かい判定（期限・回数制限・取り消しなど）は
-// apps/api の auth_db_test.go が見る。ここでは、画面とサーバーがつながっていることを確かめる。
+// apps/api/internal/feature/auth/auth_db_test.go が見る。ここでは、画面とサーバーがつながっていることを確かめる。
 // メールは送られないので、メールのリンクに載るトークンは db/e2e-auth.ts で発行する。
 
 const PASSWORD = "e2e passphrase for sign up";
