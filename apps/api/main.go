@@ -32,6 +32,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/spa"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -157,16 +158,17 @@ func run() error {
 
 	// 画面（apps/web のビルド成果物）を配る（JUK-111）。WEB_DIST_DIR が無ければ配らない（開発は Vite が配る）。
 	// GA4 と Faro の設定は画面のバンドルに焼き込まず、ここで HTML に差し込む。
-	site, err := loadSPA(os.Getenv("WEB_DIST_DIR"), pageScripts{
-		gaMeasurementID:  os.Getenv("GA_MEASUREMENT_ID"),
-		faroCollectorURL: os.Getenv("FARO_COLLECTOR_URL"),
+	web, err := spa.Load(os.Getenv("WEB_DIST_DIR"), spa.Scripts{
+		GAMeasurementID:  os.Getenv("GA_MEASUREMENT_ID"),
+		FaroCollectorURL: os.Getenv("FARO_COLLECTOR_URL"),
 	})
 	if err != nil {
 		return err
 	}
-	if site != nil {
-		registerSPA(rt, site)
-		slog.Info("api serving web", "files", len(site.assets), "prerendered", len(site.pages))
+	if web != nil {
+		spa.Register(rt, web)
+		files, prerendered := web.Stats()
+		slog.Info("api serving web", "files", files, "prerendered", prerendered)
 	}
 
 	srv := &http.Server{

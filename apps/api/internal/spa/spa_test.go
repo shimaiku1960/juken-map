@@ -1,4 +1,4 @@
-package main
+package spa
 
 import (
 	"compress/gzip"
@@ -20,6 +20,9 @@ import (
 
 // 画面の配信のテスト（Node の spa.test.ts・seo.test.ts・security-headers.test.ts から移した）。
 // apps/web のビルド成果物（dist）と同じ形を一時ディレクトリに作って読ませる。
+
+// apiCSP は API の応答に付く CSP（internal/app の securityHeaders と同じ）。
+const apiCSP = "default-src 'none'; frame-ancestors 'none'"
 
 const testIndexHTML = `<html><head><title>x</title></head><body><div id="root"></div></body></html>`
 
@@ -60,17 +63,17 @@ func writeTestDist(t *testing.T) string {
 	return root
 }
 
-func newSPATestRouter(t *testing.T, scripts pageScripts) *httpx.Router {
+func newSPATestRouter(t *testing.T, scripts Scripts) *httpx.Router {
 	t.Helper()
-	site, err := loadSPA(writeTestDist(t), scripts)
+	site, err := Load(writeTestDist(t), scripts)
 	if err != nil || site == nil {
-		t.Fatalf("loadSPA: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	rt.Public("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
-	registerSPA(rt, site)
+	Register(rt, site)
 	return rt
 }
 
@@ -80,23 +83,25 @@ func spaGet(rt *httpx.Router, target string, header map[string]string) *httptest
 		req.Header.Set(k, v)
 	}
 	rec := httptest.NewRecorder()
-	// 本番と同じく、外側の securityHeaders（API 向けの狭い CSP）を通す。HTML はこれを上書きする。
-	securityHeaders(rt).ServeHTTP(rec, req)
+	// 本番と同じく、外側（internal/app の securityHeaders）が付ける既定を先に置く。画面はこれを上書きする。
+	rec.Header().Set("Content-Security-Policy", apiCSP)
+	rec.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	rt.ServeHTTP(rec, req)
 	return rec
 }
 
 func TestLoadSPAWithoutDist(t *testing.T) {
 	// WEB_DIST_DIR が無い・index.html が無いときは画面を配らない（開発は Vite が配る）
 	for _, root := range []string{"", t.TempDir()} {
-		site, err := loadSPA(root, pageScripts{})
+		site, err := Load(root, Scripts{})
 		if site != nil || err != nil {
-			t.Fatalf("loadSPA(%q) = %v, %v", root, site, err)
+			t.Fatalf("Load(%q) = %v, %v", root, site, err)
 		}
 	}
 }
 
 func TestSPAPrerenderedPages(t *testing.T) {
-	rt := newSPATestRouter(t, pageScripts{})
+	rt := newSPATestRouter(t, Scripts{})
 
 	// SSG したパスには本文入りの HTML を返し、meta も差し込む
 	rec := spaGet(rt, "/terms", nil)
@@ -125,7 +130,7 @@ func TestSPAPrerenderedPages(t *testing.T) {
 }
 
 func TestSPATokenLinkPages(t *testing.T) {
-	rt := newSPATestRouter(t, pageScripts{})
+	rt := newSPATestRouter(t, Scripts{})
 	// メールや LINE のリンクで開く画面は Referrer-Policy: no-referrer（認証基準 10 の D3）
 	for _, target := range []string{"/verify-email/confirm?token=abc", "/reset-password?token=abc", "/line/link?linkToken=abc"} {
 		rec := spaGet(rt, target, nil)
@@ -140,7 +145,7 @@ func TestSPATokenLinkPages(t *testing.T) {
 }
 
 func TestSPAArticles(t *testing.T) {
-	rt := newSPATestRouter(t, pageScripts{})
+	rt := newSPATestRouter(t, Scripts{})
 
 	// 作り置いた本文入りの HTML に、ビルドが書き出した記事の meta を入れて返す
 	rec := spaGet(rt, "/articles/abc", nil)
@@ -168,7 +173,7 @@ func TestSPAArticles(t *testing.T) {
 }
 
 func TestSPASitemap(t *testing.T) {
-	rt := newSPATestRouter(t, pageScripts{})
+	rt := newSPATestRouter(t, Scripts{})
 	rec := spaGet(rt, "/sitemap.xml", nil)
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/xml; charset=utf-8" {
 		t.Fatalf("status = %d, Content-Type = %q", rec.Code, rec.Header().Get("Content-Type"))
@@ -208,7 +213,7 @@ func TestSPASitemap(t *testing.T) {
 }
 
 func TestSPAUnknownPaths(t *testing.T) {
-	rt := newSPATestRouter(t, pageScripts{})
+	rt := newSPATestRouter(t, Scripts{})
 
 	// App.tsx が持たないパスは、同じ HTML を 404 で返す（ボットのスキャンを「正常」に数えない）
 	rec := spaGet(rt, "/wp-login.php", nil)
@@ -226,7 +231,7 @@ func TestSPAUnknownPaths(t *testing.T) {
 		t.Fatalf("/api/nope: status = %d, Content-Type = %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
 	// API の CSP は狭いまま（画面の CSP を付けない）
-	if got := rec.Header().Get("Content-Security-Policy"); got != "default-src 'none'; frame-ancestors 'none'" {
+	if got := rec.Header().Get("Content-Security-Policy"); got != apiCSP {
 		t.Fatalf("/api/nope: CSP = %q", got)
 	}
 	// ほかのルートは今までどおり先に当たる
@@ -243,7 +248,7 @@ func TestSPAUnknownPaths(t *testing.T) {
 }
 
 func TestSPAStaticFiles(t *testing.T) {
-	rt := newSPATestRouter(t, pageScripts{})
+	rt := newSPATestRouter(t, Scripts{})
 
 	// ファイル名にハッシュが入る assets/* は永久キャッシュ。受け付けるなら作り置いた gzip を返す
 	rec := spaGet(rt, "/assets/index-abc.js", map[string]string{"Accept-Encoding": "gzip, br"})
@@ -294,7 +299,7 @@ func TestSPAStaticFiles(t *testing.T) {
 }
 
 func TestSPAPageHTMLIsGzipped(t *testing.T) {
-	rt := newSPATestRouter(t, pageScripts{gaMeasurementID: "G-TEST123"})
+	rt := newSPATestRouter(t, Scripts{GAMeasurementID: "G-TEST123"})
 	// meta を差し込んだ HTML は 1KB を超えるので、受け付けるなら gzip にする
 	rec := spaGet(rt, "/", map[string]string{"Accept-Encoding": "gzip"})
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Encoding") != "gzip" {
@@ -311,7 +316,7 @@ func TestSPAPageHTMLIsGzipped(t *testing.T) {
 }
 
 func TestSPAPageCSP(t *testing.T) {
-	scripts := pageScripts{gaMeasurementID: "G-TEST123", faroCollectorURL: "https://faro.example.net/collect/key"}
+	scripts := Scripts{GAMeasurementID: "G-TEST123", FaroCollectorURL: "https://faro.example.net/collect/key"}
 	rt := newSPATestRouter(t, scripts)
 	rec := spaGet(rt, "/login", nil)
 	csp := rec.Header().Get("Content-Security-Policy")
@@ -338,7 +343,7 @@ func TestSPAPageCSP(t *testing.T) {
 		t.Fatalf("script-src = %q", scriptSrc)
 	}
 	// 設定が無ければ Faro も GA4 も入れない
-	bare := pageScripts{}.pageCSP()
+	bare := Scripts{}.pageCSP()
 	if strings.Contains(bare, "faro") || strings.Contains(bare, "sha256") {
 		t.Fatalf("CSP = %q", bare)
 	}
@@ -349,16 +354,16 @@ func TestInjectMetaFaro(t *testing.T) {
 	meta := pageMeta{Title: "受験マップ", Description: "説明", OGTitle: "受験マップ", OGType: "website", OGImage: "https://juken-map.com/og.png"}
 
 	// FARO_COLLECTOR_URL があれば meta で画面へ渡す
-	got := pageScripts{faroCollectorURL: "https://faro.example/collect/abc"}.injectMeta(html, meta)
+	got := Scripts{FaroCollectorURL: "https://faro.example/collect/abc"}.injectMeta(html, meta)
 	if !strings.Contains(got, `<meta name="faro-collector-url" content="https://faro.example/collect/abc"/>`) {
 		t.Fatalf("got %s", got)
 	}
 	// 無ければ出さない
-	if got := (pageScripts{}).injectMeta(html, meta); strings.Contains(got, "faro-collector-url") {
+	if got := (Scripts{}).injectMeta(html, meta); strings.Contains(got, "faro-collector-url") {
 		t.Fatalf("got %s", got)
 	}
 	// 値は属性として安全に埋め込む
-	if got := (pageScripts{faroCollectorURL: `https://faro.example/"><script>`}).injectMeta(html, meta); strings.Contains(got, `"><script>`) {
+	if got := (Scripts{FaroCollectorURL: `https://faro.example/"><script>`}).injectMeta(html, meta); strings.Contains(got, `"><script>`) {
 		t.Fatalf("got %s", got)
 	}
 }
@@ -366,7 +371,7 @@ func TestInjectMetaFaro(t *testing.T) {
 func TestInjectMetaMatchesNode(t *testing.T) {
 	// Node の injectMeta（apps/api/src/seo.ts）が返していた形をそのまま固定する。差し込む順番・字下げも同じ。
 	// GA4 の config だけは、トークンが載る画面で最初の page_view を送らないよう変えた（JUK-124）。
-	got := pageScripts{gaMeasurementID: "G-1"}.injectMeta(
+	got := Scripts{GAMeasurementID: "G-1"}.injectMeta(
 		"<html><head><title>x</title></head><body></body></html>", defaultMeta("/terms"))
 	want := `<html><head><title>利用規約｜受験マップ</title>  <meta name="description" content="受験マップをご利用いただく際の条件を定めています。"/>
     <link rel="canonical" href="https://juken-map.com/terms"/>
@@ -411,7 +416,7 @@ func TestDefaultMetaNoindex(t *testing.T) {
 func TestSPARoutesMatchShared(t *testing.T) {
 	// SPA が描けるパスの一覧は src/shared/routes.ts が正（App.tsx との対応は apps/web/src/App.routes.test.ts）。
 	// Go の写しがずれると、新しい画面が 404 で返る。
-	src, err := os.ReadFile("../../src/shared/routes.ts")
+	src, err := os.ReadFile("../../../../src/shared/routes.ts")
 	if err != nil {
 		t.Fatal(err)
 	}

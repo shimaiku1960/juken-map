@@ -1,4 +1,11 @@
-package main
+// Package spa は、画面（apps/web のビルド成果物 dist/）の配信（JUK-111。Node の apps/api/src/spa.ts から移した）。
+//
+// dist は起動時に全部メモリへ読み込み、リクエストのたびにファイルを開かない。2.5MB ほどなので収まり、
+// パスに ../ を混ぜてほかのファイルを読ませる余地も無くなる（引くのは読み込んだ表だけ）。
+// 圧縮できる種類は gzip 版も起動時に作っておく。Node は br（品質4）で圧縮していたが、Go の標準ライブラリに
+// br は無いので gzip の最高圧縮にした（大きさは br の品質4とほぼ同じ）。
+// 機能（internal/feature）ではなく、どのルートにも当たらない GET を受ける土台。SEO の meta 差し込みは seo.go。
+package spa
 
 import (
 	"bytes"
@@ -22,18 +29,8 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
-// 画面（apps/web のビルド成果物 dist/）の配信（JUK-111。Node の apps/api/src/spa.ts から移した）。
-//
-// dist は起動時に全部メモリへ読み込み、リクエストのたびにファイルを開かない。2.5MB ほどなので収まり、
-// パスに ../ を混ぜてほかのファイルを読ませる余地も無くなる（引くのは読み込んだ表だけ）。
-// 圧縮できる種類は gzip 版も起動時に作っておく。Node は br（品質4）で圧縮していたが、Go の標準ライブラリに
-// br は無いので gzip の最高圧縮にした（大きさは br の品質4とほぼ同じ）。
-
 // tokenLinkPages はメールや LINE のリンクで開く、URL にトークンが載る画面（?token=…・?linkToken=…）。
 var tokenLinkPages = map[string]bool{"/verify-email/confirm": true, "/reset-password": true, "/line/link": true}
-
-// gzipMinSize より小さい応答は圧縮しない（Node の @fastify/compress の既定の下限と同じ）。
-const gzipMinSize = 1024
 
 // compressibleTypes は gzip 版を作る拡張子。画像・動画・フォントはもう圧縮されているので外す。
 var compressibleTypes = map[string]bool{
@@ -56,9 +53,9 @@ type staticAsset struct {
 	cacheControl string
 }
 
-// spaSite は読み込んだ dist。
-type spaSite struct {
-	scripts   pageScripts
+// Site は読み込んだ dist。
+type Site struct {
+	scripts   Scripts
 	csp       string
 	indexHTML string
 	pages     map[string]string       // SSG した HTML（/terms → ssg/terms.html の中身）
@@ -67,9 +64,9 @@ type spaSite struct {
 	sitemap   []byte
 }
 
-// loadSPA は root（WEB_DIST_DIR）を読み込む。root が空か index.html が無ければ (nil, nil)（画面を配らない。
+// Load は root（WEB_DIST_DIR）を読み込む。root が空か index.html が無ければ (nil, nil)（画面を配らない。
 // 開発では Vite が画面を配るのでここは通らない）。
-func loadSPA(root string, scripts pageScripts) (*spaSite, error) {
+func Load(root string, scripts Scripts) (*Site, error) {
 	if root == "" {
 		return nil, nil
 	}
@@ -80,7 +77,7 @@ func loadSPA(root string, scripts pageScripts) (*spaSite, error) {
 	if err != nil {
 		return nil, err
 	}
-	site := &spaSite{
+	site := &Site{
 		scripts:   scripts,
 		csp:       scripts.pageCSP(),
 		indexHTML: string(index),
@@ -167,8 +164,8 @@ func newStaticAsset(rel string, body []byte, modTime time.Time) *staticAsset {
 	case strings.HasPrefix(rel, "assets/"):
 		a.cacheControl = "public, max-age=31536000, immutable"
 	}
-	if compressibleTypes[ext] && len(body) >= gzipMinSize {
-		a.gzip = gzipBytes(body, gzip.BestCompression)
+	if compressibleTypes[ext] && len(body) >= httpx.GzipMinSize {
+		a.gzip = httpx.GzipBytes(body, gzip.BestCompression)
 		a.gzipETag = strings.TrimSuffix(a.etag, `"`) + `-gz"`
 	}
 	return a
@@ -179,29 +176,23 @@ func contentETag(body []byte) string {
 	return `"` + hex.EncodeToString(sum[:8]) + `"`
 }
 
-// gzipBytes は本文を gzip にする。起動時に作り置く分は最高圧縮、リクエストのたびに作る HTML は既定の強さにする。
-func gzipBytes(body []byte, level int) []byte {
-	var buf bytes.Buffer
-	w, _ := gzip.NewWriterLevel(&buf, level)
-	_, _ = w.Write(body)
-	_ = w.Close()
-	return buf.Bytes()
-}
+// Stats は配るファイルの数と、SSG したページの数（起動時のログ用）。
+func (s *Site) Stats() (files, prerendered int) { return len(s.assets), len(s.pages) }
 
-// registerSPA は画面の配信を登録する。"GET /" はほかのどのルートにも当たらない GET を受ける
+// Register は画面の配信を登録する。"GET /" はほかのどのルートにも当たらない GET を受ける
 // （ServeMux はより長いパスのルートを先に選ぶ）。GET 以外で当たらないものは、今までどおり httpx の NotFound（JSON の 404）。
-func registerSPA(rt *httpx.Router, site *spaSite) {
+func Register(rt *httpx.Router, site *Site) {
 	rt.Public("GET /sitemap.xml", site.serveSitemap)
 	rt.Public("GET /", site.serve)
 }
 
-func (s *spaSite) serveSitemap(w http.ResponseWriter, r *http.Request) {
+func (s *Site) serveSitemap(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	writeMaybeGzip(w, r, http.StatusOK, s.sitemap)
+	httpx.WriteMaybeGzip(w, r, http.StatusOK, s.sitemap)
 }
 
 // serve は、API にも sitemap にも当たらなかった GET。実ファイルがあればそれを、無ければ画面の HTML を返す。
-func (s *spaSite) serve(w http.ResponseWriter, r *http.Request) {
+func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 	info := telemetry.RequestInfoFrom(r.Context())
 	pathname := r.URL.Path
 
@@ -246,7 +237,7 @@ func (s *spaSite) serve(w http.ResponseWriter, r *http.Request) {
 	// 本文は SPA が /api/blog から取って描くので、公開直後の記事も画面には出る。
 	page, prerendered := s.pages[pathname]
 	if isArticlePath(pathname) && !prerendered {
-		writeMaybeGzip(w, r, http.StatusNotFound, []byte(s.scripts.injectMeta(s.indexHTML, defaultMeta(pathname))))
+		httpx.WriteMaybeGzip(w, r, http.StatusNotFound, []byte(s.scripts.injectMeta(s.indexHTML, defaultMeta(pathname))))
 		return
 	}
 	if !prerendered {
@@ -258,10 +249,10 @@ func (s *spaSite) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	// SSG したページは本文入りの HTML を、それ以外は中身が空の index.html を返す。
 	// SPA なのでクローラーと SNS は JS 実行前の HTML しか読まない。その分を head に差し込む。
-	writeMaybeGzip(w, r, status, []byte(s.scripts.injectMeta(page, meta)))
+	httpx.WriteMaybeGzip(w, r, status, []byte(s.scripts.injectMeta(page, meta)))
 }
 
-func (s *spaSite) serveAsset(w http.ResponseWriter, r *http.Request, a *staticAsset) {
+func (s *Site) serveAsset(w http.ResponseWriter, r *http.Request, a *staticAsset) {
 	h := w.Header()
 	h.Set("Content-Type", a.contentType)
 	h.Set("Cache-Control", a.cacheControl)
@@ -281,21 +272,4 @@ func (s *spaSite) serveAsset(w http.ResponseWriter, r *http.Request, a *staticAs
 	h.Set("ETag", etag)
 	// ServeContent が If-None-Match・If-Modified-Since（304）・Range（動画の途中から）・HEAD を扱う。
 	http.ServeContent(w, r, "", a.modTime, bytes.NewReader(body))
-}
-
-// writeMaybeGzip は本文を返す。受け付けるなら gzip にする（小さいものはそのまま）。Content-Type は呼び出し側が付ける。
-func writeMaybeGzip(w http.ResponseWriter, r *http.Request, status int, body []byte) {
-	h := w.Header()
-	if len(body) >= gzipMinSize {
-		h.Add("Vary", "Accept-Encoding")
-		if httpx.AcceptsGzip(r.Header.Get("Accept-Encoding")) {
-			h.Set("Content-Encoding", "gzip")
-			body = gzipBytes(body, gzip.DefaultCompression)
-		}
-	}
-	h.Set("Content-Length", fmt.Sprint(len(body)))
-	w.WriteHeader(status)
-	if r.Method != http.MethodHead {
-		_, _ = w.Write(body)
-	}
 }

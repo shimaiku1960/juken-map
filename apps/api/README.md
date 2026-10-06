@@ -8,7 +8,7 @@ Node から消した（JUK-84）。ダッシュボード・学習記録と予定
 ログイン（`/api/auth/*`）も Better Auth（Node）から移し、Go で自作した（JUK-115、`auth_*.go`）。
 判定の基準は dev-standards の `targets/10_authentication.md`（認証 基準）で、コメントの B1・C3 などはその項目。
 画面（SPA・SSG の HTML・静的ファイル）・sitemap・ブログの中継（`/api/blog`）・`/line/settings` も Node から移した
-（JUK-111、`spa.go`・`seo.go`・`blog.go`）。本番で動くアプリのコンテナは Go だけ（JUK-109 で Node のコンテナを外した）。
+（JUK-111、`internal/spa/`・`blog.go`）。本番で動くアプリのコンテナは Go だけ（JUK-109 で Node のコンテナを外した）。
 
 どのファイルに何があるかは、下の「[ファイルの分け方](#ファイルの分け方)」にまとめた。
 
@@ -281,8 +281,8 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `spa.go` | 画面の配信（dist を起動時にメモリへ読み、gzip を作り置く。SSG の HTML、知らないパスの 404、sitemap） |
-| `seo.go` | ページごとの meta・GA4・Faro の差し込み、画面の CSP、sitemap の中身、SPA のルートの一覧 |
+| `internal/spa/spa.go` | 画面の配信（dist を起動時にメモリへ読み、gzip を作り置く。SSG の HTML、知らないパスの 404、sitemap） |
+| `internal/spa/seo.go` | ページごとの meta・GA4・Faro の差し込み、画面の CSP、sitemap の中身、SPA のルートの一覧 |
 | `blog.go` | ブログの記事の中継（microCMS、3秒で打ち切り、障害は 502） |
 
 ### 外部サービスとの連携
@@ -325,7 +325,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `http.go` | ヘルスチェック |
 | `internal/dates/` | 東京の「今日」、月初・月末、日付のずらし、`YYYY-MM-DD` の読み方（Node の `new Date` と同じ繰り越し）、DB に書く時刻（ミリ秒で切り捨て）と ISO 文字列。機能をまたいで使う（JUK-156） |
 | `internal/site/` | 本番の画面のオリジン（`site.URL`）。通知の本文・SEO・LINE の連携先が使う（JUK-156） |
-| `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify と同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
+| `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify と同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）、受け付けるなら gzip で返す（`gzip.go`。画面・sitemap・ブログの中継）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
 | `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node と同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |

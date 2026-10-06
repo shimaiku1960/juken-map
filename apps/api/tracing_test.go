@@ -18,6 +18,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/spa"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -207,12 +208,31 @@ func TestLogOutput(t *testing.T) {
 	}
 }
 
+// newWebTestRouter は、画面（index.html だけ）と /api/health を配るルーター。
+func newWebTestRouter(t *testing.T) *httpx.Router {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte(`<html><head><title>x</title></head><body><div id="root"></div></body></html>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	web, err := spa.Load(root, spa.Scripts{})
+	if err != nil || web == nil {
+		t.Fatalf("spa.Load: %v", err)
+	}
+	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
+	rt.Public("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
+	spa.Register(rt, web)
+	return rt
+}
+
 func TestWebSpansAreNotSent(t *testing.T) {
 	buf := captureLogs(t)
 	sr := tracetest.NewSpanRecorder()
 	// 本番と同じく、送る手前に telemetry.SkipWebSpans を挟む。
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(telemetry.SkipWebSpans{SpanProcessor: sr}))
-	h := newServerHandler(newSPATestRouter(t, pageScripts{}), auth.NewMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
+	h := newServerHandler(newWebTestRouter(t), auth.NewMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
 
 	serve(h, "GET", "/", "")
 	serve(h, "GET", "/api/health", "")

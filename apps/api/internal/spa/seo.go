@@ -1,4 +1,4 @@
-package main
+package spa
 
 import (
 	"crypto/sha256"
@@ -120,11 +120,11 @@ func isArticlePath(pathname string) bool {
 	return articlePath.MatchString(pathname)
 }
 
-// pageScripts は、どのページにも差し込む実行時の設定（環境変数）。画面のバンドルに焼き込むと
+// Scripts は、どのページにも差し込む実行時の設定（環境変数）。画面のバンドルに焼き込むと
 // 環境ごとに再ビルドが要るので、サーバーが差し込む。
-type pageScripts struct {
-	gaMeasurementID  string // GA4。空なら計測のタグを出さない
-	faroCollectorURL string // 画面のエラーの送り先（Grafana Faro）。空なら画面は送らない
+type Scripts struct {
+	GAMeasurementID  string // GA4。空なら計測のタグを出さない
+	FaroCollectorURL string // 画面のエラーの送り先（Grafana Faro）。空なら画面は送らない
 }
 
 // analyticsInlineScript は GA4 のインラインスクリプト。CSP はこの中身のハッシュ（inlineScriptHashes）
@@ -143,37 +143,37 @@ func analyticsInlineScript(id string) string {
     `
 }
 
-func (p pageScripts) analyticsTag() string {
-	if p.gaMeasurementID == "" {
+func (p Scripts) analyticsTag() string {
+	if p.GAMeasurementID == "" {
 		return ""
 	}
-	id := escapeAttribute(p.gaMeasurementID)
+	id := escapeAttribute(p.GAMeasurementID)
 	return `<script async src="https://www.googletagmanager.com/gtag/js?id=` + id + `"></script>
     <script>` + analyticsInlineScript(id) + `</script>`
 }
 
 // inlineScriptHashes は CSP でインラインスクリプトを許すための sha256。'unsafe-inline' で全部を許す代わりに、
 // GA4 の1本だけを中身のハッシュで許す。
-func (p pageScripts) inlineScriptHashes() []string {
-	if p.gaMeasurementID == "" {
+func (p Scripts) inlineScriptHashes() []string {
+	if p.GAMeasurementID == "" {
 		return nil
 	}
-	sum := sha256.Sum256([]byte(analyticsInlineScript(escapeAttribute(p.gaMeasurementID))))
+	sum := sha256.Sum256([]byte(analyticsInlineScript(escapeAttribute(p.GAMeasurementID))))
 	return []string{"'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"}
 }
 
 // faroTag は Faro の送り先を画面へ渡す meta。画面側（apps/web/src/lib/faro.ts）がこれを読んで送信を始める。
-func (p pageScripts) faroTag() string {
-	if p.faroCollectorURL == "" {
+func (p Scripts) faroTag() string {
+	if p.FaroCollectorURL == "" {
 		return ""
 	}
-	return `<meta name="faro-collector-url" content="` + escapeAttribute(p.faroCollectorURL) + `"/>`
+	return `<meta name="faro-collector-url" content="` + escapeAttribute(p.FaroCollectorURL) + `"/>`
 }
 
 var titleTag = regexp.MustCompile(`<title>[^<]*</title>`)
 
 // injectMeta は HTML の <title> を差し替え、</head> の直前に meta を差し込む。
-func (p pageScripts) injectMeta(html string, meta pageMeta) string {
+func (p Scripts) injectMeta(html string, meta pageMeta) string {
 	optional := func(ok bool, tag string) string {
 		if ok {
 			return tag
@@ -220,7 +220,7 @@ func (p pageScripts) injectMeta(html string, meta pageMeta) string {
 // 2026-09-19 から2日ほど Report-Only で流し、本番の主要画面を実ブラウザでひと通り踏んでも違反が0件だったため、
 // 2026-09-21 に止めるモードへ切り替えた（Node の security-headers.ts から移した）。許可の漏れがあると画面が壊れるので、
 // 一覧を増やすときは先に Report-Only で確かめること。違反は csp_report.go が受けて Loki に `csp violation` で残る。
-func (p pageScripts) pageCSP() string {
+func (p Scripts) pageCSP() string {
 	// GA4 の計測の送り先。gtag.js は地域ごとのサブドメインへ送る。
 	googleAnalytics := []string{
 		"https://www.googletagmanager.com",
@@ -228,7 +228,7 @@ func (p pageScripts) pageCSP() string {
 		"https://*.analytics.google.com",
 	}
 	connect := []string{"'self'"}
-	if origin := urlOrigin(p.faroCollectorURL); origin != "" {
+	if origin := urlOrigin(p.FaroCollectorURL); origin != "" {
 		connect = append(connect, origin)
 	}
 	connect = append(connect, googleAnalytics...)
