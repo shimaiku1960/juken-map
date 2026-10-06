@@ -1,9 +1,9 @@
 //go:build dbtest
 
-// incident・grant-admin のコマンド（cli.go・incident.go）を本物の DB で確かめる（JUK-122）。
+// incident・grant-admin のコマンド（commands.go・incident.go）を本物の DB で確かめる（JUK-122）。
 // 本番では手順書（docs/incident-response.md）からしか使わないので、いざというときに SQL や引数の読み方の誤りで
 // 動かない、ということがないようにする。Node の incident-service.test.ts・user-service.test.ts から移した。
-package main
+package ops
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 )
 
 type cliFixture struct {
-	dbFixture
+	dbtest.Fixture
 	st incidentStore
 	// opsFrom は作った時点の OpsAuditLog の最大の id。これより後の行を、このテストが書いたものとして見て、終わったら消す。
 	opsFrom int64
@@ -30,7 +30,7 @@ type cliFixture struct {
 
 func newCLIFixture(t *testing.T) cliFixture {
 	db := dbtest.Open(t)
-	fx := cliFixture{dbFixture: newDBFixture(t, db), st: incidentStore{db: db, now: time.Now}}
+	fx := cliFixture{Fixture: dbtest.Fixture{T: t, DB: db}, st: incidentStore{db: db, now: time.Now}}
 	if err := db.QueryRow("SELECT COALESCE(MAX(id), 0) FROM OpsAuditLog").Scan(&fx.opsFrom); err != nil {
 		t.Fatal(err)
 	}

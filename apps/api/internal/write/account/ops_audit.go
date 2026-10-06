@@ -13,7 +13,7 @@ import (
 // OpsAuditRetention は OpsAuditLog を残す期間。CloudTrail（S3 に1年）とそろえ、突き合わせられる期間を同じにする。
 const OpsAuditRetention = 365 * 24 * time.Hour
 
-// OpsAudit は、運用のコマンド（incident.go・JUK-138、セキュリティ基準 H4）から操作したときに OpsAuditLog に残す記録。
+// OpsAudit は、運用のコマンド（internal/feature/ops・JUK-138、セキュリティ基準 H4）から操作したときに OpsAuditLog に残す記録。
 // 本番では `docker exec` で動き、出力が実行した人の端末にしか出ないので、DB に残す。
 // 管理画面からの操作は nil を渡す（管理画面はログに残す。internal/feature/admin/users.go の logAdminUserAction）。
 type OpsAudit struct {

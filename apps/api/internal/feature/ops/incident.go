@@ -1,4 +1,4 @@
-package main
+package ops
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
-// 乗っ取りが起きたときの操作と、管理者の付け外し（cli.go のコマンドが使う。手順は docs/incident-response.md）。
+// 乗っ取りが起きたときの操作と、管理者の付け外し（commands.go のコマンドが使う。手順は docs/incident-response.md）。
 //
 // 管理画面の「停止」は、自分自身・ほかの管理者を止められない（internal/feature/admin/users.go）。管理者が乗っ取られたときや、
 // 管理画面に入れないときでも使えるよう、ここではその守りを置かない。そのぶん画面からは呼べず、本番では

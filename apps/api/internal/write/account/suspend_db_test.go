@@ -13,7 +13,7 @@ import (
 )
 
 // 利用停止・解除の操作を、本物の MySQL で確かめる。管理画面と運用のコマンドを通した確認は
-// package main の admin_db_test.go・incident_db_test.go にある。
+// package main の admin_db_test.go、internal/feature/ops の incident_db_test.go にある。
 func TestSuspendDB(t *testing.T) {
 	ctx := context.Background()
 
