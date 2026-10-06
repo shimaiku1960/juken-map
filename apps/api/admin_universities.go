@@ -256,15 +256,15 @@ func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (
 
 func (st *sqlAdminMasterStore) createUniversity(ctx context.Context, in universityInput) (masterOutcome[AdminUniversity], error) {
 	u, err := university.CreateUniversity(ctx, st.db, in.record(), nowMillis())
-	return universityOutcome(st, AdminUniversity(u), err)
+	return masterOutcomeOf(AdminUniversity(u), err, st.universitiesChanged)
 }
 
 func (st *sqlAdminMasterStore) updateUniversity(ctx context.Context, id int64, in universityInput) (masterOutcome[masterChange[AdminUniversity]], error) {
 	c, err := university.UpdateUniversity(ctx, st.db, id, in.record())
-	return universityOutcome(st, masterChange[AdminUniversity]{before: AdminUniversity(c.Before), after: AdminUniversity(c.After)}, err)
+	return masterOutcomeOf(masterChange[AdminUniversity]{before: AdminUniversity(c.Before), after: AdminUniversity(c.After)}, err, st.universitiesChanged)
 }
 
 func (st *sqlAdminMasterStore) deleteUniversity(ctx context.Context, id int64) (masterOutcome[AdminUniversity], error) {
 	u, err := university.DeleteUniversity(ctx, st.db, id)
-	return universityOutcome(st, AdminUniversity(u), err)
+	return masterOutcomeOf(AdminUniversity(u), err, st.universitiesChanged)
 }

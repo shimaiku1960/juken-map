@@ -194,15 +194,15 @@ func (st *sqlAdminMasterStore) listTags(ctx context.Context) ([]AdminTag, error)
 
 func (st *sqlAdminMasterStore) createFaculty(ctx context.Context, in facultyInput) (masterOutcome[AdminFacultySnapshot], error) {
 	f, err := university.CreateFaculty(ctx, st.db, in.record(), nowMillis())
-	return universityOutcome(st, AdminFacultySnapshot(f), err)
+	return masterOutcomeOf(AdminFacultySnapshot(f), err, st.universitiesChanged)
 }
 
 func (st *sqlAdminMasterStore) updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[AdminFacultySnapshot]], error) {
 	c, err := university.UpdateFaculty(ctx, st.db, id, in.record())
-	return universityOutcome(st, masterChange[AdminFacultySnapshot]{before: AdminFacultySnapshot(c.Before), after: AdminFacultySnapshot(c.After)}, err)
+	return masterOutcomeOf(masterChange[AdminFacultySnapshot]{before: AdminFacultySnapshot(c.Before), after: AdminFacultySnapshot(c.After)}, err, st.universitiesChanged)
 }
 
 func (st *sqlAdminMasterStore) deleteFaculty(ctx context.Context, id int64) (masterOutcome[AdminFacultySnapshot], error) {
 	f, err := university.DeleteFaculty(ctx, st.db, id)
-	return universityOutcome(st, AdminFacultySnapshot(f), err)
+	return masterOutcomeOf(AdminFacultySnapshot(f), err, st.universitiesChanged)
 }
