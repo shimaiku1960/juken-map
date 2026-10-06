@@ -35,32 +35,6 @@ type RangeError struct{ message string }
 
 func (e *RangeError) Error() string { return e.message }
 
-// Opt は「送られなかった」と「null」を区別する値。Present が false ならキーが無く、Value が nil なら null。
-type Opt[T comparable] struct {
-	Present bool
-	Value   *T
-}
-
-// differs は Node の `data.x !== current`（current は DB の値で、null か値）。
-// キーが無い（undefined）ときは、どんな値とも違う（undefined !== null も true）。
-func (o Opt[T]) differs(current *T) bool {
-	switch {
-	case !o.Present:
-		return true
-	case o.Value == nil || current == nil:
-		return o.Value != current
-	}
-	return *o.Value != *current
-}
-
-// or は、送られていれば送られた値（null を含む）を、送られていなければ fallback を返す。
-func (o Opt[T]) or(fallback *T) *T {
-	if o.Present {
-		return o.Value
-	}
-	return fallback
-}
-
 // Log は実績の行。日時は Date#toISOString と同じ形。
 // 項目の名前・型・並びを画面に返す形（apischema の StudyLogRow）とそろえ、入口が型の変換だけで返せるようにしている。
 type Log struct {

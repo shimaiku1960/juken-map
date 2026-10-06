@@ -30,25 +30,3 @@ func TestCheckRange(t *testing.T) {
 		}
 	}
 }
-
-func TestOptDiffers(t *testing.T) {
-	one, two := int64(1), int64(2)
-	tests := []struct {
-		name    string
-		o       Opt[int64]
-		current *int64
-		want    bool
-	}{
-		{"キーが無ければ null とも違う", Opt[int64]{}, nil, true},
-		{"キーが無ければ値とも違う", Opt[int64]{}, &one, true},
-		{"null と null は同じ", Opt[int64]{Present: true}, nil, false},
-		{"null と値は違う", Opt[int64]{Present: true}, &one, true},
-		{"同じ値", Opt[int64]{Present: true, Value: &one}, &one, false},
-		{"違う値", Opt[int64]{Present: true, Value: &two}, &one, true},
-	}
-	for _, tt := range tests {
-		if got := tt.o.differs(tt.current); got != tt.want {
-			t.Errorf("%s: %v, want %v", tt.name, got, tt.want)
-		}
-	}
-}

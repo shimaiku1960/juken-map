@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
 )
 
 func TestA3StoreScopedByUserDB(t *testing.T) {
@@ -21,7 +23,6 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 	facultyID, otherFacultyID := newDBFixture(t, db).University(), newDBFixture(t, db).University()
 	ctx := context.Background()
 	goals := &goalStore{db: db}
-	textbooks := &textbookStore{db: db}
 	note := "書き換え"
 	now := time.Now().UTC().Truncate(time.Millisecond)
 
@@ -55,7 +56,7 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "参考書の逆算設定", table: "Textbook",
 			seed: func(fx dbFixture, holder string) int64 { return fx.Textbook(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = textbooks.updateProgress(ctx, caller, id, textbookProgress{subject: optional[string]{present: true, value: &note}})
+				_, _ = textbook.UpdateProgress(ctx, db, caller, id, textbook.Progress{Subject: opt.Of(note)}, now)
 			},
 		},
 		{
@@ -74,7 +75,7 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "予定の書き換え", table: "StudyPlan",
 			seed: func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = studyrecord.UpdatePlan(ctx, db, caller, id, studyrecord.PlanPatch{Content: studyrecord.Opt[string]{Present: true, Value: &note}}, now)
+				_, _ = studyrecord.UpdatePlan(ctx, db, caller, id, studyrecord.PlanPatch{Content: opt.Field[string]{Present: true, Value: &note}}, now)
 			},
 		},
 		{

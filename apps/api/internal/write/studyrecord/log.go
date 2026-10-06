@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 )
 
 // LogInput は実績の作成・変更で書く値。Date はその日の 00:00 UTC（Node の new Date("YYYY-MM-DD")）。
@@ -14,12 +15,12 @@ import (
 type LogInput struct {
 	Date       time.Time
 	Minutes    int64
-	Subject    Opt[string]
-	TextbookID Opt[int64]
-	RangeStart Opt[int64]
-	RangeEnd   Opt[int64]
-	RangeUnit  Opt[string]
-	Memo       Opt[string]
+	Subject    opt.Field[string]
+	TextbookID opt.Field[int64]
+	RangeStart opt.Field[int64]
+	RangeEnd   opt.Field[int64]
+	RangeUnit  opt.Field[string]
+	Memo       opt.Field[string]
 }
 
 // CreatedLog は作った実績と、それが利用者の初めての実績だったか。
@@ -115,10 +116,10 @@ func UpdateLog(ctx context.Context, db *sql.DB, userID string, id int64, in LogI
 			date, subject, textbookID = rawDate, current.Subject, current.TextbookID
 		}
 
-		rangeChanged := in.RangeStart.differs(current.RangeStart) ||
-			in.RangeEnd.differs(current.RangeEnd) ||
-			in.RangeUnit.differs(current.RangeUnit)
-		textbookChanged := !fromPlan && in.TextbookID.differs(current.TextbookID)
+		rangeChanged := in.RangeStart.Differs(current.RangeStart) ||
+			in.RangeEnd.Differs(current.RangeEnd) ||
+			in.RangeUnit.Differs(current.RangeUnit)
+		textbookChanged := !fromPlan && in.TextbookID.Differs(current.TextbookID)
 		if textbookID != nil && (rangeChanged || textbookChanged) {
 			tb, err := findTextbookSettings(ctx, tx, *textbookID, userID)
 			if err != nil {

@@ -117,33 +117,6 @@ func TestReadStudyLogInputValues(t *testing.T) {
 	}
 }
 
-func TestOptionalDiffers(t *testing.T) {
-	// Node の `data.x !== current`。current は DB の値で、null か値。
-	one, two := int64(1), int64(2)
-	missing := optional[int64]{}
-	null := optional[int64]{present: true}
-	value := optional[int64]{present: true, value: &one}
-	tests := []struct {
-		name    string
-		o       optional[int64]
-		current *int64
-		want    bool
-	}{
-		{"無い（undefined）は null とも違う", missing, nil, true},
-		{"無い（undefined）は値とも違う", missing, &one, true},
-		{"null と null は同じ", null, nil, false},
-		{"null と値は違う", null, &one, true},
-		{"値と null は違う", value, nil, true},
-		{"同じ値", value, &one, false},
-		{"違う値", value, &two, true},
-	}
-	for _, tt := range tests {
-		if got := tt.o.differs(tt.current); got != tt.want {
-			t.Errorf("%s: differs = %v, want %v", tt.name, got, tt.want)
-		}
-	}
-}
-
 func TestIsCalendarYMD(t *testing.T) {
 	for s, want := range map[string]bool{
 		"2026-09-30": true, "2024-02-29": true, "2000-02-29": true, "0000-02-29": true,

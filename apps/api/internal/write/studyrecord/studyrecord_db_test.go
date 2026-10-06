@@ -11,6 +11,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 )
 
 // 学習記録の操作を、本物の MySQL で確かめる。画面の形（入力チェックの 400・応答の形）は
@@ -73,15 +74,15 @@ func TestStudyRecordDB(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
 		user, other := fx.User(), fx.User()
 		_, err := CreateLog(ctx, db, user, LogInput{Date: day, Minutes: 10,
-			TextbookID: Opt[int64]{Present: true, Value: ptr(fx.Textbook(other))}}, now)
+			TextbookID: opt.Field[int64]{Present: true, Value: ptr(fx.Textbook(other))}}, now)
 		if !errors.Is(err, ErrTextbookNotOwned) {
 			t.Errorf("他人の参考書: %v", err)
 		}
 		_, err = CreateLog(ctx, db, user, LogInput{Date: day, Minutes: 10,
-			TextbookID: Opt[int64]{Present: true, Value: ptr(textbookWithSettings(fx, user))},
-			RangeStart: Opt[int64]{Present: true, Value: ptr(int64(1))},
-			RangeEnd:   Opt[int64]{Present: true, Value: ptr(int64(301))},
-			RangeUnit:  Opt[string]{Present: true, Value: ptr("page")}}, now)
+			TextbookID: opt.Field[int64]{Present: true, Value: ptr(textbookWithSettings(fx, user))},
+			RangeStart: opt.Field[int64]{Present: true, Value: ptr(int64(1))},
+			RangeEnd:   opt.Field[int64]{Present: true, Value: ptr(int64(301))},
+			RangeUnit:  opt.Field[string]{Present: true, Value: ptr("page")}}, now)
 		var rangeErr *RangeError
 		if !errors.As(err, &rangeErr) {
 			t.Errorf("総量を超える範囲: %v", err)
@@ -111,7 +112,7 @@ func TestStudyRecordDB(t *testing.T) {
 		if _, err := CompletePlan(ctx, db, user, planID, Completion{Minutes: 30}, now); !errors.Is(err, ErrAlreadyCompleted) {
 			t.Errorf("2回目の完了: %v", err)
 		}
-		if _, err := UpdatePlan(ctx, db, user, planID, PlanPatch{Done: Opt[bool]{Present: true, Value: ptr(false)}}, now); !errors.Is(err, ErrPlanHasLog) {
+		if _, err := UpdatePlan(ctx, db, user, planID, PlanPatch{Done: opt.Field[bool]{Present: true, Value: ptr(false)}}, now); !errors.Is(err, ErrPlanHasLog) {
 			t.Errorf("実績のある予定を未完了に戻す: %v", err)
 		}
 	})
@@ -122,9 +123,9 @@ func TestStudyRecordDB(t *testing.T) {
 		planID := fx.StudyPlan(user)
 		fx.Exec("UPDATE StudyPlan SET textbookId = ? WHERE id = ?", textbookWithSettings(fx, user), planID)
 		_, err := CompletePlan(ctx, db, user, planID, Completion{Minutes: 30,
-			RangeStart: Opt[int64]{Present: true, Value: ptr(int64(1))},
-			RangeEnd:   Opt[int64]{Present: true, Value: ptr(int64(10))},
-			RangeUnit:  Opt[string]{Present: true, Value: ptr("question")}}, now)
+			RangeStart: opt.Field[int64]{Present: true, Value: ptr(int64(1))},
+			RangeEnd:   opt.Field[int64]{Present: true, Value: ptr(int64(10))},
+			RangeUnit:  opt.Field[string]{Present: true, Value: ptr("question")}}, now)
 		var rangeErr *RangeError
 		if !errors.As(err, &rangeErr) {
 			t.Fatalf("単位が違う範囲: %v", err)
@@ -148,8 +149,8 @@ func TestStudyRecordDB(t *testing.T) {
 			t.Fatal(err)
 		}
 		updated, err := UpdateLog(ctx, db, user, done.Log.ID, LogInput{Date: day, Minutes: 45,
-			Subject:    Opt[string]{Present: true, Value: ptr("english")},
-			TextbookID: Opt[int64]{Present: true, Value: ptr(fx.Textbook(user))}}, now)
+			Subject:    opt.Field[string]{Present: true, Value: ptr("english")},
+			TextbookID: opt.Field[int64]{Present: true, Value: ptr(fx.Textbook(user))}}, now)
 		if err != nil {
 			t.Fatal(err)
 		}

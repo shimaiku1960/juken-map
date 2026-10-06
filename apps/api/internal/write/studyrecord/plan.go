@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 )
 
 // PlanItem は予定1件の中身。
@@ -18,17 +19,17 @@ type PlanItem struct {
 
 // PlanPatch は予定の変更。Present の項目だけを書き換える。Date はその日の 00:00 UTC。
 type PlanPatch struct {
-	Date                             Opt[time.Time]
-	TextbookID, RangeStart, RangeEnd Opt[int64]
-	RangeUnit, Content, Subject      Opt[string]
-	Done                             Opt[bool]
+	Date                             opt.Field[time.Time]
+	TextbookID, RangeStart, RangeEnd opt.Field[int64]
+	RangeUnit, Content, Subject      opt.Field[string]
+	Done                             opt.Field[bool]
 }
 
 // Completion は予定の完了で書く実績の値。範囲は、送られていなければ（キーが無ければ）予定の値を使う。
 type Completion struct {
 	Minutes              int64
-	RangeStart, RangeEnd Opt[int64]
-	RangeUnit            Opt[string]
+	RangeStart, RangeEnd opt.Field[int64]
+	RangeUnit            opt.Field[string]
 	Memo                 *string
 }
 
@@ -206,8 +207,8 @@ func CompletePlan(ctx context.Context, db *sql.DB, userID string, id int64, in C
 		if logID != nil {
 			return ErrAlreadyCompleted
 		}
-		rangeStart, rangeEnd := in.RangeStart.or(plan.RangeStart), in.RangeEnd.or(plan.RangeEnd)
-		rangeUnit := in.RangeUnit.or(plan.RangeUnit)
+		rangeStart, rangeEnd := in.RangeStart.Or(plan.RangeStart), in.RangeEnd.Or(plan.RangeEnd)
+		rangeUnit := in.RangeUnit.Or(plan.RangeUnit)
 		if tbID != nil {
 			if err := tb.checkRange(rangeEnd, rangeUnit); err != nil {
 				return err
