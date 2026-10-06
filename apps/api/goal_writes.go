@@ -2,18 +2,18 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
 )
 
 // 志望校の書き込み（JUK-75）。Node の次の部分にあたる。
 //   - routes/goals.ts の POST /api/goals と PUT・PATCH・DELETE /api/goals/:id
 //   - services/goal-service.ts の createGoal・updateGoal・applyGoalPatch・deleteGoal・findOwnedGoal
+//
+// 書き込みは持ち主の internal/write/goal にある（JUK-154）。ここは本文を確かめ、操作を呼び、結果を応答の形にする。
 //
 // 入力チェックの規則の正は Zod の goalSchema・updateGoalSchema・patchGoalSchema（src/shared/validations/goal.ts）。
 
@@ -26,146 +26,28 @@ var facultyIDRule = numberRule{int: true, positive: true, positiveMessage: "志�
 // goalNoteRule は z.string().max(500, …)（削らない。null は .nullable() で別に受ける）。
 var goalNoteRule = stringRule{max: 500, maxMessage: "500文字以内で入力してください"}
 
-var errDuplicateGoal = errors.New("この学部はすでに登録されています")
-
-// goalPatch は PATCH の本文（patchGoalSchema）。送られた項目だけを書き換える。
-type goalPatch struct {
-	isFirstChoice optional[bool]
-	note          optional[string]
-	status        optional[string]
-}
-
-const goalFieldColumns = "g.id, g.createdAt, g.userId, g.facultyId, g.isFirstChoice, g.note, g.status"
-
-// findGoalFields は userID の人の志望校の行だけ（学部は付けない）を読む（Node の findOwnedGoal）。
-// 無いか他人のものなら nil。
-func (st *goalStore) findGoalFields(ctx context.Context, id int64, userID string) (*GoalFields, error) {
-	var g GoalFields
-	err := st.db.QueryRowContext(ctx,
-		"SELECT "+goalFieldColumns+" FROM FinalGoal AS g WHERE g.id = ? AND g.userId = ? LIMIT 1", id, userID,
-	).Scan(
-		&g.ID, &g.CreatedAt, &g.UserID, &g.FacultyID, &g.IsFirstChoice, &g.Note, &g.Status)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	g.CreatedAt = database.ISOFromDatetime(g.CreatedAt)
-	return &g, nil
-}
-
-// createGoal は志望校を登録し、学部・大学つきで返す（画面が学部名・大学名を出すため）。
-// 同じ学部の重複は DB の一意制約（userId, facultyId）が弾くので、それを errDuplicateGoal にする。
-// 無い学部は外部キーで弾かれ、Node と同じくそのまま 500 になる。
-func (st *goalStore) createGoal(ctx context.Context, userID string, facultyID int64, status optional[string]) (*FirstChoiceGoal, error) {
-	s := "decided"
-	if v := status.ptr(); v != nil {
-		s = *v
-	}
-	res, err := st.db.ExecContext(ctx,
-		"INSERT INTO FinalGoal (userId, facultyId, status, createdAt) VALUES (?, ?, ?, ?)",
-		userID, facultyID, s, nowMillis())
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return nil, errDuplicateGoal
-	}
-	if err != nil {
-		return nil, err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
+// findGoalWithFaculty は登録した志望校を学部・大学つきで読む（画面が学部名・大学名を出すため）。
+func (st *goalStore) findGoalWithFaculty(ctx context.Context, id int64) (FirstChoiceGoal, error) {
 	var g FirstChoiceGoal
 	if err := st.db.QueryRowContext(ctx,
 		"SELECT"+goalColumns+fromGoalWithFaculty+" WHERE g.id = ?", id,
 	).Scan(goalDest(&g)...); err != nil {
-		return nil, fmt.Errorf("FinalGoal %d が見つかりません: %w", id, err)
+		return FirstChoiceGoal{}, fmt.Errorf("FinalGoal %d が見つかりません: %w", id, err)
 	}
 	fixGoalDates(&g)
-	return &g, nil
+	return g, nil
 }
 
-// replaceFaculty は志望校の学部を差し替える（Node の updateGoal）。facultyId が無ければ何も変えない。
-// 同じ学部の志望校が既にあると一意制約、無い学部だと外部キーで弾かれ、Node と同じく 500 になる。
-// userID の人のものだけを変える（呼び出し元の確かめが抜けても、他人の志望校は変わらない）。
-func (st *goalStore) replaceFaculty(ctx context.Context, userID string, id int64, facultyID optional[int64]) (*GoalFields, error) {
-	if v := facultyID.ptr(); v != nil {
-		if _, err := st.db.ExecContext(ctx,
-			"UPDATE FinalGoal SET facultyId = ? WHERE id = ? AND userId = ?", *v, id, userID); err != nil {
-			return nil, err
-		}
-	}
-	g, err := st.findGoalFields(ctx, id, userID)
-	if err == nil && g == nil {
-		err = fmt.Errorf("FinalGoal %d が見つかりません", id)
-	}
-	return g, err
-}
-
-// applyPatch は第一志望・メモ・ステータスのうち、送られてきたものだけを書き換える（Node の applyGoalPatch）。
-// userID の人のものだけを変える。
-//
-// 第一志望は1ユーザー1校までなので、付け替えは「全部外す→1件立てる」をひとつのトランザクションで行う。
-// 分けて実行すると、途中で失敗したときに第一志望が0校の状態が残る。
-func (st *goalStore) applyPatch(ctx context.Context, userID string, id int64, p goalPatch) error {
-	// 列名はこのコードに書いた固定の名前だけで、利用者の入力は値として ? で渡す。
-	var columns []string
-	var args []any
-	if p.isFirstChoice.present {
-		columns, args = append(columns, "isFirstChoice = ?"), append(args, *p.isFirstChoice.value)
-	}
-	if p.note.present {
-		columns, args = append(columns, "note = ?"), append(args, p.note.ptr())
-	}
-	if p.status.present {
-		columns, args = append(columns, "status = ?"), append(args, *p.status.value)
-	}
-	if len(columns) == 0 {
-		return nil
-	}
-	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（columns）。値は args で ? として渡す
-	update := "UPDATE FinalGoal SET " + strings.Join(columns, ", ") + " WHERE id = ? AND userId = ?"
-	args = append(args, id, userID)
-
-	if !p.isFirstChoice.present || !*p.isFirstChoice.value {
-		// 1文だけなので、トランザクションで包まなくても途中の状態は残らない。
-		_, err := st.db.ExecContext(ctx, update, args...)
-		return err
-	}
-	tx, err := st.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, "UPDATE FinalGoal SET isFirstChoice = FALSE WHERE userId = ?", userID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, update, args...); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// deleteGoal は userID の人の志望校だけを消す。
-func (st *goalStore) deleteGoal(ctx context.Context, userID string, id int64) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM FinalGoal WHERE id = ? AND userId = ?", id, userID)
-	return err
-}
-
-// ownedGoal は自分の志望校かを確かめる。無いか他人のものなら 404 を送って false を返す。
-// 他人のものと存在しないものは区別しない。
-func (h *goalHandlers) ownedGoal(w http.ResponseWriter, r *http.Request, id int64, s *session) bool {
-	g, err := h.store.findGoalFields(r.Context(), id, s.UserID)
-	if err != nil {
-		internalError(w, r, fmt.Errorf("goals find: %w", err))
-		return false
-	}
-	if g == nil {
+// writeGoalError は持ち主の断る理由を応答にする。他人のものと存在しないものは区別しない。
+func writeGoalError(w http.ResponseWriter, r *http.Request, op string, err error) {
+	switch {
+	case errors.Is(err, goal.ErrNotFound):
 		writeError(w, http.StatusNotFound, "Not found")
-		return false
+	case errors.Is(err, goal.ErrDuplicate):
+		writeError(w, http.StatusConflict, err.Error())
+	default:
+		internalError(w, r, fmt.Errorf("goals %s: %w", op, err))
 	}
-	return true
 }
 
 // create は POST /api/goals。
@@ -180,11 +62,12 @@ func (h *goalHandlers) create(w http.ResponseWriter, r *http.Request, s *session
 	if in.reject(w) {
 		return
 	}
-	created, err := h.store.createGoal(r.Context(), s.UserID, facultyID, status)
-	if errors.Is(err, errDuplicateGoal) {
-		writeError(w, http.StatusConflict, err.Error())
+	id, err := goal.Create(r.Context(), h.store.db, s.UserID, facultyID, status.ptr(), nowMillis())
+	if err != nil {
+		writeGoalError(w, r, "create", err)
 		return
 	}
+	created, err := h.store.findGoalWithFaculty(r.Context(), id)
 	if err != nil {
 		internalError(w, r, fmt.Errorf("goals create: %w", err))
 		return
@@ -209,15 +92,12 @@ func (h *goalHandlers) replace(w http.ResponseWriter, r *http.Request, s *sessio
 	if in.reject(w) {
 		return
 	}
-	if !h.ownedGoal(w, r, id, s) {
-		return
-	}
-	updated, err := h.store.replaceFaculty(r.Context(), s.UserID, id, facultyID)
+	updated, err := goal.ReplaceFaculty(r.Context(), h.store.db, s.UserID, id, facultyID.ptr())
 	if err != nil {
-		internalError(w, r, fmt.Errorf("goals replace: %w", err))
+		writeGoalError(w, r, "replace", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, updated)
+	writeJSON(w, http.StatusOK, GoalFields(updated))
 }
 
 // update は PATCH /api/goals/{id}。
@@ -231,19 +111,16 @@ func (h *goalHandlers) update(w http.ResponseWriter, r *http.Request, s *session
 		return
 	}
 	in := readObject(body.value())
-	patch := goalPatch{
-		isFirstChoice: in.optionalBool("isFirstChoice"),
-		note:          in.optionalString("note", goalNoteRule, true),
-		status:        in.optionalEnum("status", goalStatuses, false),
+	patch := goal.Patch{
+		IsFirstChoice: in.optionalBool("isFirstChoice").field(),
+		Note:          in.optionalString("note", goalNoteRule, true).field(),
+		Status:        in.optionalEnum("status", goalStatuses, false).field(),
 	}
 	if in.reject(w) {
 		return
 	}
-	if !h.ownedGoal(w, r, id, s) {
-		return
-	}
-	if err := h.store.applyPatch(r.Context(), s.UserID, id, patch); err != nil {
-		internalError(w, r, fmt.Errorf("goals patch: %w", err))
+	if err := goal.ApplyPatch(r.Context(), h.store.db, s.UserID, id, patch); err != nil {
+		writeGoalError(w, r, "patch", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, OkMessage{Message: OkMessageOK})
@@ -258,11 +135,8 @@ func (h *goalHandlers) delete(w http.ResponseWriter, r *http.Request, s *session
 	if !ok {
 		return
 	}
-	if !h.ownedGoal(w, r, id, s) {
-		return
-	}
-	if err := h.store.deleteGoal(r.Context(), s.UserID, id); err != nil {
-		internalError(w, r, fmt.Errorf("goals delete: %w", err))
+	if err := goal.Delete(r.Context(), h.store.db, s.UserID, id); err != nil {
+		writeGoalError(w, r, "delete", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, Deleted{Message: DeletedMessageDeleted})

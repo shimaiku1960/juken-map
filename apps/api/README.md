@@ -267,7 +267,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `study_handlers.go` | 学習記録・予定の一覧の API |
 | `study_log_writes.go` | 学習記録の記録・書き換え・削除の入口（本文の確かめと応答の形。書き込みは `internal/write/studyrecord`） |
 | `study_plan_writes.go` | 学習予定の作成（まとめて）・書き換え（送った項目だけ）・削除・完了の入口（書き込みは `internal/write/studyrecord`） |
-| `goals.go`・`goal_writes.go` | 志望校の一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除 |
+| `goals.go`・`goal_writes.go` | 志望校の一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除の入口（書き込みは `internal/write/goal`） |
 | `textbooks.go`・`textbook_writes.go` | 参考書の一覧と参考書マスター／参考書の追加（マスターからも）・進み具合の書き換えの入口（書き込みは `internal/write/textbook`） |
 | `universities.go` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 |
 | `profile.go` | プロフィールの更新 |
@@ -341,6 +341,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/write/account/` | アカウントへの書き込みの持ち主。今は利用停止・解除（`Suspend`・`Unsuspend`）と運用の記録（`OpsAuditLog`）。管理画面と `incident` の両方が呼ぶ（JUK-151、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `internal/write/studyrecord/` | 学習記録（実績・予定・初回記録の日時）への書き込みの持ち主。実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |
 | `internal/write/textbook/` | 利用者の参考書への書き込みの持ち主。名前・参考書マスターからの登録と、逆算設定の変更（JUK-154） |
+| `internal/write/goal/` | 志望校への書き込みの持ち主。登録・学部の差し替え・第一志望やメモの変更・削除。第一志望の付け替えを1つのトランザクションで行う（JUK-154） |
 | `internal/write/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `optional` を `.field()` で変換する |
 | `openapi.gen.go` | `openapi/openapi.yaml` から作った応答・リクエストの型（手で直さない。`pnpm openapi:generate`、設定は `oapi-codegen.yaml`） |
 
