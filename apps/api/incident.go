@@ -65,13 +65,10 @@ func (st incidentStore) findByEmail(ctx context.Context, email string) (incident
 	return u, nil
 }
 
-// deleteSessions はその人のセッションをすべて消し、消した数を返す（認証基準 10 の C5 の3）。
+// deleteSessions はその人のセッションをすべて消し、消した数を返す（認証基準 10 の C5 の3）。記録は書かない
+// （2段階認証のリセットと権限の変更が、それぞれの記録を別に書く）。
 func (st incidentStore) deleteSessions(ctx context.Context, userID string) (int64, error) {
-	res, err := st.db.ExecContext(ctx, "DELETE FROM AuthSession WHERE userId = ?", userID)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+	return account.RevokeUserSessions(ctx, st.db, userID, st.now(), nil)
 }
 
 // listSessions はその人のログイン中のセッションを、作られた順に返す（どこから入られたかを見るため）。
@@ -141,17 +138,15 @@ func (st incidentStore) listOps(ctx context.Context, limit int) ([]opsAuditEntry
 	return entries, rows.Err()
 }
 
-// revokeSessions はその人のセッションをすべて消す。止めはしないので、パスワードを知っていればまた入れる。
+// revokeSessions はその人のセッションをすべて消し、記録を残す（account.RevokeUserSessions）。
+// 止めはしないので、パスワードを知っていればまた入れる。
 func (st incidentStore) revokeSessions(ctx context.Context, email string) (int64, error) {
 	u, err := st.findByEmail(ctx, email)
 	if err != nil {
 		return 0, err
 	}
-	removed, err := st.deleteSessions(ctx, u.ID)
-	if err != nil {
-		return 0, err
-	}
-	return removed, st.recordOps(ctx, "revoke", u.ID, map[string]any{"sessionsRemoved": removed})
+	audit := opsAudit()
+	return account.RevokeUserSessions(ctx, st.db, u.ID, st.now(), &audit)
 }
 
 // ban はその人を止め、セッションをすべて消し、記録を残す（account.Suspend が1つのトランザクションで行う）。
@@ -180,59 +175,27 @@ func (st incidentStore) unban(ctx context.Context, email string) error {
 // revokeAll は全員のセッションを消す（C5 の4）。ログインの不具合や、セッションを読める立場（DB）からの
 // 漏えいが疑われるときに使う。全員がログインし直しになる。
 func (st incidentStore) revokeAll(ctx context.Context) (int64, error) {
-	res, err := st.db.ExecContext(ctx, "DELETE FROM AuthSession")
-	if err != nil {
-		return 0, err
-	}
-	removed, err := res.RowsAffected()
-	if err != nil {
-		return 0, err
-	}
-	return removed, st.recordOps(ctx, "revoke-all", "", map[string]any{"sessionsRemoved": removed})
+	audit := opsAudit()
+	return account.RevokeAllSessions(ctx, st.db, st.now(), &audit)
 }
 
 // revokeAdmins は管理者全員のセッションを消す。管理者のアカウントが1つでも乗っ取られたかもしれないときに使う。
 // 消した管理者（メールアドレス。無ければ ID）と、消したセッションの数を返す。
 func (st incidentStore) revokeAdmins(ctx context.Context) ([]string, int64, error) {
-	rows, err := st.db.QueryContext(ctx, "SELECT id, email FROM `user` WHERE role = 'admin' ORDER BY email ASC")
+	audit := opsAudit()
+	admins, removed, err := account.RevokeAdminSessions(ctx, st.db, st.now(), &audit)
 	if err != nil {
 		return nil, 0, err
 	}
-	type admin struct {
-		id    string
-		email sql.NullString
-	}
-	var admins []admin
-	for rows.Next() {
-		var a admin
-		if err := rows.Scan(&a.id, &a.email); err != nil {
-			rows.Close()
-			return nil, 0, err
-		}
-		admins = append(admins, a)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, 0, err
-	}
-
-	names, ids := []string{}, []string{}
-	var removed int64
+	names := []string{}
 	for _, a := range admins {
-		n, err := st.deleteSessions(ctx, a.id)
-		if err != nil {
-			return nil, 0, err
-		}
-		removed += n
-		ids = append(ids, a.id)
-		if a.email.Valid {
-			names = append(names, a.email.String)
+		if a.Email != "" {
+			names = append(names, a.Email)
 		} else {
-			names = append(names, a.id)
+			names = append(names, a.ID)
 		}
 	}
-	// 対象が複数なので、targetId は空にして detail に userId を並べる（メールアドレスは残さない）。
-	return names, removed, st.recordOps(ctx, "revoke-admins", "", map[string]any{"targetIds": ids, "sessionsRemoved": removed})
+	return names, removed, nil
 }
 
 // resetTwoFactor は2段階認証を設定する前に戻し、セッションをすべて消す。認証アプリの秘密が漏れたかもしれない

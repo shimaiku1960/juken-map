@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 // セッション（認証基準 10 の C1〜C5）と Cookie（D1）。
@@ -74,24 +75,11 @@ func (st *sessionStore) create(ctx context.Context, r *http.Request, userID, rol
 	policy := policyFor(role)
 	raw, hash := newToken()
 	expiresAt = now.Add(policy.absolute)
-	var idle any
-	if policy.idle > 0 {
-		idle = int64(policy.idle / time.Second)
-	}
-	var mfaAt any
-	if mfaVerified {
-		mfaAt = now
-	}
-	if err := st.sweep(ctx, now); err != nil {
+	if err := account.CreateSession(ctx, st.db, account.NewSession{
+		TokenHash: hash, UserID: userID, ExpiresAt: expiresAt, IdleTimeout: policy.idle, MFAVerified: mfaVerified,
+		IPAddress: truncate(clientIP(r), 64), UserAgent: truncate(r.UserAgent(), 512),
+	}, now); err != nil {
 		return "", time.Time{}, err
-	}
-	_, err = st.db.ExecContext(ctx,
-		`INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, idleTimeoutSeconds, lastUsedAt, mfaVerifiedAt, ipAddress, userAgent)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		hex.EncodeToString(randomBytes(16)), hash, userID, now, expiresAt, idle, now, mfaAt,
-		truncate(clientIP(r), 64), truncate(r.UserAgent(), 512))
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("create session: %w", err)
 	}
 	return raw, expiresAt, nil
 }
@@ -123,44 +111,16 @@ func (st *sessionStore) load(ctx context.Context, raw string) (*session, error) 
 	s.Email = email.String
 	s.Role = role.String
 	if stale {
-		if _, err := st.db.ExecContext(ctx, "UPDATE AuthSession SET lastUsedAt = ? WHERE id = ?", now, s.ID); err != nil {
-			return nil, fmt.Errorf("touch session: %w", err)
+		if err := account.TouchSession(ctx, st.db, s.ID, now); err != nil {
+			return nil, err
 		}
 	}
 	return &s, nil
 }
 
-// revoke は1つのセッションを消す（C5 の「この端末」。ログアウト）。
+// revoke は1つのセッションを消す（C5 の「この端末」。ログアウト）。行の作成・消去は持ち主の internal/write/account（JUK-154）。
 func (st *sessionStore) revoke(ctx context.Context, sessionID string) error {
-	_, err := st.db.ExecContext(ctx, "DELETE FROM AuthSession WHERE id = ?", sessionID)
-	return err
-}
-
-// sweep は期限の切れたセッションを少しずつ消す（ログインのたびに最大 100 行）。
-func (st *sessionStore) sweep(ctx context.Context, now time.Time) error {
-	rows, err := st.db.QueryContext(ctx, "SELECT id FROM AuthSession WHERE expiresAt <= ? LIMIT 100", now)
-	if err != nil {
-		return err
-	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
-		}
-		ids = append(ids, id)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, id := range ids {
-		if _, err := st.db.ExecContext(ctx, "DELETE FROM AuthSession WHERE id = ? AND expiresAt <= ?", id, now); err != nil {
-			return err
-		}
-	}
-	return nil
+	return account.RevokeSession(ctx, st.db, sessionID)
 }
 
 // sessionAuth はルーター（router.go）にセッションの読み方を渡す。
