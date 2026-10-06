@@ -10,11 +10,13 @@ import (
 	"context"
 	"reflect"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
 func TestA3StoreScopedByUserDB(t *testing.T) {
-	db := openTestDB(t)
-	facultyID, otherFacultyID := dbFixture{t: t, db: db}.university(), dbFixture{t: t, db: db}.university()
+	db := dbtest.Open(t)
+	facultyID, otherFacultyID := newDBFixture(t, db).University(), newDBFixture(t, db).University()
 	ctx := context.Background()
 	goals := &goalStore{db: db}
 	textbooks := &textbookStore{db: db}
@@ -31,33 +33,33 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 	}{
 		{
 			name: "志望校の学部の差し替え", table: "FinalGoal",
-			seed: func(fx dbFixture, holder string) int64 { return fx.finalGoal(holder, facultyID) },
+			seed: func(fx dbFixture, holder string) int64 { return fx.FinalGoal(holder, facultyID) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
 				_, _ = goals.replaceFaculty(ctx, caller, id, optional[int64]{present: true, value: &otherFacultyID})
 			},
 		},
 		{
 			name: "志望校のメモ", table: "FinalGoal",
-			seed: func(fx dbFixture, holder string) int64 { return fx.finalGoal(holder, facultyID) },
+			seed: func(fx dbFixture, holder string) int64 { return fx.FinalGoal(holder, facultyID) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
 				_ = goals.applyPatch(ctx, caller, id, goalPatch{note: optional[string]{present: true, value: &note}})
 			},
 		},
 		{
 			name: "志望校の削除", table: "FinalGoal",
-			seed:  func(fx dbFixture, holder string) int64 { return fx.finalGoal(holder, facultyID) },
+			seed:  func(fx dbFixture, holder string) int64 { return fx.FinalGoal(holder, facultyID) },
 			write: func(_ dbFixture, caller, _ string, id int64) { _ = goals.deleteGoal(ctx, caller, id) },
 		},
 		{
 			name: "参考書の逆算設定", table: "Textbook",
-			seed: func(fx dbFixture, holder string) int64 { return fx.textbook(holder) },
+			seed: func(fx dbFixture, holder string) int64 { return fx.Textbook(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
 				_, _ = textbooks.updateProgress(ctx, caller, id, textbookProgress{subject: optional[string]{present: true, value: &note}})
 			},
 		},
 		{
 			name: "実績の書き換え", table: "StudyLog",
-			seed: func(fx dbFixture, holder string) int64 { return fx.studyLog(holder) },
+			seed: func(fx dbFixture, holder string) int64 { return fx.StudyLog(holder) },
 			write: func(_ dbFixture, caller, holder string, id int64) {
 				current, err := findStudyLog(ctx, db, id, holder)
 				if err != nil || current == nil {
@@ -68,24 +70,24 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 		},
 		{
 			name: "実績の削除", table: "StudyLog",
-			seed:  func(fx dbFixture, holder string) int64 { return fx.studyLog(holder) },
+			seed:  func(fx dbFixture, holder string) int64 { return fx.StudyLog(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) { _ = logs.delete(ctx, caller, id) },
 		},
 		{
 			name: "予定の書き換え", table: "StudyPlan",
-			seed: func(fx dbFixture, holder string) int64 { return fx.studyPlan(holder) },
+			seed: func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
 				_, _ = plans.update(ctx, caller, id, studyPlanUpdate{content: optional[string]{present: true, value: &note}})
 			},
 		},
 		{
 			name: "予定の削除", table: "StudyPlan",
-			seed:  func(fx dbFixture, holder string) int64 { return fx.studyPlan(holder) },
+			seed:  func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) { _ = plans.delete(ctx, caller, id) },
 		},
 		{
 			name: "予定の完了", table: "StudyPlan",
-			seed: func(fx dbFixture, holder string) int64 { return fx.studyPlan(holder) },
+			seed: func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
 			write: func(_ dbFixture, caller, holder string, id int64) {
 				plan, err := findStudyPlan(ctx, db, id, holder)
 				if err != nil || plan == nil {
@@ -98,11 +100,11 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name+"：他人の行は変わらない", func(t *testing.T) {
-			fx := dbFixture{t: t, db: db}
-			caller, holder := fx.user(), fx.user()
+			fx := newDBFixture(t, db)
+			caller, holder := fx.User(), fx.User()
 			id := c.seed(fx, holder)
 			// #nosec G202 -- table はこのテストに書いた固定の名前だけ
-			read := func(userID string) []string { return fx.rows("SELECT * FROM "+c.table+" WHERE userId = ?", userID) }
+			read := func(userID string) []string { return fx.Rows("SELECT * FROM "+c.table+" WHERE userId = ?", userID) }
 			before := read(holder)
 
 			c.write(fx, caller, holder, id)
@@ -111,17 +113,17 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 				t.Errorf("他人の行が変わった\nbefore %v\nafter  %v", before, after)
 			}
 			// 予定の完了は実績を作るので、caller の側にも何も残っていないことを見る。
-			if logs := fx.rows("SELECT * FROM StudyLog WHERE userId = ?", caller); len(logs) != 0 {
+			if logs := fx.Rows("SELECT * FROM StudyLog WHERE userId = ?", caller); len(logs) != 0 {
 				t.Errorf("caller に実績が残った: %v", logs)
 			}
 		})
 
 		t.Run(c.name+"：自分の行なら変わる", func(t *testing.T) {
-			fx := dbFixture{t: t, db: db}
-			owner := fx.user()
+			fx := newDBFixture(t, db)
+			owner := fx.User()
 			id := c.seed(fx, owner)
 			// #nosec G202 -- table はこのテストに書いた固定の名前だけ
-			read := func() []string { return fx.rows("SELECT * FROM "+c.table+" WHERE userId = ?", owner) }
+			read := func() []string { return fx.Rows("SELECT * FROM "+c.table+" WHERE userId = ?", owner) }
 			before := read()
 
 			c.write(fx, owner, owner, id)

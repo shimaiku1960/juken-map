@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
 // ownershipAttempt は1回分のリクエストと、断られたあとに DB が変わっていないかを見るための読み取り。
@@ -53,24 +55,24 @@ func owned(cases map[string]ownershipArrange) ownershipClass {
 // ownershipTable は user のルートの分類。facultyID は志望校を作るときの学部（テストの最初に作る）。
 func ownershipTable(facultyID int64) map[string]ownershipClass {
 	goalsOf := func(fx dbFixture, user string) func() []string {
-		return func() []string { return fx.rows("SELECT * FROM FinalGoal WHERE userId = ?", user) }
+		return func() []string { return fx.Rows("SELECT * FROM FinalGoal WHERE userId = ?", user) }
 	}
 	logsOf := func(fx dbFixture, user string) func() []string {
-		return func() []string { return fx.rows("SELECT * FROM StudyLog WHERE userId = ?", user) }
+		return func() []string { return fx.Rows("SELECT * FROM StudyLog WHERE userId = ?", user) }
 	}
 	plansOf := func(fx dbFixture, user string) func() []string {
-		return func() []string { return fx.rows("SELECT * FROM StudyPlan WHERE userId = ?", user) }
+		return func() []string { return fx.Rows("SELECT * FROM StudyPlan WHERE userId = ?", user) }
 	}
 	logByID := func(fx dbFixture, id int64) func() []string {
-		return func() []string { return fx.rows("SELECT * FROM StudyLog WHERE id = ?", id) }
+		return func() []string { return fx.Rows("SELECT * FROM StudyLog WHERE id = ?", id) }
 	}
 	planByID := func(fx dbFixture, id int64) func() []string {
-		return func() []string { return fx.rows("SELECT * FROM StudyPlan WHERE id = ?", id) }
+		return func() []string { return fx.Rows("SELECT * FROM StudyPlan WHERE id = ?", id) }
 	}
 	otherGoal := func(body any) map[string]ownershipArrange {
 		return map[string]ownershipArrange{
 			"他人の志望校": func(fx dbFixture, _, holder string) ownershipAttempt {
-				id := fx.finalGoal(holder, facultyID)
+				id := fx.FinalGoal(holder, facultyID)
 				return ownershipAttempt{url: fmt.Sprintf("/api/goals/%d", id), body: body, read: goalsOf(fx, holder)}
 			},
 		}
@@ -92,27 +94,27 @@ func ownershipTable(facultyID int64) map[string]ownershipClass {
 		"GET /api/study-logs/daily": none("自分の日ごとの学習時間"),
 		"POST /api/study-logs": owned(map[string]ownershipArrange{
 			"他人の参考書": func(fx dbFixture, caller, holder string) ownershipAttempt {
-				textbookID := fx.textbook(holder)
+				textbookID := fx.Textbook(holder)
 				return ownershipAttempt{url: "/api/study-logs",
 					body: map[string]any{"date": todayTokyo(), "minutes": 30, "textbookId": textbookID}, read: logsOf(fx, caller)}
 			},
 		}),
 		"PATCH /api/study-logs/{id}": owned(map[string]ownershipArrange{
 			"他人の実績": func(fx dbFixture, _, holder string) ownershipAttempt {
-				id := fx.studyLog(holder)
+				id := fx.StudyLog(holder)
 				return ownershipAttempt{url: fmt.Sprintf("/api/study-logs/%d", id),
 					body: map[string]any{"date": todayTokyo(), "minutes": 45}, read: logByID(fx, id)}
 			},
 			"他人の参考書": func(fx dbFixture, caller, holder string) ownershipAttempt {
-				id := fx.studyLog(caller)
-				textbookID := fx.textbook(holder)
+				id := fx.StudyLog(caller)
+				textbookID := fx.Textbook(holder)
 				return ownershipAttempt{url: fmt.Sprintf("/api/study-logs/%d", id),
 					body: map[string]any{"date": todayTokyo(), "minutes": 30, "textbookId": textbookID}, read: logByID(fx, id)}
 			},
 		}),
 		"DELETE /api/study-logs/{id}": owned(map[string]ownershipArrange{
 			"他人の実績": func(fx dbFixture, _, holder string) ownershipAttempt {
-				id := fx.studyLog(holder)
+				id := fx.StudyLog(holder)
 				return ownershipAttempt{url: fmt.Sprintf("/api/study-logs/%d", id), read: logByID(fx, id)}
 			},
 		}),
@@ -121,7 +123,7 @@ func ownershipTable(facultyID int64) map[string]ownershipClass {
 		"GET /api/study-plans": none("自分の予定の一覧"),
 		"POST /api/study-plans": owned(map[string]ownershipArrange{
 			"他人の参考書": func(fx dbFixture, caller, holder string) ownershipAttempt {
-				textbookID := fx.textbook(holder)
+				textbookID := fx.Textbook(holder)
 				return ownershipAttempt{url: "/api/study-plans",
 					body: map[string]any{"date": "2027-02-20", "items": []any{map[string]any{"textbookId": textbookID}}},
 					read: plansOf(fx, caller)}
@@ -129,26 +131,26 @@ func ownershipTable(facultyID int64) map[string]ownershipClass {
 		}),
 		"PATCH /api/study-plans/{id}": owned(map[string]ownershipArrange{
 			"他人の予定": func(fx dbFixture, _, holder string) ownershipAttempt {
-				id := fx.studyPlan(holder)
+				id := fx.StudyPlan(holder)
 				return ownershipAttempt{url: fmt.Sprintf("/api/study-plans/%d", id),
 					body: map[string]any{"content": "書き換え"}, read: planByID(fx, id)}
 			},
 			"他人の参考書": func(fx dbFixture, caller, holder string) ownershipAttempt {
-				id := fx.studyPlan(caller)
-				textbookID := fx.textbook(holder)
+				id := fx.StudyPlan(caller)
+				textbookID := fx.Textbook(holder)
 				return ownershipAttempt{url: fmt.Sprintf("/api/study-plans/%d", id),
 					body: map[string]any{"textbookId": textbookID}, read: planByID(fx, id)}
 			},
 		}),
 		"DELETE /api/study-plans/{id}": owned(map[string]ownershipArrange{
 			"他人の予定": func(fx dbFixture, _, holder string) ownershipAttempt {
-				id := fx.studyPlan(holder)
+				id := fx.StudyPlan(holder)
 				return ownershipAttempt{url: fmt.Sprintf("/api/study-plans/%d", id), read: planByID(fx, id)}
 			},
 		}),
 		"POST /api/study-plans/{id}/complete": owned(map[string]ownershipArrange{
 			"他人の予定": func(fx dbFixture, caller, holder string) ownershipAttempt {
-				id := fx.studyPlan(holder)
+				id := fx.StudyPlan(holder)
 				return ownershipAttempt{url: fmt.Sprintf("/api/study-plans/%d/complete", id),
 					body: map[string]any{"minutes": 30},
 					read: func() []string {
@@ -163,10 +165,10 @@ func ownershipTable(facultyID int64) map[string]ownershipClass {
 		"POST /api/textbooks":       master("masterId は参考書マスター（名前で作るときは ID を取らない）"),
 		"PATCH /api/textbooks/{id}": owned(map[string]ownershipArrange{
 			"他人の参考書": func(fx dbFixture, _, holder string) ownershipAttempt {
-				id := fx.textbook(holder)
+				id := fx.Textbook(holder)
 				return ownershipAttempt{url: fmt.Sprintf("/api/textbooks/%d", id),
 					body: map[string]any{"totalAmount": 100},
-					read: func() []string { return fx.rows("SELECT * FROM Textbook WHERE userId = ?", holder) }}
+					read: func() []string { return fx.Rows("SELECT * FROM Textbook WHERE userId = ?", holder) }}
 			},
 		}),
 
@@ -186,10 +188,10 @@ func ownershipTable(facultyID int64) map[string]ownershipClass {
 }
 
 func TestA3OwnershipDB(t *testing.T) {
-	db := openTestDB(t)
-	fx := dbFixture{t: t, db: db}
+	db := dbtest.Open(t)
+	fx := newDBFixture(t, db)
 	app := newDBTestApp(db)
-	table := ownershipTable(fx.university())
+	table := ownershipTable(fx.University())
 
 	t.Run("A3 利用者の API は全件が表で分類されていて、表に余りも無い", func(t *testing.T) {
 		routes := app.userRoutes()
@@ -238,8 +240,8 @@ func TestA3OwnershipDB(t *testing.T) {
 		method, _, _ := strings.Cut(route, " ")
 		for name, arrange := range class.cases {
 			t.Run(fmt.Sprintf("A3 %s：%s なら断り、DB を変えない", route, name), func(t *testing.T) {
-				fx := dbFixture{t: t, db: db}
-				caller, holder := fx.user(), fx.user()
+				fx := newDBFixture(t, db)
+				caller, holder := fx.User(), fx.User()
 				attempt := arrange(fx, caller, holder)
 				before := attempt.read()
 
@@ -254,8 +256,8 @@ func TestA3OwnershipDB(t *testing.T) {
 			})
 
 			t.Run(fmt.Sprintf("A3 %s：%s を自分の ID に替えると通る", route, name), func(t *testing.T) {
-				fx := dbFixture{t: t, db: db}
-				caller := fx.user()
+				fx := newDBFixture(t, db)
+				caller := fx.User()
 				attempt := arrange(fx, caller, caller)
 
 				res := app.send(method, attempt.url, attempt.body, caller)
