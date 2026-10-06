@@ -241,6 +241,7 @@ func (st *sqlNotificationStore) findRecipients(ctx context.Context, slot apische
 	}
 	// 通知設定の無いユーザーは対象外なので、設定とは内部結合（JOIN）。
 	// LINE は未連携でもメールだけ受け取れるので、外部結合（LEFT JOIN）。
+	// #nosec G202 -- 列名は slotColumns に書いた固定の名前だけ。値は渡していない
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT u.id, u.email, u.name, u.nickname,
 		        np.morningEnabled, np.eveningEnabled, np.lineMorningEnabled, np.lineEveningEnabled,
