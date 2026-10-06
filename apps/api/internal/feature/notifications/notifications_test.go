@@ -1,4 +1,4 @@
-package main
+package notifications
 
 import (
 	"context"
@@ -166,7 +166,7 @@ func (m *fakeMessenger) pushLine(_ context.Context, lineUserID, _ string) error 
 	return nil
 }
 
-func testNotifier(store notificationStore, m messenger) *dailyNotifier {
+func testNotifier(store notificationStore, m Messenger) *dailyNotifier {
 	n := newDailyNotifier(store, m)
 	n.emailPace = newPacer(0)
 	return n
@@ -280,8 +280,8 @@ func TestDailyNotifierSend(t *testing.T) {
 func TestCronHandler(t *testing.T) {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	store := newFakeStore(recipient{ID: "u", Email: strp("u@example.com"), Morning: true})
-	h := &cronHandler{notifier: testNotifier(store, &fakeMessenger{}), now: func() time.Time { return testNow }}
-	rt.Job("POST /api/cron/daily-study-notifications", "secret", h.dailyNotifications)
+	h := &CronHandler{notifier: testNotifier(store, &fakeMessenger{}), now: func() time.Time { return testNow }}
+	rt.Job("POST /api/cron/daily-study-notifications", "secret", h.DailyNotifications)
 
 	tests := []struct {
 		name, auth, body string

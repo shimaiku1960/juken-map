@@ -265,7 +265,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/feature/textbooks/` | 参考書の一覧と参考書マスター／参考書の追加（マスターからも）・進み具合の書き換えの入口（書き込みは `internal/write/textbook`） |
 | `universities.go` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 |
 | `profile.go` | プロフィールの更新 |
-| `notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存（保存は `internal/write/notification`） |
+| `internal/feature/notifications/notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存（保存は `internal/write/notification`） |
 
 ### 管理画面（`/api/admin/*`）
 
@@ -299,8 +299,8 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる。送った印は `internal/write/notification` |
-| `daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 |
+| `internal/feature/notifications/notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる。送った印は `internal/write/notification` |
+| `internal/feature/notifications/daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 |
 
 ### 計測・シミュレーション
 

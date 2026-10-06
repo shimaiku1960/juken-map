@@ -219,7 +219,7 @@ func providerLabel(provider string) string {
 
 // ---- Resend ----
 
-// resendSender は Resend の API を直接呼ぶ（SDK は使わない。notifications.go の httpMessenger と同じ）。
+// resendSender は Resend の API を直接呼ぶ（SDK は使わない。internal/feature/notifications の HTTPMessenger と同じ）。
 type resendSender struct {
 	client *http.Client
 	base   string
