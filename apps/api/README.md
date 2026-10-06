@@ -245,7 +245,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `auth_handlers.go` | 入口の一覧、登録・ログイン・ログアウト・セッションの取得 |
-| `auth_session.go`・`auth_token.go` | セッション（期限・取り消し・Cookie、各ルートでの照会）とトークンの作り方 |
+| `auth_session.go`・`auth_token.go` | セッション（期限・取り消し・Cookie、各ルートでの照会）とトークンの作り方。行の作成・消去は `internal/write/account` |
 | `auth_password.go` | パスワードのハッシュ（Argon2id）と規則（15文字以上・よくあるものの拒否。一覧は `auth_common_passwords.txt`） |
 | `auth_recovery.go` | メールの確認・確認メールの再送・再設定・パスワードの変更 |
 | `auth_mfa.go`・`auth_totp.go` | 2段階認証（TOTP・予備コード・秘密の暗号化） |
@@ -338,7 +338,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
 | `logger.go` | pino と同じ形の JSON ログ。reqId・trace_id を足し、`LOG_FILE` にも書く |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
-| `internal/write/account/` | アカウントへの書き込みの持ち主。今は利用停止・解除（`Suspend`・`Unsuspend`）と運用の記録（`OpsAuditLog`）。管理画面と `incident` の両方が呼ぶ（JUK-151、構成は `docs/architecture.md`「バックエンドの構成」） |
+| `internal/write/account/` | アカウントへの書き込みの持ち主。今は利用停止・解除（`Suspend`・`Unsuspend`）、セッションの作成・取り消し（`session.go`）と運用の記録（`OpsAuditLog`）。管理画面と `incident` の両方が呼ぶ（JUK-151、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `internal/write/studyrecord/` | 学習記録（実績・予定・初回記録の日時）への書き込みの持ち主。実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |
 | `internal/write/textbook/` | 利用者の参考書への書き込みの持ち主。名前・参考書マスターからの登録と、逆算設定の変更（JUK-154） |
 | `internal/write/goal/` | 志望校への書き込みの持ち主。登録・学部の差し替え・第一志望やメモの変更・削除。第一志望の付け替えを1つのトランザクションで行う（JUK-154） |
