@@ -1,4 +1,4 @@
-package main
+package goals
 
 import (
 	"context"
@@ -30,7 +30,7 @@ var facultyIDRule = httpx.NumberRule{Int: true, Positive: true, PositiveMessage:
 var goalNoteRule = httpx.StringRule{Max: 500, MaxMessage: "500文字以内で入力してください"}
 
 // findGoalWithFaculty は登録した志望校を学部・大学つきで読む（画面が学部名・大学名を出すため）。
-func (st *goalStore) findGoalWithFaculty(ctx context.Context, id int64) (apischema.FirstChoiceGoal, error) {
+func (st *store) findGoalWithFaculty(ctx context.Context, id int64) (apischema.FirstChoiceGoal, error) {
 	var g apischema.FirstChoiceGoal
 	if err := st.db.QueryRowContext(ctx,
 		"SELECT"+goalColumns+fromGoalWithFaculty+" WHERE g.id = ?", id,
@@ -53,8 +53,8 @@ func writeGoalError(w http.ResponseWriter, r *http.Request, op string, err error
 	}
 }
 
-// create は POST /api/goals。
-func (h *goalHandlers) create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Create は POST /api/goals。
+func (h *Handlers) Create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -78,9 +78,9 @@ func (h *goalHandlers) create(w http.ResponseWriter, r *http.Request, s *httpx.S
 	httpx.WriteJSON(w, http.StatusCreated, created)
 }
 
-// replace は PUT /api/goals/{id}。本文は updateGoalSchema（goalSchema の全項目を任意にしたもの）で、
+// Replace は PUT /api/goals/{id}。本文は updateGoalSchema（goalSchema の全項目を任意にしたもの）で、
 // status も確かめるが書くのは facultyId だけ（Node と同じ）。入力チェックは自分の志望校かを確かめるより先。
-func (h *goalHandlers) replace(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) Replace(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -103,8 +103,8 @@ func (h *goalHandlers) replace(w http.ResponseWriter, r *http.Request, s *httpx.
 	httpx.WriteJSON(w, http.StatusOK, apischema.GoalFields(updated))
 }
 
-// update は PATCH /api/goals/{id}。
-func (h *goalHandlers) update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Update は PATCH /api/goals/{id}。
+func (h *Handlers) Update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -129,8 +129,8 @@ func (h *goalHandlers) update(w http.ResponseWriter, r *http.Request, s *httpx.S
 	httpx.WriteJSON(w, http.StatusOK, apischema.OkMessage{Message: apischema.OkMessageOK})
 }
 
-// delete は DELETE /api/goals/{id}。
-func (h *goalHandlers) delete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Delete は DELETE /api/goals/{id}。
+func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}

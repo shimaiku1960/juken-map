@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
@@ -271,13 +272,13 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfi
 	rt.User("DELETE /api/study-plans/{id}", studyPlanWrites.delete)
 	rt.User("POST /api/study-plans/{id}/complete", studyPlanWrites.complete)
 
-	goals := &goalHandlers{store: &goalStore{db: db}}
-	rt.User("GET /api/goals", goals.list)
-	rt.User("GET /api/goals/first-choice", goals.firstChoice)
-	rt.User("POST /api/goals", goals.create)
-	rt.User("PUT /api/goals/{id}", goals.replace)
-	rt.User("PATCH /api/goals/{id}", goals.update)
-	rt.User("DELETE /api/goals/{id}", goals.delete)
+	goalRoutes := goals.New(db)
+	rt.User("GET /api/goals", goalRoutes.List)
+	rt.User("GET /api/goals/first-choice", goalRoutes.FirstChoice)
+	rt.User("POST /api/goals", goalRoutes.Create)
+	rt.User("PUT /api/goals/{id}", goalRoutes.Replace)
+	rt.User("PATCH /api/goals/{id}", goalRoutes.Update)
+	rt.User("DELETE /api/goals/{id}", goalRoutes.Delete)
 
 	textbookRoutes := textbooks.New(db)
 	rt.User("GET /api/textbooks", textbookRoutes.List)

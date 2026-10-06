@@ -1,4 +1,6 @@
-package main
+// Package goals は志望校の入口（GET・POST /api/goals、GET /api/goals/first-choice、PUT・PATCH・DELETE /api/goals/{id}）。
+// ハンドラと読み取りの SQL を持ち、書き込みは internal/write/goal に任せる（JUK-156）。
+package goals
 
 import (
 	"context"
@@ -66,13 +68,13 @@ func withTags(g apischema.FirstChoiceGoal) apischema.Goal {
 	}
 }
 
-type goalStore struct {
+type store struct {
 	db *sql.DB
 }
 
 // listGoals は志望校ページ用。学部・大学に加え、学部のタグまで引く。
 // 作った順に並べ、同じ日時どうしは id で、タグは id で並べる（Node と同じ）。
-func (st *goalStore) listGoals(ctx context.Context, userID string) ([]apischema.Goal, error) {
+func (st *store) listGoals(ctx context.Context, userID string) ([]apischema.Goal, error) {
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+goalColumns+`,
 		        t.id AS t_id, t.name AS t_name, t.createdAt AS t_createdAt`+
@@ -117,7 +119,7 @@ func (st *goalStore) listGoals(ctx context.Context, userID string) ([]apischema.
 
 // findFirstChoiceGoal はトップの「第一志望」表示専用。タグは画面で使わないので引かない。
 // 無ければ nil（JSON では null）。
-func (st *goalStore) findFirstChoiceGoal(ctx context.Context, userID string) (*apischema.FirstChoiceGoal, error) {
+func (st *store) findFirstChoiceGoal(ctx context.Context, userID string) (*apischema.FirstChoiceGoal, error) {
 	// 第一志望は1ユーザー1校（Node の applyGoalPatch が保つ）。DB の制約ではないので、
 	// 万一2校あっても結果が揺れないよう id で並べて1件にする。
 	var g apischema.FirstChoiceGoal
@@ -138,12 +140,14 @@ func (st *goalStore) findFirstChoiceGoal(ctx context.Context, userID string) (*a
 	return &g, nil
 }
 
-type goalHandlers struct {
-	store *goalStore
+type Handlers struct {
+	store *store
 }
 
-// list は GET /api/goals。
-func (h *goalHandlers) list(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func New(db *sql.DB) *Handlers { return &Handlers{store: &store{db: db}} }
+
+// List は GET /api/goals。
+func (h *Handlers) List(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	goals, err := h.store.listGoals(r.Context(), s.UserID)
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("goals: %w", err))
@@ -152,8 +156,8 @@ func (h *goalHandlers) list(w http.ResponseWriter, r *http.Request, s *httpx.Ses
 	httpx.WriteJSON(w, http.StatusOK, goals)
 }
 
-// firstChoice は GET /api/goals/first-choice。第一志望が無ければ null を返す（Node と同じ）。
-func (h *goalHandlers) firstChoice(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// FirstChoice は GET /api/goals/first-choice。第一志望が無ければ null を返す（Node と同じ）。
+func (h *Handlers) FirstChoice(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	goal, err := h.store.findFirstChoiceGoal(r.Context(), s.UserID)
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("goals/first-choice: %w", err))

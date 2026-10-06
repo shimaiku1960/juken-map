@@ -265,7 +265,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `study_handlers.go` | 学習記録・予定の一覧の API |
 | `study_log_writes.go` | 学習記録の記録・書き換え・削除の入口（本文の確かめと応答の形。書き込みは `internal/write/studyrecord`） |
 | `study_plan_writes.go` | 学習予定の作成（まとめて）・書き換え（送った項目だけ）・削除・完了の入口（書き込みは `internal/write/studyrecord`） |
-| `goals.go`・`goal_writes.go` | 志望校の一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除の入口（書き込みは `internal/write/goal`） |
+| `internal/feature/goals/` | 志望校の一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除の入口（書き込みは `internal/write/goal`） |
 | `internal/feature/textbooks/` | 参考書の一覧と参考書マスター／参考書の追加（マスターからも）・進み具合の書き換えの入口（書き込みは `internal/write/textbook`） |
 | `universities.go` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 |
 | `profile.go` | プロフィールの更新 |
