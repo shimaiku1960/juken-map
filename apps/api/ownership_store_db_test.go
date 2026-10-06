@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
@@ -22,7 +23,6 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 	db := dbtest.Open(t)
 	facultyID, otherFacultyID := newDBFixture(t, db).University(), newDBFixture(t, db).University()
 	ctx := context.Background()
-	goals := &goalStore{db: db}
 	note := "書き換え"
 	now := time.Now().UTC().Truncate(time.Millisecond)
 
@@ -37,20 +37,20 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "志望校の学部の差し替え", table: "FinalGoal",
 			seed: func(fx dbFixture, holder string) int64 { return fx.FinalGoal(holder, facultyID) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = goals.replaceFaculty(ctx, caller, id, optional[int64]{present: true, value: &otherFacultyID})
+				_, _ = goal.ReplaceFaculty(ctx, db, caller, id, &otherFacultyID)
 			},
 		},
 		{
 			name: "志望校のメモ", table: "FinalGoal",
 			seed: func(fx dbFixture, holder string) int64 { return fx.FinalGoal(holder, facultyID) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_ = goals.applyPatch(ctx, caller, id, goalPatch{note: optional[string]{present: true, value: &note}})
+				_ = goal.ApplyPatch(ctx, db, caller, id, goal.Patch{Note: opt.Of(note)})
 			},
 		},
 		{
 			name: "志望校の削除", table: "FinalGoal",
 			seed:  func(fx dbFixture, holder string) int64 { return fx.FinalGoal(holder, facultyID) },
-			write: func(_ dbFixture, caller, _ string, id int64) { _ = goals.deleteGoal(ctx, caller, id) },
+			write: func(_ dbFixture, caller, _ string, id int64) { _ = goal.Delete(ctx, db, caller, id) },
 		},
 		{
 			name: "参考書の逆算設定", table: "Textbook",
