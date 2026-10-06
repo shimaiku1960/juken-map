@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"context"
@@ -33,9 +33,9 @@ import (
 // 変更はすべて構造化ログ「admin master change」に「誰が・何を・前→後」で残す（Node と同じ項目。Grafana の Loki で追える）。
 //
 // ファイルは対象ごとに分け、それぞれに入口・入力・DB をまとめる（JUK-135）。
-//   - admin_universities.go：大学（/api/admin/universities）
-//   - admin_faculties.go：学部とタグ（/api/admin/faculties・/api/admin/tags）
-//   - admin_textbook_masters.go：参考書マスター（/api/admin/textbook-masters）
+//   - universities.go：大学（/api/admin/universities）
+//   - faculties.go：学部とタグ（/api/admin/faculties・/api/admin/tags）
+//   - textbook_masters.go：参考書マスター（/api/admin/textbook-masters）
 //
 // このファイルには、3つが共通で使うもの（上限・断ったときの返し方・変更の記録・store の定義・入力と DB の部品）を置く。
 
@@ -127,7 +127,7 @@ func logMasterChange(ctx context.Context, adminID, action, table string, id int6
 // 書き込みは、断ったときは failure を、想定外の失敗は error を返す。
 type adminMasterStore interface {
 	listUniversities(ctx context.Context, q string, page int) (apischema.AdminUniversityList, error)
-	// universityDetail は大学と学部。大学が無ければ nil。
+	// UniversityDetail は大学と学部。大学が無ければ nil。
 	universityDetail(ctx context.Context, id int64) (*apischema.AdminUniversityDetail, error)
 	listTags(ctx context.Context) ([]apischema.AdminTag, error)
 	createUniversity(ctx context.Context, in universityInput) (masterOutcome[apischema.AdminUniversity], error)
@@ -142,8 +142,18 @@ type adminMasterStore interface {
 	deleteTextbookMaster(ctx context.Context, id int64) (masterOutcome[apischema.AdminTextbookMaster], error)
 }
 
-type adminMasterHandlers struct {
+type MasterHandlers struct {
 	store adminMasterStore
+}
+
+// NewMasterHandlers の universitiesChanged・textbookMastersChanged は、変更を確定したあとに
+// ほかの入口のキャッシュを捨てるために呼ぶ（sqlAdminMasterStore の同名のフィールド）。
+func NewMasterHandlers(db *sql.DB, universitiesChanged, textbookMastersChanged func()) *MasterHandlers {
+	return &MasterHandlers{store: &sqlAdminMasterStore{
+		db:                     db,
+		universitiesChanged:    universitiesChanged,
+		textbookMastersChanged: textbookMastersChanged,
+	}}
 }
 
 // ---- 入力 ----

@@ -25,7 +25,7 @@ import (
 type store struct {
 	db *sql.DB
 	// masters は GET /api/textbook-masters の JSON。全員に同じで、変わるのは管理画面の編集
-	// （admin_textbook_masters.go）だけなので、メモリに持つ（internal/httpx/json_snapshot.go、JUK-50）。
+	// （internal/feature/admin/textbook_masters.go）だけなので、メモリに持つ（internal/httpx/json_snapshot.go、JUK-50）。
 	masters *httpx.JSONSnapshotCache
 }
 

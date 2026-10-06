@@ -29,7 +29,7 @@ type Suspension struct {
 // （次のログインは auth_handlers.go・auth_mfa.go・auth_oauth.go が bannedAt を見て断る）。認証基準 10 の C5 の
 // 「ある利用者の全端末」にあたる。bannedAt を先に書くので、消している間に新しく入られても、そのログインは断られる。
 //
-// 管理画面（admin_users.go）と運用のコマンド（incident.go）の両方がこれを呼ぶ。audit を渡すと（運用のコマンド）、
+// 管理画面（internal/feature/admin/users.go）と運用のコマンド（incident.go）の両方がこれを呼ぶ。audit を渡すと（運用のコマンド）、
 // 同じトランザクションで OpsAuditLog に記録する。記録が書けなければ止めない。
 func Suspend(ctx context.Context, db *sql.DB, userID string, now time.Time, audit *OpsAudit) (Suspension, error) {
 	var s Suspension

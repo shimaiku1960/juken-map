@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 func TestAuthDBDeleteAccount(t *testing.T) {
@@ -124,7 +125,8 @@ func TestAuthDBDeleteLeavesNoRows(t *testing.T) {
 		id := e.signUpVerified(email, authTestPassword)
 		e.signedIn(email, authTestPassword)
 		fillEveryUserTable(t, e.fx, id, email, facultyID)
-		if _, err := (&sqlAdminUserStore{db: e.db}).deleteUser(context.Background(), id); err != nil {
+		// 管理画面の削除（DELETE /api/admin/users/{id}）は account.DeleteUser をそのまま呼ぶ。
+		if _, err := account.DeleteUser(context.Background(), e.db, id); err != nil {
 			t.Fatal(err)
 		}
 		expectNoTrace(t, e.fx, id, email)

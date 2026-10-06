@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"context"
@@ -14,12 +14,12 @@ import (
 )
 
 // 管理者ページのマスター編集のうち、学部とタグ（/api/admin/faculties・/api/admin/tags）。
-// 共通の部品と全体の決まりは admin_masters.go。
+// 共通の部品と全体の決まりは masters.go。
 
 // ---- 入口 ----
 
-// listTags は GET /api/admin/tags。
-func (h *adminMasterHandlers) listTags(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+// ListTags は GET /api/admin/tags。
+func (h *MasterHandlers) ListTags(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	tags, err := h.store.listTags(r.Context())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("admin tags: %w", err))
@@ -28,8 +28,8 @@ func (h *adminMasterHandlers) listTags(w http.ResponseWriter, r *http.Request, _
 	httpx.WriteJSON(w, http.StatusOK, tags)
 }
 
-// createFaculty は POST /api/admin/faculties。
-func (h *adminMasterHandlers) createFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// CreateFaculty は POST /api/admin/faculties。
+func (h *MasterHandlers) CreateFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -50,8 +50,8 @@ func (h *adminMasterHandlers) createFaculty(w http.ResponseWriter, r *http.Reque
 	httpx.WriteJSON(w, http.StatusCreated, outcome.value)
 }
 
-// updateFaculty は PATCH /api/admin/faculties/{id}。
-func (h *adminMasterHandlers) updateFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// UpdateFaculty は PATCH /api/admin/faculties/{id}。
+func (h *MasterHandlers) UpdateFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -76,8 +76,8 @@ func (h *adminMasterHandlers) updateFaculty(w http.ResponseWriter, r *http.Reque
 	httpx.WriteJSON(w, http.StatusOK, outcome.value.after)
 }
 
-// deleteFaculty は DELETE /api/admin/faculties/{id}。
-func (h *adminMasterHandlers) deleteFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// DeleteFaculty は DELETE /api/admin/faculties/{id}。
+func (h *MasterHandlers) DeleteFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}

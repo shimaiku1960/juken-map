@@ -15,7 +15,7 @@ import (
 // 大学の読み取り（JUK-73）。Node の routes/universities.ts と services/university-service.ts にあたる。
 //   - GET /api/universities       大学を探す画面の一覧。全員に同じもの
 //   - GET /api/universities/{id}  大学詳細。学部・タグと、自分が志望校に登録済みの学部
-// 大学・学部・タグの編集は管理画面（admin_universities.go・admin_faculties.go）にあり、変えたら下のキャッシュを捨てる。
+// 大学・学部・タグの編集は管理画面（internal/feature/admin/universities.go・internal/feature/admin/faculties.go）にあり、変えたら下のキャッシュを捨てる。
 
 // 一覧の応答の形。画面が使うのは大学の列と「学部ごとのタグ名」だけなので、Node と同じくそれだけ返す。
 // JSON のバイト列を Node の JSON.stringify と同じにする（下の ETag を Node と揃えるため）ので、
@@ -38,7 +38,7 @@ type exploreTagDTO struct {
 
 // 大学一覧は全員に同じもので、変わるのは管理画面でマスターを編集したときだけ。毎回 DB を引くと
 // 一番重い API（大学 823 件 × LEFT JOIN 3本）になるので、JSON にした状態でメモリに持つ（internal/httpx/json_snapshot.go）。
-// 管理画面の編集（admin_universities.go・admin_faculties.go）は explore.Invalidate で捨てる。
+// 管理画面の編集（internal/feature/admin/universities.go・internal/feature/admin/faculties.go）は explore.Invalidate で捨てる。
 const exploreCacheTTL = 10 * time.Minute
 
 type universityStore struct {

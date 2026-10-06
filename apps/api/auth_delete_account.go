@@ -10,7 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
-// 本人の退会（06 G3、JUK-123）。管理者の削除（admin_users.go の deleteUser）と同じ消し方で、
+// 本人の退会（06 G3、JUK-123）。管理者の削除（internal/feature/admin/users.go の DeleteUser）と同じ消し方で、
 // 利用者とぶら下がるデータをすべて消す。取り消せないので、直前に本人であることを確かめ直す。
 //
 //   - パスワードがある人は、今のパスワード（reauthenticate と同じ回数制限）

@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"context"
@@ -16,12 +16,12 @@ import (
 )
 
 // 管理者ページのマスター編集のうち、参考書マスター（/api/admin/textbook-masters）。
-// 共通の部品と全体の決まりは admin_masters.go。
+// 共通の部品と全体の決まりは masters.go。
 
 // ---- 入口 ----
 
-// listTextbookMasters は GET /api/admin/textbook-masters。
-func (h *adminMasterHandlers) listTextbookMasters(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+// ListTextbookMasters は GET /api/admin/textbook-masters。
+func (h *MasterHandlers) ListTextbookMasters(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	q, issue := readMasterSearchQuery(httpx.ParseQuery(r.URL.RawQuery))
 	if issue != nil {
 		issue.Write(w)
@@ -35,8 +35,8 @@ func (h *adminMasterHandlers) listTextbookMasters(w http.ResponseWriter, r *http
 	httpx.WriteJSON(w, http.StatusOK, masters)
 }
 
-// createTextbookMaster は POST /api/admin/textbook-masters。
-func (h *adminMasterHandlers) createTextbookMaster(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// CreateTextbookMaster は POST /api/admin/textbook-masters。
+func (h *MasterHandlers) CreateTextbookMaster(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -57,8 +57,8 @@ func (h *adminMasterHandlers) createTextbookMaster(w http.ResponseWriter, r *htt
 	httpx.WriteJSON(w, http.StatusCreated, outcome.value)
 }
 
-// updateTextbookMaster は PATCH /api/admin/textbook-masters/{id}。
-func (h *adminMasterHandlers) updateTextbookMaster(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// UpdateTextbookMaster は PATCH /api/admin/textbook-masters/{id}。
+func (h *MasterHandlers) UpdateTextbookMaster(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -83,8 +83,8 @@ func (h *adminMasterHandlers) updateTextbookMaster(w http.ResponseWriter, r *htt
 	httpx.WriteJSON(w, http.StatusOK, outcome.value.after)
 }
 
-// deleteTextbookMaster は DELETE /api/admin/textbook-masters/{id}。
-func (h *adminMasterHandlers) deleteTextbookMaster(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// DeleteTextbookMaster は DELETE /api/admin/textbook-masters/{id}。
+func (h *MasterHandlers) DeleteTextbookMaster(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}

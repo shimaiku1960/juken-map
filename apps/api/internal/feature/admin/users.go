@@ -1,4 +1,7 @@
-package main
+// Package admin は管理画面の入口（/api/admin/*。利用者の管理とマスター編集）。
+// ハンドラと読み取りの SQL を持ち、書き込みは internal/write の持ち主（account・university・textbookmaster）に任せる（JUK-156）。
+// 全ルートを通す DB のテスト（admin_db_test.go）は、ほかの入口のキャッシュを捨てられているかも見るので、ルートを組む側に置く。
+package admin
 
 import (
 	"context"
@@ -101,11 +104,11 @@ type adminUserStore interface {
 	listUsers(ctx context.Context, kind apischema.UserKind, q string, page int) (apischema.AdminUserList, error)
 	// findTarget は相手を引く。いなければ nil。
 	findTarget(ctx context.Context, id string) (*adminTarget, error)
-	// ban は bannedAt を書き（すでに止まっていれば最初の日時のまま）、その人の session を消す（account.Suspend）。
+	// Ban は bannedAt を書き（すでに止まっていれば最初の日時のまま）、その人の session を消す（account.Suspend）。
 	// 相手がいなければ account.ErrNotFound。
 	ban(ctx context.Context, id string, now time.Time) (account.Suspension, error)
 	unban(ctx context.Context, id string, now time.Time) error
-	// deleteUser は利用者を消し、一緒に消える行の数を返す（数えるのは記録のためだけ）。
+	// DeleteUser は利用者を消し、一緒に消える行の数を返す（数えるのは記録のためだけ）。
 	deleteUser(ctx context.Context, id string) (removedCounts, error)
 }
 
@@ -117,13 +120,17 @@ type removedCounts = struct {
 	Textbooks  int `json:"textbooks"`
 }
 
-type adminUserHandlers struct {
+type UserHandlers struct {
 	store adminUserStore
 	now   func() time.Time
 }
 
-// overview は GET /api/admin/overview。
-func (h *adminUserHandlers) overview(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+func NewUserHandlers(db *sql.DB) *UserHandlers {
+	return &UserHandlers{store: &sqlAdminUserStore{db: db}, now: time.Now}
+}
+
+// Overview は GET /api/admin/overview。
+func (h *UserHandlers) Overview(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	o, err := h.store.overview(r.Context(), h.now())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("admin overview: %w", err))
@@ -132,8 +139,8 @@ func (h *adminUserHandlers) overview(w http.ResponseWriter, r *http.Request, _ *
 	httpx.WriteJSON(w, http.StatusOK, o)
 }
 
-// listUsers は GET /api/admin/users。
-func (h *adminUserHandlers) listUsers(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+// ListUsers は GET /api/admin/users。
+func (h *UserHandlers) ListUsers(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	kind, q, page, issue := readAdminUsersQuery(httpx.ParseQuery(r.URL.RawQuery))
 	if issue != nil {
 		issue.Write(w)
@@ -147,8 +154,8 @@ func (h *adminUserHandlers) listUsers(w http.ResponseWriter, r *http.Request, _ 
 	httpx.WriteJSON(w, http.StatusOK, list)
 }
 
-// ban は POST /api/admin/users/{id}/ban。
-func (h *adminUserHandlers) ban(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Ban は POST /api/admin/users/{id}/ban。
+func (h *UserHandlers) Ban(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	// 本文は使わないが、Node（Fastify）はハンドラより先に本文を読むので、受け付けない形なら同じく 415・413 にする。
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
@@ -177,8 +184,8 @@ func (h *adminUserHandlers) ban(w http.ResponseWriter, r *http.Request, s *httpx
 	httpx.WriteJSON(w, http.StatusOK, apischema.AdminBanResult{ID: id, Email: target.Email, BannedAt: banned.BannedAt, SessionsRemoved: removed})
 }
 
-// unban は POST /api/admin/users/{id}/unban。守りは見ない（Node と同じ。止まっていなければ何も変わらない）。
-func (h *adminUserHandlers) unban(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Unban は POST /api/admin/users/{id}/unban。守りは見ない（Node と同じ。止まっていなければ何も変わらない）。
+func (h *UserHandlers) Unban(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
@@ -208,9 +215,9 @@ func (h *adminUserHandlers) unban(w http.ResponseWriter, r *http.Request, s *htt
 	httpx.WriteJSON(w, http.StatusOK, apischema.AdminUserRef{ID: id, Email: target.Email})
 }
 
-// deleteUser は DELETE /api/admin/users/{id}。取り消せないので、画面で打ち込んだメールアドレスが
+// DeleteUser は DELETE /api/admin/users/{id}。取り消せないので、画面で打ち込んだメールアドレスが
 // 本人のものと一致しないと消さない（一覧が古いまま別の行を消す事故を、id だけに頼らず止める）。
-func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *UserHandlers) DeleteUser(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -253,7 +260,7 @@ func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s
 }
 
 // operableTarget は停止・削除できる相手を引く。いなければ 404、守られていれば 409 を送って false を返す。
-func (h *adminUserHandlers) operableTarget(w http.ResponseWriter, r *http.Request, id, actorID string) (*adminTarget, bool) {
+func (h *UserHandlers) operableTarget(w http.ResponseWriter, r *http.Request, id, actorID string) (*adminTarget, bool) {
 	target, err := h.store.findTarget(r.Context(), id)
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("admin find user: %w", err))
@@ -556,7 +563,7 @@ func (st *sqlAdminUserStore) findTarget(ctx context.Context, id string) (*adminT
 	return &t, nil
 }
 
-// ban・unban は account の操作を呼ぶだけ。interface にしているのは、DB を使わないテストで結果を作るため。
+// Ban・Unban は account の操作を呼ぶだけ。interface にしているのは、DB を使わないテストで結果を作るため。
 func (st *sqlAdminUserStore) ban(ctx context.Context, id string, now time.Time) (account.Suspension, error) {
 	return account.Suspend(ctx, st.db, id, now, nil)
 }
@@ -565,7 +572,7 @@ func (st *sqlAdminUserStore) unban(ctx context.Context, id string, now time.Time
 	return account.Unsuspend(ctx, st.db, id, now, nil)
 }
 
-// deleteUser は利用者を消す。消し方は本人の退会と同じ account.DeleteUser。
+// DeleteUser は利用者を消す。消し方は本人の退会と同じ account.DeleteUser。
 func (st *sqlAdminUserStore) deleteUser(ctx context.Context, id string) (removedCounts, error) {
 	removed, err := account.DeleteUser(ctx, st.db, id)
 	return removedCounts(removed), err
