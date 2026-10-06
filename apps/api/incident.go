@@ -198,27 +198,16 @@ func (st incidentStore) revokeAdmins(ctx context.Context) ([]string, int64, erro
 	return names, removed, nil
 }
 
-// resetTwoFactor は2段階認証を設定する前に戻し、セッションをすべて消す。認証アプリの秘密が漏れたかもしれない
-// ときや、本人が認証アプリも予備コードも無くしたときに使う。次に /admin を開くと設定し直しになる。
+// resetTwoFactor は2段階認証を設定する前に戻し、セッションをすべて消し、記録を残す（account.ResetTwoFactor）。
+// 認証アプリの秘密が漏れたかもしれないときや、本人が認証アプリも予備コードも無くしたときに使う。
+// 次に /admin を開くと設定し直しになる。
 func (st incidentStore) resetTwoFactor(ctx context.Context, email string) (int64, error) {
 	u, err := st.findByEmail(ctx, email)
 	if err != nil {
 		return 0, err
 	}
-	for _, q := range []string{
-		"DELETE FROM AuthTotp WHERE userId = ?",
-		"DELETE FROM AuthBackupCode WHERE userId = ?",
-		"DELETE FROM AuthMfaChallenge WHERE userId = ?",
-	} {
-		if _, err := st.db.ExecContext(ctx, q, u.ID); err != nil {
-			return 0, err
-		}
-	}
-	removed, err := st.deleteSessions(ctx, u.ID)
-	if err != nil {
-		return 0, err
-	}
-	return removed, st.recordOps(ctx, "reset-2fa", u.ID, map[string]any{"sessionsRemoved": removed})
+	audit := opsAudit()
+	return account.ResetTwoFactor(ctx, st.db, u.ID, st.now(), &audit)
 }
 
 // errUnverified は、メール確認前の人を管理者にしようとしたとき。

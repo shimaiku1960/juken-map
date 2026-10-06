@@ -198,28 +198,9 @@ func (st *authStore) deleteMFAChallenges(ctx context.Context, userID string) err
 // ---- TOTP と予備コード（G1・G2） ----
 
 // startTOTPSetup は暗号化した秘密を、まだ有効にしていない状態で保存し、予備コードを作り直す。
-// 作り直したら古い予備コードは全部無効になる（G2）。
+// TOTP と予備コードへの書き込みは持ち主の internal/write/account（JUK-154）。
 func (st *authStore) startTOTPSetup(ctx context.Context, userID, sealed string, backupHashes [][]byte) error {
-	tx, err := st.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO AuthTotp (userId, secret, createdAt, enabledAt, lastUsedStep) VALUES (?, ?, ?, NULL, NULL)
-		 ON DUPLICATE KEY UPDATE secret = VALUES(secret), createdAt = VALUES(createdAt), enabledAt = NULL, lastUsedStep = NULL`,
-		userID, sealed, st.clock()); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM AuthBackupCode WHERE userId = ?", userID); err != nil {
-		return err
-	}
-	for _, hash := range backupHashes {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", userID, hash); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return account.StartTOTPSetup(ctx, st.db, userID, sealed, backupHashes, st.clock())
 }
 
 // pendingTOTPSecret は設定の途中（まだ有効にしていない）の、暗号化した秘密。無ければ空。
@@ -234,12 +215,7 @@ func (st *authStore) pendingTOTPSecret(ctx context.Context, userID string) (stri
 
 // enableTOTP は設定の途中の TOTP を有効にし、確かめたステップを使用済みにする。途中のものが無ければ false。
 func (st *authStore) enableTOTP(ctx context.Context, userID string, step int64, now time.Time) (bool, error) {
-	res, err := st.db.ExecContext(ctx, "UPDATE AuthTotp SET enabledAt = ?, lastUsedStep = ? WHERE userId = ? AND enabledAt IS NULL", now, step, userID)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	return n == 1, nil
+	return account.EnableTOTP(ctx, st.db, userID, step, now)
 }
 
 // enabledTOTP は有効な TOTP の、暗号化した秘密と最後に使ったステップ。有効でなければ sealed が空。
@@ -260,28 +236,16 @@ func (st *authStore) enabledTOTP(ctx context.Context, userID string) (sealed str
 
 // markTOTPStepUsed はステップを使用済みにする。同じステップ以前がもう使われていれば false。
 func (st *authStore) markTOTPStepUsed(ctx context.Context, userID string, step int64) (bool, error) {
-	res, err := st.db.ExecContext(ctx,
-		"UPDATE AuthTotp SET lastUsedStep = ? WHERE userId = ? AND (lastUsedStep IS NULL OR lastUsedStep < ?)", step, userID, step)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	return n == 1, nil
+	return account.MarkTOTPStepUsed(ctx, st.db, userID, step)
 }
 
 func (st *authStore) resealTOTP(ctx context.Context, userID, sealed string) error {
-	_, err := st.db.ExecContext(ctx, "UPDATE AuthTotp SET secret = ? WHERE userId = ?", sealed, userID)
-	return err
+	return account.ResealTOTP(ctx, st.db, userID, sealed)
 }
 
 // useBackupCode は予備コードを確かめ、通ったら消す（1回だけ使える。G2）。
 func (st *authStore) useBackupCode(ctx context.Context, userID, code string) (bool, error) {
-	res, err := st.db.ExecContext(ctx, "DELETE FROM AuthBackupCode WHERE userId = ? AND codeHash = ?", userID, hashBackupCode(code))
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	return n == 1, err
+	return account.UseBackupCode(ctx, st.db, userID, hashBackupCode(code))
 }
 
 func (st *authStore) countBackupCodes(ctx context.Context, userID string) (int, error) {
