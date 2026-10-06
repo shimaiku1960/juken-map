@@ -144,7 +144,7 @@ func (st incidentStore) ban(ctx context.Context, email string) (int64, error) {
 		return 0, err
 	}
 	audit := opsAudit()
-	// DATETIME(3) は端数を丸めるので、先にミリ秒で切っておく（管理画面の nowMillis と同じ）。
+	// DATETIME(3) は端数を丸めるので、先にミリ秒で切っておく（dates.NowMillis と同じ）。
 	banned, err := account.Suspend(ctx, st.db, u.ID, st.now().UTC().Truncate(time.Millisecond), &audit)
 	return banned.SessionsRemoved, err
 }

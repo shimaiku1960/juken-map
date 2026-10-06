@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
@@ -198,10 +199,10 @@ func TestAdminUsersDB(t *testing.T) {
 			t.Errorf("active: lastLoginAt=%v lastStudyLogAt=%v bannedAt=%v", got.LastLoginAt, got.LastStudyLogAt, got.BannedAt)
 		}
 		// 日時は ISO（UTC・ミリ秒・Z）。最終ログインは2つの session の新しいほう
-		if want := isoMillis(newer.Add(2 * time.Minute)); got.LastLoginAt != nil && string(*got.LastLoginAt) != want {
+		if want := dates.ISOMillis(newer.Add(2 * time.Minute)); got.LastLoginAt != nil && string(*got.LastLoginAt) != want {
 			t.Errorf("lastLoginAt = %s, want %s", *got.LastLoginAt, want)
 		}
-		if want := isoMillis(newer); string(got.CreatedAt) != want {
+		if want := dates.ISOMillis(newer); string(got.CreatedAt) != want {
 			t.Errorf("createdAt = %s, want %s", got.CreatedAt, want)
 		}
 		if q := real.Users[1]; q.StudyLogCount != 0 || len(q.Providers) != 0 || q.LastLoginAt != nil || q.LastStudyLogAt != nil {

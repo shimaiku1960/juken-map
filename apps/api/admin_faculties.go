@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
@@ -195,7 +196,7 @@ func (st *sqlAdminMasterStore) listTags(ctx context.Context) ([]apischema.AdminT
 }
 
 func (st *sqlAdminMasterStore) createFaculty(ctx context.Context, in facultyInput) (masterOutcome[apischema.AdminFacultySnapshot], error) {
-	f, err := university.CreateFaculty(ctx, st.db, in.record(), nowMillis())
+	f, err := university.CreateFaculty(ctx, st.db, in.record(), dates.NowMillis())
 	return masterOutcomeOf(apischema.AdminFacultySnapshot(f), err, st.universitiesChanged)
 }
 

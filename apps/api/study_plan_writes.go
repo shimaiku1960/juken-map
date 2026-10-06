@@ -10,6 +10,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
@@ -42,9 +43,9 @@ type studyPlanItem struct {
 
 func readStudyPlanItem(in *httpx.ObjectInput) studyPlanItem {
 	var v studyPlanItem
-	v.textbookID = in.OptionalInt("textbookId", positiveIntRule, true)
-	v.rangeStart = in.OptionalInt("rangeStart", positiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", positiveIntRule, true)
+	v.textbookID = in.OptionalInt("textbookId", httpx.PositiveIntRule, true)
+	v.rangeStart = in.OptionalInt("rangeStart", httpx.PositiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", httpx.PositiveIntRule, true)
 	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
 	v.content = in.OptionalString("content", memoRule, false)
 	v.subject = in.OptionalString("subject", httpx.StringRule{Checks: []httpx.StringCheck{subjectCheck}}, true)
@@ -87,9 +88,9 @@ func readStudyPlanUpdate(body any) (*httpx.ObjectInput, studyPlanUpdate) {
 	in := httpx.ReadObject(body)
 	var v studyPlanUpdate
 	v.date = in.OptionalString("date", httpx.YMDDateRule(""), false)
-	v.textbookID = in.OptionalInt("textbookId", positiveIntRule, true)
-	v.rangeStart = in.OptionalInt("rangeStart", positiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", positiveIntRule, true)
+	v.textbookID = in.OptionalInt("textbookId", httpx.PositiveIntRule, true)
+	v.rangeStart = in.OptionalInt("rangeStart", httpx.PositiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", httpx.PositiveIntRule, true)
 	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
 	v.content = in.OptionalString("content", memoRule, false)
 	v.subject = in.OptionalString("subject", httpx.StringRule{Checks: []httpx.StringCheck{subjectCheck}}, true)
@@ -109,8 +110,8 @@ func readCompleteInput(body any) (*httpx.ObjectInput, completeInput) {
 	in := httpx.ReadObject(body)
 	var v completeInput
 	v.minutes = int64(in.Number("minutes", minutesRule))
-	v.rangeStart = in.OptionalInt("rangeStart", positiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", positiveIntRule, true)
+	v.rangeStart = in.OptionalInt("rangeStart", httpx.PositiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", httpx.PositiveIntRule, true)
 	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
 	v.memo = in.OptionalString("memo", memoRule, false)
 	rangeRules(in, v.rangeStart, v.rangeEnd, v.rangeUnit)
@@ -170,7 +171,7 @@ func (h *studyPlanWriteHandlers) create(w http.ResponseWriter, r *http.Request, 
 			RangeUnit: item.rangeUnit.Ptr(), Content: item.content.Ptr(), Subject: item.subject.Ptr(),
 		}
 	}
-	count, err := studyrecord.CreatePlans(r.Context(), h.db, s.UserID, dateFromYMD(date), records, nowMillis())
+	count, err := studyrecord.CreatePlans(r.Context(), h.db, s.UserID, dates.FromYMD(date), records, dates.NowMillis())
 	if err != nil {
 		writeStudyRecordError(w, r, "study-plans create", err)
 		return
@@ -199,10 +200,10 @@ func (h *studyPlanWriteHandlers) update(w http.ResponseWriter, r *http.Request, 
 		Done: input.done.Field(),
 	}
 	if input.date.Present {
-		day := dateFromYMD(*input.date.Value)
+		day := dates.FromYMD(*input.date.Value)
 		patch.Date.Value = &day
 	}
-	updated, err := studyrecord.UpdatePlan(r.Context(), h.db, s.UserID, id, patch, nowMillis())
+	updated, err := studyrecord.UpdatePlan(r.Context(), h.db, s.UserID, id, patch, dates.NowMillis())
 	if err != nil {
 		writeStudyRecordError(w, r, "study-plans update", err)
 		return
@@ -243,7 +244,7 @@ func (h *studyPlanWriteHandlers) complete(w http.ResponseWriter, r *http.Request
 	completed, err := studyrecord.CompletePlan(r.Context(), h.db, s.UserID, id, studyrecord.Completion{
 		Minutes: input.minutes, RangeStart: input.rangeStart.Field(), RangeEnd: input.rangeEnd.Field(),
 		RangeUnit: input.rangeUnit.Field(), Memo: input.memo.Ptr(),
-	}, nowMillis())
+	}, dates.NowMillis())
 	if err != nil {
 		writeStudyRecordError(w, r, "study-plans complete", err)
 		return

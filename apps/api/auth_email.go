@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
@@ -197,7 +199,7 @@ func (m *authMailer) notifyAdminOfNewUser(name, email string, createdAt time.Tim
 		slog.Warn("[registration-notification] ADMIN_NOTIFICATION_EMAIL is not configured.")
 		return
 	}
-	registeredAt := createdAt.In(tokyo).Format("2006年1月2日 15:04")
+	registeredAt := createdAt.In(dates.Tokyo).Format("2006年1月2日 15:04")
 	m.sendLater(emailAdminNewUser, m.adminTo, "【受験マップ】新しいユーザーが登録しました",
 		`<p>受験マップに新しいユーザーが登録しました。</p><dl>`+
 			`<dt>登録日時</dt><dd>`+html.EscapeString(registeredAt)+`</dd>`+
@@ -232,7 +234,7 @@ func (s *resendSender) send(ctx context.Context, to, subject, body string) (http
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, externalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.base+"/emails", bytes.NewReader(raw))
 	if err != nil {

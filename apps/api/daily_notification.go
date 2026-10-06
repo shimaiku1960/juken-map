@@ -6,13 +6,12 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 )
 
 // 毎日の通知の文面と、「日本時間の今日」の範囲（JUK-74）。
 // Node の domain/dailyNotification.ts と同じ文面・同じ規則。DB も外部サービスも使わない。
-
-// siteURL は通知の本文に載せるリンクの先。Node の src/shared/site.ts と同じ値。
-const siteURL = "https://juken-map.com"
 
 type planSummary struct {
 	Done         bool
@@ -37,9 +36,9 @@ type tokyoDay struct {
 }
 
 func tokyoDateRange(now time.Time) tokyoDay {
-	y, m, d := now.In(tokyo).Date()
-	start := time.Date(y, m, d, 0, 0, 0, 0, tokyo).UTC()
-	return tokyoDay{date: start.In(tokyo).Format(time.DateOnly), start: start, end: start.Add(24 * time.Hour)}
+	y, m, d := now.In(dates.Tokyo).Date()
+	start := time.Date(y, m, d, 0, 0, 0, 0, dates.Tokyo).UTC()
+	return tokyoDay{date: start.In(dates.Tokyo).Format(time.DateOnly), start: start, end: start.Add(24 * time.Hour)}
 }
 
 // escapeHTML は Node の escapeHtml と同じ5文字を置き換える（html.EscapeString は ' を &#39; にするので使わない）。
@@ -81,9 +80,9 @@ func buildDailyNotification(slot apischema.NotificationSlot, nickname string, pl
 		return dailyMessage{
 			Subject: "【受験マップ】今日の学習予定",
 			HTML: "<p>" + safeName + "さん、おはようございます。</p><p>" + planText + "</p>" + planList.String() +
-				`<p><a href="` + siteURL + `/dashboard">今日の学習を始める</a></p>`,
+				`<p><a href="` + site.URL + `/dashboard">今日の学習を始める</a></p>`,
 			Text: nickname + "さん、おはようございます。\n" + planText + textList.String() +
-				"\n\n今日の学習を始める\n" + siteURL + "/dashboard",
+				"\n\n今日の学習を始める\n" + site.URL + "/dashboard",
 		}
 	}
 
@@ -108,8 +107,8 @@ func buildDailyNotification(slot apischema.NotificationSlot, nickname string, pl
 	return dailyMessage{
 		Subject: "【受験マップ】今日の学習振り返り",
 		HTML: "<p>" + safeName + "さん、今日もおつかれさまでした。</p><p>" + effort + "</p><p>" + achievement + "</p>" +
-			`<p><a href="` + siteURL + `/dashboard">今日を振り返る</a></p>`,
+			`<p><a href="` + site.URL + `/dashboard">今日を振り返る</a></p>`,
 		Text: nickname + "さん、今日もおつかれさまでした。\n" + effort + "\n" + achievement +
-			"\n\n今日を振り返る\n" + siteURL + "/dashboard",
+			"\n\n今日を振り返る\n" + site.URL + "/dashboard",
 	}
 }

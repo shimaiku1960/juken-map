@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
@@ -32,7 +32,7 @@ type userStore struct {
 
 // updateProfile はニックネームを書き換え、更新後の行を返す（Node と同じく UPDATE の後に SELECT し直す）。
 func (st *userStore) updateProfile(ctx context.Context, userID string, in apischema.ProfileInput) (apischema.User, error) {
-	if err := account.SetNickname(ctx, st.db, userID, in.Nickname, nowMillis()); err != nil {
+	if err := account.SetNickname(ctx, st.db, userID, in.Nickname, dates.NowMillis()); err != nil {
 		return apischema.User{}, err
 	}
 
@@ -80,11 +80,4 @@ func (h *profileHandlers) update(w http.ResponseWriter, r *http.Request, s *http
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, u)
-}
-
-// nowMillis は今の時刻をミリ秒で切り捨てたもの。DB の DATETIME(3) に書く値に使う。
-// Node の new Date() はミリ秒までしか持たない。Go の time.Now() はナノ秒まで持ち、そのまま渡すと
-// MySQL が小数第3位へ丸める（切り上がることがある）ので、先に切り捨てて Node と同じ値にする。
-func nowMillis() time.Time {
-	return time.Now().UTC().Truncate(time.Millisecond)
 }

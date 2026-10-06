@@ -37,18 +37,18 @@ type exploreTagDTO struct {
 }
 
 // 大学一覧は全員に同じもので、変わるのは管理画面でマスターを編集したときだけ。毎回 DB を引くと
-// 一番重い API（大学 823 件 × LEFT JOIN 3本）になるので、JSON にした状態でメモリに持つ（json_snapshot.go）。
-// 管理画面の編集（admin_universities.go・admin_faculties.go）は explore.invalidate で捨てる。
+// 一番重い API（大学 823 件 × LEFT JOIN 3本）になるので、JSON にした状態でメモリに持つ（internal/httpx/json_snapshot.go）。
+// 管理画面の編集（admin_universities.go・admin_faculties.go）は explore.Invalidate で捨てる。
 const exploreCacheTTL = 10 * time.Minute
 
 type universityStore struct {
 	db      *sql.DB
-	explore *jsonSnapshotCache
+	explore *httpx.JSONSnapshotCache
 }
 
 func newUniversityStore(db *sql.DB) *universityStore {
 	st := &universityStore{db: db}
-	st.explore = newJSONSnapshotCache(exploreCacheTTL, func(ctx context.Context) (any, error) {
+	st.explore = httpx.NewJSONSnapshotCache(exploreCacheTTL, func(ctx context.Context) (any, error) {
 		return st.listForExplore(ctx)
 	})
 	return st
@@ -195,12 +195,12 @@ type universityHandlers struct {
 
 // list は GET /api/universities。
 func (h *universityHandlers) list(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
-	snap, err := h.store.explore.get(r.Context())
+	snap, err := h.store.explore.Get(r.Context())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("universities: %w", err))
 		return
 	}
-	writeJSONSnapshot(w, r, snap)
+	httpx.WriteJSONSnapshot(w, r, snap)
 }
 
 // detail は GET /api/universities/{id}。無い大学は 404（Node と同じ文言）。

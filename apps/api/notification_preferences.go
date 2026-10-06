@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
@@ -65,7 +66,7 @@ func (h *notificationPreferenceHandlers) save(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	err := notification.SavePreference(r.Context(), h.store.db, s.UserID, notification.Preference(input), nowMillis())
+	err := notification.SavePreference(r.Context(), h.store.db, s.UserID, notification.Preference(input), dates.NowMillis())
 	if errors.Is(err, notification.ErrLineNotConnected) {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return

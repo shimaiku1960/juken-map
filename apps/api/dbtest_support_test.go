@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
@@ -33,7 +34,7 @@ func newDBFixture(t *testing.T, db *sql.DB) dbFixture {
 
 // todayTokyo は日本時間の今日（YYYY-MM-DD）。学習記録は未来の日付を断るので、本文にはこれを使う。
 func todayTokyo() string {
-	return time.Now().In(tokyo).Format("2006-01-02")
+	return time.Now().In(dates.Tokyo).Format("2006-01-02")
 }
 
 // dbTestApp は本番と同じ registerRoutes で組んだルーター。セッションは Cookie「test」の値を利用者 ID として読む

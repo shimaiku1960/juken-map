@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
@@ -248,8 +249,8 @@ func TestIncidentCommandDB(t *testing.T) {
 
 		// incident log で、新しい順に「いつ・何を・誰に・どこで・前後の値」を引ける。log 自体は見るだけなので残さない。
 		lines := strings.Split(fx.mustRun("incident", "log"), "\n")
-		wantFirst := strings.Join([]string{isoMillis(unban.CreatedAt), "unban", id, unban.Host, wantUnban}, "\t")
-		wantSecond := strings.Join([]string{isoMillis(ban.CreatedAt), "ban", id, ban.Host, wantBan}, "\t")
+		wantFirst := strings.Join([]string{dates.ISOMillis(unban.CreatedAt), "unban", id, unban.Host, wantUnban}, "\t")
+		wantSecond := strings.Join([]string{dates.ISOMillis(ban.CreatedAt), "ban", id, ban.Host, wantBan}, "\t")
 		if len(lines) < 2 || lines[0] != wantFirst || lines[1] != wantSecond {
 			t.Errorf("incident log の先頭2行:\n got  %q\n want %q\n      %q", lines[:min(2, len(lines))], wantFirst, wantSecond)
 		}

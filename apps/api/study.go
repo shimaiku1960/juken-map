@@ -7,6 +7,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 )
 
 // 学習記録と予定の読み取り。ダッシュボード（dashboard.go）と一覧の API（study_handlers.go）が共有する。
@@ -38,7 +39,7 @@ func (d dateRange) where(alias, userID string) (string, []any) {
 	args := []any{userID, d.from}
 	if d.to != nil {
 		cond += " AND " + alias + ".date < ?"
-		args = append(args, addDays(*d.to, 1))
+		args = append(args, dates.AddDays(*d.to, 1))
 	}
 	return cond, args
 }

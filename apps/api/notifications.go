@@ -37,8 +37,6 @@ const (
 	// notificationBudget は1回の実行にかけてよい時間。nginx は応答を60秒で打ち切るので、その手前で止める。
 	// 打ち切ったら 500 を返す。GitHub Actions の curl は 5xx を再試行するので、2回目は送り済みを飛ばして残りを送る。
 	notificationBudget = 50 * time.Second
-	// externalTimeout は外部サービス1回の呼び出しの上限（Node の EXTERNAL_TIMEOUT_MS と同じ）。
-	externalTimeout = 5 * time.Second
 	// notificationFrom は送り主（Node と同じ）。
 	notificationFrom = "受験マップ <noreply@juken-map.com>"
 )
@@ -151,7 +149,7 @@ func (n *dailyNotifier) send(ctx context.Context, slot apischema.NotificationSlo
 			if err := n.deliver(gctx, job); err != nil {
 				failed.Add(1)
 				// 送れなかったので印を消す。止められた後でも消せるよう、取り消されない context で行う。
-				undoCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), externalTimeout)
+				undoCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpx.ExternalTimeout)
 				defer cancel()
 				if uerr := n.store.unmarkDelivery(undoCtx, id); uerr != nil {
 					return fmt.Errorf("unmark delivery: %w", uerr)
@@ -377,7 +375,7 @@ func (m *httpMessenger) post(ctx context.Context, url, token string, body any) e
 		return err
 	}
 	// 相手が応答を返さないまま接続を保つと、こちらも返らない。1回ごとに上限を付ける。
-	ctx, cancel := context.WithTimeout(ctx, externalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {

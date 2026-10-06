@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
 )
@@ -64,7 +65,7 @@ func (h *goalHandlers) create(w http.ResponseWriter, r *http.Request, s *httpx.S
 	if in.Reject(w) {
 		return
 	}
-	id, err := goal.Create(r.Context(), h.store.db, s.UserID, facultyID, status.Ptr(), nowMillis())
+	id, err := goal.Create(r.Context(), h.store.db, s.UserID, facultyID, status.Ptr(), dates.NowMillis())
 	if err != nil {
 		writeGoalError(w, r, "create", err)
 		return

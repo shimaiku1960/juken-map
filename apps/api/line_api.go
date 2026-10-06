@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 	"golang.org/x/oauth2"
 )
 
@@ -63,7 +65,7 @@ func verifyLineSignature(body []byte, signature string, secret string) bool {
 
 // lineAccountLinkURL は、LINE のトークで案内する「連携する」リンク。画面の /line/link が受ける。
 func lineAccountLinkURL(linkToken string) string {
-	return siteURL + "/line/link?" + url.Values{"linkToken": {linkToken}}.Encode()
+	return site.URL + "/line/link?" + url.Values{"linkToken": {linkToken}}.Encode()
 }
 
 // httpLineClient は LINE の API を直接呼ぶ（SDK は使わない。Node も同じ）。
@@ -113,7 +115,7 @@ func (c *httpLineClient) botRequest(ctx context.Context, path string, body, out 
 		}
 		reader = strings.NewReader(string(raw))
 	}
-	ctx, cancel := context.WithTimeout(ctx, externalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.botBase+path, reader)
 	if err != nil {
@@ -167,7 +169,7 @@ func (c *httpLineClient) exchangeCode(ctx context.Context, code, codeVerifier, r
 	if err != nil {
 		return lineTokens{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, externalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
 	// oauth2 は ctx に入れた *http.Client で呼ぶ（入れなければ http.DefaultClient）。
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, c.client)
@@ -191,7 +193,7 @@ func (c *httpLineClient) verifyIDToken(ctx context.Context, idToken, nonce strin
 		return identity, errors.New("LINE_LOGIN_CHANNEL_ID is not configured")
 	}
 	form := url.Values{"id_token": {idToken}, "client_id": {c.loginChannelID}, "nonce": {nonce}}
-	ctx, cancel := context.WithTimeout(ctx, externalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.loginBase+"/oauth2/v2.1/verify", strings.NewReader(form.Encode()))
 	if err != nil {
@@ -203,7 +205,7 @@ func (c *httpLineClient) verifyIDToken(ctx context.Context, idToken, nonce strin
 
 // isFriend は、その利用者が公式アカウントを友だちにしているか（ブロック中も false）。
 func (c *httpLineClient) isFriend(ctx context.Context, accessToken string) (bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, externalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpx.ExternalTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.loginBase+"/friendship/v1/status", nil)
 	if err != nil {

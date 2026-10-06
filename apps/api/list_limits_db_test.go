@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
@@ -22,7 +23,7 @@ func TestE2ListLimitsDB(t *testing.T) {
 	fx := newDBFixture(t, db)
 	app := newDBTestApp(db)
 	userID := fx.User()
-	today := dateOnTokyo(time.Now())
+	today := dates.OnTokyo(time.Now())
 	const n = maxLogs + 1
 
 	// 学習記録は今日から過去へ、予定は今日から先へ、1日1件ずつ上限＋1件入れる（日別の合計も上限＋1日になる）
@@ -32,7 +33,7 @@ func TestE2ListLimitsDB(t *testing.T) {
 		userID, today, 1, maxPlans+1)
 
 	ymd := func(d time.Time) string { return d.Format("2006-01-02") }
-	wide := "from=" + ymd(addDays(today, -2*n)) + "&to=" + ymd(addDays(today, 2*n))
+	wide := "from=" + ymd(dates.AddDays(today, -2*n)) + "&to=" + ymd(dates.AddDays(today, 2*n))
 	tests := []struct {
 		name      string
 		url       string
@@ -41,10 +42,10 @@ func TestE2ListLimitsDB(t *testing.T) {
 		wantLast  time.Time
 	}{
 		// 新しい日付から並ぶので、いちばん古い1件が切れる
-		{"学習記録", "/api/study-logs?" + wide, maxLogs, today, addDays(today, -(maxLogs - 1))},
-		{"日別の合計", "/api/study-logs/daily?" + wide, maxLogs, today, addDays(today, -(maxLogs - 1))},
+		{"学習記録", "/api/study-logs?" + wide, maxLogs, today, dates.AddDays(today, -(maxLogs - 1))},
+		{"日別の合計", "/api/study-logs/daily?" + wide, maxLogs, today, dates.AddDays(today, -(maxLogs - 1))},
 		// 古い日付から並ぶので、いちばん先の1件が切れる
-		{"予定", "/api/study-plans?" + wide, maxPlans, today, addDays(today, maxPlans-1)},
+		{"予定", "/api/study-plans?" + wide, maxPlans, today, dates.AddDays(today, maxPlans-1)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -83,7 +84,7 @@ func insertDaily(t *testing.T, db *sql.DB, query, userID string, from time.Time,
 	}
 	defer stmt.Close()
 	for i := range count {
-		if _, err := stmt.Exec(userID, addDays(from, i*step)); err != nil {
+		if _, err := stmt.Exec(userID, dates.AddDays(from, i*step)); err != nil {
 			t.Fatal(err)
 		}
 	}

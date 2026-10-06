@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 func TestTextbookMasterJSON(t *testing.T) {
@@ -22,5 +27,38 @@ func TestTextbookMasterJSON(t *testing.T) {
 		if v, has := got[key]; !has || v != nil {
 			t.Errorf("%s = %v（キーあり %v）, want null", key, v, has)
 		}
+	}
+}
+
+func TestTextbookMastersFromCache(t *testing.T) {
+	st := newTextbookStore(nil)
+	loads := 0
+	st.masters = httpx.NewJSONSnapshotCache(time.Minute, func(context.Context) (any, error) {
+		loads++
+		return []apischema.TextbookMaster{}, nil
+	})
+	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt.User("GET /api/textbook-masters", (&textbookHandlers{store: st}).listMasters)
+
+	get := func(etag string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", "/api/textbook-masters", nil)
+		req.AddCookie(&http.Cookie{Name: "test", Value: "alice"})
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		res := httptest.NewRecorder()
+		rt.ServeHTTP(res, req)
+		return res
+	}
+	first := get("")
+	etag := first.Header().Get("ETag")
+	if first.Code != http.StatusOK || etag == "" {
+		t.Fatalf("status = %d, ETag = %q", first.Code, etag)
+	}
+	if res := get(etag); res.Code != http.StatusNotModified {
+		t.Errorf("status = %d, want 304", res.Code)
+	}
+	if loads != 1 {
+		t.Errorf("loads = %d, want 1（2回目はキャッシュから返す）", loads)
 	}
 }

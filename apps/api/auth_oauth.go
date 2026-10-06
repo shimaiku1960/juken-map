@@ -360,7 +360,7 @@ func splitJWT(raw string) []string {
 func identifyGitHub(apiBase string) func(context.Context, *oauth2.Config, *oauth2.Token, string, time.Time) (*oauthIdentity, error) {
 	return func(ctx context.Context, cfg *oauth2.Config, token *oauth2.Token, _ string, _ time.Time) (*oauthIdentity, error) {
 		client := cfg.Client(ctx, token)
-		client.Timeout = externalTimeout
+		client.Timeout = httpx.ExternalTimeout
 		var user struct {
 			ID        int64  `json:"id"`
 			Login     string `json:"login"`

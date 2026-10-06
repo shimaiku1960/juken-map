@@ -23,8 +23,8 @@ import (
 type textbookStore struct {
 	db *sql.DB
 	// masters は GET /api/textbook-masters の JSON。全員に同じで、変わるのは管理画面の編集
-	// （admin_textbook_masters.go）だけなので、メモリに持つ（json_snapshot.go、JUK-50）。
-	masters *jsonSnapshotCache
+	// （admin_textbook_masters.go）だけなので、メモリに持つ（internal/httpx/json_snapshot.go、JUK-50）。
+	masters *httpx.JSONSnapshotCache
 }
 
 // textbookMastersCacheTTL は、DB を直接書き換えたとき（seed など）の保険。大学一覧と同じ10分。
@@ -32,7 +32,7 @@ const textbookMastersCacheTTL = 10 * time.Minute
 
 func newTextbookStore(db *sql.DB) *textbookStore {
 	st := &textbookStore{db: db}
-	st.masters = newJSONSnapshotCache(textbookMastersCacheTTL, func(ctx context.Context) (any, error) {
+	st.masters = httpx.NewJSONSnapshotCache(textbookMastersCacheTTL, func(ctx context.Context) (any, error) {
 		return st.listTextbookMasters(ctx)
 	})
 	return st
@@ -155,10 +155,10 @@ func (h *textbookHandlers) list(w http.ResponseWriter, r *http.Request, s *httpx
 
 // listMasters は GET /api/textbook-masters。ログイン必須だが、中身は利用者によらない。
 func (h *textbookHandlers) listMasters(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
-	snap, err := h.store.masters.get(r.Context())
+	snap, err := h.store.masters.Get(r.Context())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("textbook-masters: %w", err))
 		return
 	}
-	writeJSONSnapshot(w, r, snap)
+	httpx.WriteJSONSnapshot(w, r, snap)
 }
