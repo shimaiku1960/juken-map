@@ -49,7 +49,7 @@ func setupTracing(ctx context.Context) (trace.TracerProvider, func(context.Conte
 	}
 	tp := sdktrace.NewTracerProvider(
 		// まとめて送る。送り先が落ちていてもリクエストは待たされない（溢れた分は捨てる）。
-		sdktrace.WithSpanProcessor(skipWebSpans{sdktrace.NewBatchSpanProcessor(exporter)}),
+		sdktrace.WithSpanProcessor(skipWebSpans{sdktrace.NewBatchSpanProcessor(redactingExporter{exporter})}),
 		sdktrace.WithResource(resource.NewSchemaless(attribute.String("service.name", serviceName))),
 	)
 	// openDB の otelsql は、指定が無ければこの全体の設定を使う。
@@ -96,6 +96,52 @@ func (p skipWebSpans) OnEnd(s sdktrace.ReadOnlySpan) {
 		}
 	}
 	p.SpanProcessor.OnEnd(s)
+}
+
+// redactingExporter は送る直前に、スパンの属性・イベント（記録した誤り）・状態の文から
+// メールアドレスを伏せる（redact.go）。SQL が失敗すると otelsql が誤りの文をそのままイベントに入れるため。
+type redactingExporter struct{ sdktrace.SpanExporter }
+
+func (e redactingExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+	redacted := make([]sdktrace.ReadOnlySpan, len(spans))
+	for i, s := range spans {
+		redacted[i] = redactedSpan{s}
+	}
+	return e.SpanExporter.ExportSpans(ctx, redacted)
+}
+
+// redactedSpan は、送るときに読まれる値だけを伏せた形で返す。元のスパンは書き換えない。
+type redactedSpan struct{ sdktrace.ReadOnlySpan }
+
+func (s redactedSpan) Attributes() []attribute.KeyValue {
+	return redactAttributes(s.ReadOnlySpan.Attributes())
+}
+
+func (s redactedSpan) Events() []sdktrace.Event {
+	events := s.ReadOnlySpan.Events()
+	out := make([]sdktrace.Event, len(events))
+	for i, ev := range events {
+		ev.Attributes = redactAttributes(ev.Attributes)
+		out[i] = ev
+	}
+	return out
+}
+
+func (s redactedSpan) Status() sdktrace.Status {
+	st := s.ReadOnlySpan.Status()
+	st.Description = redactEmails(st.Description)
+	return st
+}
+
+func redactAttributes(attrs []attribute.KeyValue) []attribute.KeyValue {
+	out := make([]attribute.KeyValue, len(attrs))
+	for i, kv := range attrs {
+		if kv.Value.Type() == attribute.STRING {
+			kv.Value = attribute.StringValue(redactEmails(kv.Value.AsString()))
+		}
+		out[i] = kv
+	}
+	return out
 }
 
 // startRequestSpan は1リクエスト全体のスパンを始める。名前はルートが決まってから付け直す（endRequestSpan）。
