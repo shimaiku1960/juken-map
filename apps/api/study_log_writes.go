@@ -69,14 +69,9 @@ func readStudyLogInput(body any, today string) (*objectInput, studyLogInput) {
 // record は持ち主に渡す形にする。
 func (v studyLogInput) record() studyrecord.LogInput {
 	return studyrecord.LogInput{
-		Date: dateFromYMD(v.date), Minutes: v.minutes, Subject: toOpt(v.subject), TextbookID: toOpt(v.textbookID),
-		RangeStart: toOpt(v.rangeStart), RangeEnd: toOpt(v.rangeEnd), RangeUnit: toOpt(v.rangeUnit), Memo: toOpt(v.memo),
+		Date: dateFromYMD(v.date), Minutes: v.minutes, Subject: v.subject.field(), TextbookID: v.textbookID.field(),
+		RangeStart: v.rangeStart.field(), RangeEnd: v.rangeEnd.field(), RangeUnit: v.rangeUnit.field(), Memo: v.memo.field(),
 	}
-}
-
-// toOpt は「無い」と null を区別した値を、持ち主（internal/write）に渡す形にする。
-func toOpt[T comparable](o optional[T]) studyrecord.Opt[T] {
-	return studyrecord.Opt[T]{Present: o.present, Value: o.value}
 }
 
 // rangeRules は superRefine の範囲の3つの規則（実績・予定・予定の完了で同じ）。Zod と同じ順に足す。

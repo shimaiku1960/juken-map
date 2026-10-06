@@ -1,19 +1,20 @@
 package main
 
 import (
-	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
+	"time"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
 )
 
 // 参考書の書き込み（JUK-75）。Node の次の部分にあたる。
 //   - routes/textbooks.ts の POST /api/textbooks と PATCH /api/textbooks/:id
 //   - services/textbook-service.ts の createTextbook・createTextbookFromMaster・updateTextbookProgress・findOwnedTextbook
+//
+// 書き込みは持ち主の internal/write/textbook にある（JUK-154）。ここは本文を確かめ、操作を呼び、結果を応答の形にする。
 //
 // 入力チェックの規則の正は Zod の createTextbookSchema・updateTextbookProgressSchema（src/shared/validations/textbook.ts）。
 
@@ -38,12 +39,6 @@ var totalAmountRule = numberRule{
 	positive: true, positiveMessage: "1以上で入力してください",
 	max: 100000, maxMessage: "100000以下で入力してください",
 }
-
-var (
-	errDuplicateTextbook = errors.New("この参考書はすでに登録されています")
-	errMasterNotFound    = errors.New("参考書マスターが見つかりません")
-	errMasterNoMetric    = errors.New("参考書の総量データが登録されていません")
-)
 
 // textbookInput は createTextbookSchema を通した本文。fromMaster なら masterID だけを使う。
 type textbookInput struct {
@@ -157,147 +152,16 @@ type textbookProgress struct {
 	rangeUnit, targetDate, subject optional[string]
 }
 
-// findTextbook は userID の人の参考書を1件読む（Node の findOwnedTextbook）。無いか他人のものなら nil。
-func (st *textbookStore) findTextbook(ctx context.Context, id int64, userID string) (*TextbookRow, error) {
-	t, err := scanTextbook(st.db.QueryRowContext(ctx,
-		"SELECT "+textbookRowColumns+" FROM Textbook WHERE id = ? AND userId = ? LIMIT 1", id, userID,
-	).Scan)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+// record は持ち主に渡す形にする。目標日は日付だけを持つので、UTC の 0 時にする。
+func (p textbookProgress) record() textbook.Progress {
+	targetDate := opt.Field[time.Time]{Present: p.targetDate.present}
+	if v := p.targetDate.ptr(); v != nil {
+		day := dateFromYMD(*v)
+		targetDate.Value = &day
 	}
-	if err != nil {
-		return nil, err
+	return textbook.Progress{
+		TotalAmount: p.totalAmount.field(), RangeUnit: p.rangeUnit.field(), Subject: p.subject.field(), TargetDate: targetDate,
 	}
-	return &t, nil
-}
-
-// newTextbook は登録する参考書の値。null の項目は nil。
-type newTextbook struct {
-	name                  string
-	masterID, totalAmount *int64
-	rangeUnit, subject    *string
-}
-
-// createTextbook は参考書を登録する。同名の重複は DB の一意制約（userId, name）が弾くので、
-// それを errDuplicateTextbook にする。
-func (st *textbookStore) createTextbook(ctx context.Context, userID string, t newTextbook) (*TextbookRow, error) {
-	now := nowMillis()
-	res, err := st.db.ExecContext(ctx,
-		`INSERT INTO Textbook
-		   (userId, name, masterId, totalAmount, rangeUnit, subject, createdAt, updatedAt)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, t.name, t.masterID, t.totalAmount, t.rangeUnit, t.subject, now, now)
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return nil, errDuplicateTextbook
-	}
-	if err != nil {
-		return nil, err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-	return st.mustFindTextbook(ctx, id, userID)
-}
-
-func (st *textbookStore) mustFindTextbook(ctx context.Context, id int64, userID string) (*TextbookRow, error) {
-	t, err := st.findTextbook(ctx, id, userID)
-	if err == nil && t == nil {
-		err = fmt.Errorf("Textbook %d が見つかりません", id)
-	}
-	return t, err
-}
-
-// textbookFromMaster は参考書マスターから登録する値を作る（Node の createTextbookFromMaster）。
-// 総量はマスターの既定（isDefault）の候補を使い、既定が無ければ先頭（id が最小）の候補を使う。
-func (st *textbookStore) textbookFromMaster(ctx context.Context, masterID int64) (newTextbook, error) {
-	rows, err := st.db.QueryContext(ctx,
-		`SELECT tm.name, m.unit, m.totalAmount, m.isDefault
-		 FROM TextbookMaster AS tm
-		 LEFT JOIN TextbookMasterMetric AS m ON m.masterId = tm.id
-		 WHERE tm.id = ?
-		 ORDER BY m.id ASC`,
-		masterID)
-	if err != nil {
-		return newTextbook{}, err
-	}
-	defer rows.Close()
-
-	var (
-		name   string
-		found  bool
-		first  *newTextbook
-		chosen *newTextbook
-	)
-	for rows.Next() {
-		var (
-			unit        *string
-			totalAmount *int64
-			isDefault   *bool
-		)
-		if err := rows.Scan(&name, &unit, &totalAmount, &isDefault); err != nil {
-			return newTextbook{}, err
-		}
-		found = true
-		// LEFT JOIN の相手（総量の候補）が居なければ、候補の列が NULL の行が1行だけ来る
-		if unit == nil {
-			continue
-		}
-		candidate := &newTextbook{masterID: &masterID, totalAmount: totalAmount, rangeUnit: unit}
-		if first == nil {
-			first = candidate
-		}
-		if chosen == nil && *isDefault {
-			chosen = candidate
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return newTextbook{}, err
-	}
-	switch {
-	case !found:
-		return newTextbook{}, errMasterNotFound
-	case chosen == nil && first == nil:
-		return newTextbook{}, errMasterNoMetric
-	case chosen == nil:
-		chosen = first
-	}
-	chosen.name = name
-	return *chosen, nil
-}
-
-// updateProgress は逆算設定のうち、送られてきた項目だけを書き換える（Node の updateTextbookProgress）。
-// 更新日時は何も送られていなくても書き換える。userID の人のものだけを変える。
-func (st *textbookStore) updateProgress(ctx context.Context, userID string, id int64, p textbookProgress) (*TextbookRow, error) {
-	// 列名はこのコードに書いた固定の名前だけで、利用者の入力は値として ? で渡す。
-	var columns []string
-	var args []any
-	if p.totalAmount.present {
-		columns, args = append(columns, "totalAmount = ?"), append(args, *p.totalAmount.value)
-	}
-	if p.rangeUnit.present {
-		columns, args = append(columns, "rangeUnit = ?"), append(args, *p.rangeUnit.value)
-	}
-	if p.targetDate.present {
-		// 目標日は日付だけを持つので、UTC の 0 時として保存する。
-		var targetDate any
-		if v := p.targetDate.ptr(); v != nil {
-			targetDate = dateFromYMD(*v)
-		}
-		columns, args = append(columns, "targetDate = ?"), append(args, targetDate)
-	}
-	if p.subject.present {
-		columns, args = append(columns, "subject = ?"), append(args, p.subject.ptr())
-	}
-	columns, args = append(columns, "updatedAt = ?"), append(args, nowMillis())
-
-	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（columns）。値は args で ? として渡す
-	if _, err := st.db.ExecContext(ctx,
-		"UPDATE Textbook SET "+strings.Join(columns, ", ")+" WHERE id = ? AND userId = ?",
-		append(args, id, userID)...); err != nil {
-		return nil, err
-	}
-	return st.mustFindTextbook(ctx, id, userID)
 }
 
 // create は POST /api/textbooks。
@@ -312,32 +176,26 @@ func (h *textbookHandlers) create(w http.ResponseWriter, r *http.Request, s *ses
 		return
 	}
 
-	t := newTextbook{name: input.name, rangeUnit: input.rangeUnit.ptr(), subject: input.subject.ptr()}
+	var created textbook.Textbook
+	var err error
 	if input.fromMaster {
-		var err error
-		t, err = h.store.textbookFromMaster(r.Context(), input.masterID)
-		switch {
-		case errors.Is(err, errMasterNotFound):
-			writeError(w, http.StatusNotFound, err.Error())
-			return
-		case errors.Is(err, errMasterNoMetric):
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		case err != nil:
-			internalError(w, r, fmt.Errorf("textbooks master: %w", err))
-			return
-		}
+		created, err = textbook.CreateFromMaster(r.Context(), h.store.db, s.UserID, input.masterID, nowMillis())
+	} else {
+		created, err = textbook.Create(r.Context(), h.store.db, s.UserID,
+			textbook.New{Name: input.name, RangeUnit: input.rangeUnit.ptr(), Subject: input.subject.ptr()}, nowMillis())
 	}
-	created, err := h.store.createTextbook(r.Context(), s.UserID, t)
-	if errors.Is(err, errDuplicateTextbook) {
+	switch {
+	case errors.Is(err, textbook.ErrMasterNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, textbook.ErrMasterNoMetric):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, textbook.ErrDuplicate):
 		writeError(w, http.StatusConflict, err.Error())
-		return
-	}
-	if err != nil {
+	case err != nil:
 		internalError(w, r, fmt.Errorf("textbooks create: %w", err))
-		return
+	default:
+		writeJSON(w, http.StatusCreated, TextbookRow(created))
 	}
-	writeJSON(w, http.StatusCreated, created)
 }
 
 // updateProgress は PATCH /api/textbooks/{id}。入力チェックは自分の参考書かを確かめるより先（Node と同じ）。
@@ -354,19 +212,13 @@ func (h *textbookHandlers) updateProgress(w http.ResponseWriter, r *http.Request
 	if in.reject(w) {
 		return
 	}
-	owned, err := h.store.findTextbook(r.Context(), id, s.UserID)
-	if err != nil {
-		internalError(w, r, fmt.Errorf("textbooks find: %w", err))
-		return
-	}
-	if owned == nil {
-		writeError(w, http.StatusNotFound, "参考書が見つかりません")
-		return
-	}
-	updated, err := h.store.updateProgress(r.Context(), s.UserID, id, progress)
-	if err != nil {
+	updated, err := textbook.UpdateProgress(r.Context(), h.store.db, s.UserID, id, progress.record(), nowMillis())
+	switch {
+	case errors.Is(err, textbook.ErrNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case err != nil:
 		internalError(w, r, fmt.Errorf("textbooks update: %w", err))
-		return
+	default:
+		writeJSON(w, http.StatusOK, TextbookRow(updated))
 	}
-	writeJSON(w, http.StatusOK, updated)
 }

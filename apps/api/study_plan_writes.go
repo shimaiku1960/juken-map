@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
 
@@ -190,10 +191,10 @@ func (h *studyPlanWriteHandlers) update(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	patch := studyrecord.PlanPatch{
-		Date:       studyrecord.Opt[time.Time]{Present: input.date.present},
-		TextbookID: toOpt(input.textbookID), RangeStart: toOpt(input.rangeStart), RangeEnd: toOpt(input.rangeEnd),
-		RangeUnit: toOpt(input.rangeUnit), Content: toOpt(input.content), Subject: toOpt(input.subject),
-		Done: toOpt(input.done),
+		Date:       opt.Field[time.Time]{Present: input.date.present},
+		TextbookID: input.textbookID.field(), RangeStart: input.rangeStart.field(), RangeEnd: input.rangeEnd.field(),
+		RangeUnit: input.rangeUnit.field(), Content: input.content.field(), Subject: input.subject.field(),
+		Done: input.done.field(),
 	}
 	if input.date.present {
 		day := dateFromYMD(*input.date.value)
@@ -238,8 +239,8 @@ func (h *studyPlanWriteHandlers) complete(w http.ResponseWriter, r *http.Request
 		return
 	}
 	completed, err := studyrecord.CompletePlan(r.Context(), h.db, s.UserID, id, studyrecord.Completion{
-		Minutes: input.minutes, RangeStart: toOpt(input.rangeStart), RangeEnd: toOpt(input.rangeEnd),
-		RangeUnit: toOpt(input.rangeUnit), Memo: input.memo.ptr(),
+		Minutes: input.minutes, RangeStart: input.rangeStart.field(), RangeEnd: input.rangeEnd.field(),
+		RangeUnit: input.rangeUnit.field(), Memo: input.memo.ptr(),
 	}, nowMillis())
 	if err != nil {
 		writeStudyRecordError(w, r, "study-plans complete", err)

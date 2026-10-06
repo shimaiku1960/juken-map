@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 )
 
 // 書き込みの API の入力チェック（JUK-75）。
@@ -292,16 +294,9 @@ func (o optional[T]) isNull() bool {
 	return o.value == nil
 }
 
-// differs は Node の `data.x !== current`（current は DB の値で、null か値）。
-// キーが無い（undefined）ときは、どんな値とも違う（undefined !== null も true）。
-func (o optional[T]) differs(current *T) bool {
-	switch {
-	case !o.present:
-		return true
-	case o.value == nil || current == nil:
-		return o.value != current
-	}
-	return *o.value != *current
+// field は持ち主（internal/write）の操作に渡す形にする。
+func (o optional[T]) field() opt.Field[T] {
+	return opt.Field[T]{Present: o.present, Value: o.value}
 }
 
 // readOptional は .optional() の付いた項目を読む。nullable なら null も受け付ける（.nullable()）。
