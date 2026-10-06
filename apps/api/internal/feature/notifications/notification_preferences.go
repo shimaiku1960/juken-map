@@ -1,4 +1,4 @@
-package main
+package notifications
 
 import (
 	"context"
@@ -17,12 +17,12 @@ import (
 // services/notification-service.ts の findNotificationPreference・findLineConnection・saveNotificationPreference にあたる。
 // 保存（LINE と連携していなければ LINE 通知を ON にできない、も含む）は持ち主の internal/write/notification にある（JUK-154）。
 
-type notificationPreferenceStore struct {
+type preferenceStore struct {
 	db *sql.DB
 }
 
 // find は自分の通知設定を返す。まだ保存していなければ、全部 false（Node の DEFAULT_PREFERENCE と同じ）。
-func (st *notificationPreferenceStore) find(ctx context.Context, userID string) (apischema.NotificationPreference, error) {
+func (st *preferenceStore) find(ctx context.Context, userID string) (apischema.NotificationPreference, error) {
 	var p apischema.NotificationPreference
 	err := st.db.QueryRowContext(ctx,
 		`SELECT morningEnabled, eveningEnabled, lineMorningEnabled, lineEveningEnabled
@@ -35,12 +35,17 @@ func (st *notificationPreferenceStore) find(ctx context.Context, userID string) 
 	return p, err
 }
 
-type notificationPreferenceHandlers struct {
-	store *notificationPreferenceStore
+type PreferenceHandlers struct {
+	store *preferenceStore
 }
 
-// get は GET /api/notification-preferences。
-func (h *notificationPreferenceHandlers) get(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// NewPreferenceHandlers は通知設定の入口を組み立てる。
+func NewPreferenceHandlers(db *sql.DB) *PreferenceHandlers {
+	return &PreferenceHandlers{store: &preferenceStore{db: db}}
+}
+
+// Get は GET /api/notification-preferences。
+func (h *PreferenceHandlers) Get(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	p, err := h.store.find(r.Context(), s.UserID)
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("notification-preferences: %w", err))
@@ -49,8 +54,8 @@ func (h *notificationPreferenceHandlers) get(w http.ResponseWriter, r *http.Requ
 	httpx.WriteJSON(w, http.StatusOK, p)
 }
 
-// save は PUT /api/notification-preferences。入力チェックは Zod の notificationPreferenceSchema と同じ（4つとも真偽値）。
-func (h *notificationPreferenceHandlers) save(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Save は PUT /api/notification-preferences。入力チェックは Zod の notificationPreferenceSchema と同じ（4つとも真偽値）。
+func (h *PreferenceHandlers) Save(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return

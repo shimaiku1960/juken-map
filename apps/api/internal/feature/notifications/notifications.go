@@ -1,4 +1,6 @@
-package main
+// Package notifications は通知の入口。通知設定の読み取りと保存（/api/notification-preferences）と、
+// 毎日の学習通知の送信（cron）を持つ。書き込みは internal/write/notification が持つ。
+package notifications
 
 import (
 	"bytes"
@@ -73,20 +75,20 @@ type notificationStore interface {
 	unmarkDelivery(ctx context.Context, id int64) error
 }
 
-// messenger は外部サービスへの送信。テストでは偽物を渡す。
-type messenger interface {
+// Messenger は外部サービスへの送信。テストでは偽物を渡す。
+type Messenger interface {
 	sendEmail(ctx context.Context, to string, m dailyMessage) error
 	pushLine(ctx context.Context, lineUserID, text string) error
 }
 
 type dailyNotifier struct {
 	store     notificationStore
-	messenger messenger
+	messenger Messenger
 	workers   int
 	emailPace *pacer
 }
 
-func newDailyNotifier(store notificationStore, m messenger) *dailyNotifier {
+func newDailyNotifier(store notificationStore, m Messenger) *dailyNotifier {
 	return &dailyNotifier{store: store, messenger: m, workers: notificationWorkers, emailPace: newPacer(emailInterval)}
 }
 
@@ -342,34 +344,34 @@ func (st *sqlNotificationStore) unmarkDelivery(ctx context.Context, id int64) er
 	return notification.UnmarkDelivery(ctx, st.db, id)
 }
 
-// httpMessenger は Resend と LINE の API を直接呼ぶ（どちらも SDK は使わない）。
-type httpMessenger struct {
-	client     *http.Client
-	resendBase string // 既定は https://api.resend.com。手元の比較では偽のサーバーへ向ける（RESEND_BASE_URL、Node の SDK と同じ名前）
-	resendKey  string
-	lineBase   string // 既定は https://api.line.me/v2/bot
-	lineToken  string
+// HTTPMessenger は Resend と LINE の API を直接呼ぶ（どちらも SDK は使わない）。
+type HTTPMessenger struct {
+	Client     *http.Client
+	ResendBase string // 既定は https://api.resend.com。手元の比較では偽のサーバーへ向ける（RESEND_BASE_URL、Node の SDK と同じ名前）
+	ResendKey  string
+	LineBase   string // 既定は https://api.line.me/v2/bot
+	LineToken  string
 }
 
-func (m *httpMessenger) sendEmail(ctx context.Context, to string, msg dailyMessage) error {
-	if m.resendKey == "" {
+func (m *HTTPMessenger) sendEmail(ctx context.Context, to string, msg dailyMessage) error {
+	if m.ResendKey == "" {
 		return errors.New("RESEND_API_KEY is not configured")
 	}
-	return m.post(ctx, m.resendBase+"/emails", m.resendKey, map[string]any{
+	return m.post(ctx, m.ResendBase+"/emails", m.ResendKey, map[string]any{
 		"from": notificationFrom, "to": to, "subject": msg.Subject, "html": msg.HTML, "text": msg.Text,
 	})
 }
 
-func (m *httpMessenger) pushLine(ctx context.Context, lineUserID, text string) error {
-	if m.lineToken == "" {
+func (m *HTTPMessenger) pushLine(ctx context.Context, lineUserID, text string) error {
+	if m.LineToken == "" {
 		return errors.New("LINE_CHANNEL_ACCESS_TOKEN is not configured")
 	}
-	return m.post(ctx, m.lineBase+"/message/push", m.lineToken, map[string]any{
+	return m.post(ctx, m.LineBase+"/message/push", m.LineToken, map[string]any{
 		"to": lineUserID, "messages": []map[string]string{{"type": "text", "text": text}},
 	})
 }
 
-func (m *httpMessenger) post(ctx context.Context, url, token string, body any) error {
+func (m *HTTPMessenger) post(ctx context.Context, url, token string, body any) error {
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -383,7 +385,7 @@ func (m *httpMessenger) post(ctx context.Context, url, token string, body any) e
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	res, err := m.client.Do(req)
+	res, err := m.Client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -397,13 +399,18 @@ func (m *httpMessenger) post(ctx context.Context, url, token string, body any) e
 	return nil
 }
 
-// cronHandler は POST /api/cron/daily-study-notifications。トークンの確認はルーター（rt.Job）が行う。
-type cronHandler struct {
+// CronHandler は POST /api/cron/daily-study-notifications。トークンの確認はルーター（rt.Job）が行う。
+type CronHandler struct {
 	notifier *dailyNotifier
 	now      func() time.Time
 }
 
-func (h *cronHandler) dailyNotifications(w http.ResponseWriter, r *http.Request) {
+// NewCronHandler は毎日の通知の入口を組み立てる。送信先は m（本番は HTTPMessenger）。
+func NewCronHandler(db *sql.DB, m Messenger) *CronHandler {
+	return &CronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, m), now: time.Now}
+}
+
+func (h *CronHandler) DailyNotifications(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Slot apischema.NotificationSlot `json:"slot"`
 	}

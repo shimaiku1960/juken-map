@@ -26,6 +26,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/admin"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/notifications"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/study"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
@@ -122,12 +123,12 @@ func run() error {
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
 		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
 		simulationSecret:        os.Getenv("SIMULATION_SECRET"),
-		messenger: &httpMessenger{
-			client:     telemetry.NewOutboundClient(tp),
-			resendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
-			resendKey:  os.Getenv("RESEND_API_KEY"),
-			lineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
-			lineToken:  os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
+		messenger: &notifications.HTTPMessenger{
+			Client:     telemetry.NewOutboundClient(tp),
+			ResendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
+			ResendKey:  os.Getenv("RESEND_API_KEY"),
+			LineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
+			LineToken:  os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
 		},
 	}, line.Config{
 		ChannelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
@@ -286,9 +287,9 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 	rt.User("POST /api/textbooks", textbookRoutes.Create)
 	rt.User("PATCH /api/textbooks/{id}", textbookRoutes.UpdateProgress)
 
-	prefs := &notificationPreferenceHandlers{store: &notificationPreferenceStore{db: db}}
-	rt.User("GET /api/notification-preferences", prefs.get)
-	rt.User("PUT /api/notification-preferences", prefs.save)
+	prefs := notifications.NewPreferenceHandlers(db)
+	rt.User("GET /api/notification-preferences", prefs.Get)
+	rt.User("PUT /api/notification-preferences", prefs.Save)
 
 	profile := &profileHandlers{store: &userStore{db: db}}
 	rt.User("PUT /api/profile", profile.update)
@@ -339,8 +340,8 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 	rt.Admin("PATCH /api/admin/textbook-masters/{id}", masters.UpdateTextbookMaster)
 	rt.Admin("DELETE /api/admin/textbook-masters/{id}", masters.DeleteTextbookMaster)
 
-	cron := &cronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, jobs.messenger), now: time.Now}
-	rt.Job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)
+	cron := notifications.NewCronHandler(db, jobs.messenger)
+	rt.Job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.DailyNotifications)
 
 	// シミュレーションの API は SIMULATION_ENABLED=on のときだけ存在する（付けなければ 404）。
 	if jobs.simulationEnabled {
@@ -357,7 +358,7 @@ type jobConfig struct {
 	dailyNotificationSecret string
 	simulationEnabled       bool
 	simulationSecret        string
-	messenger               messenger
+	messenger               notifications.Messenger
 }
 
 type serverOptions struct {

@@ -250,7 +250,7 @@ apps/api/
   ├ app/                  起動・終了、依存の組み立て、ルートとアクセス条件の一覧
   ├ feature/              画面・入口ごとの処理（ハンドラと読み取りの SQL）
   │ ├ auth/  study/  goals/  textbooks/   （study はダッシュボードも持つ。同じ読み取りを使うため）
-  │ └ admin/  line/  ops/
+  │ └ admin/  line/  notifications/  ops/
   ├ write/                書き込みの持ち主（操作とトランザクション）
   │ ├ account/  authguard/  studyrecord/  textbook/  goal/
   │ └ university/  textbookmaster/  notification/  simulation/   （一覧は下の「持ち主の一覧」）
@@ -441,7 +441,7 @@ ORM を外すと、次のことを自分で持つことになる。どれも Go 
   `IN (...)` で別に取る。生 SQL では自分で選ぶ。大学 → 学部 → タグのような一本道の
   1対多は JOIN 1本で取って詰め直す。ユーザー → 予定・実績のように1対多が並ぶときは、
   JOIN すると（予定 × 実績）の行に膨らみ合計がずれるので、別々の SQL に分ける
-  （毎日の通知の宛先を集める SQL。今は Go の `notifications.go`）。
+  （毎日の通知の宛先を集める SQL。今は Go の `internal/feature/notifications/notifications.go`）。
 - **並び順。** Prisma が子を取る SQL には `ORDER BY` が無く、並びは DB が返した順だった
   （大学一覧のタグの順がそうだった）。親の `ORDER BY` も、同じ値の行どうしの順番までは決めない
   （予定・実績の一覧は同じ日付の中の順番が DB 任せだった）。生 SQL では最後に id で並べて順番を固定している。
