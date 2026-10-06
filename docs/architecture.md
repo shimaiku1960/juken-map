@@ -480,7 +480,9 @@ Fastify の `inject()` で同じことをしていた。
 - ローカルでは `pnpm db:start` で DB コンテナを起動しておく必要がある。CI は `check` ジョブに
   MySQL サービスを持つ。
 - Go の DB テストは `dbtest` タグを付け、名前に `DB` を入れる（`TestSuspendDB` など）。CI と `pnpm test:go-db` は
-  `go test -tags dbtest -run DB ./...` で、どのパッケージのものも拾う（JUK-158）。
+  `go test -tags dbtest -p 1 -run DB ./...` で、どのパッケージのものも拾う（JUK-158）。
+  `-p 1` でパッケージを1つずつ流す。DB 全体を数えるテスト（管理画面の概要）が、ほかのパッケージの
+  テストが同時に作った行を数えてしまうため。
 - テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる
   （`db/test-db/fixtures.ts`、Go は `apps/api/internal/dbtest`）。テーブルを空にする方式と違い、並列に走る他のテストと干渉しない。
 - 往復（書いて読む）だけのテストでは時間帯の誤りが打ち消されて見えないので、
