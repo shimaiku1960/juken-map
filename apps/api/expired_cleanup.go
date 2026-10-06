@@ -8,7 +8,7 @@
 //     開発環境でも同じように動くから。台が増えて同時に動いても、消す対象が同じなので害は無い。
 //   - どの表を消すかは表の持ち主（internal/write/account・authguard・notification）が決め、それぞれの
 //     DeleteExpired を順に呼ぶ（JUK-154）。表ごとに別々に消してよく、まとめて確定させる必要は無い。
-//     消し方（主キーで選んで主キーで消す）は internal/database の DeleteExpired。
+//     消し方（主キーで選んで主キーで消す）は internal/write/expired の Delete。
 package main
 
 import (

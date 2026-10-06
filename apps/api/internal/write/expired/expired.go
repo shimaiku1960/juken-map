@@ -1,25 +1,27 @@
-package database
+package expired
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
-// ExpiringTable は expiresAt（索引あり）を過ぎたら要らなくなる表。どの表を消すかは、表の持ち主
-// （internal/write/...）が決めて DeleteExpired を呼ぶ。消し方（下）はどの表も同じなので、ここに置く。
-type ExpiringTable struct {
+// Table は expiresAt（索引あり）を過ぎたら要らなくなる表。どの表を消すかは、表の持ち主
+// （internal/write/...）が決めて Delete を呼ぶ。消し方（下）はどの表も同じなので、持ち主の共通の部品としてここに置く。
+type Table struct {
 	Name      string
 	Key       string // 主キーの列
 	BinaryKey bool   // 主キーが BINARY（トークンのハッシュ）。文字列の列に []byte を渡すと索引が効かないので分ける
 }
 
-// DeleteExpired は tables の expiresAt が now 以前の行を、batch 行ずつ消す。表ごとに消した行数を返す。
+// Delete は tables の expiresAt が now 以前の行を、batch 行ずつ消す。表ごとに消した行数を返す。
 //
 // 消す行は先に主キーで選び、主キーで消す。expiresAt の範囲で DELETE すると索引の隙間までロックし、
 // 空に近い表では新しい行の INSERT がそのあいだ待たされる。
-func DeleteExpired(ctx context.Context, db *sql.DB, tables []ExpiringTable, now time.Time, batch int) (map[string]int64, error) {
+func Delete(ctx context.Context, db *sql.DB, tables []Table, now time.Time, batch int) (map[string]int64, error) {
 	removed := make(map[string]int64, len(tables))
 	for _, table := range tables {
 		for {
@@ -35,7 +37,7 @@ func DeleteExpired(ctx context.Context, db *sql.DB, tables []ExpiringTable, now 
 			// 選んだ行は消すまでのあいだも期限切れのまま。
 			// #nosec G202 -- 表名と列名は持ち主が書いた固定の名前、ほかは件数ぶん並べた ? だけ。値は keys で渡す
 			res, err := db.ExecContext(ctx,
-				"DELETE FROM `"+table.Name+"` WHERE `"+table.Key+"` IN ("+Placeholders(len(keys), "?")+")", keys...)
+				"DELETE FROM `"+table.Name+"` WHERE `"+table.Key+"` IN ("+database.Placeholders(len(keys), "?")+")", keys...)
 			if err != nil {
 				return removed, fmt.Errorf("delete expired %s: %w", table.Name, err)
 			}
@@ -53,7 +55,7 @@ func DeleteExpired(ctx context.Context, db *sql.DB, tables []ExpiringTable, now 
 }
 
 // expiredKeys は期限の切れた行の主キーを batch 個まで返す（ロックしない読み取り）。
-func expiredKeys(ctx context.Context, db *sql.DB, table ExpiringTable, now time.Time, batch int) ([]any, error) {
+func expiredKeys(ctx context.Context, db *sql.DB, table Table, now time.Time, batch int) ([]any, error) {
 	// #nosec G202 -- 表名と列名は持ち主が書いた固定の名前だけ。値は ? で渡す
 	rows, err := db.QueryContext(ctx,
 		"SELECT `"+table.Key+"` FROM `"+table.Name+"` WHERE expiresAt <= ? LIMIT ?", now, batch)

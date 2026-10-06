@@ -78,7 +78,7 @@ curl -b jar localhost:8080/api/dashboard
 | `MICROCMS_WEBHOOK_SECRET` | なし | microCMS の Webhook の署名を確かめる（JUK-112）。空なら Webhook は必ず 401 |
 | `GITHUB_DEPLOY_TOKEN` | なし | microCMS の Webhook で deploy.yml を動かす GitHub のトークン（fine-grained、このリポジトリの Actions: Read and write だけ）。空なら Webhook は 502 |
 | `GITHUB_API_BASE` | `https://api.github.com` | GitHub の API の根元。テスト用 |
-| `MIGRATION_DATABASE_URL` | なし | `migrate` コマンド（`migrate.go`）が繋ぐ、テーブル定義を変えられるユーザー。無ければ `DATABASE_URL` |
+| `MIGRATION_DATABASE_URL` | なし | `migrate` コマンド（`internal/migrate/`）が繋ぐ、テーブル定義を変えられるユーザー。無ければ `DATABASE_URL` |
 | `MIGRATIONS_DIR` | なし（イメージでは `/migrations`、手元は `pnpm db:migrate` が `db/migrations` を渡す） | `migrate` が当てる SQL の置き場 |
 | `WEB_DIST_DIR` | なし（イメージでは `/web`） | 画面のビルド成果物（apps/web の dist）。`index.html` が無ければ画面を配らない（開発は Vite が配る） |
 | `GA_MEASUREMENT_ID` | なし | GA4 の測定 ID。画面の HTML に計測のタグを差し込み、CSP でそのインラインスクリプトだけをハッシュで許す |
@@ -320,7 +320,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | --- | --- |
 | `cli.go` | 引数の読み取りと振り分け：`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）・`migrate`。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
 | `incident.go` | `incident`・`grant-admin` が使う読み取りと、`internal/write/account` の操作（セッションの取り消し・停止・2段階認証の解除・役割の付け外し。変えたことは `OpsAuditLog` に残り、`incident log` で見る。JUK-138）の呼び出し。手順は `docs/incident-response.md` |
-| `migrate.go` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
+| `internal/migrate/` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
 
 ### 共通の部品
 
@@ -331,7 +331,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
 | `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
 | `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node と同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
-| `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする、期限の切れた行の消し方（`expired.go`。消す表は持ち主が渡す）。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
+| `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `internal/write/studyrecord/` | 学習記録（実績・予定・初回記録の日時）への書き込みの持ち主。実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |
 | `internal/write/textbook/` | 利用者の参考書への書き込みの持ち主。名前・参考書マスターからの登録と、逆算設定の変更（JUK-154） |
@@ -341,6 +341,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |
 | `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
 | `internal/write/authguard/` | ログインの守り（回数の制限・メールの送信の上限・外部ログインの state）への書き込みの持ち主。試行を先に数えてから判定し、メールは数えてから記録するまでを名前付きロックで1件ずつ通す（JUK-154） |
+| `internal/write/expired/` | 期限の切れた行の消し方（主キーで選んで主キーで消す）。消す表は持ち主（account・authguard・notification）が渡す。書き込みの SQL は `internal/write/` の下だけに置く決まり（JUK-157）のため、`internal/database` から移した |
 | `internal/write/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `optional` を `.field()` で変換する |
 | `internal/apischema/` | `openapi/openapi.yaml` から作った応答・リクエストの型（`openapi.gen.go`。手で直さない。`pnpm openapi:generate`、設定は同じディレクトリの `oapi-codegen.yaml`）。入口と持ち主の両方が使う（JUK-155） |
 
