@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
 // captureLogs はテストの間だけ、既定のロガーの書き出し先を buf にする。
@@ -19,7 +21,7 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
 	prev := slog.Default()
-	slog.SetDefault(newLogger(&buf, slog.LevelDebug))
+	slog.SetDefault(telemetry.NewLogger(&buf, slog.LevelDebug))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	return &buf
 }
@@ -58,7 +60,7 @@ func serve(h http.Handler, method, path, cookie string, header ...string) *httpt
 	return res
 }
 
-func newTestServer(m *metrics, maxInFlight int) (http.Handler, *router) {
+func newTestServer(m *telemetry.Metrics, maxInFlight int) (http.Handler, *router) {
 	rt := newTestRouter()
 	return newServerHandler(rt, m, serverOptions{maxInFlight: maxInFlight}), rt
 }
@@ -145,7 +147,7 @@ func TestMetricsUseRouteTemplate(t *testing.T) {
 		{"GET", "/api/mine", "401", 1},
 	}
 	for _, tt := range tests {
-		got := testutil.ToFloat64(m.requests.WithLabelValues(tt.method, tt.route, tt.status))
+		got := testutil.ToFloat64(m.Requests.WithLabelValues(tt.method, tt.route, tt.status))
 		if got != tt.want {
 			t.Errorf("http_requests_total{%s %s %s} = %v, want %v", tt.method, tt.route, tt.status, got, tt.want)
 		}
@@ -303,7 +305,7 @@ func TestParseLevel(t *testing.T) {
 		"what":  slog.LevelInfo,
 	}
 	for name, want := range tests {
-		if got := parseLevel(name); got != want {
+		if got := telemetry.ParseLevel(name); got != want {
 			t.Errorf("parseLevel(%q) = %v, want %v", name, got, want)
 		}
 	}

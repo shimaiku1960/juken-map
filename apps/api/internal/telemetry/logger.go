@@ -1,4 +1,4 @@
-package main
+package telemetry
 
 import (
 	"context"
@@ -27,8 +27,8 @@ var pinoLevels = map[slog.Level]int{
 	slog.LevelError: 50,
 }
 
-// newLogger は pino と同じ形で w に書くロガーを作る。pid・hostname も pino と同じく毎行に付ける。
-func newLogger(w io.Writer, level slog.Level) *slog.Logger {
+// NewLogger は pino と同じ形で w に書くロガーを作る。pid・hostname も pino と同じく毎行に付ける。
+func NewLogger(w io.Writer, level slog.Level) *slog.Logger {
 	h := slog.NewJSONHandler(w, &slog.HandlerOptions{
 		Level: level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
@@ -57,10 +57,10 @@ func newLogger(w io.Writer, level slog.Level) *slog.Logger {
 	return slog.New(requestContextHandler{h}).With("pid", os.Getpid(), "hostname", hostname)
 }
 
-// logOutput は、LOG_FILE を設定したときだけ、標準出力に加えてそのファイルにも同じ行を書く。
+// LogOutput は、LOG_FILE を設定したときだけ、標準出力に加えてそのファイルにも同じ行を書く。
 // 手元の Alloy がこのファイルを読んで Loki へ送る（observability/alloy/config.alloy）。本番は Docker の
 // ログを読むので使わない。相対パスは起動したディレクトリから（pnpm dev ではリポジトリのルート）。
-func logOutput(stdout io.Writer, path string) (io.Writer, error) {
+func LogOutput(stdout io.Writer, path string) (io.Writer, error) {
 	if path == "" {
 		return stdout, nil
 	}
@@ -75,8 +75,8 @@ func logOutput(stdout io.Writer, path string) (io.Writer, error) {
 	return io.MultiWriter(stdout, f), nil
 }
 
-// parseLevel は LOG_LEVEL（pino と同じ名前）を slog のレベルにする。知らない値は info にする。
-func parseLevel(name string) slog.Level {
+// ParseLevel は LOG_LEVEL（pino と同じ名前）を slog のレベルにする。知らない値は info にする。
+func ParseLevel(name string) slog.Level {
 	switch strings.ToLower(name) {
 	case "trace", "debug":
 		return slog.LevelDebug
@@ -100,9 +100,9 @@ type requestContextHandler struct {
 }
 
 func (h requestContextHandler) Handle(ctx context.Context, r slog.Record) error {
-	if info := requestInfoFrom(ctx); info != nil {
-		r.AddAttrs(slog.String("reqId", info.id))
-		if info.sim {
+	if info := RequestInfoFrom(ctx); info != nil {
+		r.AddAttrs(slog.String("reqId", info.ID))
+		if info.Sim {
 			r.AddAttrs(slog.Bool("sim", true))
 		}
 	}

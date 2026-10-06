@@ -187,7 +187,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    ```
 
    APIと画面のログは、実行したターミナルに実行元の名前付きで表示されます。
-   APIのログは1行1件のJSONで出ます（`apps/api/logger.go`）。
+   APIのログは1行1件のJSONで出ます（`apps/api/internal/telemetry/logger.go`）。
    Viteが`/api`を同一オリジンのままnginx（4200番、Docker）へ送り、nginxが本番と同じ振り分けファイル
    （`infra/nginx/juken-map-go-routes.conf`）でGo（4100番）へ送ります。本番と同じ形で
    動かすためです。ブラウザで開くのは5173番です。Goは自動で再起動しないので、Goを書き換えたら

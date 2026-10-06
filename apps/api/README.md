@@ -312,8 +312,6 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `metrics.go` | Prometheus のメトリクス（名前・ラベルは Node と同じ） |
-| `tracing.go` | OpenTelemetry のトレース（リクエスト・SQL・外部 API の呼び出し）。URL のパスとクエリは入れない（JUK-126） |
 | `analytics.go` | 本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80） |
 | `csp_report.go` | ブラウザが送る CSP の違反の報告をログに残す（認証なしの口なので件数と大きさに上限） |
 | `sim.go` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る。書き込みは `internal/write/simulation` |
@@ -336,7 +334,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `body.go` | リクエスト本文の読み方（Content-Type・上限・壊れた JSON・不正な UTF-8）、415・413 の形 |
 | `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
-| `logger.go` | pino と同じ形の JSON ログ。reqId・trace_id を足し、`LOG_FILE` にも書く |
+| `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node と同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする、期限の切れた行の消し方（`expired.go`。消す表は持ち主が渡す）。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `internal/write/studyrecord/` | 学習記録（実績・予定・初回記録の日時）への書き込みの持ち主。実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |

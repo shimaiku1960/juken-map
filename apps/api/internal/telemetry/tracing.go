@@ -1,4 +1,4 @@
-package main
+package telemetry
 
 import (
 	"context"
@@ -21,23 +21,23 @@ import (
 // Node の instrumentation.ts にあたる（JUK-126）。
 //
 // Node は import を横取りしてライブラリに計測を仕込んだが、Go にその仕組みは無いので、
-// 計測する場所を自分で包む。リクエストは observe（middleware.go）、SQL は database.Open の otelsql、
-// 外部 API は newOutboundClient。
+// 計測する場所を自分で包む。リクエストは observe（apps/api/middleware.go）、SQL は database.Open の otelsql、
+// 外部 API は NewOutboundClient。
 //
 // トークンを残さないため、スパンには URL のパスも ? 以降も入れない。リクエストはルートの型
 // （/api/x/:id）で名付け、外部 API は送り先のホスト名だけを入れる。Node は URL をそのまま入れる
 // ライブラリの計測を使ったので、送る直前に取り除いていた（redact.ts）。
 
-// serviceName は Tempo で探すときの名前。Node と同じにして、Grafana のダッシュボードの絞り込み
+// ServiceName は Tempo で探すときの名前。Node と同じにして、Grafana のダッシュボードの絞り込み
 // （resource.service.name）をそのまま使う。
-const serviceName = "juken-map-api"
+const ServiceName = "juken-map-api"
 
-// setupTracing は OTEL_EXPORTER_OTLP_ENDPOINT を設定したときだけトレースを送る準備をする。
+// SetupTracing は OTEL_EXPORTER_OTLP_ENDPOINT を設定したときだけトレースを送る準備をする。
 // 返す関数は、溜めたスパンを送り切ってから止める（サーバーを止めるときに呼ぶ）。
 //
 // 送り先（+ /v1/traces）や間引き（OTEL_TRACES_SAMPLER）は、SDK が OTEL_* の環境変数を読んで決める。
 // 設定しなければ何も送らず、スパンも作らない（noop）。
-func setupTracing(ctx context.Context) (trace.TracerProvider, func(context.Context) error, error) {
+func SetupTracing(ctx context.Context) (trace.TracerProvider, func(context.Context) error, error) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
 		return noop.NewTracerProvider(), func(context.Context) error { return nil }, nil
 	}
@@ -47,8 +47,8 @@ func setupTracing(ctx context.Context) (trace.TracerProvider, func(context.Conte
 	}
 	tp := sdktrace.NewTracerProvider(
 		// まとめて送る。送り先が落ちていてもリクエストは待たされない（溢れた分は捨てる）。
-		sdktrace.WithSpanProcessor(skipWebSpans{sdktrace.NewBatchSpanProcessor(redactingExporter{exporter})}),
-		sdktrace.WithResource(resource.NewSchemaless(attribute.String("service.name", serviceName))),
+		sdktrace.WithSpanProcessor(SkipWebSpans{sdktrace.NewBatchSpanProcessor(redactingExporter{exporter})}),
+		sdktrace.WithResource(resource.NewSchemaless(attribute.String("service.name", ServiceName))),
 	)
 	// database.Open の otelsql は、指定が無ければこの全体の設定を使う。
 	otel.SetTracerProvider(tp)
@@ -60,23 +60,23 @@ func setupTracing(ctx context.Context) (trace.TracerProvider, func(context.Conte
 	return tp, tp.Shutdown, nil
 }
 
-// webRoute は API 以外（画面の HTML・JS・CSS・画像）をまとめたルート（spa.go）。
-const webRoute = "(web)"
+// WebRoute は API 以外（画面の HTML・JS・CSS・画像）をまとめたルート（apps/api/spa.go）。
+const WebRoute = "(web)"
 
-// tracedRoute は、そのルートのトレースを送るか。画面のファイル配信は SQL も外部 API も呼ばず、
+// TracedRoute は、そのルートのトレースを送るか。画面のファイル配信は SQL も外部 API も呼ばず、
 // 1枚のスパンで終わるので見るものが無い。画面を1回開くだけで十数件になり、Tempo の一覧を埋める
 // （本番で、デプロイ後の168件のうち135件がこれだった）。
-func tracedRoute(route string) bool {
-	return route != webRoute
+func TracedRoute(route string) bool {
+	return route != WebRoute
 }
 
-// skipWebSpans は、送らないルートのスパンを送る前に捨てる。ルートは返し終えるまで決まらないので、
+// SkipWebSpans は、送らないルートのスパンを送る前に捨てる。ルートは返し終えるまで決まらないので、
 // スパンを作らずに済ませることはできない（間引き＝Sampler は始める時点で決める）。
-type skipWebSpans struct{ sdktrace.SpanProcessor }
+type SkipWebSpans struct{ sdktrace.SpanProcessor }
 
-func (p skipWebSpans) OnEnd(s sdktrace.ReadOnlySpan) {
+func (p SkipWebSpans) OnEnd(s sdktrace.ReadOnlySpan) {
 	for _, kv := range s.Attributes() {
-		if kv.Key == "http.route" && !tracedRoute(kv.Value.AsString()) {
+		if kv.Key == "http.route" && !TracedRoute(kv.Value.AsString()) {
 			return
 		}
 	}
@@ -129,27 +129,27 @@ func redactAttributes(attrs []attribute.KeyValue) []attribute.KeyValue {
 	return out
 }
 
-// startRequestSpan は1リクエスト全体のスパンを始める。名前はルートが決まってから付け直す（endRequestSpan）。
+// StartRequestSpan は1リクエスト全体のスパンを始める。名前はルートが決まってから付け直す（EndRequestSpan）。
 //
 // 外から来た traceparent ヘッダーは読まず（propagator を設定していない）、毎回ここを根にする。
 // 外の誰かが決めた ID でトレースを作らせないため（この API を呼ぶのは自分の画面と外部サービスで、
 // どちらもトレースを渡してこない）。
-func startRequestSpan(ctx context.Context, tracer trace.Tracer, method string) (context.Context, trace.Span) {
+func StartRequestSpan(ctx context.Context, tracer trace.Tracer, method string) (context.Context, trace.Span) {
 	return tracer.Start(ctx, method, trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(attribute.String("http.request.method", method)))
 }
 
-// endRequestSpan はルートの型で名付け直し、結果を書いて閉じる。
+// EndRequestSpan はルートの型で名付け直し、結果を書いて閉じる。
 // 名前は Node（Fastify の計測）と同じ「GET /api/x/:id」にする。ダッシュボードが
 // 「GET /api/health」の根を除く絞り込みを持っているため。
-func endRequestSpan(span trace.Span, method, route string, status int, info *requestInfo) {
+func EndRequestSpan(span trace.Span, method, route string, status int, info *RequestInfo) {
 	span.SetName(method + " " + route)
 	span.SetAttributes(
 		attribute.String("http.route", route),
 		attribute.Int("http.response.status_code", status),
-		attribute.String("reqId", info.id),
+		attribute.String("reqId", info.ID),
 	)
-	if info.sim {
+	if info.Sim {
 		span.SetAttributes(attribute.Bool("sim", true))
 	}
 	// OpenTelemetry の決まりで、サーバーの 4xx は呼び出し側の誤りなのでエラーにしない。
@@ -159,12 +159,12 @@ func endRequestSpan(span trace.Span, method, route string, status int, info *req
 	span.End()
 }
 
-// newOutboundClient は外部 API（Resend・LINE・microCMS・GitHub）を呼ぶクライアント。
+// NewOutboundClient は外部 API（Resend・LINE・microCMS・GitHub）を呼ぶクライアント。
 // 呼び出し1回ごとにスパンを作る。tracer は呼び出し元（ctx）のスパンの子にするために使う。
-func newOutboundClient(tp trace.TracerProvider) *http.Client {
+func NewOutboundClient(tp trace.TracerProvider) *http.Client {
 	return &http.Client{Transport: &tracedTransport{
 		base:   http.DefaultTransport,
-		tracer: tp.Tracer(serviceName),
+		tracer: tp.Tracer(ServiceName),
 	}}
 }
 

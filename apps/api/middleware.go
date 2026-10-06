@@ -10,35 +10,13 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
 // ミドルウェアは「http.Handler を受け取り、前後に処理を足した http.Handler を返す関数」。
 // Fastify のフック（onRequest・onResponse など）にあたるものを、包む順番で表す。
-// 組み立ては main.go の newServerHandler にある。
-
-// requestInfo はリクエストごとの情報。一番外側の observe が作って ctx に入れる。
-// ポインタで持つので、内側（ルーター）が route を書き込むと外側からも見える。
-type requestInfo struct {
-	id    string
-	sim   bool
-	route string // メトリクスの route ラベル。ルーターが登録した型を入れる（router.go）
-}
-
-// ctx のキーは、他のパッケージのキーとぶつからないよう専用の型にする（Go の決まり）。
-type requestInfoKey struct{}
-
-func requestInfoFrom(ctx context.Context) *requestInfo {
-	info, _ := ctx.Value(requestInfoKey{}).(*requestInfo)
-	return info
-}
-
-// requestIDFrom はログとエラー応答に載せる reqId。リクエストの外では空文字。
-func requestIDFrom(ctx context.Context) string {
-	if info := requestInfoFrom(ctx); info != nil {
-		return info.id
-	}
-	return ""
-}
+// 組み立ては main.go の newServerHandler にある。リクエストごとの情報（RequestInfo）・ログ・計測・トレースは internal/telemetry にある。
 
 // newRequestID は UUID（v4）を作る。Node と同じく、本番は36文字、開発は先頭8文字にする
 // （開発は人が目で読むので短さを取る。observability/logger.ts の genReqId）。
@@ -86,34 +64,34 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 // observe は一番外側で、reqId を振り、返し終えたらアクセスログ1行とメトリクスとトレースを残す。
 // Node の genReqId・requestContext・RequestLogController・registerMetrics と、
 // instrumentation.ts の HTTP の計測をまとめたもの。
-func observe(m *metrics, tracer trace.Tracer, shortIDs bool, next http.Handler) http.Handler {
+func observe(m *telemetry.Metrics, tracer trace.Tracer, shortIDs bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		info := &requestInfo{
-			id: newRequestID(shortIDs),
+		info := &telemetry.RequestInfo{
+			ID: newRequestID(shortIDs),
 			// シミュレーションからのリクエストに印を付ける（Grafana で実利用者と分ける）。
-			sim: r.Header.Get("X-Sim-Run") != "",
+			Sim: r.Header.Get("X-Sim-Run") != "",
 		}
 		// トレースのスパンも ctx に入れる。内側の SQL・外部 API のスパンはこの子になり、
-		// ログの行には trace_id が付く（logger.go）。
-		ctx, span := startRequestSpan(r.Context(), tracer, r.Method)
-		r = r.WithContext(context.WithValue(ctx, requestInfoKey{}, info))
+		// ログの行には trace_id が付く（internal/telemetry/logger.go）。
+		ctx, span := telemetry.StartRequestSpan(r.Context(), tracer, r.Method)
+		r = r.WithContext(telemetry.WithRequestInfo(ctx, info))
 		// 調査のときに画面の Network タブの値でログを引けるよう、応答ヘッダーに載せる
 		// （Node の error-handling.ts。この API はすべて /api/ なので常に付ける）。
-		w.Header().Set("X-Request-Id", info.id)
+		w.Header().Set("X-Request-Id", info.ID)
 
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
 
 		elapsed := time.Since(start)
-		route := info.route
+		route := info.Route
 		if route == "" {
 			route = "(unmatched)"
 		}
-		m.observe(r.Method, route, rec.status, elapsed)
-		endRequestSpan(span, r.Method, route, rec.status, info)
+		m.Observe(r.Method, route, rec.status, elapsed)
+		telemetry.EndRequestSpan(span, r.Method, route, rec.status, info)
 		logCtx := r.Context()
-		if !tracedRoute(route) {
+		if !telemetry.TracedRoute(route) {
 			// 送らないトレースの ID をログに書くと、Grafana で開いても見つからないリンクになる。
 			logCtx = trace.ContextWithSpanContext(logCtx, trace.SpanContext{})
 		}
