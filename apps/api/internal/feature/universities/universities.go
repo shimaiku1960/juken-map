@@ -1,4 +1,9 @@
-package main
+// Package universities は大学の読み取り（JUK-73）。Node の routes/universities.ts と services/university-service.ts にあたる。
+//   - GET /api/universities       大学を探す画面の一覧。全員に同じもの
+//   - GET /api/universities/{id}  大学詳細。学部・タグと、自分が志望校に登録済みの学部
+//
+// 大学・学部・タグの編集は管理画面（internal/feature/admin/universities.go・internal/feature/admin/faculties.go）にあり、変えたら一覧のキャッシュを捨てる（InvalidateExplore）。
+package universities
 
 import (
 	"context"
@@ -11,11 +16,6 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
-
-// 大学の読み取り（JUK-73）。Node の routes/universities.ts と services/university-service.ts にあたる。
-//   - GET /api/universities       大学を探す画面の一覧。全員に同じもの
-//   - GET /api/universities/{id}  大学詳細。学部・タグと、自分が志望校に登録済みの学部
-// 大学・学部・タグの編集は管理画面（internal/feature/admin/universities.go・internal/feature/admin/faculties.go）にあり、変えたら下のキャッシュを捨てる。
 
 // 一覧の応答の形。画面が使うのは大学の列と「学部ごとのタグ名」だけなので、Node と同じくそれだけ返す。
 // JSON のバイト列を Node の JSON.stringify と同じにする（下の ETag を Node と揃えるため）ので、
@@ -38,16 +38,16 @@ type exploreTagDTO struct {
 
 // 大学一覧は全員に同じもので、変わるのは管理画面でマスターを編集したときだけ。毎回 DB を引くと
 // 一番重い API（大学 823 件 × LEFT JOIN 3本）になるので、JSON にした状態でメモリに持つ（internal/httpx/json_snapshot.go）。
-// 管理画面の編集（internal/feature/admin/universities.go・internal/feature/admin/faculties.go）は explore.Invalidate で捨てる。
+// 管理画面の編集（internal/feature/admin/universities.go・internal/feature/admin/faculties.go）は InvalidateExplore で捨てる。
 const exploreCacheTTL = 10 * time.Minute
 
-type universityStore struct {
+type store struct {
 	db      *sql.DB
 	explore *httpx.JSONSnapshotCache
 }
 
-func newUniversityStore(db *sql.DB) *universityStore {
-	st := &universityStore{db: db}
+func newStore(db *sql.DB) *store {
+	st := &store{db: db}
 	st.explore = httpx.NewJSONSnapshotCache(exploreCacheTTL, func(ctx context.Context) (any, error) {
 		return st.listForExplore(ctx)
 	})
@@ -56,7 +56,7 @@ func newUniversityStore(db *sql.DB) *universityStore {
 
 // listForExplore は大学 → 学部 → タグを LEFT JOIN 1本で取り、入れ子へ詰め直す。
 // 行は（大学 × 学部 × タグ）の数だけ並ぶ。
-func (st *universityStore) listForExplore(ctx context.Context) ([]exploreUniversityDTO, error) {
+func (st *store) listForExplore(ctx context.Context) ([]exploreUniversityDTO, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT u.id, u.name, u.prefecture, u.type, f.id AS facultyId, t.name AS tagName
 		 FROM University AS u
@@ -108,7 +108,7 @@ func (st *universityStore) listForExplore(ctx context.Context) ([]exploreUnivers
 // 学部（FacultyWithTags）は志望校の学部と違い、大学を入れ子にしない。
 
 // findDetail は大学詳細ページ用。学部と、絞り込みに使うタグまで一度に引く。無ければ nil。
-func (st *universityStore) findDetail(ctx context.Context, id int64) (*apischema.UniversityDetail, error) {
+func (st *store) findDetail(ctx context.Context, id int64) (*apischema.UniversityDetail, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT u.id, u.name, u.prefecture, u.type, u.createdAt,
 		        f.id AS f_id, f.name AS f_name, f.examDate AS f_examDate,
@@ -170,7 +170,7 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*apischema
 }
 
 // listGoalFacultyIDs は志望校として登録済みの学部 ID。大学詳細で「登録済み」を出し分けるのに使う。
-func (st *universityStore) listGoalFacultyIDs(ctx context.Context, userID string) ([]int64, error) {
+func (st *store) listGoalFacultyIDs(ctx context.Context, userID string) ([]int64, error) {
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT facultyId FROM FinalGoal WHERE userId = ? ORDER BY facultyId ASC", userID)
 	if err != nil {
@@ -189,12 +189,21 @@ func (st *universityStore) listGoalFacultyIDs(ctx context.Context, userID string
 	return ids, rows.Err()
 }
 
-type universityHandlers struct {
-	store *universityStore
+type Handlers struct {
+	store *store
+}
+
+func New(db *sql.DB) *Handlers {
+	return &Handlers{store: newStore(db)}
+}
+
+// invalidateExplore は大学を探す画面の一覧のキャッシュを捨てる。管理画面で大学・学部を変えたら呼ぶ。
+func (h *Handlers) InvalidateExplore() {
+	h.store.explore.Invalidate()
 }
 
 // list は GET /api/universities。
-func (h *universityHandlers) list(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+func (h *Handlers) List(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	snap, err := h.store.explore.Get(r.Context())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("universities: %w", err))
@@ -204,7 +213,7 @@ func (h *universityHandlers) list(w http.ResponseWriter, r *http.Request, _ *htt
 }
 
 // detail は GET /api/universities/{id}。無い大学は 404（Node と同じ文言）。
-func (h *universityHandlers) detail(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	id, ok := httpx.PathID(w, r, "id")
 	if !ok {
 		return

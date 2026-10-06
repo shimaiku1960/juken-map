@@ -29,7 +29,7 @@ import (
 // 書き込みは持ち主の internal/write/university（大学・学部）と internal/write/textbookmaster（参考書）にあり（JUK-154）、
 // store はその操作を呼んで結果を masterOutcome に直す。
 //
-// 大学・学部を変えたら、大学を探す画面の一覧のキャッシュ（universities.go）を捨てる。成功したときだけ。
+// 大学・学部を変えたら、大学を探す画面の一覧のキャッシュ（internal/feature/universities）を捨てる。成功したときだけ。
 // 変更はすべて構造化ログ「admin master change」に「誰が・何を・前→後」で残す（Node と同じ項目。Grafana の Loki で追える）。
 //
 // ファイルは対象ごとに分け、それぞれに入口・入力・DB をまとめる（JUK-135）。

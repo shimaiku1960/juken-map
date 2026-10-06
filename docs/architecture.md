@@ -250,7 +250,7 @@ apps/api/
   ├ app/                  起動・終了、依存の組み立て、ルートとアクセス条件の一覧
   ├ feature/              画面・入口ごとの処理（ハンドラと読み取りの SQL）
   │ ├ auth/  study/  goals/  textbooks/   （study はダッシュボードも持つ。同じ読み取りを使うため）
-  │ └ admin/  line/  notifications/  ops/  blog/
+  │ └ admin/  line/  notifications/  ops/  blog/  universities/
   ├ write/                書き込みの持ち主（操作とトランザクション）
   │ ├ account/  authguard/  studyrecord/  textbook/  goal/
   │ └ university/  textbookmaster/  notification/  simulation/   （一覧は下の「持ち主の一覧」）

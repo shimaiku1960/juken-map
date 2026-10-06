@@ -31,6 +31,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/notifications"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/study"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/universities"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/spa"
@@ -270,10 +271,9 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 	profile := auth.NewProfileHandlers(db)
 	rt.User("PUT /api/profile", profile.Update)
 
-	universityStore := newUniversityStore(db)
-	universities := &universityHandlers{store: universityStore}
-	rt.User("GET /api/universities", universities.list)
-	rt.User("GET /api/universities/{id}", universities.detail)
+	universityRoutes := universities.New(db)
+	rt.User("GET /api/universities", universityRoutes.List)
+	rt.User("GET /api/universities/{id}", universityRoutes.Detail)
 
 	analytics := &analyticsHandlers{store: &analyticsStore{db: db}}
 	rt.User("POST /api/analytics/registration", analytics.registration)
@@ -299,9 +299,9 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 	rt.Admin("POST /api/admin/users/{id}/unban", adminUsers.Unban)
 	rt.Admin("DELETE /api/admin/users/{id}", adminUsers.DeleteUser)
 
-	// マスター編集。大学・学部を変えたら大学を探す画面の一覧（上の universities）の、参考書マスターを
+	// マスター編集。大学・学部を変えたら大学を探す画面の一覧（上の universityRoutes）の、参考書マスターを
 	// 変えたら GET /api/textbook-masters（上の textbookRoutes）のキャッシュを捨てる。
-	masters := admin.NewMasterHandlers(db, universityStore.explore.Invalidate, textbookRoutes.InvalidateMasters)
+	masters := admin.NewMasterHandlers(db, universityRoutes.InvalidateExplore, textbookRoutes.InvalidateMasters)
 	rt.Admin("GET /api/admin/universities", masters.ListUniversities)
 	rt.Admin("POST /api/admin/universities", masters.CreateUniversity)
 	rt.Admin("GET /api/admin/universities/{id}", masters.UniversityDetail)
