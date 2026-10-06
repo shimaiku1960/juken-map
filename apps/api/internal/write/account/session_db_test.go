@@ -11,7 +11,7 @@ import (
 )
 
 // セッションの操作を、本物の MySQL で確かめる。ログイン・ログアウトの流れは internal/feature/auth の auth_db_test.go、
-// 運用のコマンド（revoke・revoke-all・revoke-admins）は incident_db_test.go にある。
+// 運用のコマンド（revoke・revoke-all・revoke-admins）は internal/feature/ops の incident_db_test.go にある。
 func TestSessionDB(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 10, 6, 1, 2, 3, 4_000_000, time.UTC)

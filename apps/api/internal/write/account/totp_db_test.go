@@ -11,7 +11,7 @@ import (
 )
 
 // 2段階認証の操作を、本物の MySQL で確かめる。入口からの流れ（設定・ログイン・予備コード）は
-// internal/feature/auth の auth_db_test.go、運用のコマンド（reset-2fa）は incident_db_test.go にある。
+// internal/feature/auth の auth_db_test.go、運用のコマンド（reset-2fa）は internal/feature/ops の incident_db_test.go にある。
 func TestTOTPDB(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 10, 6, 1, 2, 3, 4_000_000, time.UTC)
