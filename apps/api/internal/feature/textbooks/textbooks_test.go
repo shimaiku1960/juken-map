@@ -1,4 +1,4 @@
-package main
+package textbooks
 
 import (
 	"context"
@@ -32,14 +32,14 @@ func TestTextbookMasterJSON(t *testing.T) {
 }
 
 func TestTextbookMastersFromCache(t *testing.T) {
-	st := newTextbookStore(nil)
+	st := newStore(nil)
 	loads := 0
 	st.masters = httpx.NewJSONSnapshotCache(time.Minute, func(context.Context) (any, error) {
 		loads++
 		return []apischema.TextbookMaster{}, nil
 	})
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	rt.User("GET /api/textbook-masters", (&textbookHandlers{store: st}).listMasters)
+	rt.User("GET /api/textbook-masters", (&Handlers{store: st}).ListMasters)
 
 	get := func(etag string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("GET", "/api/textbook-masters", nil)

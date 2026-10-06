@@ -1,4 +1,6 @@
-package main
+// Package textbooks は参考書の入口（GET・POST /api/textbooks、PATCH /api/textbooks/{id}、GET /api/textbook-masters）。
+// ハンドラと読み取りの SQL を持ち、書き込みは internal/write/textbook に任せる（JUK-156）。
+package textbooks
 
 import (
 	"context"
@@ -20,7 +22,7 @@ import (
 // 列の名前と並びも Node の TEXTBOOK_COLUMNS・groupMasters に揃える。
 // 日時は Date を JSON にしたときと同じ ISO 文字列。
 
-type textbookStore struct {
+type store struct {
 	db *sql.DB
 	// masters は GET /api/textbook-masters の JSON。全員に同じで、変わるのは管理画面の編集
 	// （admin_textbook_masters.go）だけなので、メモリに持つ（internal/httpx/json_snapshot.go、JUK-50）。
@@ -30,8 +32,8 @@ type textbookStore struct {
 // textbookMastersCacheTTL は、DB を直接書き換えたとき（seed など）の保険。大学一覧と同じ10分。
 const textbookMastersCacheTTL = 10 * time.Minute
 
-func newTextbookStore(db *sql.DB) *textbookStore {
-	st := &textbookStore{db: db}
+func newStore(db *sql.DB) *store {
+	st := &store{db: db}
 	st.masters = httpx.NewJSONSnapshotCache(textbookMastersCacheTTL, func(ctx context.Context) (any, error) {
 		return st.listTextbookMasters(ctx)
 	})
@@ -60,7 +62,7 @@ func scanTextbook(scan func(...any) error) (apischema.TextbookRow, error) {
 }
 
 // listTextbooks は自分の参考書の一覧。名前は (userId, name) で UNIQUE なので、名前順だけで並びが決まる。
-func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]apischema.TextbookRow, error) {
+func (st *store) listTextbooks(ctx context.Context, userID string) ([]apischema.TextbookRow, error) {
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT "+textbookRowColumns+" FROM Textbook WHERE userId = ? ORDER BY name ASC",
 		userID,
@@ -84,7 +86,7 @@ func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]ap
 // listTextbookMasters は参考書マスターの一覧を、総量の候補（metrics）と一緒に返す。全員に同じもの。
 // マスター → 総量の候補は1対多なので、LEFT JOIN 1本で取り、マスターごとに束ねる。
 // 候補は id 順（登録時に「isDefault の候補、無ければ先頭」を使うので、先頭を決めておく）。
-func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]apischema.TextbookMaster, error) {
+func (st *store) listTextbookMasters(ctx context.Context) ([]apischema.TextbookMaster, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT tm.id, tm.name, tm.publisher, tm.edition, tm.isbn, tm.createdAt, tm.updatedAt,
 		        m.id AS m_id, m.unit AS m_unit, m.totalAmount AS m_totalAmount,
@@ -139,12 +141,22 @@ func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]apischema.T
 	return masters, rows.Err()
 }
 
-type textbookHandlers struct {
-	store *textbookStore
+type Handlers struct {
+	store *store
 }
 
-// list は GET /api/textbooks。
-func (h *textbookHandlers) list(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// New は参考書の入口を作る。
+func New(db *sql.DB) *Handlers {
+	return &Handlers{store: newStore(db)}
+}
+
+// InvalidateMasters は参考書マスターの応答のキャッシュを捨てる。管理画面でマスターを変えたら呼ぶ。
+func (h *Handlers) InvalidateMasters() {
+	h.store.masters.Invalidate()
+}
+
+// List は GET /api/textbooks。
+func (h *Handlers) List(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	textbooks, err := h.store.listTextbooks(r.Context(), s.UserID)
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("textbooks: %w", err))
@@ -153,8 +165,8 @@ func (h *textbookHandlers) list(w http.ResponseWriter, r *http.Request, s *httpx
 	httpx.WriteJSON(w, http.StatusOK, textbooks)
 }
 
-// listMasters は GET /api/textbook-masters。ログイン必須だが、中身は利用者によらない。
-func (h *textbookHandlers) listMasters(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+// ListMasters は GET /api/textbook-masters。ログイン必須だが、中身は利用者によらない。
+func (h *Handlers) ListMasters(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	snap, err := h.store.masters.Get(r.Context())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("textbook-masters: %w", err))

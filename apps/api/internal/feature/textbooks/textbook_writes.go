@@ -1,4 +1,4 @@
-package main
+package textbooks
 
 import (
 	"errors"
@@ -167,8 +167,8 @@ func (p textbookProgress) record() textbook.Progress {
 	}
 }
 
-// create は POST /api/textbooks。
-func (h *textbookHandlers) create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// Create は POST /api/textbooks。
+func (h *Handlers) Create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
@@ -201,8 +201,8 @@ func (h *textbookHandlers) create(w http.ResponseWriter, r *http.Request, s *htt
 	}
 }
 
-// updateProgress は PATCH /api/textbooks/{id}。入力チェックは自分の参考書かを確かめるより先（Node と同じ）。
-func (h *textbookHandlers) updateProgress(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+// UpdateProgress は PATCH /api/textbooks/{id}。入力チェックは自分の参考書かを確かめるより先（Node と同じ）。
+func (h *Handlers) UpdateProgress(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
