@@ -1,4 +1,4 @@
-package main
+package line
 
 import (
 	"context"
@@ -221,15 +221,15 @@ type lineTestEnv struct {
 
 func newLineTestEnv() *lineTestEnv {
 	env := &lineTestEnv{store: newFakeLineStore(), client: &fakeLineClient{friend: true}}
-	h := &lineHandlers{store: env.store, line: env.client, channelSecret: testChannelSecret, webOrigin: "https://juken-map.com"}
+	h := &Handlers{store: env.store, line: env.client, channelSecret: testChannelSecret, webOrigin: "https://juken-map.com"}
 	env.rt = httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	env.rt.User("GET /api/line/connection", h.connection)
-	env.rt.User("DELETE /api/line/connection", h.disconnect)
-	env.rt.User("POST /api/line/account-link", h.accountLink)
-	env.rt.OAuth("GET /api/line/oauth/start", h.oauthStart)
-	env.rt.OAuth("GET /api/line/oauth/callback", h.oauthCallback)
-	env.rt.Webhook("POST /api/line/webhook", h.webhook)
-	env.rt.PublicWithSession("GET /line/settings", h.settings)
+	env.rt.User("GET /api/line/connection", h.Connection)
+	env.rt.User("DELETE /api/line/connection", h.Disconnect)
+	env.rt.User("POST /api/line/account-link", h.AccountLink)
+	env.rt.OAuth("GET /api/line/oauth/start", h.OauthStart)
+	env.rt.OAuth("GET /api/line/oauth/callback", h.OauthCallback)
+	env.rt.Webhook("POST /api/line/webhook", h.Webhook)
+	env.rt.PublicWithSession("GET /line/settings", h.Settings)
 	return env
 }
 
@@ -662,8 +662,8 @@ func TestHTTPLineClientLogin(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := &httpLineClient{client: srv.Client(), loginBase: srv.URL, authorizeURL: "https://access.line.me/oauth2/v2.1/authorize",
-		loginChannelID: "CID", loginSecret: "SECRET"}
+	c := &HTTPClient{HTTP: srv.Client(), LoginBase: srv.URL, AuthorizeURL: "https://access.line.me/oauth2/v2.1/authorize",
+		LoginChannelID: "CID", LoginSecret: "SECRET"}
 	ctx := context.Background()
 	redirectURI := "https://juken-map.com/api/line/oauth/callback"
 
@@ -713,7 +713,7 @@ func TestHTTPLineClientLogin(t *testing.T) {
 	}
 
 	// 設定が無ければ LINE を呼ばずにエラー
-	if _, err := (&httpLineClient{}).authCodeURL("S1", "N1", "V", redirectURI); err == nil {
+	if _, err := (&HTTPClient{}).authCodeURL("S1", "N1", "V", redirectURI); err == nil {
 		t.Error("LINE_LOGIN_CHANNEL_ID が空なのにエラーにならない")
 	}
 }

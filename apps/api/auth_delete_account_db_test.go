@@ -23,12 +23,12 @@ func TestAuthDBDeleteAccount(t *testing.T) {
 		other := e.signedIn(email, authTestPassword)
 
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"password": "not my passphrase!!"}), 400, "INVALID_PASSWORD")
-		if e.fx.count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 1 {
+		if e.fx.Count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 1 {
 			t.Fatal("パスワードが違うのに消えた")
 		}
 
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"password": authTestPassword}), 200, "")
-		if e.fx.count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 0 {
+		if e.fx.Count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 0 {
 			t.Fatal("利用者が残っている")
 		}
 		if _, ok := b.cookies[sessionCookieName]; ok {
@@ -49,13 +49,13 @@ func TestAuthDBDeleteAccount(t *testing.T) {
 
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"password": authTestPassword}), 400, "MFA_CODE_REQUIRED")
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"password": authTestPassword, "code": "000000"}), 400, "INVALID_CODE")
-		if e.fx.count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 1 {
+		if e.fx.Count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 1 {
 			t.Fatal("コードが無い・違うのに消えた")
 		}
 		// 予備コードでも通る（認証アプリを失くした人も退会できる）。
 		expectStatus(t, b.do("POST", "/api/auth/delete-account",
 			map[string]string{"password": authTestPassword, "code": backup[0], "method": "backup"}), 200, "")
-		if e.fx.count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 0 {
+		if e.fx.Count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 0 {
 			t.Fatal("利用者が残っている")
 		}
 	})
@@ -69,7 +69,7 @@ func TestAuthDBDeleteAccount(t *testing.T) {
 		e.clock.Advance(totpPeriod)
 		expectStatus(t, b.do("POST", "/api/auth/delete-account",
 			map[string]string{"password": authTestPassword, "code": totpCode(secret, totpStep(e.clock.Now()))}), 200, "")
-		if e.fx.count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 0 {
+		if e.fx.Count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 0 {
 			t.Fatal("利用者が残っている")
 		}
 	})
@@ -83,7 +83,7 @@ func TestAuthDBDeleteAccount(t *testing.T) {
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"email": "someone@else.example"}), 400, "EMAIL_MISMATCH")
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"email": ""}), 400, "EMAIL_MISMATCH")
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"email": "  " + strings.ToUpper(email) + " "}), 200, "")
-		if e.fx.count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 0 {
+		if e.fx.Count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 0 {
 			t.Fatal("利用者が残っている")
 		}
 	})
@@ -94,7 +94,7 @@ func TestAuthDBDeleteAccount(t *testing.T) {
 		e.fx.Exec("UPDATE `user` SET role = 'admin' WHERE id = ?", id)
 		b := e.signedIn(email, authTestPassword)
 		expectStatus(t, b.do("POST", "/api/auth/delete-account", map[string]string{"password": authTestPassword}), 409, "ADMIN_CANNOT_DELETE")
-		if e.fx.count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 1 {
+		if e.fx.Count("SELECT COUNT(*) FROM `user` WHERE id = ?", id) != 1 {
 			t.Fatal("管理者が消えた")
 		}
 	})
@@ -158,7 +158,7 @@ func fillEveryUserTable(t *testing.T, fx dbFixture, id, email string, facultyID 
 	fx.Exec("INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", id, h())
 
 	for _, ref := range userReferences(t, fx) {
-		if fx.count("SELECT COUNT(*) FROM `"+ref.table+"` WHERE `"+ref.column+"` = ?", id) == 0 {
+		if fx.Count("SELECT COUNT(*) FROM `"+ref.table+"` WHERE `"+ref.column+"` = ?", id) == 0 {
 			t.Errorf("%s.%s が user を指しているのに、テストの行が無い。fillEveryUserTable に足して、退会で消えることを確かめる", ref.table, ref.column)
 		}
 	}
@@ -212,7 +212,7 @@ func expectNoTrace(t *testing.T, fx dbFixture, id, email string) {
 	}
 	for _, c := range cols {
 		q := "SELECT COUNT(*) FROM `" + c.table + "` WHERE INSTR(`" + c.column + "`, ?) > 0 OR INSTR(`" + c.column + "`, ?) > 0"
-		if n := fx.count(q, id, email); n != 0 {
+		if n := fx.Count(q, id, email); n != 0 {
 			t.Errorf("%s.%s に本人の ID かメールアドレスが %d 行残っている", c.table, c.column, n)
 		}
 	}

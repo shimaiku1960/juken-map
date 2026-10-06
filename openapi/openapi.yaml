@@ -908,7 +908,7 @@ paths:
           application/json:
             schema:
               type: object
-              description: LINE の Webhook の本文（使う項目は apps/api/line.go の lineEvent）
+              description: LINE の Webhook の本文（使う項目は apps/api/internal/feature/line/line.go の lineEvent）
       responses:
         "200":
           description: 受け取った（イベントごとの失敗はログにだけ残す）

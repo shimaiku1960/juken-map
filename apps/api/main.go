@@ -25,6 +25,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/admin"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/study"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/textbooks"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
@@ -128,17 +129,17 @@ func run() error {
 			lineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
 			lineToken:  os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
 		},
-	}, lineConfig{
-		channelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
-		webOrigin:     envOr("WEB_ORIGIN", site.URL),
-		client: &httpLineClient{
-			client:         telemetry.NewOutboundClient(tp),
-			botBase:        envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
-			accessToken:    os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
-			loginBase:      envOr("LINE_LOGIN_API_BASE", "https://api.line.me"),
-			authorizeURL:   "https://access.line.me/oauth2/v2.1/authorize",
-			loginChannelID: os.Getenv("LINE_LOGIN_CHANNEL_ID"),
-			loginSecret:    os.Getenv("LINE_LOGIN_CHANNEL_SECRET"),
+	}, line.Config{
+		ChannelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
+		WebOrigin:     envOr("WEB_ORIGIN", site.URL),
+		Client: &line.HTTPClient{
+			HTTP:           telemetry.NewOutboundClient(tp),
+			BotBase:        envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
+			AccessToken:    os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
+			LoginBase:      envOr("LINE_LOGIN_API_BASE", "https://api.line.me"),
+			AuthorizeURL:   "https://access.line.me/oauth2/v2.1/authorize",
+			LoginChannelID: os.Getenv("LINE_LOGIN_CHANNEL_ID"),
+			LoginSecret:    os.Getenv("LINE_LOGIN_CHANNEL_SECRET"),
 		},
 	}, microcmsWebhookConfig{
 		secret: os.Getenv("MICROCMS_WEBHOOK_SECRET"),
@@ -253,7 +254,7 @@ func registerBlogRoutes(rt *httpx.Router, c blogConfig) {
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
-func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfig, microcms microcmsWebhookConfig) {
+func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.Config, microcms microcmsWebhookConfig) {
 	studyRoutes := study.New(db)
 
 	rt.Public("GET /api/health", healthHandler(db))
@@ -301,14 +302,14 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfi
 	rt.User("POST /api/analytics/registration", analytics.registration)
 	rt.AnonymousWrite("POST /api/csp-report", cspReport)
 
-	lineRoutes := &lineHandlers{store: &sqlLineStore{db: db}, line: line.client, channelSecret: line.channelSecret, webOrigin: line.webOrigin}
-	rt.User("GET /api/line/connection", lineRoutes.connection)
-	rt.User("DELETE /api/line/connection", lineRoutes.disconnect)
-	rt.User("POST /api/line/account-link", lineRoutes.accountLink)
-	rt.OAuth("GET /api/line/oauth/start", lineRoutes.oauthStart)
-	rt.OAuth("GET /api/line/oauth/callback", lineRoutes.oauthCallback)
-	rt.Webhook("POST /api/line/webhook", lineRoutes.webhook)
-	rt.PublicWithSession("GET /line/settings", lineRoutes.settings)
+	lineRoutes := line.New(db, lineCfg)
+	rt.User("GET /api/line/connection", lineRoutes.Connection)
+	rt.User("DELETE /api/line/connection", lineRoutes.Disconnect)
+	rt.User("POST /api/line/account-link", lineRoutes.AccountLink)
+	rt.OAuth("GET /api/line/oauth/start", lineRoutes.OauthStart)
+	rt.OAuth("GET /api/line/oauth/callback", lineRoutes.OauthCallback)
+	rt.Webhook("POST /api/line/webhook", lineRoutes.Webhook)
+	rt.PublicWithSession("GET /line/settings", lineRoutes.Settings)
 
 	// microCMS で記事を変えたら、記事を作り直すデプロイを動かす（JUK-112）。
 	microcmsWebhook := &microcmsWebhookHandler{secret: microcms.secret, trigger: newDeployTrigger(microcms.deployer)}
@@ -357,13 +358,6 @@ type jobConfig struct {
 	simulationEnabled       bool
 	simulationSecret        string
 	messenger               messenger
-}
-
-// lineConfig は LINE 連携（line.go）の設定。
-type lineConfig struct {
-	channelSecret string // Webhook の署名を確かめる。空なら Webhook は必ず 401
-	webOrigin     string // 画面のオリジン。OAuth の戻り先とリダイレクト先に使う
-	client        lineClient
 }
 
 type serverOptions struct {

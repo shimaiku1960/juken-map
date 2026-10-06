@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
@@ -48,7 +49,7 @@ func microcmsSign(body string) string {
 
 func newMicrocmsTestRouter(secret string, d deployer) *httpx.Router {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
-	registerRoutes(rt, nil, jobConfig{}, lineConfig{}, microcmsWebhookConfig{secret: secret, deployer: d})
+	registerRoutes(rt, nil, jobConfig{}, line.Config{}, microcmsWebhookConfig{secret: secret, deployer: d})
 	return rt
 }
 

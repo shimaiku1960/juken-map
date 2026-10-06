@@ -50,10 +50,10 @@ func remaining(t *testing.T, fx dbFixture, userID string, expiresAt time.Time) m
 	got := map[string]int{}
 	for _, table := range expiredTables {
 		if table == "AuthOAuthState" {
-			got[table] = count(t, fx.DB, "SELECT COUNT(*) FROM AuthOAuthState WHERE expiresAt = ?", expiresAt)
+			got[table] = fx.Count("SELECT COUNT(*) FROM AuthOAuthState WHERE expiresAt = ?", expiresAt)
 			continue
 		}
-		got[table] = count(t, fx.DB, "SELECT COUNT(*) FROM `"+table+"` WHERE userId = ? AND expiresAt = ?", userID, expiresAt)
+		got[table] = fx.Count("SELECT COUNT(*) FROM `"+table+"` WHERE userId = ? AND expiresAt = ?", userID, expiresAt)
 	}
 	return got
 }

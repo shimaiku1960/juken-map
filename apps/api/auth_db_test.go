@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
@@ -134,7 +135,7 @@ func newAuthEnv(t *testing.T) *authEnv {
 	})
 	e.rt = httpx.NewRouter((&sessionAuth{store: e.h.sessions}).load)
 	registerAuthRoutes(e.rt, e.h)
-	registerRoutes(e.rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
+	registerRoutes(e.rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
 	t.Cleanup(e.cleanup)
 	return e
 }
@@ -266,7 +267,7 @@ func TestAuthDBSignUpVerifyAndSignIn(t *testing.T) {
 	}
 	token := mail.token(t)
 	// E1：DB にはトークンそのものではなく、そのハッシュが入っている。
-	if e.fx.count("SELECT COUNT(*) FROM AuthToken WHERE tokenHash = ?", hashToken(token)) != 1 {
+	if e.fx.Count("SELECT COUNT(*) FROM AuthToken WHERE tokenHash = ?", hashToken(token)) != 1 {
 		t.Fatal("トークンのハッシュが保存されていない")
 	}
 	expectStatus(t, b.do("POST", "/api/auth/verify-email", map[string]string{"token": token}), 200, "")
@@ -662,7 +663,7 @@ func TestAuthDBMFA(t *testing.T) {
 	if strings.Contains(sealed, base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(secret)) || !strings.HasPrefix(sealed, "v0:") {
 		t.Fatalf("秘密が暗号化されていない: %s", sealed)
 	}
-	if e.fx.count("SELECT COUNT(*) FROM AuthBackupCode WHERE userId = ? AND codeHash = ?", id, hashBackupCode(backup[0])) != 1 {
+	if e.fx.Count("SELECT COUNT(*) FROM AuthBackupCode WHERE userId = ? AND codeHash = ?", id, hashBackupCode(backup[0])) != 1 {
 		t.Fatal("予備コードのハッシュが無い")
 	}
 
@@ -859,7 +860,7 @@ func TestAuthDBGoogleLogin(t *testing.T) {
 		g.claims = map[string]any{"sub": "g-" + dbtest.Hex(6), "email": email, "email_verified": true}
 		b := e.browser()
 		callback(b, g.start(b, "/"), "good-code")
-		if b.sessionEmail() != email || e.fx.count("SELECT COUNT(*) FROM AuthIdentity WHERE userId = ?", id) != 1 {
+		if b.sessionEmail() != email || e.fx.Count("SELECT COUNT(*) FROM AuthIdentity WHERE userId = ?", id) != 1 {
 			t.Fatal("結びついていない")
 		}
 		e.mails.last(t, email, "連携しました")
