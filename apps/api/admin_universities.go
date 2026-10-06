@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
 // 管理者ページのマスター編集のうち、大学（/api/admin/universities）。共通の部品と全体の決まりは admin_masters.go。
@@ -142,6 +143,11 @@ type universityInput struct {
 	name, prefecture, typ string
 }
 
+// record は持ち主に渡す形にする。
+func (in universityInput) record() university.UniversityInput {
+	return university.UniversityInput{Name: in.name, Prefecture: in.prefecture, Type: in.typ}
+}
+
 // readUniversityInput は universityInputSchema。
 func readUniversityInput(body any) (universityInput, *objectInput) {
 	in := readObject(body)
@@ -249,56 +255,16 @@ func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (
 }
 
 func (st *sqlAdminMasterStore) createUniversity(ctx context.Context, in universityInput) (masterOutcome[AdminUniversity], error) {
-	res, err := st.db.ExecContext(ctx,
-		"INSERT INTO University (name, prefecture, type, createdAt) VALUES (?, ?, ?, ?)", in.name, in.prefecture, in.typ, nowMillis())
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return masterOutcome[AdminUniversity]{failure: masterDuplicate}, nil
-	}
-	if err != nil {
-		return masterOutcome[AdminUniversity]{}, err
-	}
-	st.universitiesChanged()
-	id, err := res.LastInsertId()
-	if err != nil {
-		return masterOutcome[AdminUniversity]{}, err
-	}
-	return foundOutcome(findAdminUniversity(ctx, st.db, id))
+	u, err := university.CreateUniversity(ctx, st.db, in.record(), nowMillis())
+	return universityOutcome(st, AdminUniversity(u), err)
 }
 
 func (st *sqlAdminMasterStore) updateUniversity(ctx context.Context, id int64, in universityInput) (masterOutcome[masterChange[AdminUniversity]], error) {
-	type outcome = masterOutcome[masterChange[AdminUniversity]]
-	before, err := findAdminUniversity(ctx, st.db, id)
-	if err != nil || before == nil {
-		return outcome{failure: masterNotFound}, err
-	}
-	_, err = st.db.ExecContext(ctx, "UPDATE University SET name = ?, prefecture = ?, type = ? WHERE id = ?", in.name, in.prefecture, in.typ, id)
-	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return outcome{failure: masterDuplicate}, nil
-	}
-	if err != nil {
-		return outcome{}, err
-	}
-	st.universitiesChanged()
-	after, err := foundOutcome(findAdminUniversity(ctx, st.db, id))
-	return outcome{value: masterChange[AdminUniversity]{before: *before, after: after.value}}, err
+	c, err := university.UpdateUniversity(ctx, st.db, id, in.record())
+	return universityOutcome(st, masterChange[AdminUniversity]{before: AdminUniversity(c.Before), after: AdminUniversity(c.After)}, err)
 }
 
 func (st *sqlAdminMasterStore) deleteUniversity(ctx context.Context, id int64) (masterOutcome[AdminUniversity], error) {
-	university, err := findAdminUniversity(ctx, st.db, id)
-	if err != nil || university == nil {
-		return masterOutcome[AdminUniversity]{failure: masterNotFound}, err
-	}
-	inUse := masterOutcome[AdminUniversity]{failure: masterInUse, count: university.GoalCount}
-	if university.GoalCount > 0 {
-		return inUse, nil
-	}
-	_, err = st.db.ExecContext(ctx, "DELETE FROM University WHERE id = ?", id)
-	if database.IsMySQLError(err, database.RowIsReferenced) {
-		return inUse, nil
-	}
-	if err != nil {
-		return masterOutcome[AdminUniversity]{}, err
-	}
-	st.universitiesChanged()
-	return masterOutcome[AdminUniversity]{value: *university}, nil
+	u, err := university.DeleteUniversity(ctx, st.db, id)
+	return universityOutcome(st, AdminUniversity(u), err)
 }

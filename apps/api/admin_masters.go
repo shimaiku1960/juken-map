@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
 // 管理者ページのマスター編集（/admin/masters、JUK-78）。Node の routes/admin-masters.ts と
@@ -20,6 +22,8 @@ import (
 //
 // 事前に数えて断るのが基本で、数えたあとに志望校が増えた場合も、DB の外部キーが拒んだエラーを
 // 同じ「使われている」に読み替える（二重の守り）。
+//
+// 大学・学部の書き込みは持ち主の internal/write/university にあり（JUK-154）、store はその操作を呼んで結果を masterOutcome に直す。
 //
 // 大学・学部を変えたら、大学を探す画面の一覧のキャッシュ（universities.go）を捨てる。成功したときだけ。
 // 変更はすべて構造化ログ「admin master change」に「誰が・何を・前→後」で残す（Node と同じ項目。Grafana の Loki で追える）。
@@ -189,6 +193,27 @@ type sqlAdminMasterStore struct {
 	universitiesChanged func()
 	// textbookMastersChanged は参考書マスターを変えて確定したあとに呼ぶ（GET /api/textbook-masters のキャッシュを捨てる）。
 	textbookMastersChanged func()
+}
+
+// universityOutcome は大学・学部の持ち主（internal/write/university）の操作の結果を masterOutcome にする。
+// 断った理由は failure に、想定外の失敗は error にする。成功したら（確定したあとに）大学を探す画面のキャッシュを捨てる。
+// トランザクションの中で捨てると、確定前に別のリクエストが古い一覧を読み直して置き直せる。
+func universityOutcome[T any](st *sqlAdminMasterStore, v T, err error) (masterOutcome[T], error) {
+	var inUse *university.InUseError
+	switch {
+	case err == nil:
+		st.universitiesChanged()
+		return masterOutcome[T]{value: v}, nil
+	case errors.Is(err, university.ErrNotFound):
+		return masterOutcome[T]{failure: masterNotFound}, nil
+	case errors.Is(err, university.ErrDuplicate):
+		return masterOutcome[T]{failure: masterDuplicate}, nil
+	case errors.Is(err, university.ErrInvalidTags):
+		return masterOutcome[T]{failure: masterInvalidTags}, nil
+	case errors.As(err, &inUse):
+		return masterOutcome[T]{failure: masterInUse, count: inUse.Count}, nil
+	}
+	return masterOutcome[T]{}, err
 }
 
 // foundOutcome は、作った・書き換えた直後に読み直した行を結果にする。直後に別の操作で消えていれば失敗にする。
