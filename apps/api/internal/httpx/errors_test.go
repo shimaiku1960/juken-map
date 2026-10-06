@@ -1,4 +1,4 @@
-package main
+package httpx
 
 import (
 	"net/http"
@@ -12,17 +12,17 @@ func TestNewErrorBody(t *testing.T) {
 	// 文言の選び方は Node の errorBody（error-handling.ts）と同じ。
 	tests := []struct {
 		status int
-		code   apischema.ServerErrorCode
+		Code   apischema.ServerErrorCode
 		want   string
 	}{
-		{500, codeInternal, serverMessage},
-		{503, codeOverloaded, overloadedMessage},
-		{404, codeNotFound, fallbackClientMessage},
+		{500, CodeInternal, ServerMessage},
+		{503, CodeOverloaded, OverloadedMessage},
+		{404, CodeNotFound, FallbackClientMessage},
 	}
 	for _, tt := range tests {
-		got := newErrorBody(tt.status, tt.code, "req-1")
-		if got != (apischema.ServerError{Error: tt.want, Code: tt.code, ReqID: "req-1"}) {
-			t.Errorf("newErrorBody(%d, %q) = %+v", tt.status, tt.code, got)
+		got := newErrorBody(tt.status, tt.Code, "req-1")
+		if got != (apischema.ServerError{Error: tt.want, Code: tt.Code, ReqID: "req-1"}) {
+			t.Errorf("newErrorBody(%d, %q) = %+v", tt.status, tt.Code, got)
 		}
 	}
 }
@@ -30,7 +30,7 @@ func TestNewErrorBody(t *testing.T) {
 func TestPathID(t *testing.T) {
 	// Node の idParamsSchema と同じ境目（routes/params.test.ts）。
 	tests := []struct {
-		raw    string
+		Raw    string
 		want   int64
 		wantOK bool
 	}{
@@ -47,14 +47,14 @@ func TestPathID(t *testing.T) {
 		{" 1", 0, false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.raw, func(t *testing.T) {
+		t.Run(tt.Raw, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
-			req.SetPathValue("id", tt.raw)
+			req.SetPathValue("id", tt.Raw)
 			res := httptest.NewRecorder()
 
-			got, ok := pathID(res, req, "id")
+			got, ok := PathID(res, req, "id")
 			if got != tt.want || ok != tt.wantOK {
-				t.Fatalf("pathID(%q) = (%d, %v), want (%d, %v)", tt.raw, got, ok, tt.want, tt.wantOK)
+				t.Fatalf("pathID(%q) = (%d, %v), want (%d, %v)", tt.Raw, got, ok, tt.want, tt.wantOK)
 			}
 			if !ok {
 				if res.Code != http.StatusBadRequest {

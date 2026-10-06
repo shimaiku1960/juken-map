@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// jsonValue は readBody と同じく、数を json.Number にして JSON を読む。
+// jsonValue は httpx.ReadBody と同じく、数を json.Number にして JSON を読む。
 func jsonValue(t *testing.T, s string) any {
 	t.Helper()
 	dec := json.NewDecoder(strings.NewReader(s))

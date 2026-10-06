@@ -9,6 +9,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -16,13 +17,13 @@ import (
 
 // 入力チェックは Zod の profileSchema（src/shared/validations/profile.ts）と同じ。
 // 前後の空白を削ってから長さを確かめるので、空白だけのニックネームは「必須です」で弾く（JUK-64）。
-var nicknameRule = stringRule{
-	typeMessage: "ニックネームは文字列で入力してください",
-	trimFirst:   true,
-	min:         1,
-	minMessage:  "ニックネームは必須です",
-	max:         50,
-	maxMessage:  "50文字以内で入力してください",
+var nicknameRule = httpx.StringRule{
+	TypeMessage: "ニックネームは文字列で入力してください",
+	TrimFirst:   true,
+	Min:         1,
+	MinMessage:  "ニックネームは必須です",
+	Max:         50,
+	MaxMessage:  "50文字以内で入力してください",
 }
 
 type userStore struct {
@@ -62,23 +63,23 @@ type profileHandlers struct {
 }
 
 // update は PUT /api/profile。
-func (h *profileHandlers) update(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+func (h *profileHandlers) update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
-	in := readObject(body.value())
-	input := apischema.ProfileInput{Nickname: in.string("nickname", nicknameRule)}
-	if in.reject(w) {
+	in := httpx.ReadObject(body.Value())
+	input := apischema.ProfileInput{Nickname: in.String("nickname", nicknameRule)}
+	if in.Reject(w) {
 		return
 	}
 
 	u, err := h.store.updateProfile(r.Context(), s.UserID, input)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("profile: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("profile: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, u)
+	httpx.WriteJSON(w, http.StatusOK, u)
 }
 
 // nowMillis は今の時刻をミリ秒で切り捨てたもの。DB の DATETIME(3) に書く値に使う。

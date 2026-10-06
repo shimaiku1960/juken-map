@@ -56,7 +56,7 @@ db        ──→  shared                      （seed が日付の関数を�
 apps/web  ── HTTP（JSON）──→  apps/api      （Go。TS のコードは import しない）
 openapi/openapi.yaml  ──生成──→  shared/openapi.gen.ts・apps/api/internal/apischema/openapi.gen.go
 
-apps/api の中:  router.go（入口の種類で拒否）──→ ハンドラ（入力・状態コード）──→ ストア（SQL）
+apps/api の中:  httpx/router.go（入口の種類で拒否）──→ ハンドラ（入力・状態コード）──→ ストア（SQL）
 ```
 
 - **shared は何にも依存しない。** DB・HTTP・ブラウザ API に依存するものは置かない。
@@ -163,10 +163,10 @@ DB の文字列のまま受けて ISO 文字列に直す（`apps/api/internal/da
 
 Go の API は、1つの機能を1つのファイル（大きいものは数ファイル）に置き、その中を
 **ハンドラ**（HTTP を読み書きする）と**ストア**（SQL を流す）に分ける。その手前に、入口の種類ごとの
-拒否（`router.go`）がある。Node の頃の `routes/` と `services/` の分担を、Go へ移すとき（JUK-70）に
+拒否（`internal/httpx/router.go`）がある。Node の頃の `routes/` と `services/` の分担を、Go へ移すとき（JUK-70）に
 フォルダではなくファイルの中の分担にした。
 
-1. **入口（`router.go`）**：未ログイン・停止中・管理者でない・デモの書き込みを断る。ルートは
+1. **入口（`internal/httpx/router.go`）**：未ログイン・停止中・管理者でない・デモの書き込みを断る。ルートは
    `rt.user` や `rt.admin` のように種類を選んで登録し、種類を選ばずに登録する方法が無いので、書き忘れが起きない
 2. **ハンドラ**：本文と入力を確かめ（`readBody`・`readObject`）、自分の行かを確かめ、
    ストアの結果をステータスコードへ翻訳する（見つからない → 404、重複 → 409 など）
@@ -360,7 +360,7 @@ apps/api/
   多くのファイルを動かす PR は、ほかの worktree の作業とぶつかるので、並行する作業が無いときに出す。
 - **Go ではディレクトリがパッケージの境界になる。** 小文字の名前は外から見えなくなり、パッケージ同士の
   循環 import はビルドが通らない。ルーターは今と同じくセッションの読み込みを関数で受け取り
-  （`router.go` の `newRouter(load sessionLoader)`）、`httpx` が `write/account` に依存しない形を保つ。
+  （`internal/httpx/router.go` の `NewRouter(load SessionLoader)`）、`httpx` が `write/account` に依存しない形を保つ。
 - **一緒に動かすもの。** `//go:embed` は同じディレクトリかその下しか読めないので、よく使われるパスワードの一覧や
   RDS の証明書も移す。`_test.go` の補助はほかのパッケージから import できないので `internal/dbtest` に
   移し、全ルートを通すテスト（`ownership_db_test.go`）は `internal/app` に置く。`oapi-codegen.yaml` の
@@ -475,7 +475,7 @@ Go の API の DB テストは、本番と同じ `registerRoutes` で組んだ�
 （`apps/api/dbtest_support_test.go` の `dbTestApp`）。ハンドラを直接呼ばないのは、
 **本物のルーティングと入口の拒否・本文の読み取りを通すため**である。たとえば本文は
 「壊れた JSON でも 400 にせず、入口の拒否（未ログイン・デモ）を先に効かせる」ように読んでおり
-（`apps/api/body.go`）、ハンドラ直呼びではここが素通りしてしまう。Node の頃（JUK-121 まで）は
+（`apps/api/internal/httpx/body.go`）、ハンドラ直呼びではここが素通りしてしまう。Node の頃（JUK-121 まで）は
 Fastify の `inject()` で同じことをしていた。
 
 差し替えるのはセッションの取得（Cookie の値を利用者 ID として読む）と外部サービスという境界だけで、

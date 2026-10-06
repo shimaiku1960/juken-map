@@ -1,5 +1,5 @@
 # openapi/openapi.yaml から Go の型を作る設定（JUK-76）。`pnpm openapi:generate` が使う。
-# 作るのは型だけ（サーバーの枠やクライアントは作らない。ルーティングは apps/api/router.go のまま）。
+# 作るのは型だけ（サーバーの枠やクライアントは作らない。ルーティングは apps/api/internal/httpx/router.go）。
 package: apischema
 generate:
   models: true

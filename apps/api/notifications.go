@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
@@ -398,7 +399,7 @@ func (m *httpMessenger) post(ctx context.Context, url, token string, body any) e
 	return nil
 }
 
-// cronHandler は POST /api/cron/daily-study-notifications。トークンの確認はルーター（rt.job）が行う。
+// cronHandler は POST /api/cron/daily-study-notifications。トークンの確認はルーター（rt.Job）が行う。
 type cronHandler struct {
 	notifier *dailyNotifier
 	now      func() time.Time
@@ -410,7 +411,7 @@ func (h *cronHandler) dailyNotifications(w http.ResponseWriter, r *http.Request)
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil ||
 		(body.Slot != apischema.NotificationSlotMorning && body.Slot != apischema.NotificationSlotEvening) {
-		writeError(w, http.StatusBadRequest, "Invalid slot")
+		httpx.WriteError(w, http.StatusBadRequest, "Invalid slot")
 		return
 	}
 
@@ -419,7 +420,7 @@ func (h *cronHandler) dailyNotifications(w http.ResponseWriter, r *http.Request)
 	// （テストの httptest.ResponseRecorder は書き込みの期限を持たないので、ErrNotSupported は気にしない）
 	err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(notificationBudget + 10*time.Second))
 	if err != nil && !errors.Is(err, http.ErrNotSupported) {
-		internalError(w, r, fmt.Errorf("daily-notification: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("daily-notification: %w", err))
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), notificationBudget)
@@ -432,9 +433,9 @@ func (h *cronHandler) dailyNotifications(w http.ResponseWriter, r *http.Request)
 		"sent", summary.Sent, "skipped", summary.Skipped, "failed", summary.Failed)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "[daily-notification] Run stopped.", logAttrs)
-		internalError(w, r, fmt.Errorf("daily-notification: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("daily-notification: %w", err))
 		return
 	}
 	slog.InfoContext(r.Context(), "[daily-notification] Run finished.", logAttrs)
-	writeJSON(w, http.StatusOK, summary)
+	httpx.WriteJSON(w, http.StatusOK, summary)
 }

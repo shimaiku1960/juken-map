@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 画面の配信のテスト（Node の spa.test.ts・seo.test.ts・security-headers.test.ts から移した）。
@@ -57,21 +59,21 @@ func writeTestDist(t *testing.T) string {
 	return root
 }
 
-func newSPATestRouter(t *testing.T, scripts pageScripts) *router {
+func newSPATestRouter(t *testing.T, scripts pageScripts) *httpx.Router {
 	t.Helper()
 	site, err := loadSPA(writeTestDist(t), scripts)
 	if err != nil || site == nil {
 		t.Fatalf("loadSPA: %v", err)
 	}
-	rt := newRouter(fakeSessions(nil))
-	rt.public("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	rt := httpx.NewRouter(fakeSessions(nil))
+	rt.Public("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
 	registerSPA(rt, site)
 	return rt
 }
 
-func spaGet(rt *router, target string, header map[string]string) *httptest.ResponseRecorder {
+func spaGet(rt *httpx.Router, target string, header map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, target, nil)
 	for k, v := range header {
 		req.Header.Set(k, v)

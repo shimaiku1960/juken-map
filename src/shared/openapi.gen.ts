@@ -968,7 +968,7 @@ export interface components {
         Error: {
             error: string;
         };
-        /** @description 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の query.go） */
+        /** @description 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の internal/httpx/response.go） */
         ValidationError: {
             /** @description 画面にそのまま出す文言 */
             error: string;

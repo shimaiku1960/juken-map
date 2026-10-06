@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 func TestMatchesETag(t *testing.T) {
@@ -176,8 +177,8 @@ func TestTextbookMastersFromCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	st.masters.snapshot.Store(snap)
-	rt := newRouter(fakeSessions(testSessions))
-	rt.user("GET /api/textbook-masters", (&textbookHandlers{store: st}).listMasters)
+	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt.User("GET /api/textbook-masters", (&textbookHandlers{store: st}).listMasters)
 
 	req := httptest.NewRequest("GET", "/api/textbook-masters", nil)
 	req.AddCookie(&http.Cookie{Name: "test", Value: "alice"})

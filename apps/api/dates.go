@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strconv"
 	"time"
 )
 
@@ -46,22 +45,4 @@ func later(a, b time.Time) time.Time {
 
 func ymd(t time.Time) string {
 	return t.Format(time.DateOnly)
-}
-
-// isCalendarYMD は "YYYY-MM-DD"（形は確かめ済み）が暦にある日付か。2026-02-30・2026-13-01 は false。
-// Node の isCalendarYmd（src/shared/date.ts）と同じ算数で判定する。time.Date は範囲外の日を翌月へ
-// 繰り越してしまうので使わない。
-func isCalendarYMD(s string) bool {
-	y, _ := strconv.Atoi(s[0:4])
-	m, _ := strconv.Atoi(s[5:7])
-	d, _ := strconv.Atoi(s[8:10])
-	if m < 1 || m > 12 || d < 1 {
-		return false
-	}
-	leap := (y%4 == 0 && y%100 != 0) || y%400 == 0
-	days := [12]int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
-	if leap {
-		days[1] = 29
-	}
-	return d <= days[m-1]
 }

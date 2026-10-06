@@ -9,6 +9,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 大学の読み取り（JUK-73）。Node の routes/universities.ts と services/university-service.ts にあたる。
@@ -193,35 +194,35 @@ type universityHandlers struct {
 }
 
 // list は GET /api/universities。
-func (h *universityHandlers) list(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *universityHandlers) list(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	snap, err := h.store.explore.get(r.Context())
 	if err != nil {
-		internalError(w, r, fmt.Errorf("universities: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("universities: %w", err))
 		return
 	}
 	writeJSONSnapshot(w, r, snap)
 }
 
 // detail は GET /api/universities/{id}。無い大学は 404（Node と同じ文言）。
-func (h *universityHandlers) detail(w http.ResponseWriter, r *http.Request, s *session) {
-	id, ok := pathID(w, r, "id")
+func (h *universityHandlers) detail(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	id, ok := httpx.PathID(w, r, "id")
 	if !ok {
 		return
 	}
 	university, err := h.store.findDetail(r.Context(), id)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("universities/:id: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("universities/:id: %w", err))
 		return
 	}
 	if university == nil {
-		writeError(w, http.StatusNotFound, "Not found")
+		httpx.WriteError(w, http.StatusNotFound, "Not found")
 		return
 	}
 	// 画面は「この学部は登録済みか」を出し分けるので、同じ応答に含める。
 	registered, err := h.store.listGoalFacultyIDs(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("universities/:id goals: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("universities/:id goals: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, apischema.UniversityDetailResponse{University: *university, RegisteredFacultyIds: registered})
+	httpx.WriteJSON(w, http.StatusOK, apischema.UniversityDetailResponse{University: *university, RegisteredFacultyIds: registered})
 }

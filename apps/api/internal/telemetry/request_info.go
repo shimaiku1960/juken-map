@@ -7,7 +7,7 @@ import "context"
 type RequestInfo struct {
 	ID    string
 	Sim   bool
-	Route string // メトリクスの route ラベル。ルーターが登録した型を入れる（apps/api/router.go）
+	Route string // メトリクスの route ラベル。ルーターが登録した型を入れる（apps/api/internal/httpx/router.go）
 }
 
 // ctx のキーは、他のパッケージのキーとぶつからないよう専用の型にする（Go の決まり）。

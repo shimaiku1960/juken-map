@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -50,24 +51,24 @@ type analyticsHandlers struct {
 }
 
 // registration は POST /api/analytics/registration。2回目以降は shouldTrack: false で黙って終わる。
-func (h *analyticsHandlers) registration(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *analyticsHandlers) registration(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	// 本文は使わないが、Node と同じく形と大きさは確かめる（受け付けない形なら 415）。
-	if _, ok := readBody(w, r, defaultBodyLimit); !ok {
+	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
 	first, err := h.store.markSignUpTracked(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("analytics: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("analytics: %w", err))
 		return
 	}
 	if !first {
-		writeJSON(w, http.StatusOK, apischema.RegistrationTracking{ShouldTrack: false})
+		httpx.WriteJSON(w, http.StatusOK, apischema.RegistrationTracking{ShouldTrack: false})
 		return
 	}
 	method, err := h.store.findSignUpMethod(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("analytics: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("analytics: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, apischema.RegistrationTracking{ShouldTrack: true, Method: &method})
+	httpx.WriteJSON(w, http.StatusOK, apischema.RegistrationTracking{ShouldTrack: true, Method: &method})
 }

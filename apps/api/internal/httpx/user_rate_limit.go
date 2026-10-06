@@ -1,4 +1,4 @@
-package main
+package httpx
 
 import (
 	"log/slog"
@@ -110,15 +110,15 @@ func (l *userRateLimiter) sweep(now time.Time) {
 
 // rateLimitKey は数える単位。ふつうは利用者。デモアカウントは面接官が共有して使うので、
 // 利用者と IP の組で数える（1人が使い切っても、ほかの人のデモが止まらないように）。
-func rateLimitKey(r *http.Request, s *session) string {
-	if s.Email == demoEmail {
-		return s.UserID + "@" + clientIP(r)
+func rateLimitKey(r *http.Request, s *Session) string {
+	if s.Email == DemoEmail {
+		return s.UserID + "@" + ClientIP(r)
 	}
 	return s.UserID
 }
 
 // limitUser は、利用者の札が尽きていたら 429 を送って false を返す。
-func (rt *router) limitUser(w http.ResponseWriter, r *http.Request, s *session) bool {
+func (rt *Router) limitUser(w http.ResponseWriter, r *http.Request, s *Session) bool {
 	rule := rateLimitRead
 	if isWrite(r) {
 		rule = rateLimitWrite
@@ -131,6 +131,22 @@ func (rt *router) limitUser(w http.ResponseWriter, r *http.Request, s *session) 
 	slog.WarnContext(r.Context(), "request limited: per user", "userId", s.UserID, "kind", rule.name)
 	// Retry-After は秒の整数。切り上げて、待った後には必ず1つ戻っているようにする。
 	w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
-	writeErrorBody(w, r, http.StatusTooManyRequests, codeTooManyRequests)
+	WriteErrorBody(w, r, http.StatusTooManyRequests, codeTooManyRequests)
 	return false
+}
+
+// UseUp は、時計を止めたうえで利用者たちの札（読み取り・書き込みとも）を使い切る。
+// main のテストで、登録したどのルートも回数制限を通る（ハンドラまで来ずに 429 になる）かを確かめるためのもの。
+func (rt *Router) UseUp(userIDs ...string) {
+	frozen := time.Now()
+	rt.rateLimiter = newUserRateLimiter(func() time.Time { return frozen })
+	for _, id := range userIDs {
+		for _, rule := range []rateLimitRule{rateLimitRead, rateLimitWrite} {
+			for {
+				if ok, _ := rt.rateLimiter.allow(rule, id); !ok {
+					break
+				}
+			}
+		}
+	}
 }

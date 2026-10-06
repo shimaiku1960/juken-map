@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -188,10 +189,10 @@ func gzipBytes(body []byte, level int) []byte {
 }
 
 // registerSPA は画面の配信を登録する。"GET /" はほかのどのルートにも当たらない GET を受ける
-// （ServeMux はより長いパスのルートを先に選ぶ）。GET 以外で当たらないものは、今までどおり router.go の notFound（JSON の 404）。
-func registerSPA(rt *router, site *spaSite) {
-	rt.public("GET /sitemap.xml", site.serveSitemap)
-	rt.public("GET /", site.serve)
+// （ServeMux はより長いパスのルートを先に選ぶ）。GET 以外で当たらないものは、今までどおり httpx の NotFound（JSON の 404）。
+func registerSPA(rt *httpx.Router, site *spaSite) {
+	rt.Public("GET /sitemap.xml", site.serveSitemap)
+	rt.Public("GET /", site.serve)
 }
 
 func (s *spaSite) serveSitemap(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +210,7 @@ func (s *spaSite) serve(w http.ResponseWriter, r *http.Request) {
 		if info != nil {
 			info.Route = "(unmatched)"
 		}
-		notFound(w, r)
+		httpx.NotFound(w, r)
 		return
 	}
 	// メトリクスの route は Node と同じく、API 以外をまとめて "(web)" にする（ファイルごとに分けると種類が増えすぎる）。

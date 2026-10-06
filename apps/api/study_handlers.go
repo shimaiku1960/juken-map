@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 学習記録・予定の一覧の API（JUK-73）。Node の routes/study-logs.ts・study-plans.ts の GET にあたる。
@@ -25,7 +26,7 @@ type studyHandlers struct {
 }
 
 // listLogs は GET /api/study-logs。from を省くと直近90日、to を省くと上限なし。
-func (h *studyHandlers) listLogs(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *studyHandlers) listLogs(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	q, ok := readDateRangeQuery(w, r)
 	if !ok {
 		return
@@ -33,19 +34,19 @@ func (h *studyHandlers) listLogs(w http.ResponseWriter, r *http.Request, s *sess
 	today := dateOnTokyo(time.Now())
 	rng, ok := q.resolve(addDays(today, -(defaultLogDays-1)), nil)
 	if !ok {
-		writeJSON(w, http.StatusOK, []apischema.StudyLog{})
+		httpx.WriteJSON(w, http.StatusOK, []apischema.StudyLog{})
 		return
 	}
 	logs, err := h.store.listStudyLogs(r.Context(), s.UserID, rng)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("study-logs: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("study-logs: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, logs)
+	httpx.WriteJSON(w, http.StatusOK, logs)
 }
 
 // listDaily は GET /api/study-logs/daily。日ごとの合計だけを返す軽い方（連続記録日数が使う）。
-func (h *studyHandlers) listDaily(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *studyHandlers) listDaily(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	q, ok := readDateRangeQuery(w, r)
 	if !ok {
 		return
@@ -53,19 +54,19 @@ func (h *studyHandlers) listDaily(w http.ResponseWriter, r *http.Request, s *ses
 	today := dateOnTokyo(time.Now())
 	rng, ok := q.resolve(addDays(today, -(defaultDailyDays-1)), nil)
 	if !ok {
-		writeJSON(w, http.StatusOK, []apischema.DailyStudyMinutes{})
+		httpx.WriteJSON(w, http.StatusOK, []apischema.DailyStudyMinutes{})
 		return
 	}
 	daily, err := h.store.listDailyStudyMinutes(r.Context(), s.UserID, rng)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("study-logs/daily: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("study-logs/daily: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, daily)
+	httpx.WriteJSON(w, http.StatusOK, daily)
 }
 
 // listPlans は GET /api/study-plans。予定は未来にもあるので、省くと今日の前後90日。
-func (h *studyHandlers) listPlans(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *studyHandlers) listPlans(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	q, ok := readDateRangeQuery(w, r)
 	if !ok {
 		return
@@ -74,13 +75,13 @@ func (h *studyHandlers) listPlans(w http.ResponseWriter, r *http.Request, s *ses
 	defaultTo := addDays(today, defaultPlanFutureDays)
 	rng, ok := q.resolve(addDays(today, -defaultPlanPastDays), &defaultTo)
 	if !ok {
-		writeJSON(w, http.StatusOK, []apischema.StudyPlan{})
+		httpx.WriteJSON(w, http.StatusOK, []apischema.StudyPlan{})
 		return
 	}
 	plans, err := h.store.listStudyPlans(r.Context(), s.UserID, rng)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("study-plans: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("study-plans: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, plans)
+	httpx.WriteJSON(w, http.StatusOK, plans)
 }

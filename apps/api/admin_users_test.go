@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -25,7 +26,7 @@ import (
 // ルートを足しても、このテストに書き足さなくても確かめられる。ハンドラまで来ると DB が nil で
 // panic するので、断れていなければテストが落ちる。
 func TestAdminRoutesRejectNonAdmins(t *testing.T) {
-	rt := newRouter(fakeSessions(testSessions))
+	rt := httpx.NewRouter(fakeSessions(testSessions))
 	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
 
 	tests := []struct {
@@ -40,13 +41,13 @@ func TestAdminRoutesRejectNonAdmins(t *testing.T) {
 		{"admin-no-2fa", 403, `{"code":"TWO_FACTOR_REQUIRED","error":"管理画面を開くには、2段階認証を通してログインしてください。"}`},
 	}
 	admins := 0
-	for _, route := range rt.routes {
-		if route.Access != accessAdmin {
+	for _, route := range rt.Routes {
+		if route.Access != httpx.AccessAdmin {
 			continue
 		}
 		admins++
 		method, path, _ := strings.Cut(route.Pattern, " ")
-		path = pathParam.ReplaceAllString(path, "1")
+		path = httpx.PathParam.ReplaceAllString(path, "1")
 		for _, tt := range tests {
 			req := httptest.NewRequest(method, path, strings.NewReader(`{}`))
 			req.Header.Set("Content-Type", "application/json")
@@ -105,7 +106,7 @@ func TestReadAdminUsersQuery(t *testing.T) {
 		kind, q, page, issue := readAdminUsersQuery(parseQuery(tt.raw))
 		got := ""
 		if issue != nil {
-			got = issue.code + " " + issue.field + " " + issue.message
+			got = issue.Code + " " + issue.Field + " " + issue.Message
 		}
 		if got != tt.wantIssue {
 			t.Errorf("%q: issue = %q\nwant %q", tt.raw, got, tt.wantIssue)
@@ -170,26 +171,26 @@ func (f *fakeAdminUserStore) deleteUser(_ context.Context, id string) (removedCo
 
 func strPtr(s string) *string { return &s }
 
-func newAdminUserTestRouter() (*router, *fakeAdminUserStore) {
+func newAdminUserTestRouter() (*httpx.Router, *fakeAdminUserStore) {
 	store := &fakeAdminUserStore{users: map[string]*adminTarget{
 		"u1":     {ID: "u1", Email: strPtr("alice@example.com"), Role: "user"},
 		"u2":     {ID: "u2", Email: strPtr("admin@example.com"), Role: "admin"}, // ログイン中の管理者自身
 		"other":  {ID: "other", Email: strPtr("other-admin@example.com"), Role: "admin"},
-		"demo":   {ID: "demo", Email: strPtr(demoEmail), Role: "user"},
+		"demo":   {ID: "demo", Email: strPtr(httpx.DemoEmail), Role: "user"},
 		"old":    {ID: "old", Email: strPtr("old@example.com"), Role: "user", BannedAt: strPtr("2026-09-01T00:00:00.000Z")},
 		"noMail": {ID: "noMail", Role: "user"},
 		"blank":  {ID: "blank", Email: strPtr(""), Role: "user"},
 	}}
 	h := &adminUserHandlers{store: store, now: time.Now}
-	rt := newRouter(fakeSessions(testSessions))
-	rt.admin("GET /api/admin/users", h.listUsers)
-	rt.admin("POST /api/admin/users/{id}/ban", h.ban)
-	rt.admin("POST /api/admin/users/{id}/unban", h.unban)
-	rt.admin("DELETE /api/admin/users/{id}", h.deleteUser)
+	rt := httpx.NewRouter(fakeSessions(testSessions))
+	rt.Admin("GET /api/admin/users", h.listUsers)
+	rt.Admin("POST /api/admin/users/{id}/ban", h.ban)
+	rt.Admin("POST /api/admin/users/{id}/unban", h.unban)
+	rt.Admin("DELETE /api/admin/users/{id}", h.deleteUser)
 	return rt, store
 }
 
-func adminRequest(rt *router, method, path, body string) *httptest.ResponseRecorder {
+func adminRequest(rt *httpx.Router, method, path, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
@@ -231,7 +232,7 @@ func TestAdminUserActions(t *testing.T) {
 		{"削除：メールの無い相手は、空白だけを打っても 409", "DELETE", "/api/admin/users/noMail", `{"email":" "}`, 409, `{"error":"メールアドレスの無い利用者は、本人の確認ができないため削除できません"}`},
 		{"削除：メールの無い相手は、何を打っても 409", "DELETE", "/api/admin/users/noMail", `{"email":"x@example.com"}`, 409, `{"error":"メールアドレスの無い利用者は、本人の確認ができないため削除できません"}`},
 		{"削除：メールが空文字の相手も 409", "DELETE", "/api/admin/users/blank", `{"email":" "}`, 409, `{"error":"メールアドレスの無い利用者は、本人の確認ができないため削除できません"}`},
-		{"削除：守られた相手は、メールが合っていても 409", "DELETE", "/api/admin/users/demo", `{"email":"` + demoEmail + `"}`, 409, `{"error":"デモアカウントは停止・削除できません"}`},
+		{"削除：守られた相手は、メールが合っていても 409", "DELETE", "/api/admin/users/demo", `{"email":"` + httpx.DemoEmail + `"}`, 409, `{"error":"デモアカウントは停止・削除できません"}`},
 		{"削除：大文字小文字と前後の空白は無視して比べる", "DELETE", "/api/admin/users/u1", `{"email":"  ALICE@example.com "}`, 200,
 			`{"id":"u1","email":"alice@example.com","removed":{"studyLogs":3,"studyPlans":0,"textbooks":0,"finalGoals":0}}`},
 	}

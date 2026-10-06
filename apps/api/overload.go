@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // defaultMaxInFlight は同時に処理するリクエストの上限。Node の DEFAULT_MAX_IN_FLIGHT と同じ値から始める。
@@ -37,7 +39,7 @@ func limitInFlight(max int, next http.Handler) http.Handler {
 			slog.WarnContext(r.Context(), "request shed: overloaded", "inFlight", len(slots), "maxInFlight", max)
 			// すぐ再送されると混雑が続くので、少し待ってもらう。
 			w.Header().Set("Retry-After", "1")
-			writeErrorBody(w, r, http.StatusServiceUnavailable, codeOverloaded)
+			httpx.WriteErrorBody(w, r, http.StatusServiceUnavailable, httpx.CodeOverloaded)
 		}
 	})
 }

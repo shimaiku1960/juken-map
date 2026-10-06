@@ -9,6 +9,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 参考書の読み取り（JUK-73）。Node の routes/textbooks.ts・textbook-masters.ts の GET と、
@@ -143,20 +144,20 @@ type textbookHandlers struct {
 }
 
 // list は GET /api/textbooks。
-func (h *textbookHandlers) list(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *textbookHandlers) list(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	textbooks, err := h.store.listTextbooks(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("textbooks: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("textbooks: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, textbooks)
+	httpx.WriteJSON(w, http.StatusOK, textbooks)
 }
 
 // listMasters は GET /api/textbook-masters。ログイン必須だが、中身は利用者によらない。
-func (h *textbookHandlers) listMasters(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *textbookHandlers) listMasters(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	snap, err := h.store.masters.get(r.Context())
 	if err != nil {
-		internalError(w, r, fmt.Errorf("textbook-masters: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("textbook-masters: %w", err))
 		return
 	}
 	writeJSONSnapshot(w, r, snap)

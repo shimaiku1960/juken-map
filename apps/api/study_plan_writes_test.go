@@ -4,6 +4,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 期待値は、Node の Zod（createStudyPlansSchema・updateStudyPlanSchema・completeStudyPlanSchema、zod 4.5.4）に
@@ -13,10 +15,10 @@ func issueJSON(message, code, field string) string {
 	return `{"error":"` + message + `","code":"` + code + `","field":"` + field + `"}`
 }
 
-func checkIssue(t *testing.T, in *objectInput, want string) {
+func checkIssue(t *testing.T, in *httpx.ObjectInput, want string) {
 	t.Helper()
 	res := httptest.NewRecorder()
-	rejected := in.reject(res)
+	rejected := in.Reject(res)
 	if want == "" {
 		if rejected {
 			t.Fatalf("弾かれた: %s", res.Body)
@@ -31,7 +33,7 @@ func checkIssue(t *testing.T, in *objectInput, want string) {
 
 func parse(t *testing.T, body string) any {
 	t.Helper()
-	v, err := parseJSON(body)
+	v, err := httpx.ParseJSON(body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,9 +69,9 @@ func TestReadStudyPlansInput(t *testing.T) {
 	}
 
 	in, date, items := readStudyPlansInput(parse(t, `{"date":"2099-10-01","items":[{"content":" a "},{"textbookId":1,"subject":null}]}`))
-	if in.issue != nil || date != "2099-10-01" || len(items) != 2 || *items[0].content.value != "a" ||
-		*items[1].textbookID.value != 1 || !items[1].subject.present || items[1].subject.value != nil {
-		t.Errorf("値 = %q %+v（issue %v）", date, items, in.issue)
+	if in.Issue != nil || date != "2099-10-01" || len(items) != 2 || *items[0].content.Value != "a" ||
+		*items[1].textbookID.Value != 1 || !items[1].subject.Present || items[1].subject.Value != nil {
+		t.Errorf("値 = %q %+v（issue %v）", date, items, in.Issue)
 	}
 }
 
@@ -92,8 +94,8 @@ func TestReadStudyPlanUpdate(t *testing.T) {
 	}
 
 	in, v := readStudyPlanUpdate(parse(t, `{"date":"2026-10-01","done":true,"textbookId":null,"content":"  x "}`))
-	if in.issue != nil || *v.date.value != "2026-10-01" || !*v.done.value || !v.textbookID.present || v.textbookID.value != nil ||
-		*v.content.value != "x" || v.rangeStart.present || v.subject.present {
+	if in.Issue != nil || *v.date.Value != "2026-10-01" || !*v.done.Value || !v.textbookID.Present || v.textbookID.Value != nil ||
+		*v.content.Value != "x" || v.rangeStart.Present || v.subject.Present {
 		t.Errorf("値 = %+v", v)
 	}
 }

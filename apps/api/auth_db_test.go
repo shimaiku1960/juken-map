@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
@@ -108,7 +109,7 @@ type authEnv struct {
 	db     *sql.DB
 	fx     dbFixture
 	h      *authHandlers
-	rt     *router
+	rt     *httpx.Router
 	clock  *testClock
 	mails  *fakeMailbox
 	ips    []string
@@ -131,7 +132,7 @@ func newAuthEnv(t *testing.T) *authEnv {
 		adminTo: e.newEmail(), sender: e.mails, now: e.clock.Now,
 		async: func(f func()) { f() },
 	})
-	e.rt = newRouter((&sessionAuth{store: e.h.sessions}).load)
+	e.rt = httpx.NewRouter((&sessionAuth{store: e.h.sessions}).load)
 	registerAuthRoutes(e.rt, e.h)
 	registerRoutes(e.rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
 	t.Cleanup(e.cleanup)
@@ -642,7 +643,7 @@ func TestAuthDBMFA(t *testing.T) {
 	b := e.signedIn(email, authTestPassword)
 
 	// 06 B7：2段階認証を通していない管理者のセッションは、管理 API で 403。
-	expectStatus(t, b.do("GET", "/api/admin/overview", nil), 403, twoFactorRequired)
+	expectStatus(t, b.do("GET", "/api/admin/overview", nil), 403, httpx.TwoFactorRequired)
 	// E4：設定には今のパスワードの入れ直しが要る。
 	expectStatus(t, b.do("POST", "/api/auth/mfa/setup", map[string]string{"password": "not my passphrase!!"}), 400, "INVALID_PASSWORD")
 	before := b.cookies[sessionCookieName].Value

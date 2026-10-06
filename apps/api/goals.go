@@ -9,6 +9,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 志望校の読み取り（JUK-73）。Node の routes/goals.ts・home.ts の GET と、
@@ -142,21 +143,21 @@ type goalHandlers struct {
 }
 
 // list は GET /api/goals。
-func (h *goalHandlers) list(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *goalHandlers) list(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	goals, err := h.store.listGoals(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("goals: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("goals: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, goals)
+	httpx.WriteJSON(w, http.StatusOK, goals)
 }
 
 // firstChoice は GET /api/goals/first-choice。第一志望が無ければ null を返す（Node と同じ）。
-func (h *goalHandlers) firstChoice(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *goalHandlers) firstChoice(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	goal, err := h.store.findFirstChoiceGoal(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("goals/first-choice: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("goals/first-choice: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, goal)
+	httpx.WriteJSON(w, http.StatusOK, goal)
 }

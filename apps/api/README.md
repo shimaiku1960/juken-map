@@ -120,16 +120,16 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
 
 ## ルートを足す
 
-入口の種類ごとに登録の関数が分かれている（`router.go`）。種類を選ばずに登録する方法は無い。
+入口の種類ごとに登録の関数が分かれている（`internal/httpx/router.go`）。種類を選ばずに登録する方法は無い。
 
 ```go
-rt.public("GET /api/health", healthHandler(db))          // 誰でも
-rt.user("GET /api/dashboard", dashboard.serve)           // ログイン必須。デモの書き込みは 403
-rt.admin("GET /api/admin/users", adminUsers.serve)       // 管理者だけ
-rt.job("POST /api/cron/…", secret, cron.handle)           // タイマー（infra/systemd/）などが共有トークンで呼ぶ
+rt.Public("GET /api/health", healthHandler(db))          // 誰でも
+rt.User("GET /api/dashboard", dashboard.serve)           // ログイン必須。デモの書き込みは 403
+rt.Admin("GET /api/admin/users", adminUsers.serve)       // 管理者だけ
+rt.Job("POST /api/cron/…", secret, cron.handle)           // タイマー（infra/systemd/）などが共有トークンで呼ぶ
 ```
 
-`user` と `admin` のハンドラは `func(w, r, s *session)` で、ログイン中の利用者を引数で受け取る。
+`user` と `admin` のハンドラは `func(w, r, s *httpx.Session)` で、ログイン中の利用者を引数で受け取る。
 path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。想定外の失敗は
 `internalError(w, r, err)` に渡す（500 を返し、原因はログにだけ残す）。
 
@@ -149,7 +149,7 @@ SQL を `WHERE id = ? AND userId = ?` にする。ハンドラーも先に持ち
 
 ## 書き込みのルート
 
-本文は `readBody`（`body.go`）で読み、入力は `readObject`（`validate.go`）で確かめる。
+本文は `httpx.ReadBody`（`internal/httpx/body.go`）で読み、入力は `httpx.ReadObject`（`internal/httpx/validate.go`）で確かめる。
 
 ```go
 body, ok := readBody(w, r, defaultBodyLimit)   // 415・413 はここで返す。壊れた JSON は「本文なし」になる（Node と同じ）
@@ -169,21 +169,21 @@ if in.reject(w) {            // 最初の1件を {error, code, field} の 400 �
 - Zod の規則を変えたら、Go も直して `*_writes_test.go` にケースを足す。移すあいだは Node と応答を比べるテスト
   （`parity.sh`）でずれを見つけていたが、比べる相手の Node の API を消したので一緒に消した（JUK-84）
 - Zod の issue は「スキーマに書いた項目の順、項目の中では書いたチェックの順」に積まれ、Node は最初の1件だけを返す。
-  `readObject` の読み取りも書いた順に確かめ、最初の1件で止まる。文字列の長さは Zod 4.5 と同じくコードポイントで数え、
+  `ReadObject` の読み取りも書いた順に確かめ、最初の1件で止まる。文字列の長さは Zod 4.5 と同じくコードポイントで数え、
   trim は JavaScript の `String#trim` と同じ文字を削る
-- Cookie で認証する書き込みは、別のサイトから送られたら 403（`router.go` の `sameOrigin`、標準の
+- Cookie で認証する書き込みは、別のサイトから送られたら 403（`internal/httpx/router.go` の `sameOrigin`、標準の
   `http.CrossOriginProtection`）。Node の自前 API には無く、Go だけが持つ
 - DB に書く時刻は `nowMillis()`（ミリ秒で切り捨て）。そのまま渡すと MySQL が DATETIME(3) へ丸め、Node とずれる
 - 任意の項目は `optional[T]`（`in.optionalString`・`in.optionalInt`）で読み、「キーが無い」と null を区別する。
   Node は `data.x ?? null` で書き、`data.x !== current` で「変わったか」を見るので、`ptr()` と `differs()` で同じにする
-- 数は `json.Number` のまま受け、`checkNumber` で Zod の `number().int().positive().max()` と同じ順・同じ文言で確かめる
+- 数は `json.Number` のまま受け、`httpx.CheckNumber` で Zod の `number().int().positive().max()` と同じ順・同じ文言で確かめる
   （範囲外の数は ±Infinity、安全な整数の外は too_big・too_small）
 - 入れ子のオブジェクトは `readObjectAt(element, "items.0")` で読み、`in.take(item)` で外側の issue にする。
   field は Zod と同じ `items.0.content` の形になる。配列は `in.array`（`.min(1)` も確かめる）
 
 クエリ文字列は `r.URL.Query()` ではなく `parseQuery`（`query.go`）で読む。Go の標準は `;` を含む組や
 壊れた `%` を黙って捨てるが、Node（Fastify）は値として受け取るので、そのままでは応答がずれる。
-不正な入力の 400 は、Node の Zod と同じ形（`validationIssue`）で返す。
+不正な入力の 400 は、Node の Zod と同じ形（`httpx.ValidationIssue`）で返す。
 
 ## DB に流すテスト（A3・A4）
 
@@ -234,10 +234,8 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `main.go` | 設定の読み込み、ルートの登録（`registerRoutes`）、ミドルウェアの順番、起動と停止 |
-| `router.go` | 入口の種類ごとの拒否（未ログイン・停止中・管理者・デモ） |
 | `middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 |
 | `overload.go` | 同時処理数の上限を超えたら 503 |
-| `user_rate_limit.go` | 利用者単位の回数制限（読み取り・書き込みの2種類、メモリのトークンバケット）。超えたら 429 と `Retry-After`（06 E2） |
 | `Dockerfile` | 本番のイメージ（distroless の static に実行ファイル1つ） |
 
 ### ログイン（`auth_*.go`、JUK-115）
@@ -328,12 +326,10 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `http.go` | JSON の書き出し、ヘルスチェック |
-| `errors.go` | エラー応答の形、404、path の ID |
-| `query.go` | クエリ文字列の読み方、期間（`?from=&to=`）、400 の形 |
-| `body.go` | リクエスト本文の読み方（Content-Type・上限・壊れた JSON・不正な UTF-8）、415・413 の形 |
-| `validate.go` | 書き込みの入力チェック（Zod の最初の issue と同じ 400） |
+| `http.go` | ヘルスチェック |
+| `query.go` | クエリ文字列の読み方、期間（`?from=&to=`） |
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
+| `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
 | `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node と同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする、期限の切れた行の消し方（`expired.go`。消す表は持ち主が渡す）。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |

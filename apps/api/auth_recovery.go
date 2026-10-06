@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
@@ -15,7 +16,7 @@ import (
 // verifyEmail は POST /api/auth/verify-email。メールのリンクは確認の画面（/verify-email/confirm）を開くだけで、
 // トークンを使うのはその画面のボタンからのこの POST（E2）。メールのセキュリティ製品やプレビューがリンクを
 // 先に開いても、トークンは使われない。確認できてもログインはさせない（ログインの画面へ案内する）。
-func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Token string `json:"token"`
 	}
@@ -25,7 +26,7 @@ func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *se
 	ctx := r.Context()
 	userID, err := h.store.consumeToken(ctx, in.Token, tokenPurposeVerifyEmail)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("verify-email: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("verify-email: %w", err))
 		return
 	}
 	if userID == "" {
@@ -36,7 +37,7 @@ func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *se
 	now := h.clock()
 	first, err := h.store.markEmailVerified(ctx, userID, now)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("verify-email: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("verify-email: %w", err))
 		return
 	}
 	// 初めて確認できたときだけ、運営者へ新しい利用者を知らせる（Better Auth の afterEmailVerification と同じ）。
@@ -51,7 +52,7 @@ func (h *authHandlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *se
 
 // resendVerification は POST /api/auth/verify-email/resend。
 // 応答は、宛先があってもなくても、確認済みでも同じ。調べて送るのは応答のあと（10 H2）。
-func (h *authHandlers) resendVerification(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *authHandlers) resendVerification(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Email       string `json:"email"`
 		CallbackURL string `json:"callbackURL"`
@@ -73,7 +74,7 @@ func (h *authHandlers) resendVerification(w http.ResponseWriter, r *http.Request
 
 // forgotPassword は POST /api/auth/password/forgot。応答は宛先の有無で変えず、調べて送るのは応答のあと（H2）。
 // パスワードを持たない利用者（Google・GitHub だけ）にも送る。パスワードを作る道がこれだけなので（A1 の回復）。
-func (h *authHandlers) forgotPassword(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *authHandlers) forgotPassword(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Email string `json:"email"`
 	}
@@ -116,7 +117,7 @@ func (h *authHandlers) later(r *http.Request, name string, f func(ctx context.Co
 //   - 2段階認証は外さない
 //
 // メールのリンクを受け取れたことは、そのアドレスを持っていることの確認になるので、未確認なら確認済みにする。
-func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Token    string `json:"token"`
 		Password string `json:"password"`
@@ -132,7 +133,7 @@ func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *
 	// 規則に合わないパスワードで断るときは、トークンを使わない（直して送り直せるように）。
 	userID, err := h.store.peekToken(ctx, in.Token, tokenPurposePasswordReset)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("reset-password: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	}
 	if userID == "" {
@@ -141,7 +142,7 @@ func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *
 	}
 	u, err := h.store.findUserByID(ctx, userID)
 	if err != nil || u == nil {
-		internalError(w, r, fmt.Errorf("reset-password: %w (user=%v)", err, u != nil))
+		httpx.InternalError(w, r, fmt.Errorf("reset-password: %w (user=%v)", err, u != nil))
 		return
 	}
 	if message, ok := checkNewPassword(in.Password, u.Email); !ok {
@@ -150,22 +151,22 @@ func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *
 	}
 	hash, err := h.hasher.hash(ctx, in.Password)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("reset-password: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	}
 	if consumed, err := h.store.consumeToken(ctx, in.Token, tokenPurposePasswordReset); err != nil {
-		internalError(w, r, fmt.Errorf("reset-password: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	} else if consumed == "" {
 		invalid()
 		return
 	}
 	if err := h.store.replacePassword(ctx, u.ID, hash, ""); err != nil {
-		internalError(w, r, fmt.Errorf("reset-password: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	}
 	if _, err := h.store.markEmailVerified(ctx, u.ID, h.clock()); err != nil {
-		internalError(w, r, fmt.Errorf("reset-password: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("reset-password: %w", err))
 		return
 	}
 	h.mailer.sendPasswordChanged(u.Email, h.webOrigin)
@@ -175,7 +176,7 @@ func (h *authHandlers) resetPassword(w http.ResponseWriter, r *http.Request, _ *
 
 // changePassword は POST /api/auth/password/change。今のパスワードを入れ直してもらい（06 B6・10 E4）、
 // ほかの端末のセッションをすべて消して、本人へ知らせる。今の端末はログインしたまま。
-func (h *authHandlers) changePassword(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *authHandlers) changePassword(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		CurrentPassword string `json:"currentPassword"`
 		NewPassword     string `json:"newPassword"`
@@ -194,11 +195,11 @@ func (h *authHandlers) changePassword(w http.ResponseWriter, r *http.Request, s 
 	}
 	hash, err := h.hasher.hash(ctx, in.NewPassword)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("change-password: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("change-password: %w", err))
 		return
 	}
 	if err := h.store.replacePassword(ctx, u.ID, hash, s.ID); err != nil {
-		internalError(w, r, fmt.Errorf("change-password: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("change-password: %w", err))
 		return
 	}
 	h.mailer.sendPasswordChanged(u.Email, h.webOrigin)
@@ -208,14 +209,14 @@ func (h *authHandlers) changePassword(w http.ResponseWriter, r *http.Request, s 
 
 // requireUser は、ログインが要る認証の入口（パスワードの変更・2段階認証の設定）で、未ログインは 401、
 // 停止中とデモアカウントは 403 にする。止めたら false。
-func (h *authHandlers) requireUser(w http.ResponseWriter, r *http.Request, s *session) bool {
+func (h *authHandlers) requireUser(w http.ResponseWriter, r *http.Request, s *httpx.Session) bool {
 	switch {
 	case s == nil:
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 	case s.Banned:
-		writeError(w, http.StatusForbidden, bannedMessage)
-	case s.Email == demoEmail:
-		writeError(w, http.StatusForbidden, "デモアカウントは閲覧専用です")
+		httpx.WriteError(w, http.StatusForbidden, bannedMessage)
+	case s.Email == httpx.DemoEmail:
+		httpx.WriteError(w, http.StatusForbidden, "デモアカウントは閲覧専用です")
 	default:
 		return true
 	}
@@ -224,11 +225,11 @@ func (h *authHandlers) requireUser(w http.ResponseWriter, r *http.Request, s *se
 
 // reauthenticate は重要な操作の直前に、今のパスワードを入れ直してもらう（10 E4）。
 // アカウント単位で回数を数える（H1）。合わなければ応答を返して false。
-func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s *session, password string) (*authUser, bool) {
+func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s *httpx.Session, password string) (*authUser, bool) {
 	ctx := r.Context()
 	ok, retry, err := h.throttle.hit(ctx, authguard.ReauthAccount, s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("reauth: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("reauth: %w", err))
 		return nil, false
 	}
 	if !ok {
@@ -238,7 +239,7 @@ func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s 
 	}
 	u, err := h.store.findUserByID(ctx, s.UserID)
 	if err != nil || u == nil {
-		internalError(w, r, fmt.Errorf("reauth: %w (user=%v)", err, u != nil))
+		httpx.InternalError(w, r, fmt.Errorf("reauth: %w (user=%v)", err, u != nil))
 		return nil, false
 	}
 	if !u.PasswordHash.Valid {
@@ -248,7 +249,7 @@ func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s 
 	}
 	matched, needsRehash, err := h.hasher.verify(ctx, u.PasswordHash.String, password)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("reauth: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("reauth: %w", err))
 		return nil, false
 	}
 	if !matched {
@@ -257,7 +258,7 @@ func (h *authHandlers) reauthenticate(w http.ResponseWriter, r *http.Request, s 
 		return nil, false
 	}
 	if err := h.throttle.clear(ctx, authguard.ReauthAccount, s.UserID); err != nil {
-		internalError(w, r, fmt.Errorf("reauth: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("reauth: %w", err))
 		return nil, false
 	}
 	if needsRehash {

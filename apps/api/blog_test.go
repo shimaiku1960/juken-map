@@ -6,20 +6,22 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // ブログの中継のテスト。microCMS は httptest の偽物にする（本物の API キーは要らない）。
 
-func newBlogTestRouter(t *testing.T, upstream http.HandlerFunc) *router {
+func newBlogTestRouter(t *testing.T, upstream http.HandlerFunc) *httpx.Router {
 	t.Helper()
 	srv := httptest.NewServer(upstream)
 	t.Cleanup(srv.Close)
-	rt := newRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(fakeSessions(nil))
 	registerBlogRoutes(rt, blogConfig{apiBase: srv.URL + "/api/v1", apiKey: "key"})
 	return rt
 }
 
-func getBlog(rt *router, target string) *httptest.ResponseRecorder {
+func getBlog(rt *httpx.Router, target string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	rt.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec
@@ -111,7 +113,7 @@ func TestBlogUpstreamFailures(t *testing.T) {
 	}
 
 	// 設定が無ければ microCMS を呼ばずに 502
-	rt = newRouter(fakeSessions(nil))
+	rt = httpx.NewRouter(fakeSessions(nil))
 	registerBlogRoutes(rt, blogConfig{})
 	if rec := getBlog(rt, "/api/blog"); rec.Code != http.StatusBadGateway {
 		t.Fatalf("未設定: status = %d, want 502", rec.Code)

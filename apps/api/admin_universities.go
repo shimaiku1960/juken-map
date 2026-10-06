@@ -9,6 +9,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
@@ -30,7 +31,7 @@ var prefectures = []string{
 }
 
 // listUniversities は GET /api/admin/universities。
-func (h *adminMasterHandlers) listUniversities(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *adminMasterHandlers) listUniversities(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	query := parseQuery(r.URL.RawQuery)
 	q, issue := readMasterSearchQuery(query)
 	if issue == nil {
@@ -39,59 +40,59 @@ func (h *adminMasterHandlers) listUniversities(w http.ResponseWriter, r *http.Re
 		if issue == nil {
 			list, err := h.store.listUniversities(r.Context(), q, page)
 			if err != nil {
-				internalError(w, r, fmt.Errorf("admin universities: %w", err))
+				httpx.InternalError(w, r, fmt.Errorf("admin universities: %w", err))
 				return
 			}
-			writeJSON(w, http.StatusOK, list)
+			httpx.WriteJSON(w, http.StatusOK, list)
 			return
 		}
 	}
-	issue.write(w)
+	issue.Write(w)
 }
 
 // universityDetail は GET /api/admin/universities/{id}。
-func (h *adminMasterHandlers) universityDetail(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *adminMasterHandlers) universityDetail(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	id, ok := masterID(w, r)
 	if !ok {
 		return
 	}
 	detail, err := h.store.universityDetail(r.Context(), id)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin university detail: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin university detail: %w", err))
 		return
 	}
 	if detail == nil {
-		writeError(w, http.StatusNotFound, universityMessages.notFound)
+		httpx.WriteError(w, http.StatusNotFound, universityMessages.notFound)
 		return
 	}
-	writeJSON(w, http.StatusOK, detail)
+	httpx.WriteJSON(w, http.StatusOK, detail)
 }
 
 // createUniversity は POST /api/admin/universities。
-func (h *adminMasterHandlers) createUniversity(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+func (h *adminMasterHandlers) createUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
-	input, in := readUniversityInput(body.value())
-	if in.reject(w) {
+	input, in := readUniversityInput(body.Value())
+	if in.Reject(w) {
 		return
 	}
 	outcome, err := h.store.createUniversity(r.Context(), input)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin create university: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin create university: %w", err))
 		return
 	}
 	if rejectMasterFailure(w, universityMessages, outcome.failure, outcome.count) {
 		return
 	}
 	logMasterChange(r.Context(), s.UserID, "create", "University", outcome.value.ID, "after", outcome.value)
-	writeJSON(w, http.StatusCreated, outcome.value)
+	httpx.WriteJSON(w, http.StatusCreated, outcome.value)
 }
 
 // updateUniversity は PATCH /api/admin/universities/{id}。
-func (h *adminMasterHandlers) updateUniversity(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+func (h *adminMasterHandlers) updateUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
@@ -100,26 +101,26 @@ func (h *adminMasterHandlers) updateUniversity(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	input, in := readUniversityInput(body.value())
-	if in.reject(w) {
+	input, in := readUniversityInput(body.Value())
+	if in.Reject(w) {
 		return
 	}
 	outcome, err := h.store.updateUniversity(r.Context(), id, input)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin update university: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin update university: %w", err))
 		return
 	}
 	if rejectMasterFailure(w, universityMessages, outcome.failure, outcome.count) {
 		return
 	}
 	logMasterChange(r.Context(), s.UserID, "update", "University", id, "before", outcome.value.before, "after", outcome.value.after)
-	writeJSON(w, http.StatusOK, outcome.value.after)
+	httpx.WriteJSON(w, http.StatusOK, outcome.value.after)
 }
 
 // deleteUniversity は DELETE /api/admin/universities/{id}。
-func (h *adminMasterHandlers) deleteUniversity(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *adminMasterHandlers) deleteUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	// 本文は使わないが、Node（Fastify）はハンドラより先に本文を読むので、受け付けない形なら同じく 415・413 にする。
-	if _, ok := readBody(w, r, defaultBodyLimit); !ok {
+	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
 	id, ok := masterID(w, r)
@@ -128,7 +129,7 @@ func (h *adminMasterHandlers) deleteUniversity(w http.ResponseWriter, r *http.Re
 	}
 	outcome, err := h.store.deleteUniversity(r.Context(), id)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin delete university: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin delete university: %w", err))
 		return
 	}
 	if rejectMasterFailure(w, universityMessages, outcome.failure, outcome.count) {
@@ -150,12 +151,12 @@ func (in universityInput) record() university.UniversityInput {
 }
 
 // readUniversityInput は universityInputSchema。
-func readUniversityInput(body any) (universityInput, *objectInput) {
-	in := readObject(body)
+func readUniversityInput(body any) (universityInput, *httpx.ObjectInput) {
+	in := httpx.ReadObject(body)
 	v := universityInput{
-		name:       in.string("name", masterNameRule("大学名")),
-		prefecture: in.string("prefecture", stringRule{checks: []stringCheck{oneOf(prefectures, "invalid_prefecture", "都道府県を選んでください")}}),
-		typ:        in.enum("type", func(s string) bool { return apischema.UniversityInputType(s).Valid() }, "種別を選んでください"),
+		name:       in.String("name", masterNameRule("大学名")),
+		prefecture: in.String("prefecture", httpx.StringRule{Checks: []httpx.StringCheck{httpx.OneOf(prefectures, "invalid_prefecture", "都道府県を選んでください")}}),
+		typ:        in.Enum("type", func(s string) bool { return apischema.UniversityInputType(s).Valid() }, "種別を選んでください"),
 	}
 	return v, in
 }

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // ブログの記事の中継（GET /api/blog・/api/blog/{id}。JUK-111 で Node の routes/blog.ts から移した）。
@@ -65,7 +67,7 @@ func (h *blogHandlers) detail(w http.ResponseWriter, r *http.Request) {
 	// 404 だけを「記事が無い」として扱う。タイムアウトや microCMS の障害まで 404 にすると、
 	// こちらの調査でも利用者の画面でも原因を取り違える。
 	if errors.Is(err, errBlogNotFound) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Not found"})
+		httpx.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "Not found"})
 		return
 	}
 	if err != nil {
@@ -113,7 +115,7 @@ func (h *blogHandlers) fetch(ctx context.Context, path string) ([]byte, error) {
 // 可観測性で見るエラー率にも、自分の不具合と外部の障害が混ざってしまう。
 func upstreamFailed(w http.ResponseWriter, r *http.Request, err error) {
 	slog.ErrorContext(r.Context(), "[blog] microCMS request failed.", "err", err.Error())
-	writeJSON(w, http.StatusBadGateway, map[string]string{"error": "Bad Gateway"})
+	httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "Bad Gateway"})
 }
 
 // writeRawJSON は microCMS の応答を中身を変えずに返す（Node は SDK が読んだ値を JSON に戻していたので、中身は同じ）。
