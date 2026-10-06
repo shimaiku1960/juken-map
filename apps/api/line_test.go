@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // LINE 連携のテスト。DB と LINE の API は偽物にする（Go の CI には DB が無い）。
@@ -213,20 +215,20 @@ func (f *fakeLineClient) isFriend(context.Context, string) (bool, error) {
 type lineTestEnv struct {
 	store  *fakeLineStore
 	client *fakeLineClient
-	rt     *router
+	rt     *httpx.Router
 }
 
 func newLineTestEnv() *lineTestEnv {
 	env := &lineTestEnv{store: newFakeLineStore(), client: &fakeLineClient{friend: true}}
 	h := &lineHandlers{store: env.store, line: env.client, channelSecret: testChannelSecret, webOrigin: "https://juken-map.com"}
-	env.rt = newRouter(fakeSessions(testSessions))
-	env.rt.user("GET /api/line/connection", h.connection)
-	env.rt.user("DELETE /api/line/connection", h.disconnect)
-	env.rt.user("POST /api/line/account-link", h.accountLink)
-	env.rt.oauth("GET /api/line/oauth/start", h.oauthStart)
-	env.rt.oauth("GET /api/line/oauth/callback", h.oauthCallback)
-	env.rt.webhook("POST /api/line/webhook", h.webhook)
-	env.rt.publicWithSession("GET /line/settings", h.settings)
+	env.rt = httpx.NewRouter(fakeSessions(testSessions))
+	env.rt.User("GET /api/line/connection", h.connection)
+	env.rt.User("DELETE /api/line/connection", h.disconnect)
+	env.rt.User("POST /api/line/account-link", h.accountLink)
+	env.rt.OAuth("GET /api/line/oauth/start", h.oauthStart)
+	env.rt.OAuth("GET /api/line/oauth/callback", h.oauthCallback)
+	env.rt.Webhook("POST /api/line/webhook", h.webhook)
+	env.rt.PublicWithSession("GET /line/settings", h.settings)
 	return env
 }
 

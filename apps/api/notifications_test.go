@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 func strp(s string) *string { return &s }
@@ -276,10 +277,10 @@ func TestDailyNotifierSend(t *testing.T) {
 }
 
 func TestCronHandler(t *testing.T) {
-	rt := newRouter(fakeSessions(nil))
+	rt := httpx.NewRouter(fakeSessions(nil))
 	store := newFakeStore(recipient{ID: "u", Email: strp("u@example.com"), Morning: true})
 	h := &cronHandler{notifier: testNotifier(store, &fakeMessenger{}), now: func() time.Time { return testNow }}
-	rt.job("POST /api/cron/daily-study-notifications", "secret", h.dailyNotifications)
+	rt.Job("POST /api/cron/daily-study-notifications", "secret", h.dailyNotifications)
 
 	tests := []struct {
 		name, auth, body string
@@ -311,9 +312,9 @@ func TestCronHandler(t *testing.T) {
 
 func TestJobWithoutSecret(t *testing.T) {
 	// 秘密値を設定し忘れたら、何を送っても 401（誰でも呼べる状態にしない）
-	rt := newRouter(fakeSessions(nil))
-	rt.job("POST /api/job", "", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	rt := httpx.NewRouter(fakeSessions(nil))
+	rt.Job("POST /api/job", "", func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
 	for _, auth := range []string{"", "Bearer ", "Bearer undefined"} {
 		req := httptest.NewRequest("POST", "/api/job", nil)

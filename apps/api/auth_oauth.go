@@ -18,6 +18,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
@@ -105,7 +106,7 @@ func newOAuthProviders(webOrigin string, ep oauthEndpoints, googleID, googleSecr
 
 // oauthStart は POST /api/auth/oauth/{provider}。同意画面の URL を返し、画面がそこへ移る。
 // GET で始めないのは、状態（DB の往復の行）を作る処理を別のサイトから踏ませないため（10 D2）。
-func (h *authHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *authHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		CallbackURL string `json:"callbackURL"`
 	}
@@ -125,7 +126,7 @@ func (h *authHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *ses
 	nonce := base64.RawURLEncoding.EncodeToString(randomBytes(16))
 	if err := h.store.saveOAuthState(r.Context(), stateHash, p.name,
 		authguard.OAuthState{Verifier: verifier, Nonce: nonce, RedirectTo: safeRedirectPath(in.CallbackURL, "/")}); err != nil {
-		internalError(w, r, fmt.Errorf("oauth start: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("oauth start: %w", err))
 		return
 	}
 	setCookie(w, oauthCookieName, state, authguard.OAuthStateTTL, http.SameSiteLaxMode)
@@ -133,12 +134,12 @@ func (h *authHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *ses
 	if p.usesNonce {
 		opts = append(opts, oauth2.SetAuthURLParam("nonce", nonce))
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"url": p.config.AuthCodeURL(state, opts...)})
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"url": p.config.AuthCodeURL(state, opts...)})
 }
 
 // oauthCallback は GET /api/auth/callback/{provider}。プロバイダーから画面遷移で戻ってくる。
 // 失敗はすべてログインの画面へ戻し、理由の詳しいところはログにだけ残す。
-func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, previous *session) {
+func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
 	ctx := r.Context()
 	providerName := r.PathValue("provider")
 	clearCookie(w, oauthCookieName, http.SameSiteLaxMode)

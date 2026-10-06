@@ -1,4 +1,4 @@
-package main
+package httpx
 
 import (
 	"encoding/json"
@@ -99,14 +99,14 @@ func TestUserRateLimiterSweep(t *testing.T) {
 }
 
 // limitedTestRouter は時計を差し替えた newTestRouter。
-func limitedTestRouter() (*router, *fakeClock) {
+func limitedTestRouter() (*Router, *fakeClock) {
 	rt := newTestRouter()
 	clock := newFakeClock()
 	rt.rateLimiter = newUserRateLimiter(clock.now)
 	return rt, clock
 }
 
-func serveAs(rt *router, method, path, as, ip string) *httptest.ResponseRecorder {
+func serveAs(rt *Router, method, path, as, ip string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	if as != "" {
@@ -178,55 +178,5 @@ func TestRouterRateLimitDemoPerIP(t *testing.T) {
 	}
 	if res := serveAs(rt, http.MethodGet, "/api/mine", "alice", "203.0.113.9"); res.Code != http.StatusTooManyRequests {
 		t.Fatalf("IP を変えた利用者: status = %d, want 429", res.Code)
-	}
-}
-
-func TestRegisteredRoutesAreRateLimited(t *testing.T) {
-	// 本番と同じルートの一覧で、ログインして呼ぶ入口（user・admin）がすべて回数制限を通ることを確かめる。
-	// 札を先に使い切っておき、どのルートもハンドラまで来ずに 429 になるかを見る。
-	// ログインの入口（auth）は auth_throttle.go が IP とアカウントで別に数えるので対象外。
-	rt := newRouter(fakeSessions(testSessions))
-	registerAuthRoutes(rt, newAuthHandlers(nil, authConfig{}))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, lineConfig{}, microcmsWebhookConfig{})
-	clock := newFakeClock()
-	rt.rateLimiter = newUserRateLimiter(clock.now)
-	for _, as := range []string{"alice", "admin"} {
-		s := testSessions[as]
-		use(rt.rateLimiter, rateLimitRead, s.UserID, 120)
-		use(rt.rateLimiter, rateLimitWrite, s.UserID, 30)
-	}
-
-	checked := 0
-	for _, route := range rt.routes {
-		as := ""
-		switch route.Access {
-		case accessUser:
-			as = "alice"
-		case accessAdmin:
-			as = "admin"
-		default:
-			continue
-		}
-		method, path, _ := strings.Cut(route.Pattern, " ")
-		t.Run(route.Pattern, func(t *testing.T) {
-			var res *httptest.ResponseRecorder
-			func() {
-				// DB は nil なので、ハンドラまで来たら panic になる。来たこと自体を失敗として出す。
-				defer func() {
-					if p := recover(); p != nil {
-						t.Fatalf("回数制限を超えたのにハンドラまで来た: %v", p)
-					}
-				}()
-				res = serveAs(rt, method, pathParam.ReplaceAllString(path, "1"), as, "")
-			}()
-			if res.Code != http.StatusTooManyRequests {
-				t.Fatalf("status = %d, want 429（本文 %s）", res.Code, res.Body)
-			}
-		})
-		checked++
-	}
-	// 一覧が空になって何も確かめずに通る、ということが無いように。
-	if checked < 40 {
-		t.Fatalf("確かめたルートが %d 本しかない", checked)
 	}
 }

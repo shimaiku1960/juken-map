@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
@@ -89,11 +90,11 @@ func validEmail(email string) bool {
 // ---- 応答とログ ----
 
 func writeAuthError(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, map[string]string{"error": message, "code": code})
+	httpx.WriteJSON(w, status, map[string]string{"error": message, "code": code})
 }
 
 func writeOK(w http.ResponseWriter) {
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func writeTooMany(w http.ResponseWriter, code string, retryAfter time.Duration) {
@@ -103,12 +104,12 @@ func writeTooMany(w http.ResponseWriter, code string, retryAfter time.Duration) 
 
 // readAuthJSON は JSON の本文を dst へ読む。JSON でなければ 400 を返して false。
 func readAuthJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	body, ok := readBody(w, r, authBodyLimit)
+	body, ok := httpx.ReadBody(w, r, authBodyLimit)
 	if !ok {
 		return false
 	}
-	if !body.parsed || body.text || json.Unmarshal([]byte(body.raw), dst) != nil {
-		writeError(w, http.StatusBadRequest, "入力が正しくありません")
+	if !body.Parsed || body.Text || json.Unmarshal([]byte(body.Raw), dst) != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "入力が正しくありません")
 		return false
 	}
 	return true
@@ -117,7 +118,7 @@ func readAuthJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 // logAuthEvent は認証の出来事を構造化ログに1行出す（10 I1）。パスワード・トークン・コードは渡さない。
 // 失敗の種類（reason）は記録するが、画面には出さない（06 B4）。
 func logAuthEvent(r *http.Request, level slog.Level, event, userID string, attrs ...any) {
-	args := append([]any{"event", event, "userId", userID, "ip", clientIP(r), "userAgent", truncate(r.UserAgent(), 256)}, attrs...)
+	args := append([]any{"event", event, "userId", userID, "ip", httpx.ClientIP(r), "userAgent", truncate(r.UserAgent(), 256)}, attrs...)
 	slog.Log(r.Context(), level, "[auth] "+event, args...)
 }
 
@@ -135,7 +136,7 @@ func safeRedirectPath(p, fallback string) string {
 
 // startSession はログインを完了させる。新しいセッションを作り（C4）、前のセッション（同じブラウザで
 // 別の人・同じ人がログインしていたもの）があれば消す。
-func (h *authHandlers) startSession(w http.ResponseWriter, r *http.Request, u *authUser, mfaVerified bool, previous *session) error {
+func (h *authHandlers) startSession(w http.ResponseWriter, r *http.Request, u *authUser, mfaVerified bool, previous *httpx.Session) error {
 	raw, expiresAt, err := h.sessions.create(r.Context(), r, u.ID, u.Role, mfaVerified)
 	if err != nil {
 		return err
@@ -190,21 +191,21 @@ type SessionInfo struct {
 }
 
 // session は GET /api/auth/session。ログインしていなければ null（200）を返す。
-func (h *authHandlers) session(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *authHandlers) session(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s == nil || s.Banned {
-		writeJSON(w, http.StatusOK, nil)
+		httpx.WriteJSON(w, http.StatusOK, nil)
 		return
 	}
 	u, expiresAt, err := h.store.sessionUser(r.Context(), s.ID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("auth session: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("auth session: %w", err))
 		return
 	}
 	if u == nil {
-		writeJSON(w, http.StatusOK, nil)
+		httpx.WriteJSON(w, http.StatusOK, nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, SessionResponse{
+	httpx.WriteJSON(w, http.StatusOK, SessionResponse{
 		User:    *u,
 		Session: SessionInfo{ID: s.ID, ExpiresAt: database.ISOFromDatetime(expiresAt), TwoFactorVerified: s.TwoFactorVerified},
 	})
@@ -219,7 +220,7 @@ func (h *authHandlers) session(w http.ResponseWriter, r *http.Request, s *sessio
 // まだ確認していないアカウントへの登録し直しは、パスワードを新しいものに置き換えて確認メールを送り直す
 // （古い確認のリンクは無効になる）。相手が先に被害者のメールアドレスで登録しておき、被害者が確認した後も
 // 相手のパスワードで入れる、という乗っ取りを防ぐため（10 F2 の迷ったら と同じ考え方）。
-func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Email       string `json:"email"`
 		Password    string `json:"password"`
@@ -243,12 +244,12 @@ func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *session
 	}
 	hash, err := h.hasher.hash(ctx, in.Password)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("sign-up: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("sign-up: %w", err))
 		return
 	}
 	existing, err := h.store.findUserByEmail(ctx, email)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("sign-up: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("sign-up: %w", err))
 		return
 	}
 	callback := safeRedirectPath(in.CallbackURL, "/dashboard")
@@ -257,21 +258,21 @@ func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *session
 	case existing == nil:
 		id := account.NewUserID()
 		if err := h.store.createUserWithPassword(ctx, id, email, hash, now); err != nil {
-			internalError(w, r, fmt.Errorf("sign-up: %w", err))
+			httpx.InternalError(w, r, fmt.Errorf("sign-up: %w", err))
 			return
 		}
 		if err := h.sendVerification(ctx, id, email, callback); err != nil {
-			internalError(w, r, fmt.Errorf("sign-up: %w", err))
+			httpx.InternalError(w, r, fmt.Errorf("sign-up: %w", err))
 			return
 		}
 		logAuthEvent(r, slog.LevelInfo, "sign_up", id)
 	case !existing.EmailVerified:
 		if err := h.store.setPassword(ctx, existing.ID, hash, now); err != nil {
-			internalError(w, r, fmt.Errorf("sign-up: %w", err))
+			httpx.InternalError(w, r, fmt.Errorf("sign-up: %w", err))
 			return
 		}
 		if err := h.sendVerification(ctx, existing.ID, email, callback); err != nil {
-			internalError(w, r, fmt.Errorf("sign-up: %w", err))
+			httpx.InternalError(w, r, fmt.Errorf("sign-up: %w", err))
 			return
 		}
 		logAuthEvent(r, slog.LevelInfo, "sign_up_unverified_again", existing.ID)
@@ -299,9 +300,9 @@ func (h *authHandlers) sendVerification(ctx context.Context, userID, email, call
 
 // allowAnonymous はログインしていなくても呼べる入口の、IP 単位の回数制限（H1）。止めたら 429 を返して false。
 func (h *authHandlers) allowAnonymous(w http.ResponseWriter, r *http.Request) bool {
-	ok, retry, err := h.throttle.hit(r.Context(), authguard.AnonymousIP, clientIP(r))
+	ok, retry, err := h.throttle.hit(r.Context(), authguard.AnonymousIP, httpx.ClientIP(r))
 	if err != nil {
-		internalError(w, r, fmt.Errorf("throttle: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("throttle: %w", err))
 		return false
 	}
 	if !ok {
@@ -313,7 +314,7 @@ func (h *authHandlers) allowAnonymous(w http.ResponseWriter, r *http.Request) bo
 }
 
 // signIn は POST /api/auth/sign-in。
-func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *session) {
+func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
 	var in struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -326,12 +327,12 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 
 	// IP 単位とアカウント単位の両方で数える（06 B4）。デモアカウントはパスワードを画面に載せていて
 	// 守る意味が無く、わざと失敗させれば面接官が入れなくなるので、アカウント単位では数えない。
-	ok, retry, err := h.throttle.hit(ctx, authguard.SignInIP, clientIP(r))
-	if err == nil && ok && email != demoEmail {
+	ok, retry, err := h.throttle.hit(ctx, authguard.SignInIP, httpx.ClientIP(r))
+	if err == nil && ok && email != httpx.DemoEmail {
 		ok, retry, err = h.throttle.hit(ctx, authguard.SignInAccount, email)
 	}
 	if err != nil {
-		internalError(w, r, fmt.Errorf("sign-in: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("sign-in: %w", err))
 		return
 	}
 	if !ok {
@@ -342,7 +343,7 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 
 	u, err := h.store.findUserByEmail(ctx, email)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("sign-in: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("sign-in: %w", err))
 		return
 	}
 	if u == nil || !u.PasswordHash.Valid {
@@ -358,7 +359,7 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 	}
 	matched, needsRehash, err := h.hasher.verify(ctx, u.PasswordHash.String, in.Password)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("sign-in: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("sign-in: %w", err))
 		return
 	}
 	if !matched {
@@ -368,7 +369,7 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 	}
 	// パスワードが合ったら数を消す。メール未確認・停止中で断るのも、パスワードを確かめたあとなので同じ扱い。
 	if err := h.throttle.clear(ctx, authguard.SignInAccount, email); err != nil {
-		internalError(w, r, fmt.Errorf("sign-in: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("sign-in: %w", err))
 		return
 	}
 	if needsRehash {
@@ -386,18 +387,18 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 	}
 	if u.MFAEnabled {
 		if err := h.startMFAChallenge(w, r, u.ID); err != nil {
-			internalError(w, r, fmt.Errorf("sign-in: %w", err))
+			httpx.InternalError(w, r, fmt.Errorf("sign-in: %w", err))
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]bool{"mfaRequired": true})
+		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"mfaRequired": true})
 		return
 	}
 	if err := h.startSession(w, r, u, false, previous); err != nil {
-		internalError(w, r, fmt.Errorf("sign-in: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("sign-in: %w", err))
 		return
 	}
 	logAuthEvent(r, slog.LevelInfo, "sign_in_success", u.ID, "method", "password")
-	writeJSON(w, http.StatusOK, map[string]bool{"mfaRequired": false})
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"mfaRequired": false})
 }
 
 // rehash は、合っていたパスワードを今の方式で作り直して保存する（B2）。失敗してもログインは止めない
@@ -415,10 +416,10 @@ func (h *authHandlers) rehash(r *http.Request, userID, password string) {
 }
 
 // signOut は POST /api/auth/sign-out。この端末のセッションを消す（C5 の1）。
-func (h *authHandlers) signOut(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *authHandlers) signOut(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s != nil {
 		if err := h.sessions.revoke(r.Context(), s.ID); err != nil {
-			internalError(w, r, fmt.Errorf("sign-out: %w", err))
+			httpx.InternalError(w, r, fmt.Errorf("sign-out: %w", err))
 			return
 		}
 		logAuthEvent(r, slog.LevelInfo, "sign_out", s.UserID)
@@ -429,17 +430,17 @@ func (h *authHandlers) signOut(w http.ResponseWriter, r *http.Request, s *sessio
 }
 
 // accounts は GET /api/auth/accounts。ログインの手段の一覧（2段階認証の設定の前に、パスワードがあるかを見る）。
-func (h *authHandlers) accounts(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *authHandlers) accounts(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 	hasPassword, providers, err := h.store.loginMethods(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("auth accounts: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("auth accounts: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"hasPassword": hasPassword, "providers": providers})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"hasPassword": hasPassword, "providers": providers})
 }
 
 // authConfig は認証の入口の設定（main.go が環境変数から作る）。

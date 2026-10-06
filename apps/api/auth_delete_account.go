@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
@@ -22,7 +23,7 @@ import (
 // デモアカウントは requireUser が断る。
 
 // deleteAccount は POST /api/auth/delete-account。
-func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
@@ -35,7 +36,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 	ctx := r.Context()
 	u, err := h.store.findUserByID(ctx, s.UserID)
 	if err != nil || u == nil {
-		internalError(w, r, fmt.Errorf("delete-account: %w (user=%v)", err, u != nil))
+		httpx.InternalError(w, r, fmt.Errorf("delete-account: %w (user=%v)", err, u != nil))
 		return
 	}
 	if u.Role == "admin" {
@@ -67,7 +68,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 			ok, err = h.useTOTP(r, u.ID, in.Code)
 		}
 		if err != nil {
-			internalError(w, r, fmt.Errorf("delete-account: %w", err))
+			httpx.InternalError(w, r, fmt.Errorf("delete-account: %w", err))
 			return
 		}
 		if !ok {
@@ -79,7 +80,7 @@ func (h *authHandlers) deleteAccount(w http.ResponseWriter, r *http.Request, s *
 	}
 
 	if err := h.store.deleteUser(ctx, u.ID); err != nil {
-		internalError(w, r, fmt.Errorf("delete-account: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("delete-account: %w", err))
 		return
 	}
 	// 回数制限の数は宛先・利用者の SHA-256 で持っていて、窓が過ぎれば消える。消し忘れても本人に戻らない。
@@ -98,7 +99,7 @@ func (h *authHandlers) confirmEmail(w http.ResponseWriter, r *http.Request, u *a
 	ctx := r.Context()
 	ok, retry, err := h.throttle.hit(ctx, authguard.ReauthAccount, u.ID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("delete-account: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("delete-account: %w", err))
 		return false
 	}
 	if !ok {
@@ -113,7 +114,7 @@ func (h *authHandlers) confirmEmail(w http.ResponseWriter, r *http.Request, u *a
 		return false
 	}
 	if err := h.throttle.clear(ctx, authguard.ReauthAccount, u.ID); err != nil {
-		internalError(w, r, fmt.Errorf("delete-account: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("delete-account: %w", err))
 		return false
 	}
 	return true

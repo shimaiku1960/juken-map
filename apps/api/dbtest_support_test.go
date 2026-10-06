@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // dbFixture は dbtest.Fixture に、package main のテストだけが使う作り方（ログイン・運用のコマンドなど）を足したもの。
@@ -38,16 +39,16 @@ func todayTokyo() string {
 // dbTestApp は本番と同じ registerRoutes で組んだルーター。セッションは Cookie「test」の値を利用者 ID として読む
 // （Better Auth の Cookie の署名と session 表は auth_test.go が確かめるので、ここでは省く）。
 type dbTestApp struct {
-	rt *router
+	rt *httpx.Router
 }
 
 func newDBTestApp(db *sql.DB) dbTestApp {
-	rt := newRouter(func(r *http.Request) (*session, error) {
+	rt := httpx.NewRouter(func(r *http.Request) (*httpx.Session, error) {
 		c, err := r.Cookie("test")
 		if err != nil {
 			return nil, nil
 		}
-		return &session{UserID: c.Value, Email: c.Value + "@example.test", Role: "user"}, nil
+		return &httpx.Session{UserID: c.Value, Email: c.Value + "@example.test", Role: "user"}, nil
 	})
 	registerRoutes(rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
 	return dbTestApp{rt: rt}
@@ -56,8 +57,8 @@ func newDBTestApp(db *sql.DB) dbTestApp {
 // userRoutes は入口が user のルート（"METHOD /path"）。skip に入れたメソッドは除く。
 func (app dbTestApp) userRoutes(skip ...string) []string {
 	var out []string
-	for _, r := range app.rt.routes {
-		if r.Access != accessUser {
+	for _, r := range app.rt.Routes {
+		if r.Access != httpx.AccessUser {
 			continue
 		}
 		method, _, _ := strings.Cut(r.Pattern, " ")

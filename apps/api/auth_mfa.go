@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
@@ -16,7 +17,7 @@ import (
 
 // mfaSetup は POST /api/auth/mfa/setup。今のパスワードを入れ直してもらい（E4）、秘密と予備コードを作る。
 // この時点ではまだ有効にしない。認証アプリのコードを1回確かめてから有効にする（mfaConfirm、G1）。
-func (h *authHandlers) mfaSetup(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *authHandlers) mfaSetup(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		Password string `json:"password"`
 	}
@@ -34,23 +35,23 @@ func (h *authHandlers) mfaSetup(w http.ResponseWriter, r *http.Request, s *sessi
 	secret := randomBytes(totpSecretSize)
 	sealed, err := h.totpKeys.seal(secret, u.ID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("mfa setup: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa setup: %w", err))
 		return
 	}
 	codes, hashes := newBackupCodes()
 	// 作り直したら古い予備コードは全部無効になる（G2）。
 	if err := h.store.startTOTPSetup(r.Context(), u.ID, sealed, hashes); err != nil {
-		internalError(w, r, fmt.Errorf("mfa setup: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa setup: %w", err))
 		return
 	}
 	logAuthEvent(r, slog.LevelInfo, "mfa_setup_started", u.ID)
 	// 予備コードを見せるのは、この応答の1回だけ（DB にはハッシュしか無い）。
-	writeJSON(w, http.StatusOK, map[string]any{"totpURI": totpURI(secret, u.Email), "backupCodes": codes})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"totpURI": totpURI(secret, u.Email), "backupCodes": codes})
 }
 
 // mfaConfirm は POST /api/auth/mfa/confirm。認証アプリのコードを1回確かめてから有効にし、
 // 2段階認証を通したセッションに作り直す（C4）。本人へ知らせる（E5）。
-func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		Code string `json:"code"`
 	}
@@ -60,7 +61,7 @@ func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *ses
 	ctx := r.Context()
 	sealed, err := h.store.pendingTOTPSecret(ctx, s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("mfa confirm: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa confirm: %w", err))
 		return
 	}
 	if sealed == "" {
@@ -69,7 +70,7 @@ func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *ses
 	}
 	secret, err := h.totpKeys.open(sealed, s.UserID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("mfa confirm: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa confirm: %w", err))
 		return
 	}
 	now := h.clock()
@@ -81,7 +82,7 @@ func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *ses
 	}
 	enabled, err := h.store.enableTOTP(ctx, s.UserID, step, now)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("mfa confirm: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa confirm: %w", err))
 		return
 	}
 	if !enabled {
@@ -90,15 +91,15 @@ func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *ses
 	}
 	u, err := h.store.findUserByID(ctx, s.UserID)
 	if err != nil || u == nil {
-		internalError(w, r, fmt.Errorf("mfa confirm: %w (user=%v)", err, u != nil))
+		httpx.InternalError(w, r, fmt.Errorf("mfa confirm: %w (user=%v)", err, u != nil))
 		return
 	}
 	if err := h.throttle.clear(ctx, authguard.MFAAccount, u.ID); err != nil {
-		internalError(w, r, fmt.Errorf("mfa confirm: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa confirm: %w", err))
 		return
 	}
 	if err := h.startSession(w, r, u, true, s); err != nil {
-		internalError(w, r, fmt.Errorf("mfa confirm: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa confirm: %w", err))
 		return
 	}
 	h.mailer.sendMFAEnabled(u.Email, h.webOrigin)
@@ -109,7 +110,7 @@ func (h *authHandlers) mfaConfirm(w http.ResponseWriter, r *http.Request, s *ses
 // mfaVerify は POST /api/auth/mfa/verify。ログインの途中（パスワードか外部ログインは通った状態）で、
 // 認証アプリのコードか予備コードを確かめ、通ったら2段階認証を済ませたセッションを作る（G3・C4）。
 // previous は同じブラウザに残っていた前のセッション（あれば、ログインの完了で消す。C4）。
-func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previous *session) {
+func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
 	var in struct {
 		Code   string `json:"code"`
 		Method string `json:"method"`
@@ -134,7 +135,7 @@ func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previou
 	// 途中の状態1つで試せる数を数える（H1）。数えてから確かめるので、同時に送られても上限を超えない。
 	userID, err := h.store.countMFAChallengeAttempt(ctx, hash)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("mfa verify: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa verify: %w", err))
 		return
 	}
 	if userID == "" {
@@ -154,7 +155,7 @@ func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previou
 		ok, err = h.useTOTP(r, userID, in.Code)
 	}
 	if err != nil {
-		internalError(w, r, fmt.Errorf("mfa verify: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa verify: %w", err))
 		return
 	}
 	if !ok {
@@ -164,16 +165,16 @@ func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previou
 	}
 
 	if err := h.store.deleteMFAChallenges(ctx, userID); err != nil {
-		internalError(w, r, fmt.Errorf("mfa verify: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa verify: %w", err))
 		return
 	}
 	if err := h.throttle.clear(ctx, authguard.MFAAccount, userID); err != nil {
-		internalError(w, r, fmt.Errorf("mfa verify: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa verify: %w", err))
 		return
 	}
 	u, err := h.store.findUserByID(ctx, userID)
 	if err != nil || u == nil {
-		internalError(w, r, fmt.Errorf("mfa verify: %w (user=%v)", err, u != nil))
+		httpx.InternalError(w, r, fmt.Errorf("mfa verify: %w (user=%v)", err, u != nil))
 		return
 	}
 	// 途中で停止されたかもしれないので、セッションを作る直前にもう一度見る。
@@ -183,12 +184,12 @@ func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previou
 		return
 	}
 	if err := h.startSession(w, r, u, true, previous); err != nil {
-		internalError(w, r, fmt.Errorf("mfa verify: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa verify: %w", err))
 		return
 	}
 	remaining, err := h.store.countBackupCodes(ctx, userID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("mfa verify: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa verify: %w", err))
 		return
 	}
 	method := "totp"
@@ -197,14 +198,14 @@ func (h *authHandlers) mfaVerify(w http.ResponseWriter, r *http.Request, previou
 	}
 	logAuthEvent(r, slog.LevelInfo, "sign_in_success", userID, "method", "mfa:"+method)
 	// 予備コードの残りの数を本人が分かるようにする（G2）。
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "backupCodesRemaining": remaining})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "backupCodesRemaining": remaining})
 }
 
 // allowMFAAttempt は2段階認証のコードの、アカウント単位の回数制限（H1）。止めたら 429 を返して false。
 func (h *authHandlers) allowMFAAttempt(w http.ResponseWriter, r *http.Request, userID string) bool {
 	ok, retry, err := h.throttle.hit(r.Context(), authguard.MFAAccount, userID)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("mfa throttle: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("mfa throttle: %w", err))
 		return false
 	}
 	if !ok {

@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // ブラウザが送ってくる CSP の違反の報告を、ログ（本番は Grafana の Loki）に残す（JUK-80）。
@@ -120,11 +122,11 @@ func parseCSPReports(body any) []cspViolation {
 // cspReport は POST /api/csp-report。ブラウザは中身を読まないので、報告の形が崩れていても、
 // 送り直させないよう常に 204（Content-Type が違う・大きすぎるときは、本文を読む前に 415・413）。
 func cspReport(w http.ResponseWriter, r *http.Request) {
-	body, ok := readBody(w, r, cspBodyLimit)
+	body, ok := httpx.ReadBody(w, r, cspBodyLimit)
 	if !ok {
 		return
 	}
-	for _, v := range parseCSPReports(body.json) {
+	for _, v := range parseCSPReports(body.JSON) {
 		slog.WarnContext(r.Context(), "csp violation", "csp", v)
 	}
 	w.WriteHeader(http.StatusNoContent)

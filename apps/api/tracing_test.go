@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -78,12 +79,12 @@ func TestRequestSpanUsesRouteTemplate(t *testing.T) {
 func TestRequestSpanStatus(t *testing.T) {
 	captureLogs(t)
 	tp, sr := recordSpans()
-	rt := newRouter(fakeSessions(nil))
-	rt.public("GET /api/boom", func(w http.ResponseWriter, r *http.Request) {
+	rt := httpx.NewRouter(fakeSessions(nil))
+	rt.Public("GET /api/boom", func(w http.ResponseWriter, r *http.Request) {
 		panic("boom")
 	})
-	rt.public("GET /api/missing", func(w http.ResponseWriter, r *http.Request) {
-		writeErrorBody(w, r, http.StatusNotFound, codeNotFound)
+	rt.Public("GET /api/missing", func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteErrorBody(w, r, http.StatusNotFound, httpx.CodeNotFound)
 	})
 	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
 

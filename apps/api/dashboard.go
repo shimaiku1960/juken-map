@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 期間と上限は Node 側（apps/api/src/services/dashboard-service.ts ほか）と同じ値にする。
@@ -24,13 +25,13 @@ type dashboardHandler struct {
 	store *studyStore
 }
 
-func (h *dashboardHandler) serve(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *dashboardHandler) serve(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	dashboard, err := h.get(r.Context(), s.UserID, time.Now())
 	if err != nil {
-		internalError(w, r, fmt.Errorf("dashboard: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("dashboard: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, dashboard)
+	httpx.WriteJSON(w, http.StatusOK, dashboard)
 }
 
 // get はダッシュボードの初回表示ぶんをまとめて返す。Node 側の getDashboard にあたる。

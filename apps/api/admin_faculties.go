@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
@@ -17,40 +18,40 @@ import (
 // ---- 入口 ----
 
 // listTags は GET /api/admin/tags。
-func (h *adminMasterHandlers) listTags(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *adminMasterHandlers) listTags(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	tags, err := h.store.listTags(r.Context())
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin tags: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin tags: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, tags)
+	httpx.WriteJSON(w, http.StatusOK, tags)
 }
 
 // createFaculty は POST /api/admin/faculties。
-func (h *adminMasterHandlers) createFaculty(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+func (h *adminMasterHandlers) createFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
-	input, in := readFacultyInput(body.value(), true)
-	if in.reject(w) {
+	input, in := readFacultyInput(body.Value(), true)
+	if in.Reject(w) {
 		return
 	}
 	outcome, err := h.store.createFaculty(r.Context(), input)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin create faculty: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin create faculty: %w", err))
 		return
 	}
 	if rejectMasterFailure(w, facultyMessages, outcome.failure, outcome.count) {
 		return
 	}
 	logMasterChange(r.Context(), s.UserID, "create", "Faculty", outcome.value.ID, "after", outcome.value)
-	writeJSON(w, http.StatusCreated, outcome.value)
+	httpx.WriteJSON(w, http.StatusCreated, outcome.value)
 }
 
 // updateFaculty は PATCH /api/admin/faculties/{id}。
-func (h *adminMasterHandlers) updateFaculty(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+func (h *adminMasterHandlers) updateFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
@@ -58,25 +59,25 @@ func (h *adminMasterHandlers) updateFaculty(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	input, in := readFacultyInput(body.value(), false)
-	if in.reject(w) {
+	input, in := readFacultyInput(body.Value(), false)
+	if in.Reject(w) {
 		return
 	}
 	outcome, err := h.store.updateFaculty(r.Context(), id, input)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin update faculty: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin update faculty: %w", err))
 		return
 	}
 	if rejectMasterFailure(w, facultyMessages, outcome.failure, outcome.count) {
 		return
 	}
 	logMasterChange(r.Context(), s.UserID, "update", "Faculty", id, "before", outcome.value.before, "after", outcome.value.after)
-	writeJSON(w, http.StatusOK, outcome.value.after)
+	httpx.WriteJSON(w, http.StatusOK, outcome.value.after)
 }
 
 // deleteFaculty は DELETE /api/admin/faculties/{id}。
-func (h *adminMasterHandlers) deleteFaculty(w http.ResponseWriter, r *http.Request, s *session) {
-	if _, ok := readBody(w, r, defaultBodyLimit); !ok {
+func (h *adminMasterHandlers) deleteFaculty(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
 	id, ok := masterID(w, r)
@@ -85,7 +86,7 @@ func (h *adminMasterHandlers) deleteFaculty(w http.ResponseWriter, r *http.Reque
 	}
 	outcome, err := h.store.deleteFaculty(r.Context(), id)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin delete faculty: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin delete faculty: %w", err))
 		return
 	}
 	if rejectMasterFailure(w, facultyMessages, outcome.failure, outcome.count) {
@@ -112,19 +113,19 @@ func (in facultyInput) record() university.FacultyInput {
 
 // readFacultyInput は facultyInputSchema（withUniversity なら createFacultySchema）。
 // createFacultySchema は facultyInputSchema を extend したものなので、universityId は最後に確かめる。
-func readFacultyInput(body any, withUniversity bool) (facultyInput, *objectInput) {
-	in := readObject(body)
+func readFacultyInput(body any, withUniversity bool) (facultyInput, *httpx.ObjectInput) {
+	in := httpx.ReadObject(body)
 	var v facultyInput
-	v.name = in.string("name", masterNameRule("学部名"))
-	examDate := in.string("examDate", stringRule{checks: []stringCheck{
-		{ok: ymdPattern.MatchString, code: "invalid_format", message: "受験日を選んでください"},
-		{ok: func(s string) bool { _, ok := examDateOf(s); return ok }, code: "invalid_exam_date", message: "受験日を選んでください"},
+	v.name = in.String("name", masterNameRule("学部名"))
+	examDate := in.String("examDate", httpx.StringRule{Checks: []httpx.StringCheck{
+		{OK: httpx.YMDPattern.MatchString, Code: "invalid_format", Message: "受験日を選んでください"},
+		{OK: func(s string) bool { _, ok := examDateOf(s); return ok }, Code: "invalid_exam_date", Message: "受験日を選んでください"},
 	}})
 	v.tagIDs = readTagIDs(in, "tagIds")
 	if withUniversity {
-		v.universityID = int64(in.number("universityId", numberRule{int: true, positive: true}))
+		v.universityID = int64(in.Number("universityId", httpx.NumberRule{Int: true, Positive: true}))
 	}
-	if in.issue == nil {
+	if in.Issue == nil {
 		v.examDate, _ = examDateOf(examDate)
 	}
 	return v, in
@@ -132,7 +133,7 @@ func readFacultyInput(body any, withUniversity bool) (facultyInput, *objectInput
 
 // examDateOf は受験日（YYYY-MM-DD）を、Node が保存する new Date("YYYY-MM-DD")（UTC の0時）と同じ日時にする。
 // JavaScript の new Date は月が 01〜12・日が 01〜31 なら受け付け、その月に無い日は繰り上げる
-// （2027-02-30 は 3月2日）。time.Date も同じく繰り上げる。形（ymdPattern）は呼ぶ前に確かめておくこと。
+// （2027-02-30 は 3月2日）。time.Date も同じく繰り上げる。形（httpx.YMDPattern）は呼ぶ前に確かめておくこと。
 func examDateOf(s string) (time.Time, bool) {
 	year, _ := strconv.Atoi(s[0:4])
 	month, _ := strconv.Atoi(s[5:7])
@@ -145,28 +146,28 @@ func examDateOf(s string) (time.Time, bool) {
 
 // readTagIDs は z.array(z.number().int().positive()).max(20, …).refine(重ならない)。
 // Zod は要素 → max → refine の順に確かめる（要素が不正なら、21個でも要素の issue が先）。
-func readTagIDs(in *objectInput, key string) []int64 {
-	items := in.array(key, "")
-	if in.issue != nil {
+func readTagIDs(in *httpx.ObjectInput, key string) []int64 {
+	items := in.Array(key, "")
+	if in.Issue != nil {
 		return nil
 	}
 	ids := make([]int64, 0, len(items))
 	for i, item := range items {
-		f, issue := checkNumber(in.field(key)+"."+strconv.Itoa(i), item, numberRule{int: true, positive: true})
+		f, issue := httpx.CheckNumber(in.Field(key)+"."+strconv.Itoa(i), item, httpx.NumberRule{Int: true, Positive: true})
 		if issue != nil {
-			in.issue = issue
+			in.Issue = issue
 			return nil
 		}
 		ids = append(ids, int64(f))
 	}
 	if len(ids) > adminFacultyTagsMax {
-		in.addIssue("too_big", key, "タグは20個までです")
+		in.AddIssue("too_big", key, "タグは20個までです")
 		return nil
 	}
 	seen := make(map[int64]bool, len(ids))
 	for _, id := range ids {
 		if seen[id] {
-			in.addIssue("duplicate_tags", key, "同じタグが重なっています")
+			in.AddIssue("duplicate_tags", key, "同じタグが重なっています")
 			return nil
 		}
 		seen[id] = true

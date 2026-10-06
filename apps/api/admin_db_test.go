@@ -5,7 +5,7 @@
 // 以前は Node と Go の応答を比べるテスト（parity タグ）がこの役目を持っていたが、Node のルートを消したとき
 // （JUK-84）に一緒に消えた。ここでは期待するステータスと本文を直接書く。
 //
-// 管理者・2段階認証・デモの拒否はルーターの仕事で、router_test.go と admin_*_test.go（偽物の store）が確かめる。
+// 管理者・2段階認証・デモの拒否はルーターの仕事で、internal/httpx/router_test.go と admin_*_test.go（偽物の store）が確かめる。
 // ここでは管理者のセッションで叩き、SQL が正しい行を読み書きするか（絞り込み・件数・CASCADE・一意の重なり・
 // 使われている行の拒否）だけを見る。
 //
@@ -29,22 +29,23 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // dbAdminApp は本番と同じ registerRoutes で組んだルーター。Cookie「test」の値を、2段階認証を通した管理者の
 // 利用者 ID として読む（Better Auth の Cookie と session 表の読み方は auth_test.go が確かめる）。
 type dbAdminApp struct {
 	t  *testing.T
-	rt *router
+	rt *httpx.Router
 }
 
 func newDBAdminApp(t *testing.T, db *sql.DB) dbAdminApp {
-	rt := newRouter(func(r *http.Request) (*session, error) {
+	rt := httpx.NewRouter(func(r *http.Request) (*httpx.Session, error) {
 		c, err := r.Cookie("test")
 		if err != nil {
 			return nil, nil
 		}
-		return &session{UserID: c.Value, Email: c.Value + "@example.test", Role: "admin", TwoFactorVerified: true}, nil
+		return &httpx.Session{UserID: c.Value, Email: c.Value + "@example.test", Role: "admin", TwoFactorVerified: true}, nil
 	})
 	registerRoutes(rt, db, jobConfig{}, lineConfig{webOrigin: "https://juken-map.com"}, microcmsWebhookConfig{})
 	return dbAdminApp{t: t, rt: rt}

@@ -214,7 +214,7 @@ type adminSummary struct {
 	HasPassword      bool
 }
 
-// listAdmins は管理者の一覧。管理画面に入るには2段階認証が要る（router.go の admin）ので、その有無も出す。
+// listAdmins は管理者の一覧。管理画面に入るには2段階認証が要る（internal/httpx/router.go の Admin）ので、その有無も出す。
 func (st incidentStore) listAdmins(ctx context.Context) ([]adminSummary, error) {
 	rows, err := st.db.QueryContext(ctx, "SELECT u.email,"+
 		" EXISTS (SELECT 1 FROM AuthTotp AS t WHERE t.userId = u.id AND t.enabledAt IS NOT NULL),"+

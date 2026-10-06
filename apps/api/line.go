@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
@@ -94,46 +95,46 @@ type lineHandlers struct {
 }
 
 // connection は GET /api/line/connection。プロフィール画面が連携の有無を出すのに使う。
-func (h *lineHandlers) connection(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *lineHandlers) connection(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	connected, err := h.store.isConnected(r.Context(), s.UserID)
 	if err != nil {
-		internalError(w, r, err)
+		httpx.InternalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, apischema.LineConnectionStatus{Connected: connected})
+	httpx.WriteJSON(w, http.StatusOK, apischema.LineConnectionStatus{Connected: connected})
 }
 
 // disconnect は DELETE /api/line/connection。LINE 通知の設定も一緒に落とす。
-func (h *lineHandlers) disconnect(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *lineHandlers) disconnect(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if err := h.store.disconnect(r.Context(), s.UserID); err != nil {
-		internalError(w, r, err)
+		httpx.InternalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, apischema.LineConnectionStatus{Connected: false})
+	httpx.WriteJSON(w, http.StatusOK, apischema.LineConnectionStatus{Connected: false})
 }
 
 // accountLink は POST /api/line/account-link。トークのリンクから開いた画面が、ログインしたあとに呼ぶ。
 // 使い捨ての nonce をこの利用者に結びつけ、LINE の連携画面の URL を返す。
 // LINE はそのあと Webhook の accountLink イベントで同じ nonce を送ってくる（completeAccountLink）。
-func (h *lineHandlers) accountLink(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *lineHandlers) accountLink(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var body struct {
 		LinkToken *string `json:"linkToken"`
 	}
 	// Node の z.object({ linkToken: z.string().min(1).max(255) }) と同じ条件。文言も同じ。
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil ||
 		body.LinkToken == nil || len(*body.LinkToken) == 0 || len([]rune(*body.LinkToken)) > 255 {
-		writeError(w, http.StatusBadRequest, "連携情報が正しくありません")
+		httpx.WriteError(w, http.StatusBadRequest, "連携情報が正しくありません")
 		return
 	}
 
 	nonce := randomToken(32)
 	if err := h.store.issueLinkNonce(r.Context(), s.UserID, nonce); err != nil {
-		internalError(w, r, err)
+		httpx.InternalError(w, r, err)
 		return
 	}
 	redirect := url.URL{Scheme: "https", Host: "access.line.me", Path: "/dialog/bot/accountLink"}
 	redirect.RawQuery = url.Values{"linkToken": {*body.LinkToken}, "nonce": {nonce}}.Encode()
-	writeJSON(w, http.StatusOK, map[string]string{"redirectUrl": redirect.String()})
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"redirectUrl": redirect.String()})
 }
 
 // notificationSettingsPath はプロフィールの通知設定の場所。
@@ -141,7 +142,7 @@ const notificationSettingsPath = "/profile#notification-settings"
 
 // settings は GET /line/settings。LINE のメッセージ本文が案内する入口で、画面を持たずにログイン状態で行き先を変えるだけ
 // （JUK-111 で Node の routes/line.ts から移した）。SPA のルートにしないのは、描画が要らず、画面で判定すると一瞬ちらつくため。
-func (h *lineHandlers) settings(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *lineHandlers) settings(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s != nil {
 		http.Redirect(w, r, h.webOrigin+notificationSettingsPath, http.StatusFound)
 		return
@@ -150,7 +151,7 @@ func (h *lineHandlers) settings(w http.ResponseWriter, r *http.Request, s *sessi
 }
 
 // oauthStart は GET /api/line/oauth/start。プロフィールの「LINE と連携する」から画面遷移で来る。
-func (h *lineHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *lineHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s == nil {
 		http.Redirect(w, r, h.webOrigin+"/login?callbackURL=%2Fprofile%23line-connection", http.StatusFound)
 		return
@@ -175,7 +176,7 @@ func (h *lineHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *ses
 
 // oauthCallback は GET /api/line/oauth/callback。LINE の同意画面から戻ってくる。
 // 結果はプロフィール画面へ ?line=<結果> で知らせる（画面が文言を出し分ける）。
-func (h *lineHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *lineHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	query := parseQuery(r.URL.RawQuery)
 	// 利用者が同意画面でキャンセルすると、LINE は error を付けて戻す。
 	if _, ok := query["error"]; ok {
@@ -198,7 +199,7 @@ func (h *lineHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, s *
 	ctx := r.Context()
 	attempt, err := h.store.findOAuthAttempt(ctx, state)
 	if err != nil {
-		internalError(w, r, err)
+		httpx.InternalError(w, r, err)
 		return
 	}
 	// 無い・別の人の・期限切れの state は使えない（C4）。見つかった state は、使えなくても捨てる。
@@ -207,7 +208,7 @@ func (h *lineHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, s *
 		return
 	}
 	if err := h.store.discardOAuthAttempt(ctx, state); err != nil {
-		internalError(w, r, err)
+		httpx.InternalError(w, r, err)
 		return
 	}
 	if attempt.UserID != s.UserID || attempt.Expired {
@@ -225,7 +226,7 @@ func (h *lineHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, s *
 }
 
 // completeOAuth はコードをトークンに換え、LINE のアカウントを確かめて連携する。戻り値は画面へ知らせる結果。
-func (h *lineHandlers) completeOAuth(ctx context.Context, s *session, attempt *oauthAttempt, code string) (string, error) {
+func (h *lineHandlers) completeOAuth(ctx context.Context, s *httpx.Session, attempt *oauthAttempt, code string) (string, error) {
 	tokens, err := h.line.exchangeCode(ctx, code, attempt.CodeVerifier, attempt.RedirectURI)
 	if err != nil {
 		return "", err
@@ -302,15 +303,15 @@ func (h *lineHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, lineWebhookBodyLimit))
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
-		writeError(w, http.StatusRequestEntityTooLarge, "Payload too large")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Payload too large")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid payload")
+		httpx.WriteError(w, http.StatusBadRequest, "Invalid payload")
 		return
 	}
 	if !verifyLineSignature(body, r.Header.Get("x-line-signature"), h.channelSecret) {
-		writeError(w, http.StatusUnauthorized, "Invalid signature")
+		httpx.WriteError(w, http.StatusUnauthorized, "Invalid signature")
 		return
 	}
 	var payload struct {
@@ -318,7 +319,7 @@ func (h *lineHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		// 署名は合っているのに JSON として読めない。LINE がそんな本文を送ることは無いはず。
-		writeError(w, http.StatusBadRequest, "Invalid payload")
+		httpx.WriteError(w, http.StatusBadRequest, "Invalid payload")
 		return
 	}
 
@@ -329,7 +330,7 @@ func (h *lineHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 				"err", err.Error(), "eventType", event.Type, "webhookEventId", event.WebhookEventID)
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // handleEvent はイベント1つを、印を入れてから処理する。失敗したら印を消し、再送されたときにやり直せるようにする。

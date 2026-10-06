@@ -1,54 +1,10 @@
-package main
+package httpx
 
 import (
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
-
-// fakeSessions は DB の代わりに、Cookie の値で決まったセッションを返す。
-func fakeSessions(sessions map[string]*session) sessionLoader {
-	return func(r *http.Request) (*session, error) {
-		c, err := r.Cookie("test")
-		if err != nil {
-			return nil, nil
-		}
-		if c.Value == "db-down" {
-			return nil, errors.New("connection refused")
-		}
-		return sessions[c.Value], nil
-	}
-}
-
-var testSessions = map[string]*session{
-	"alice": {UserID: "u1", Email: "alice@example.com", Role: "user"},
-	"admin": {UserID: "u2", Email: "admin@example.com", Role: "admin", TwoFactorVerified: true},
-	// 管理者だが、2段階認証を通していないセッション（Google / GitHub でのログインなど）
-	"admin-no-2fa": {UserID: "u5", Email: "admin@example.com", Role: "admin"},
-	"demo":         {UserID: "u3", Email: demoEmail, Role: "user"},
-	"banned":       {UserID: "u4", Email: "banned@example.com", Role: "user", Banned: true},
-}
-
-// newTestRouter は入口の種類ごとに1本ずつルートを持つルーター。ハンドラまで来たら 200 と利用者 ID を返す。
-func newTestRouter() *router {
-	rt := newRouter(fakeSessions(testSessions))
-	reached := func(w http.ResponseWriter, r *http.Request, s *session) {
-		writeJSON(w, http.StatusOK, map[string]string{"userId": s.UserID})
-	}
-	rt.public("GET /api/public", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-	})
-	rt.user("GET /api/mine", reached)
-	rt.user("POST /api/mine", reached)
-	rt.user("DELETE /api/mine/{id}", reached)
-	rt.admin("GET /api/admin/thing", reached)
-	rt.admin("POST /api/admin/thing", reached)
-	rt.anonymousWrite("POST /api/report", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	return rt
-}
 
 func TestRouterAccess(t *testing.T) {
 	rt := newTestRouter()
@@ -165,22 +121,22 @@ func TestRouterSessionError(t *testing.T) {
 		t.Fatalf("status = %d, want 500", res.Code)
 	}
 	body := decodeJSON(t, res.Body.String())
-	if body["code"] != string(codeInternal) || body["error"] != serverMessage {
+	if body["code"] != string(CodeInternal) || body["error"] != ServerMessage {
 		t.Errorf("本文 = %v", body)
 	}
 }
 
 func TestRouterRoutes(t *testing.T) {
 	// 登録したルートは、入口の種類と一緒に一覧で読める。
-	got := newTestRouter().routes
-	want := []routeEntry{
-		{"GET /api/public", accessPublic},
-		{"GET /api/mine", accessUser},
-		{"POST /api/mine", accessUser},
-		{"DELETE /api/mine/{id}", accessUser},
-		{"GET /api/admin/thing", accessAdmin},
-		{"POST /api/admin/thing", accessAdmin},
-		{"POST /api/report", accessAnonymousWrite},
+	got := newTestRouter().Routes
+	want := []RouteEntry{
+		{"GET /api/public", AccessPublic},
+		{"GET /api/mine", AccessUser},
+		{"POST /api/mine", AccessUser},
+		{"DELETE /api/mine/{id}", AccessUser},
+		{"GET /api/admin/thing", AccessAdmin},
+		{"POST /api/admin/thing", AccessAdmin},
+		{"POST /api/report", AccessAnonymousWrite},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("routes = %v", got)
@@ -198,7 +154,7 @@ func TestRouterRejectsPatternWithoutMethod(t *testing.T) {
 			t.Error("メソッドの無いルートを登録できてしまった")
 		}
 	}()
-	newRouter(fakeSessions(nil)).user("/api/mine", nil)
+	NewRouter(fakeSessions(nil)).User("/api/mine", nil)
 }
 
 func TestRouteLabel(t *testing.T) {

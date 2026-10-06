@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -104,7 +105,7 @@ func run() error {
 			os.Getenv("AUTH_GOOGLE_ID"), os.Getenv("AUTH_GOOGLE_SECRET"),
 			os.Getenv("AUTH_GITHUB_ID"), os.Getenv("AUTH_GITHUB_SECRET")),
 	})
-	rt := newRouter((&sessionAuth{store: authHandlers.sessions}).load)
+	rt := httpx.NewRouter((&sessionAuth{store: authHandlers.sessions}).load)
 	registerAuthRoutes(rt, authHandlers)
 	registerBlogRoutes(rt, blogConfig{
 		serviceDomain: os.Getenv("MICROCMS_SERVICE_DOMAIN"),
@@ -218,106 +219,106 @@ func run() error {
 
 // registerAuthRoutes はログインの入口（auth_handlers.go の一覧）を登録する。本番では /api/auth/ で始まるものを
 // すべて Go へ送る（infra/nginx/juken-map-go-routes.conf）。
-func registerAuthRoutes(rt *router, h *authHandlers) {
-	rt.auth("GET /api/auth/session", h.session)
-	rt.auth("POST /api/auth/sign-up", h.signUp)
-	rt.auth("POST /api/auth/sign-in", h.signIn)
-	rt.auth("POST /api/auth/sign-out", h.signOut)
-	rt.auth("POST /api/auth/verify-email", h.verifyEmail)
-	rt.auth("POST /api/auth/verify-email/resend", h.resendVerification)
-	rt.auth("POST /api/auth/password/forgot", h.forgotPassword)
-	rt.auth("POST /api/auth/password/reset", h.resetPassword)
-	rt.auth("POST /api/auth/password/change", h.changePassword)
-	rt.auth("GET /api/auth/accounts", h.accounts)
-	rt.auth("POST /api/auth/delete-account", h.deleteAccount)
-	rt.auth("POST /api/auth/mfa/setup", h.mfaSetup)
-	rt.auth("POST /api/auth/mfa/confirm", h.mfaConfirm)
-	rt.auth("POST /api/auth/mfa/verify", h.mfaVerify)
-	rt.auth("POST /api/auth/oauth/{provider}", h.oauthStart)
-	rt.auth("GET /api/auth/callback/{provider}", h.oauthCallback)
+func registerAuthRoutes(rt *httpx.Router, h *authHandlers) {
+	rt.Auth("GET /api/auth/session", h.session)
+	rt.Auth("POST /api/auth/sign-up", h.signUp)
+	rt.Auth("POST /api/auth/sign-in", h.signIn)
+	rt.Auth("POST /api/auth/sign-out", h.signOut)
+	rt.Auth("POST /api/auth/verify-email", h.verifyEmail)
+	rt.Auth("POST /api/auth/verify-email/resend", h.resendVerification)
+	rt.Auth("POST /api/auth/password/forgot", h.forgotPassword)
+	rt.Auth("POST /api/auth/password/reset", h.resetPassword)
+	rt.Auth("POST /api/auth/password/change", h.changePassword)
+	rt.Auth("GET /api/auth/accounts", h.accounts)
+	rt.Auth("POST /api/auth/delete-account", h.deleteAccount)
+	rt.Auth("POST /api/auth/mfa/setup", h.mfaSetup)
+	rt.Auth("POST /api/auth/mfa/confirm", h.mfaConfirm)
+	rt.Auth("POST /api/auth/mfa/verify", h.mfaVerify)
+	rt.Auth("POST /api/auth/oauth/{provider}", h.oauthStart)
+	rt.Auth("GET /api/auth/callback/{provider}", h.oauthCallback)
 }
 
 // registerBlogRoutes はブログの記事の中継（blog.go）を登録する。
-func registerBlogRoutes(rt *router, c blogConfig) {
+func registerBlogRoutes(rt *httpx.Router, c blogConfig) {
 	blog := newBlogHandlers(c)
-	rt.public("GET /api/blog", blog.list)
-	rt.public("GET /api/blog/{id}", blog.detail)
+	rt.Public("GET /api/blog", blog.list)
+	rt.Public("GET /api/blog/{id}", blog.detail)
 }
 
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
-func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig, microcms microcmsWebhookConfig) {
+func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, line lineConfig, microcms microcmsWebhookConfig) {
 	study := &studyStore{db: db}
 	studyHandlers := &studyHandlers{store: study}
 
-	rt.public("GET /api/health", healthHandler(db))
-	rt.user("GET /api/dashboard", (&dashboardHandler{store: study}).serve)
-	rt.user("GET /api/study-logs", studyHandlers.listLogs)
-	rt.user("GET /api/study-logs/daily", studyHandlers.listDaily)
-	rt.user("GET /api/study-plans", studyHandlers.listPlans)
+	rt.Public("GET /api/health", healthHandler(db))
+	rt.User("GET /api/dashboard", (&dashboardHandler{store: study}).serve)
+	rt.User("GET /api/study-logs", studyHandlers.listLogs)
+	rt.User("GET /api/study-logs/daily", studyHandlers.listDaily)
+	rt.User("GET /api/study-plans", studyHandlers.listPlans)
 
 	studyLogWrites := &studyLogWriteHandlers{db: db, now: time.Now}
-	rt.user("POST /api/study-logs", studyLogWrites.create)
-	rt.user("PATCH /api/study-logs/{id}", studyLogWrites.update)
-	rt.user("DELETE /api/study-logs/{id}", studyLogWrites.delete)
+	rt.User("POST /api/study-logs", studyLogWrites.create)
+	rt.User("PATCH /api/study-logs/{id}", studyLogWrites.update)
+	rt.User("DELETE /api/study-logs/{id}", studyLogWrites.delete)
 
 	studyPlanWrites := &studyPlanWriteHandlers{db: db}
-	rt.user("POST /api/study-plans", studyPlanWrites.create)
-	rt.user("PATCH /api/study-plans/{id}", studyPlanWrites.update)
-	rt.user("DELETE /api/study-plans/{id}", studyPlanWrites.delete)
-	rt.user("POST /api/study-plans/{id}/complete", studyPlanWrites.complete)
+	rt.User("POST /api/study-plans", studyPlanWrites.create)
+	rt.User("PATCH /api/study-plans/{id}", studyPlanWrites.update)
+	rt.User("DELETE /api/study-plans/{id}", studyPlanWrites.delete)
+	rt.User("POST /api/study-plans/{id}/complete", studyPlanWrites.complete)
 
 	goals := &goalHandlers{store: &goalStore{db: db}}
-	rt.user("GET /api/goals", goals.list)
-	rt.user("GET /api/goals/first-choice", goals.firstChoice)
-	rt.user("POST /api/goals", goals.create)
-	rt.user("PUT /api/goals/{id}", goals.replace)
-	rt.user("PATCH /api/goals/{id}", goals.update)
-	rt.user("DELETE /api/goals/{id}", goals.delete)
+	rt.User("GET /api/goals", goals.list)
+	rt.User("GET /api/goals/first-choice", goals.firstChoice)
+	rt.User("POST /api/goals", goals.create)
+	rt.User("PUT /api/goals/{id}", goals.replace)
+	rt.User("PATCH /api/goals/{id}", goals.update)
+	rt.User("DELETE /api/goals/{id}", goals.delete)
 
 	textbookStore := newTextbookStore(db)
 	textbooks := &textbookHandlers{store: textbookStore}
-	rt.user("GET /api/textbooks", textbooks.list)
-	rt.user("GET /api/textbook-masters", textbooks.listMasters)
-	rt.user("POST /api/textbooks", textbooks.create)
-	rt.user("PATCH /api/textbooks/{id}", textbooks.updateProgress)
+	rt.User("GET /api/textbooks", textbooks.list)
+	rt.User("GET /api/textbook-masters", textbooks.listMasters)
+	rt.User("POST /api/textbooks", textbooks.create)
+	rt.User("PATCH /api/textbooks/{id}", textbooks.updateProgress)
 
 	prefs := &notificationPreferenceHandlers{store: &notificationPreferenceStore{db: db}}
-	rt.user("GET /api/notification-preferences", prefs.get)
-	rt.user("PUT /api/notification-preferences", prefs.save)
+	rt.User("GET /api/notification-preferences", prefs.get)
+	rt.User("PUT /api/notification-preferences", prefs.save)
 
 	profile := &profileHandlers{store: &userStore{db: db}}
-	rt.user("PUT /api/profile", profile.update)
+	rt.User("PUT /api/profile", profile.update)
 
 	universityStore := newUniversityStore(db)
 	universities := &universityHandlers{store: universityStore}
-	rt.user("GET /api/universities", universities.list)
-	rt.user("GET /api/universities/{id}", universities.detail)
+	rt.User("GET /api/universities", universities.list)
+	rt.User("GET /api/universities/{id}", universities.detail)
 
 	analytics := &analyticsHandlers{store: &analyticsStore{db: db}}
-	rt.user("POST /api/analytics/registration", analytics.registration)
-	rt.anonymousWrite("POST /api/csp-report", cspReport)
+	rt.User("POST /api/analytics/registration", analytics.registration)
+	rt.AnonymousWrite("POST /api/csp-report", cspReport)
 
 	lineRoutes := &lineHandlers{store: &sqlLineStore{db: db}, line: line.client, channelSecret: line.channelSecret, webOrigin: line.webOrigin}
-	rt.user("GET /api/line/connection", lineRoutes.connection)
-	rt.user("DELETE /api/line/connection", lineRoutes.disconnect)
-	rt.user("POST /api/line/account-link", lineRoutes.accountLink)
-	rt.oauth("GET /api/line/oauth/start", lineRoutes.oauthStart)
-	rt.oauth("GET /api/line/oauth/callback", lineRoutes.oauthCallback)
-	rt.webhook("POST /api/line/webhook", lineRoutes.webhook)
-	rt.publicWithSession("GET /line/settings", lineRoutes.settings)
+	rt.User("GET /api/line/connection", lineRoutes.connection)
+	rt.User("DELETE /api/line/connection", lineRoutes.disconnect)
+	rt.User("POST /api/line/account-link", lineRoutes.accountLink)
+	rt.OAuth("GET /api/line/oauth/start", lineRoutes.oauthStart)
+	rt.OAuth("GET /api/line/oauth/callback", lineRoutes.oauthCallback)
+	rt.Webhook("POST /api/line/webhook", lineRoutes.webhook)
+	rt.PublicWithSession("GET /line/settings", lineRoutes.settings)
 
 	// microCMS で記事を変えたら、記事を作り直すデプロイを動かす（JUK-112）。
 	microcmsWebhook := &microcmsWebhookHandler{secret: microcms.secret, trigger: newDeployTrigger(microcms.deployer)}
-	rt.webhook("POST /api/webhooks/microcms", microcmsWebhook.serve)
+	rt.Webhook("POST /api/webhooks/microcms", microcmsWebhook.serve)
 
 	adminUsers := &adminUserHandlers{store: &sqlAdminUserStore{db: db}, now: time.Now}
-	rt.admin("GET /api/admin/overview", adminUsers.overview)
-	rt.admin("GET /api/admin/users", adminUsers.listUsers)
-	rt.admin("POST /api/admin/users/{id}/ban", adminUsers.ban)
-	rt.admin("POST /api/admin/users/{id}/unban", adminUsers.unban)
-	rt.admin("DELETE /api/admin/users/{id}", adminUsers.deleteUser)
+	rt.Admin("GET /api/admin/overview", adminUsers.overview)
+	rt.Admin("GET /api/admin/users", adminUsers.listUsers)
+	rt.Admin("POST /api/admin/users/{id}/ban", adminUsers.ban)
+	rt.Admin("POST /api/admin/users/{id}/unban", adminUsers.unban)
+	rt.Admin("DELETE /api/admin/users/{id}", adminUsers.deleteUser)
 
 	// マスター編集。大学・学部を変えたら大学を探す画面の一覧（上の universities）の、参考書マスターを
 	// 変えたら GET /api/textbook-masters（上の textbooks）のキャッシュを捨てる。
@@ -326,29 +327,29 @@ func registerRoutes(rt *router, db *sql.DB, jobs jobConfig, line lineConfig, mic
 		universitiesChanged:    universityStore.explore.invalidate,
 		textbookMastersChanged: textbookStore.masters.invalidate,
 	}}
-	rt.admin("GET /api/admin/universities", masters.listUniversities)
-	rt.admin("POST /api/admin/universities", masters.createUniversity)
-	rt.admin("GET /api/admin/universities/{id}", masters.universityDetail)
-	rt.admin("PATCH /api/admin/universities/{id}", masters.updateUniversity)
-	rt.admin("DELETE /api/admin/universities/{id}", masters.deleteUniversity)
-	rt.admin("GET /api/admin/tags", masters.listTags)
-	rt.admin("POST /api/admin/faculties", masters.createFaculty)
-	rt.admin("PATCH /api/admin/faculties/{id}", masters.updateFaculty)
-	rt.admin("DELETE /api/admin/faculties/{id}", masters.deleteFaculty)
-	rt.admin("GET /api/admin/textbook-masters", masters.listTextbookMasters)
-	rt.admin("POST /api/admin/textbook-masters", masters.createTextbookMaster)
-	rt.admin("PATCH /api/admin/textbook-masters/{id}", masters.updateTextbookMaster)
-	rt.admin("DELETE /api/admin/textbook-masters/{id}", masters.deleteTextbookMaster)
+	rt.Admin("GET /api/admin/universities", masters.listUniversities)
+	rt.Admin("POST /api/admin/universities", masters.createUniversity)
+	rt.Admin("GET /api/admin/universities/{id}", masters.universityDetail)
+	rt.Admin("PATCH /api/admin/universities/{id}", masters.updateUniversity)
+	rt.Admin("DELETE /api/admin/universities/{id}", masters.deleteUniversity)
+	rt.Admin("GET /api/admin/tags", masters.listTags)
+	rt.Admin("POST /api/admin/faculties", masters.createFaculty)
+	rt.Admin("PATCH /api/admin/faculties/{id}", masters.updateFaculty)
+	rt.Admin("DELETE /api/admin/faculties/{id}", masters.deleteFaculty)
+	rt.Admin("GET /api/admin/textbook-masters", masters.listTextbookMasters)
+	rt.Admin("POST /api/admin/textbook-masters", masters.createTextbookMaster)
+	rt.Admin("PATCH /api/admin/textbook-masters/{id}", masters.updateTextbookMaster)
+	rt.Admin("DELETE /api/admin/textbook-masters/{id}", masters.deleteTextbookMaster)
 
 	cron := &cronHandler{notifier: newDailyNotifier(&sqlNotificationStore{db: db}, jobs.messenger), now: time.Now}
-	rt.job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)
+	rt.Job("POST /api/cron/daily-study-notifications", jobs.dailyNotificationSecret, cron.dailyNotifications)
 
 	// シミュレーションの API は SIMULATION_ENABLED=on のときだけ存在する（付けなければ 404）。
 	if jobs.simulationEnabled {
 		sim := &simHandlers{store: &simStore{db: db}}
-		rt.job("GET /api/sim/state", jobs.simulationSecret, sim.state)
-		rt.job("POST /api/sim/users", jobs.simulationSecret, sim.markUser)
-		rt.job("PATCH /api/sim/users/{seq}", jobs.simulationSecret, sim.updateUser)
+		rt.Job("GET /api/sim/state", jobs.simulationSecret, sim.state)
+		rt.Job("POST /api/sim/users", jobs.simulationSecret, sim.markUser)
+		rt.Job("PATCH /api/sim/users/{seq}", jobs.simulationSecret, sim.updateUser)
 	}
 }
 
@@ -381,10 +382,10 @@ type serverOptions struct {
 //  3. recoverPanic  ハンドラの panic を 500 にする
 //  4. limitInFlight 同時処理数の上限を超えたら 503
 //  5. withDeadline  1リクエストの時間の上限
-//  6. ルーター       入口の種類ごとの拒否（router.go）→ ハンドラ
+//  6. ルーター       入口の種類ごとの拒否（internal/httpx/router.go）→ ハンドラ
 //
 // 順番は Node の server.ts と同じ考え方（メトリクス → エラー処理 → 過負荷 → 認証）。
-func newServerHandler(rt *router, m *telemetry.Metrics, opts serverOptions) http.Handler {
+func newServerHandler(rt *httpx.Router, m *telemetry.Metrics, opts serverOptions) http.Handler {
 	var h http.Handler = rt
 	h = withDeadline(requestTimeout, h)
 	h = limitInFlight(opts.maxInFlight, h)

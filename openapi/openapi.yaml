@@ -1760,7 +1760,7 @@ components:
         error: { type: string }
 
     ValidationError:
-      description: 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の query.go）
+      description: 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の internal/httpx/response.go）
       type: object
       required: [error, code, field]
       properties:
@@ -1794,7 +1794,7 @@ components:
             - FST_ERR_CTP_BODY_TOO_LARGE
             - FST_ERR_CTP_INVALID_MEDIA_TYPE
             - FST_ERR_CTP_INVALID_CONTENT_LENGTH
-            # 利用者単位の回数制限を超えた（429、Go の user_rate_limit.go）
+            # 利用者単位の回数制限を超えた（429、Go の internal/httpx/user_rate_limit.go）
             - TOO_MANY_REQUESTS
           x-enum-varnames:
             - ServerErrorCodeInternal

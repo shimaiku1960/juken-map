@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 期待値は、Node の Zod（goalSchema・updateGoalSchema・patchGoalSchema、zod 4.5.4）に
@@ -31,9 +33,9 @@ func TestReadGoalInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			in := readObject(parse(t, tt.body))
-			in.number("facultyId", facultyIDRule)
-			in.optionalEnum("status", goalStatuses, false)
+			in := httpx.ReadObject(parse(t, tt.body))
+			in.Number("facultyId", facultyIDRule)
+			in.OptionalEnum("status", goalStatuses, false)
 			checkIssue(t, in, tt.want)
 		})
 	}
@@ -47,9 +49,9 @@ func TestReadGoalUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			in := readObject(parse(t, tt.body))
-			in.optionalInt("facultyId", facultyIDRule, false)
-			in.optionalEnum("status", goalStatuses, false)
+			in := httpx.ReadObject(parse(t, tt.body))
+			in.OptionalInt("facultyId", facultyIDRule, false)
+			in.OptionalEnum("status", goalStatuses, false)
 			checkIssue(t, in, tt.want)
 		})
 	}
@@ -67,10 +69,10 @@ func TestReadGoalPatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			in := readObject(parse(t, tt.body))
-			in.optionalBool("isFirstChoice")
-			in.optionalString("note", goalNoteRule, true)
-			in.optionalEnum("status", goalStatuses, false)
+			in := httpx.ReadObject(parse(t, tt.body))
+			in.OptionalBool("isFirstChoice")
+			in.OptionalString("note", goalNoteRule, true)
+			in.OptionalEnum("status", goalStatuses, false)
 			checkIssue(t, in, tt.want)
 		})
 	}

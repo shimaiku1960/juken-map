@@ -13,6 +13,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -60,7 +61,7 @@ func serve(h http.Handler, method, path, cookie string, header ...string) *httpt
 	return res
 }
 
-func newTestServer(m *telemetry.Metrics, maxInFlight int) (http.Handler, *router) {
+func newTestServer(m *telemetry.Metrics, maxInFlight int) (http.Handler, *httpx.Router) {
 	rt := newTestRouter()
 	return newServerHandler(rt, m, serverOptions{maxInFlight: maxInFlight}), rt
 }
@@ -180,7 +181,7 @@ func TestNotFoundBody(t *testing.T) {
 	res := serve(h, "GET", "/api/nothing", "")
 	body := decodeJSON(t, res.Body.String())
 	// Node の spa.ts と同じ形。reqId は応答ヘッダーと同じ値。
-	if body["code"] != string(codeNotFound) || body["error"] != fallbackClientMessage || body["reqId"] != res.Header().Get("X-Request-Id") {
+	if body["code"] != string(httpx.CodeNotFound) || body["error"] != httpx.FallbackClientMessage || body["reqId"] != res.Header().Get("X-Request-Id") {
 		t.Errorf("本文 = %v", body)
 	}
 	if got := res.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
@@ -190,8 +191,8 @@ func TestNotFoundBody(t *testing.T) {
 
 func TestRecoverPanic(t *testing.T) {
 	buf := captureLogs(t)
-	rt := newRouter(fakeSessions(nil))
-	rt.public("GET /api/boom", func(w http.ResponseWriter, r *http.Request) {
+	rt := httpx.NewRouter(fakeSessions(nil))
+	rt.Public("GET /api/boom", func(w http.ResponseWriter, r *http.Request) {
 		panic("SELECT * FROM secret_table")
 	})
 	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 10})
@@ -206,7 +207,7 @@ func TestRecoverPanic(t *testing.T) {
 		t.Errorf("原因が応答に出ている: %s", res.Body)
 	}
 	body := decodeJSON(t, res.Body.String())
-	if body["code"] != string(codeInternal) || body["error"] != serverMessage {
+	if body["code"] != string(httpx.CodeInternal) || body["error"] != httpx.ServerMessage {
 		t.Errorf("本文 = %v", body)
 	}
 	lines := logLines(t, buf)
@@ -222,16 +223,16 @@ func TestRecoverPanic(t *testing.T) {
 func TestLimitInFlight(t *testing.T) {
 	buf := captureLogs(t)
 	entered, release := make(chan struct{}), make(chan struct{})
-	rt := newRouter(fakeSessions(nil))
-	rt.public("GET /api/slow", func(w http.ResponseWriter, r *http.Request) {
+	rt := httpx.NewRouter(fakeSessions(nil))
+	rt.Public("GET /api/slow", func(w http.ResponseWriter, r *http.Request) {
 		entered <- struct{}{}
 		<-release
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
-	rt.public("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	rt.Public("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
-	rt.public("GET /assets/app.js", func(w http.ResponseWriter, r *http.Request) {
+	rt.Public("GET /assets/app.js", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 1})
@@ -247,7 +248,7 @@ func TestLimitInFlight(t *testing.T) {
 		t.Fatalf("status = %d, Retry-After = %q", res.Code, res.Header().Get("Retry-After"))
 	}
 	body := decodeJSON(t, res.Body.String())
-	if body["code"] != string(codeOverloaded) || body["error"] != overloadedMessage {
+	if body["code"] != string(httpx.CodeOverloaded) || body["error"] != httpx.OverloadedMessage {
 		t.Errorf("本文 = %v", body)
 	}
 	if shed := findLog(logLines(t, buf), "request shed: overloaded"); shed == nil || shed["level"] != float64(40) {
@@ -278,8 +279,8 @@ func TestRequestDeadline(t *testing.T) {
 	captureLogs(t)
 	var deadline time.Time
 	var ok bool
-	rt := newRouter(fakeSessions(nil))
-	rt.public("GET /api/check", func(w http.ResponseWriter, r *http.Request) {
+	rt := httpx.NewRouter(fakeSessions(nil))
+	rt.Public("GET /api/check", func(w http.ResponseWriter, r *http.Request) {
 		deadline, ok = r.Context().Deadline()
 	})
 	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 10})

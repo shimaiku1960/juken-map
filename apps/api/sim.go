@@ -15,6 +15,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/simulation"
 )
@@ -94,9 +95,6 @@ func (u simUpdate) activity() simulation.Activity {
 
 // ここから下は、本文とパスの値を Node（Zod と Number()）と同じ規則で読む部分。
 
-// maxSafeInteger は JavaScript の Number.MAX_SAFE_INTEGER。Zod の int() はこれを超える数を弾く。
-const maxSafeInteger = 1<<53 - 1
-
 // positiveInt は Zod の z.number().int().positive() と同じ判定（1.0 は整数、1e20 は安全な範囲の外）。
 func positiveInt(v any) (int64, bool) {
 	n, ok := v.(json.Number)
@@ -104,7 +102,7 @@ func positiveInt(v any) (int64, bool) {
 		return 0, false
 	}
 	f, err := n.Float64()
-	if err != nil || f != math.Trunc(f) || f <= 0 || f > maxSafeInteger {
+	if err != nil || f != math.Trunc(f) || f <= 0 || f > httpx.MaxSafeInteger {
 		return 0, false
 	}
 	return int64(f), true
@@ -185,21 +183,21 @@ type simHandlers struct {
 func (h *simHandlers) state(w http.ResponseWriter, r *http.Request) {
 	state, err := h.store.state(r.Context())
 	if err != nil {
-		internalError(w, r, fmt.Errorf("sim state: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("sim state: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, state)
+	httpx.WriteJSON(w, http.StatusOK, state)
 }
 
 // markUser は POST /api/sim/users。
 func (h *simHandlers) markUser(w http.ResponseWriter, r *http.Request) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
-	m, ok := parseSimMark(body.json)
+	m, ok := parseSimMark(body.JSON)
 	if !ok {
-		writeError(w, http.StatusBadRequest, invalidInput)
+		httpx.WriteError(w, http.StatusBadRequest, invalidInput)
 		return
 	}
 	err := simulation.Mark(r.Context(), h.store.db, m.Email, m.Seq, string(m.Cohort), time.Now().UTC())
@@ -210,14 +208,14 @@ func (h *simHandlers) markUser(w http.ResponseWriter, r *http.Request) {
 
 // updateUser は PATCH /api/sim/users/{seq}。
 func (h *simHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
 	seq, seqOK := parseSeq(r.PathValue("seq"))
-	u, bodyOK := parseSimUpdate(body.json)
+	u, bodyOK := parseSimUpdate(body.JSON)
 	if !seqOK || !bodyOK {
-		writeError(w, http.StatusBadRequest, invalidInput)
+		httpx.WriteError(w, http.StatusBadRequest, invalidInput)
 		return
 	}
 	err := simulation.RecordActivity(r.Context(), h.store.db, seq, u.activity())
@@ -232,11 +230,11 @@ func writeSimError(w http.ResponseWriter, r *http.Request, op string, err error)
 	case err == nil:
 		return false
 	case errors.Is(err, simulation.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
+		httpx.WriteError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, simulation.ErrDuplicate):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.WriteError(w, http.StatusConflict, err.Error())
 	default:
-		internalError(w, r, fmt.Errorf("%s: %w", op, err))
+		httpx.InternalError(w, r, fmt.Errorf("%s: %w", op, err))
 	}
 	return true
 }

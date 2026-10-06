@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
 
@@ -26,70 +27,70 @@ import (
 type studyLogInput struct {
 	date       string
 	minutes    int64
-	subject    optional[string]
-	textbookID optional[int64]
-	rangeStart optional[int64]
-	rangeEnd   optional[int64]
-	rangeUnit  optional[string]
-	memo       optional[string]
+	subject    httpx.Optional[string]
+	textbookID httpx.Optional[int64]
+	rangeStart httpx.Optional[int64]
+	rangeEnd   httpx.Optional[int64]
+	rangeUnit  httpx.Optional[string]
+	memo       httpx.Optional[string]
 }
 
 // positiveIntRule は z.number().int().positive()（文言は Zod の既定）。
-var positiveIntRule = numberRule{int: true, positive: true}
+var positiveIntRule = httpx.NumberRule{Int: true, Positive: true}
 
 // minutesRule は実績の時間（分）。実績の記録と予定の完了で同じ。
-var minutesRule = numberRule{
-	typeMessage:     "学習時間を入力してください",
-	int:             true,
-	intMessage:      "整数で入力してください",
-	positive:        true,
-	positiveMessage: "1分以上を入力してください",
-	max:             1440,
-	maxMessage:      "24時間（1440分）以内で入力してください",
+var minutesRule = httpx.NumberRule{
+	TypeMessage:     "学習時間を入力してください",
+	Int:             true,
+	IntMessage:      "整数で入力してください",
+	Positive:        true,
+	PositiveMessage: "1分以上を入力してください",
+	Max:             1440,
+	MaxMessage:      "24時間（1440分）以内で入力してください",
 }
 
 // readStudyLogInput は createStudyLogSchema と同じ順に確かめる。today は日本時間の今日（YYYY-MM-DD）。
-func readStudyLogInput(body any, today string) (*objectInput, studyLogInput) {
-	in := readObject(body)
+func readStudyLogInput(body any, today string) (*httpx.ObjectInput, studyLogInput) {
+	in := httpx.ReadObject(body)
 	var v studyLogInput
-	v.date = in.string("date", ymdDateRule("日付を選択してください",
-		// Node と同じく文字列のまま比べる（形は ymdDateRule で確かめてある）。
-		stringCheck{ok: func(s string) bool { return s <= today }, code: "future_date", message: "未来日は実績として記録できません"}))
-	v.minutes = int64(in.number("minutes", minutesRule))
-	v.subject = in.optionalString("subject", stringRule{checks: []stringCheck{subjectCheck}}, true)
-	v.textbookID = in.optionalInt("textbookId", positiveIntRule, true)
-	v.rangeStart = in.optionalInt("rangeStart", positiveIntRule, true)
-	v.rangeEnd = in.optionalInt("rangeEnd", positiveIntRule, true)
-	v.rangeUnit = in.optionalString("rangeUnit", stringRule{checks: []stringCheck{rangeUnitCheck}}, true)
-	v.memo = in.optionalString("memo", memoRule, false)
+	v.date = in.String("date", httpx.YMDDateRule("日付を選択してください",
+		// Node と同じく文字列のまま比べる（形は httpx.YMDDateRule で確かめてある）。
+		httpx.StringCheck{OK: func(s string) bool { return s <= today }, Code: "future_date", Message: "未来日は実績として記録できません"}))
+	v.minutes = int64(in.Number("minutes", minutesRule))
+	v.subject = in.OptionalString("subject", httpx.StringRule{Checks: []httpx.StringCheck{subjectCheck}}, true)
+	v.textbookID = in.OptionalInt("textbookId", positiveIntRule, true)
+	v.rangeStart = in.OptionalInt("rangeStart", positiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", positiveIntRule, true)
+	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
+	v.memo = in.OptionalString("memo", memoRule, false)
 
-	in.rangeRules(v.rangeStart, v.rangeEnd, v.rangeUnit)
+	rangeRules(in, v.rangeStart, v.rangeEnd, v.rangeUnit)
 	return in, v
 }
 
 // record は持ち主に渡す形にする。
 func (v studyLogInput) record() studyrecord.LogInput {
 	return studyrecord.LogInput{
-		Date: dateFromYMD(v.date), Minutes: v.minutes, Subject: v.subject.field(), TextbookID: v.textbookID.field(),
-		RangeStart: v.rangeStart.field(), RangeEnd: v.rangeEnd.field(), RangeUnit: v.rangeUnit.field(), Memo: v.memo.field(),
+		Date: dateFromYMD(v.date), Minutes: v.minutes, Subject: v.subject.Field(), TextbookID: v.textbookID.Field(),
+		RangeStart: v.rangeStart.Field(), RangeEnd: v.rangeEnd.Field(), RangeUnit: v.rangeUnit.Field(), Memo: v.memo.Field(),
 	}
 }
 
 // rangeRules は superRefine の範囲の3つの規則（実績・予定・予定の完了で同じ）。Zod と同じ順に足す。
-func (in *objectInput) rangeRules(start, end optional[int64], unit optional[string]) {
-	hasStart, hasEnd := !start.isNull(), !end.isNull()
+func rangeRules(in *httpx.ObjectInput, start, end httpx.Optional[int64], unit httpx.Optional[string]) {
+	hasStart, hasEnd := !start.IsNull(), !end.IsNull()
 	if hasStart != hasEnd {
 		field := "rangeStart"
 		if hasStart {
 			field = "rangeEnd"
 		}
-		in.addIssue("range_incomplete", field, "範囲は開始と終了の両方を入力してください")
+		in.AddIssue("range_incomplete", field, "範囲は開始と終了の両方を入力してください")
 	}
-	if hasStart && hasEnd && *start.value > *end.value {
-		in.addIssue("range_end_before_start", "rangeEnd", "終了は開始以上にしてください")
+	if hasStart && hasEnd && *start.Value > *end.Value {
+		in.AddIssue("range_end_before_start", "rangeEnd", "終了は開始以上にしてください")
 	}
-	if (hasStart || hasEnd) && unit.isNull() {
-		in.addIssue("range_unit_required", "rangeUnit", "単位を選択してください")
+	if (hasStart || hasEnd) && unit.IsNull() {
+		in.AddIssue("range_unit_required", "rangeUnit", "単位を選択してください")
 	}
 }
 
@@ -105,13 +106,13 @@ func writeStudyRecordError(w http.ResponseWriter, r *http.Request, op string, er
 	var rangeErr *studyrecord.RangeError
 	switch {
 	case errors.Is(err, studyrecord.ErrNotFound):
-		writeError(w, http.StatusNotFound, "Not found")
+		httpx.WriteError(w, http.StatusNotFound, "Not found")
 	case errors.Is(err, studyrecord.ErrTextbookNotOwned), errors.Is(err, studyrecord.ErrTextbooksNotOwned), errors.As(err, &rangeErr):
-		writeError(w, http.StatusBadRequest, err.Error())
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, studyrecord.ErrAlreadyCompleted), errors.Is(err, studyrecord.ErrPlanHasLog):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.WriteError(w, http.StatusConflict, err.Error())
 	default:
-		internalError(w, r, fmt.Errorf("%s: %w", op, err))
+		httpx.InternalError(w, r, fmt.Errorf("%s: %w", op, err))
 	}
 }
 
@@ -125,13 +126,13 @@ func (h *studyLogWriteHandlers) today() string {
 }
 
 // create は POST /api/study-logs。
-func (h *studyLogWriteHandlers) create(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+func (h *studyLogWriteHandlers) create(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
-	in, input := readStudyLogInput(body.value(), h.today())
-	if in.reject(w) {
+	in, input := readStudyLogInput(body.Value(), h.today())
+	if in.Reject(w) {
 		return
 	}
 	created, err := studyrecord.CreateLog(r.Context(), h.db, s.UserID, input.record(), nowMillis())
@@ -139,7 +140,7 @@ func (h *studyLogWriteHandlers) create(w http.ResponseWriter, r *http.Request, s
 		writeStudyRecordError(w, r, "study-logs create", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, apischema.CreatedStudyLog{
+	httpx.WriteJSON(w, http.StatusCreated, apischema.CreatedStudyLog{
 		ID: created.ID, UserID: created.UserID, Date: created.Date, Subject: created.Subject, Minutes: created.Minutes,
 		TextbookID: created.TextbookID, RangeStart: created.RangeStart, RangeEnd: created.RangeEnd, RangeUnit: created.RangeUnit,
 		Memo: created.Memo, StudyPlanID: created.StudyPlanID, CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt,
@@ -149,27 +150,27 @@ func (h *studyLogWriteHandlers) create(w http.ResponseWriter, r *http.Request, s
 
 // update は PATCH /api/study-logs/{id}。Node と同じく、本文は先に読み（415・413 は ID の確かめより先）、
 // 自分の実績かを本文の確かめより先に見る（無ければ本文に関わらず 404）。
-func (h *studyLogWriteHandlers) update(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+func (h *studyLogWriteHandlers) update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
-	id, ok := pathID(w, r, "id")
+	id, ok := httpx.PathID(w, r, "id")
 	if !ok {
 		return
 	}
 	var exists bool
 	if err := h.db.QueryRowContext(r.Context(),
 		"SELECT EXISTS (SELECT 1 FROM StudyLog WHERE id = ? AND userId = ?)", id, s.UserID).Scan(&exists); err != nil {
-		internalError(w, r, fmt.Errorf("study-logs find: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("study-logs find: %w", err))
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusNotFound, "Not found")
+		httpx.WriteError(w, http.StatusNotFound, "Not found")
 		return
 	}
-	in, input := readStudyLogInput(body.value(), h.today())
-	if in.reject(w) {
+	in, input := readStudyLogInput(body.Value(), h.today())
+	if in.Reject(w) {
 		return
 	}
 	updated, err := studyrecord.UpdateLog(r.Context(), h.db, s.UserID, id, input.record(), nowMillis())
@@ -177,15 +178,15 @@ func (h *studyLogWriteHandlers) update(w http.ResponseWriter, r *http.Request, s
 		writeStudyRecordError(w, r, "study-logs update", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, apischema.StudyLogRow(updated))
+	httpx.WriteJSON(w, http.StatusOK, apischema.StudyLogRow(updated))
 }
 
 // delete は DELETE /api/study-logs/{id}。
-func (h *studyLogWriteHandlers) delete(w http.ResponseWriter, r *http.Request, s *session) {
-	if _, ok := readBody(w, r, defaultBodyLimit); !ok {
+func (h *studyLogWriteHandlers) delete(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
-	id, ok := pathID(w, r, "id")
+	id, ok := httpx.PathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -193,5 +194,5 @@ func (h *studyLogWriteHandlers) delete(w http.ResponseWriter, r *http.Request, s
 		writeStudyRecordError(w, r, "study-logs delete", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, apischema.Deleted{Message: apischema.DeletedMessageDeleted})
+	httpx.WriteJSON(w, http.StatusOK, apischema.Deleted{Message: apischema.DeletedMessageDeleted})
 }

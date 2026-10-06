@@ -11,6 +11,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -122,10 +123,10 @@ func recoverPanic(next http.Handler) http.Handler {
 			if v == http.ErrAbortHandler {
 				panic(v)
 			}
-			slog.ErrorContext(r.Context(), "request failed", "err", fmt.Sprint(v), "statusCode", 500, "code", codeInternal)
+			slog.ErrorContext(r.Context(), "request failed", "err", fmt.Sprint(v), "statusCode", 500, "code", httpx.CodeInternal)
 			// 本文を書き始めた後だと、ステータスはもう変えられない。書く前なら 500 を返す。
 			if rec, ok := w.(*statusRecorder); !ok || !rec.wroteHeader {
-				writeErrorBody(w, r, http.StatusInternalServerError, codeInternal)
+				httpx.WriteErrorBody(w, r, http.StatusInternalServerError, httpx.CodeInternal)
 			}
 		}()
 		next.ServeHTTP(w, r)

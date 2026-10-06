@@ -1,4 +1,4 @@
-package main
+package httpx
 
 import (
 	"encoding/json"
@@ -29,8 +29,8 @@ import (
 // 認証・トークンの確認はルーターが先に済ませるので、ここに来るのは通してよいリクエストだけ
 // （Node も onRequest の拒否が本文の解析より先に走る）。
 
-// defaultBodyLimit は Node の BODY_LIMIT（error-handling.ts）と同じ 1MiB。
-const defaultBodyLimit = 1 << 20
+// DefaultBodyLimit は Node の BODY_LIMIT（error-handling.ts）と同じ 1MiB。
+const DefaultBodyLimit = 1 << 20
 
 // bodyMediaTypes は受け付ける Content-Type と、その本文を JSON として読むか。
 // CSP の報告の2つは csp-report.ts がアプリ全体に登録しているので、どのルートでも JSON として読む。
@@ -43,36 +43,36 @@ var bodyMediaTypes = map[string]bool{
 
 // requestBody は読んだ本文。
 type requestBody struct {
-	raw string
-	// json は JSON として読めたときの値（数は json.Number）。読めなかった・本文が無い・JSON の null のときは nil。
-	json any
-	// parsed は JSON として読めたか（本文が null なら json は nil のまま true）。
-	parsed bool
-	// text は text/plain で受けたか。
-	text bool
+	Raw string
+	// JSON は JSON として読めたときの値（数は json.Number）。読めなかった・本文が無い・JSON の null のときは nil。
+	JSON any
+	// Parsed は JSON として読めたか（本文が null なら JSON は nil のまま true）。
+	Parsed bool
+	// Text は text/plain で受けたか。
+	Text bool
 }
 
-// jsUndefined は「値が無い」を表す。JSON の null（nil）と区別するため、別の値にする。
+// JSUndefined は「値が無い」を表す。JSON の null（nil）と区別するため、別の値にする。
 // Node で言えば request.body が undefined のとき、オブジェクトにキーが無いときにあたる。
-type jsUndefined struct{}
+type JSUndefined struct{}
 
-// value は Node のハンドラが受け取る request.body と同じ値を返す。入力チェック（validate.go）に渡す。
-//   - 本文なし・JSON として読めない：jsUndefined{}
+// Value は Node のハンドラが受け取る request.body と同じ値を返す。入力チェック（validate.go）に渡す。
+//   - 本文なし・JSON として読めない：JSUndefined{}
 //   - text/plain：string
 //   - JSON：nil（null）・bool・json.Number・string・[]any・map[string]any
-func (b requestBody) value() any {
+func (b requestBody) Value() any {
 	switch {
-	case b.text:
-		return b.raw
-	case b.parsed:
-		return b.json
+	case b.Text:
+		return b.Raw
+	case b.Parsed:
+		return b.JSON
 	}
-	return jsUndefined{}
+	return JSUndefined{}
 }
 
-// readBody は本文を読む。受け付けない形なら 415、大きすぎれば 413、UTF-8 として不正で
+// ReadBody は本文を読む。受け付けない形なら 415、大きすぎれば 413、UTF-8 として不正で
 // Content-Length と合わなければ 400 を書いて ok=false を返す。
-func readBody(w http.ResponseWriter, r *http.Request, limit int64) (body requestBody, ok bool) {
+func ReadBody(w http.ResponseWriter, r *http.Request, limit int64) (body requestBody, ok bool) {
 	ct, hasCT := r.Header["Content-Type"]
 	if !hasCT {
 		if isEmptyBody(r) {
@@ -90,17 +90,17 @@ func readBody(w http.ResponseWriter, r *http.Request, limit int64) (body request
 	text, status, code, err := readBodyText(r, limit)
 	switch {
 	case err != nil:
-		internalError(w, r, err)
+		InternalError(w, r, err)
 		return requestBody{}, false
 	case status != 0:
 		rejectBody(w, r, status, code)
 		return requestBody{}, false
 	}
 
-	body = requestBody{raw: text, text: !asJSON}
+	body = requestBody{Raw: text, Text: !asJSON}
 	if asJSON && text != "" {
-		if v, err := parseJSON(text); err == nil {
-			body.json, body.parsed = v, true
+		if v, err := ParseJSON(text); err == nil {
+			body.JSON, body.Parsed = v, true
 		}
 	}
 	return body, true
@@ -232,10 +232,10 @@ func maximalSubpart(b []byte) int {
 	return n
 }
 
-// parseJSON は JSON.parse と同じく本文全体を1つの値として読む。前後の空白以外の余りがあれば失敗にする。
+// ParseJSON は JSON.parse と同じく本文全体を1つの値として読む。前後の空白以外の余りがあれば失敗にする。
 // 数は json.Number で受ける（1.5 と 1 を区別して、整数かどうかを Zod と同じく確かめるため。
 // 範囲を超えた数も、JavaScript と同じく ±Infinity として読める。jsNumber を参照）。
-func parseJSON(text string) (any, error) {
+func ParseJSON(text string) (any, error) {
 	dec := json.NewDecoder(strings.NewReader(text))
 	dec.UseNumber()
 	var v any
@@ -262,5 +262,5 @@ func jsNumber(n json.Number) float64 {
 // rejectBody は本文を読まずに断る。Node の setErrorHandler と同じく、4xx は warn でログに残す。
 func rejectBody(w http.ResponseWriter, r *http.Request, status int, code apischema.ServerErrorCode) {
 	slog.WarnContext(r.Context(), "request rejected", "statusCode", status, "code", code)
-	writeErrorBody(w, r, status, code)
+	WriteErrorBody(w, r, status, code)
 }

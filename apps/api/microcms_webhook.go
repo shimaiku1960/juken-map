@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // microCMS で記事を公開・更新・削除したら、本番の記事（ビルド時に SSG したもの、JUK-110）を作り直す（JUK-112）。
@@ -72,21 +74,21 @@ func (h *microcmsWebhookHandler) serve(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, microcmsWebhookBodyLimit))
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
-		writeError(w, http.StatusRequestEntityTooLarge, "Payload too large")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Payload too large")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid payload")
+		httpx.WriteError(w, http.StatusBadRequest, "Invalid payload")
 		return
 	}
 	// 署名は JSON として読む前の本文で確かめる（読み直した JSON は元のバイト列と一致しない）。
 	if !verifyMicrocmsSignature(body, r.Header.Get("x-microcms-signature"), h.secret) {
-		writeError(w, http.StatusUnauthorized, "Invalid signature")
+		httpx.WriteError(w, http.StatusUnauthorized, "Invalid signature")
 		return
 	}
 	var payload microcmsPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid payload")
+		httpx.WriteError(w, http.StatusBadRequest, "Invalid payload")
 		return
 	}
 
@@ -94,7 +96,7 @@ func (h *microcmsWebhookHandler) serve(w http.ResponseWriter, r *http.Request) {
 	if !payload.changesPublished() {
 		slog.InfoContext(ctx, "[microcms-webhook] Published content unchanged. Skip deploy.",
 			"api", payload.API, "contentId", payload.ID, "type", payload.Type)
-		writeJSON(w, http.StatusOK, map[string]string{"deploy": "skipped"})
+		httpx.WriteJSON(w, http.StatusOK, map[string]string{"deploy": "skipped"})
 		return
 	}
 	result, err := h.trigger.request(ctx)
@@ -102,12 +104,12 @@ func (h *microcmsWebhookHandler) serve(w http.ResponseWriter, r *http.Request) {
 		// microCMS の管理画面の Webhook のログに失敗として残る。そのときは deploy.yml を手で動かす。
 		slog.ErrorContext(ctx, "[microcms-webhook] Failed to dispatch deploy.", "err", err.Error(),
 			"api", payload.API, "contentId", payload.ID, "type", payload.Type)
-		writeError(w, http.StatusBadGateway, "Failed to dispatch deploy")
+		httpx.WriteError(w, http.StatusBadGateway, "Failed to dispatch deploy")
 		return
 	}
 	slog.InfoContext(ctx, "[microcms-webhook] Deploy requested.", "deploy", result,
 		"api", payload.API, "contentId", payload.ID, "type", payload.Type)
-	writeJSON(w, http.StatusOK, map[string]string{"deploy": result})
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"deploy": result})
 }
 
 // changesPublished は、公開中の中身が変わったか（作り直すと本番の見た目が変わるか）を返す。

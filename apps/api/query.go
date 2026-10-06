@@ -3,12 +3,11 @@ package main
 import (
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // クエリ文字列の読み方と、不正なときの 400 の形を Node（Fastify ＋ Zod）に揃える。
@@ -42,17 +41,6 @@ func unescapeQuery(s string) string {
 	return s
 }
 
-// writeValidationError は 400 を返す。Node と同じく、弾いた理由の最初の1件だけを返す。
-func writeValidationError(w http.ResponseWriter, code, field, message string) {
-	writeJSON(w, http.StatusBadRequest, apischema.ValidationError{Error: message, Code: code, Field: &field})
-}
-
-// ymdPattern は Node の ymdField（z.string().regex(/^\d{4}-\d{2}-\d{2}$/)）と同じ形。
-// 形だけを見て、13月や2月30日は通す（下の parseYMD で扱う）。
-var ymdPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-
-const ymdMessage = "日付は YYYY-MM-DD で指定してください"
-
 // dateRangeQuery は ?from=&to= を読んだ結果。省かれたものは nil。
 type dateRangeQuery struct {
 	from, to *string
@@ -73,10 +61,10 @@ func readDateRangeQuery(w http.ResponseWriter, r *http.Request) (dateRangeQuery,
 		case !ok:
 		case len(values) > 1:
 			// 同じキーが2回以上あると Fastify では配列になり、Zod の z.string() が invalid_type で弾く。
-			writeValidationError(w, "invalid_type", f.key, "Invalid input: expected string, received array")
+			httpx.WriteValidationError(w, "invalid_type", f.key, "Invalid input: expected string, received array")
 			return dateRangeQuery{}, false
-		case !ymdPattern.MatchString(values[0]):
-			writeValidationError(w, "invalid_format", f.key, ymdMessage)
+		case !httpx.YMDPattern.MatchString(values[0]):
+			httpx.WriteValidationError(w, "invalid_format", f.key, httpx.YMDMessage)
 			return dateRangeQuery{}, false
 		default:
 			*f.dst = &values[0]

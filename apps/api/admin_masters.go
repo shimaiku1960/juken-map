@@ -10,12 +10,13 @@ import (
 	"strconv"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbookmaster"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
 // 管理者ページのマスター編集（/admin/masters、JUK-78）。Node の routes/admin-masters.ts と
-// services/master-service.ts にあたる。どれも rt.admin（管理者＋2段階認証を通したセッションだけ）で登録する。
+// services/master-service.ts にあたる。どれも rt.Admin（管理者＋2段階認証を通したセッションだけ）で登録する。
 //
 // 削除は「誰にも使われていない行」に限る。
 //   - 学部：志望校（FinalGoal）が参照していれば消せない（DB も ON DELETE RESTRICT で拒む）
@@ -104,13 +105,13 @@ func rejectMasterFailure(w http.ResponseWriter, m masterMessages, failure master
 	case masterOK:
 		return false
 	case masterNotFound:
-		writeError(w, http.StatusNotFound, m.notFound)
+		httpx.WriteError(w, http.StatusNotFound, m.notFound)
 	case masterDuplicate:
-		writeError(w, http.StatusConflict, m.duplicate)
+		httpx.WriteError(w, http.StatusConflict, m.duplicate)
 	case masterInUse:
-		writeError(w, http.StatusConflict, fmt.Sprintf(m.inUse, count))
+		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf(m.inUse, count))
 	case masterInvalidTags:
-		writeError(w, http.StatusBadRequest, "存在しないタグが含まれています")
+		httpx.WriteError(w, http.StatusBadRequest, "存在しないタグが含まれています")
 	}
 	return true
 }
@@ -146,14 +147,14 @@ type adminMasterHandlers struct {
 }
 
 // ---- 入力 ----
-// 規則の正は src/shared/validations/master.ts の Zod のスキーマ（validate.go の冒頭を参照）。
+// 規則の正は src/shared/validations/master.ts の Zod のスキーマ（internal/httpx/validate.go の冒頭を参照）。
 
-// masterID は path の {id} を読む。判定は pathID と同じだが、Node のマスター編集は readIdParam を通さず
+// masterID は path の {id} を読む。判定は httpx.PathID と同じだが、Node のマスター編集は readIdParam を通さず
 // idParamsSchema を sendValidationError で返すので、本文は ValidationError の形になる。
 func masterID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := r.PathValue("id")
-	if !idPattern.MatchString(raw) {
-		(&validationIssue{code: "invalid_format", field: "id", message: "Invalid string: must match pattern /^[1-9][0-9]{0,14}$/"}).write(w)
+	if !httpx.IDPattern.MatchString(raw) {
+		(&httpx.ValidationIssue{Code: "invalid_format", Field: "id", Message: "Invalid string: must match pattern /^[1-9][0-9]{0,14}$/"}).Write(w)
 		return 0, false
 	}
 	// 形は上で確かめたので、ここで失敗することはない。
@@ -163,28 +164,28 @@ func masterID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 
 // readMasterSearchQuery は一覧の q（z.string().trim().max(100).optional()）を読む。
 // Node は空の q を「絞らない」として扱う（q || undefined）ので、"" はそのまま返す。
-func readMasterSearchQuery(query map[string][]string) (string, *validationIssue) {
+func readMasterSearchQuery(query map[string][]string) (string, *httpx.ValidationIssue) {
 	values, ok := query["q"]
 	if !ok {
 		return "", nil
 	}
 	// Fastify は同じキーが2つ以上あると値を配列にする。
 	if len(values) != 1 {
-		return "", invalidType("q", "string", []any{})
+		return "", httpx.InvalidType("q", "string", []any{})
 	}
-	q := jsTrim(values[0])
-	if codePointLength(q) > adminMasterQueryMax {
-		return "", &validationIssue{code: "too_big", field: "q", message: "Too big: expected string to have <=100 characters"}
+	q := httpx.JSTrim(values[0])
+	if httpx.CodePointLength(q) > adminMasterQueryMax {
+		return "", &httpx.ValidationIssue{Code: "too_big", Field: "q", Message: "Too big: expected string to have <=100 characters"}
 	}
 	return q, nil
 }
 
 // masterNameRule は Node の name(label)：z.string().trim().min(1).max(100)。
-func masterNameRule(label string) stringRule {
-	return stringRule{
-		trimFirst: true,
-		min:       1, minMessage: label + "を入力してください",
-		max: 100, maxMessage: label + "は100文字以内で入力してください",
+func masterNameRule(label string) httpx.StringRule {
+	return httpx.StringRule{
+		TrimFirst: true,
+		Min:       1, MinMessage: label + "を入力してください",
+		Max: 100, MaxMessage: label + "は100文字以内で入力してください",
 	}
 }
 

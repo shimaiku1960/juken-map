@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 func TestParseQuery(t *testing.T) {
@@ -84,11 +86,11 @@ func TestDateRangeWhere(t *testing.T) {
 
 func TestStudyListQueryErrors(t *testing.T) {
 	// DB に届く前に返る場面だけを見る（store は nil のまま）。DB を使う場面は E2E（nginx を通して Go に届く、JUK-96）が通す。
-	rt := newRouter(fakeSessions(testSessions))
+	rt := httpx.NewRouter(fakeSessions(testSessions))
 	h := &studyHandlers{}
-	rt.user("GET /api/study-logs", h.listLogs)
-	rt.user("GET /api/study-logs/daily", h.listDaily)
-	rt.user("GET /api/study-plans", h.listPlans)
+	rt.User("GET /api/study-logs", h.listLogs)
+	rt.User("GET /api/study-logs/daily", h.listDaily)
+	rt.User("GET /api/study-plans", h.listPlans)
 
 	// 本文は Node（routes/validation-error.ts）が返すものと同じ「文言・コード・項目」
 	formatError := func(key string) string {

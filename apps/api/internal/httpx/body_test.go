@@ -1,4 +1,4 @@
-package main
+package httpx
 
 import (
 	"encoding/json"
@@ -43,7 +43,7 @@ func TestReadBodyMediaTypes(t *testing.T) {
 				req.Header.Set("Content-Type", tt.contentType)
 			}
 			res := httptest.NewRecorder()
-			body, ok := readBody(res, req, tt.limit)
+			body, ok := ReadBody(res, req, tt.limit)
 
 			if tt.wantStatus != 0 {
 				if ok || res.Code != tt.wantStatus {
@@ -54,8 +54,8 @@ func TestReadBodyMediaTypes(t *testing.T) {
 			if !ok {
 				t.Fatalf("読めなかった（status %d、本文 %s）", res.Code, res.Body)
 			}
-			if (body.json != nil) != tt.wantJSON {
-				t.Errorf("json = %#v, want JSON: %v", body.json, tt.wantJSON)
+			if (body.JSON != nil) != tt.wantJSON {
+				t.Errorf("json = %#v, want JSON: %v", body.JSON, tt.wantJSON)
 			}
 		})
 	}
@@ -73,7 +73,7 @@ func TestReadBodyErrors(t *testing.T) {
 			req := httptest.NewRequest("POST", "/", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", tt.contentType)
 			res := httptest.NewRecorder()
-			readBody(res, req, 10)
+			ReadBody(res, req, 10)
 			assertJSONEqual(t, res.Body.String(), tt.want)
 		})
 	}
@@ -83,12 +83,12 @@ func TestReadBodyNumbers(t *testing.T) {
 	// 数は json.Number で受け取る（1 と 1.0 と 1.5 を、整数かどうかの判定まで区別できるように）。
 	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"seq":1.5}`))
 	req.Header.Set("Content-Type", "application/json")
-	body, ok := readBody(httptest.NewRecorder(), req, defaultBodyLimit)
+	body, ok := ReadBody(httptest.NewRecorder(), req, DefaultBodyLimit)
 	if !ok {
 		t.Fatal("読めなかった")
 	}
-	if n, isNumber := body.json.(map[string]any)["seq"].(json.Number); !isNumber || n.String() != "1.5" {
-		t.Errorf("seq = %#v", body.json)
+	if n, isNumber := body.JSON.(map[string]any)["seq"].(json.Number); !isNumber || n.String() != "1.5" {
+		t.Errorf("seq = %#v", body.JSON)
 	}
 }
 
@@ -96,21 +96,21 @@ func TestReadBodyNumbers(t *testing.T) {
 
 // prefsHandler は PUT /api/notification-preferences の入力チェックまでを通す。保存の代わりに 200 で入力を返す。
 func prefsHandler(w http.ResponseWriter, r *http.Request) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+	body, ok := ReadBody(w, r, DefaultBodyLimit)
 	if !ok {
 		return
 	}
-	in := readObject(body.value())
+	in := ReadObject(body.Value())
 	p := apischema.NotificationPreference{
-		EmailMorningEnabled: in.boolean("emailMorningEnabled"),
-		EmailEveningEnabled: in.boolean("emailEveningEnabled"),
-		LineMorningEnabled:  in.boolean("lineMorningEnabled"),
-		LineEveningEnabled:  in.boolean("lineEveningEnabled"),
+		EmailMorningEnabled: in.Boolean("emailMorningEnabled"),
+		EmailEveningEnabled: in.Boolean("emailEveningEnabled"),
+		LineMorningEnabled:  in.Boolean("lineMorningEnabled"),
+		LineEveningEnabled:  in.Boolean("lineEveningEnabled"),
 	}
-	if in.reject(w) {
+	if in.Reject(w) {
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	WriteJSON(w, http.StatusOK, p)
 }
 
 func TestReadBodyLikeNode(t *testing.T) {
@@ -166,10 +166,10 @@ func TestReadBodyLikeNode(t *testing.T) {
 		{"; の後ろが壊れていても読む", "application/json ;;; x", `{}`, false, 400, missingFirst},
 		{"前後の空白", "  application/json ", `{}`, false, 400, missingFirst},
 
-		{"1MiB ちょうどは読む", "application/json", strings.Repeat(" ", defaultBodyLimit), false, 400, undefinedBody},
-		{"1MiB を超えたら 413", "application/json", strings.Repeat(" ", defaultBodyLimit+1), false, 413, tooLarge},
-		{"chunked でも 413", "application/json", strings.Repeat(" ", defaultBodyLimit+1), true, 413, tooLarge},
-		{"text/plain も 413", "text/plain", strings.Repeat(" ", defaultBodyLimit+1), false, 413, tooLarge},
+		{"1MiB ちょうどは読む", "application/json", strings.Repeat(" ", DefaultBodyLimit), false, 400, undefinedBody},
+		{"1MiB を超えたら 413", "application/json", strings.Repeat(" ", DefaultBodyLimit+1), false, 413, tooLarge},
+		{"chunked でも 413", "application/json", strings.Repeat(" ", DefaultBodyLimit+1), true, 413, tooLarge},
+		{"text/plain も 413", "text/plain", strings.Repeat(" ", DefaultBodyLimit+1), false, 413, tooLarge},
 		{"UTF-8 として不正なバイトは Content-Length と合わず 400", "application/json", "{\"a\":\"\xff\"}", false, 400,
 			`{"error":"リクエストを処理できませんでした","code":"FST_ERR_CTP_INVALID_CONTENT_LENGTH","reqId":""}`},
 	}

@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 const testMicrocmsSecret = "microcms-test-secret"
@@ -43,13 +45,13 @@ func microcmsSign(body string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func newMicrocmsTestRouter(secret string, d deployer) *router {
-	rt := newRouter(fakeSessions(nil))
+func newMicrocmsTestRouter(secret string, d deployer) *httpx.Router {
+	rt := httpx.NewRouter(fakeSessions(nil))
 	registerRoutes(rt, nil, jobConfig{}, lineConfig{}, microcmsWebhookConfig{secret: secret, deployer: d})
 	return rt
 }
 
-func postMicrocms(rt *router, body, signature string) *httptest.ResponseRecorder {
+func postMicrocms(rt *httpx.Router, body, signature string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest("POST", "/api/webhooks/microcms", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if signature != "" {

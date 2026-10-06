@@ -4,6 +4,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
 // 期待値は、Node（Zod 4.5.4）に同じ本文を送って返ってきた 400（2026-09-30 に手元で確かめた）。
@@ -81,13 +83,13 @@ func TestReadStudyLogInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, err := parseJSON(tt.body)
+			body, err := httpx.ParseJSON(tt.body)
 			if err != nil {
 				t.Fatal(err)
 			}
 			in, _ := readStudyLogInput(body, today)
 			res := httptest.NewRecorder()
-			rejected := in.reject(res)
+			rejected := in.Reject(res)
 			if tt.want == "" {
 				if rejected {
 					t.Fatalf("弾かれた: %s", res.Body)
@@ -103,16 +105,16 @@ func TestReadStudyLogInput(t *testing.T) {
 }
 
 func TestReadStudyLogInputValues(t *testing.T) {
-	body, _ := parseJSON(`{"date":"2026-09-01","minutes":30,"subject":null,"rangeStart":1,"rangeEnd":10,"rangeUnit":"page","memo":"  メモ  "}`)
+	body, _ := httpx.ParseJSON(`{"date":"2026-09-01","minutes":30,"subject":null,"rangeStart":1,"rangeEnd":10,"rangeUnit":"page","memo":"  メモ  "}`)
 	in, v := readStudyLogInput(body, "2026-09-30")
-	if in.issue != nil {
-		t.Fatal(in.issue)
+	if in.Issue != nil {
+		t.Fatal(in.Issue)
 	}
-	if v.date != "2026-09-01" || v.minutes != 30 || *v.memo.value != "メモ" {
+	if v.date != "2026-09-01" || v.minutes != 30 || *v.memo.Value != "メモ" {
 		t.Errorf("値 = %+v", v)
 	}
 	// subject は null、textbookId は無い。どちらも DB には null で書くが、PATCH の比べ方が違う
-	if !v.subject.present || v.subject.value != nil || v.textbookID.present {
+	if !v.subject.Present || v.subject.Value != nil || v.textbookID.Present {
 		t.Errorf("subject = %+v, textbookId = %+v", v.subject, v.textbookID)
 	}
 }
@@ -123,7 +125,7 @@ func TestIsCalendarYMD(t *testing.T) {
 		"2026-02-30": false, "2025-02-29": false, "1900-02-29": false, "2025-13-01": false,
 		"2025-00-10": false, "2025-04-31": false, "2025-01-00": false,
 	} {
-		if got := isCalendarYMD(s); got != want {
+		if got := httpx.IsCalendarYMD(s); got != want {
 			t.Errorf("isCalendarYMD(%s) = %v, want %v", s, got, want)
 		}
 	}

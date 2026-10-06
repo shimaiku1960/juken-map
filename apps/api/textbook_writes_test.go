@@ -65,7 +65,7 @@ func TestReadTextbookInput(t *testing.T) {
 					t.Fatalf("通ってしまった: %+v", input)
 				}
 				res := httptest.NewRecorder()
-				issue.write(res)
+				issue.Write(res)
 				assertJSONEqual(t, res.Body.String(), tt.want)
 				return
 			}

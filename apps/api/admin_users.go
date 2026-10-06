@@ -17,11 +17,12 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 // 管理者ページ（/admin）の利用者の管理（JUK-78）。Node の routes/admin.ts と services/admin-service.ts にあたる。
-// どれも rt.admin（管理者＋2段階認証を通したセッションだけ）で登録する。守るのはルーターで、
+// どれも rt.Admin（管理者＋2段階認証を通したセッションだけ）で登録する。守るのはルーターで、
 // 画面がメニューを出し分けているのは見た目のためだけ。
 //
 // 停止：bannedAt を書き、その人のセッション（AuthSession）を消して今の画面を落とす。次のログインは、
@@ -49,7 +50,7 @@ const kindSQL = `CASE
   ELSE 'real'
 END`
 
-var kindParams = []any{seedEmailLike, demoEmail}
+var kindParams = []any{seedEmailLike, httpx.DemoEmail}
 
 // protectedReason は、相手はいるが操作できない理由。
 type protectedReason string
@@ -87,7 +88,7 @@ func (t *adminTarget) protection(actorID string) (protectedReason, bool) {
 		return protectedSelf, true
 	case t.Role == "admin":
 		return protectedAdmin, true
-	case t.Email != nil && *t.Email == demoEmail:
+	case t.Email != nil && *t.Email == httpx.DemoEmail:
 		return protectedDemo, true
 	}
 	return "", false
@@ -121,34 +122,34 @@ type adminUserHandlers struct {
 }
 
 // overview は GET /api/admin/overview。
-func (h *adminUserHandlers) overview(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *adminUserHandlers) overview(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	o, err := h.store.overview(r.Context(), h.now())
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin overview: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin overview: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, o)
+	httpx.WriteJSON(w, http.StatusOK, o)
 }
 
 // listUsers は GET /api/admin/users。
-func (h *adminUserHandlers) listUsers(w http.ResponseWriter, r *http.Request, _ *session) {
+func (h *adminUserHandlers) listUsers(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	kind, q, page, issue := readAdminUsersQuery(parseQuery(r.URL.RawQuery))
 	if issue != nil {
-		issue.write(w)
+		issue.Write(w)
 		return
 	}
 	list, err := h.store.listUsers(r.Context(), kind, q, page)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin users: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin users: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.WriteJSON(w, http.StatusOK, list)
 }
 
 // ban は POST /api/admin/users/{id}/ban。
-func (h *adminUserHandlers) ban(w http.ResponseWriter, r *http.Request, s *session) {
+func (h *adminUserHandlers) ban(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	// 本文は使わないが、Node（Fastify）はハンドラより先に本文を読むので、受け付けない形なら同じく 415・413 にする。
-	if _, ok := readBody(w, r, defaultBodyLimit); !ok {
+	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
 	id, ok := adminUserID(w, r)
@@ -163,21 +164,21 @@ func (h *adminUserHandlers) ban(w http.ResponseWriter, r *http.Request, s *sessi
 	// 押し直しても最初に止めた日時を保つ（Node の COALESCE と同じ。account.Suspend が DB の値を返す）。
 	banned, err := h.store.ban(r.Context(), id, nowMillis())
 	if errors.Is(err, account.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
+		httpx.WriteError(w, http.StatusNotFound, "ユーザーが見つかりません")
 		return
 	}
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin ban: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin ban: %w", err))
 		return
 	}
 	removed := int(banned.SessionsRemoved)
 	logAdminUserAction(r.Context(), s.UserID, "ban", target, "sessionsRemoved", removed)
-	writeJSON(w, http.StatusOK, apischema.AdminBanResult{ID: id, Email: target.Email, BannedAt: banned.BannedAt, SessionsRemoved: removed})
+	httpx.WriteJSON(w, http.StatusOK, apischema.AdminBanResult{ID: id, Email: target.Email, BannedAt: banned.BannedAt, SessionsRemoved: removed})
 }
 
 // unban は POST /api/admin/users/{id}/unban。守りは見ない（Node と同じ。止まっていなければ何も変わらない）。
-func (h *adminUserHandlers) unban(w http.ResponseWriter, r *http.Request, s *session) {
-	if _, ok := readBody(w, r, defaultBodyLimit); !ok {
+func (h *adminUserHandlers) unban(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
 	id, ok := adminUserID(w, r)
@@ -186,30 +187,30 @@ func (h *adminUserHandlers) unban(w http.ResponseWriter, r *http.Request, s *ses
 	}
 	target, err := h.store.findTarget(r.Context(), id)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin unban: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin unban: %w", err))
 		return
 	}
 	if target == nil {
-		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
+		httpx.WriteError(w, http.StatusNotFound, "ユーザーが見つかりません")
 		return
 	}
 	err = h.store.unban(r.Context(), id, nowMillis())
 	if errors.Is(err, account.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
+		httpx.WriteError(w, http.StatusNotFound, "ユーザーが見つかりません")
 		return
 	}
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin unban: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin unban: %w", err))
 		return
 	}
 	logAdminUserAction(r.Context(), s.UserID, "unban", target)
-	writeJSON(w, http.StatusOK, apischema.AdminUserRef{ID: id, Email: target.Email})
+	httpx.WriteJSON(w, http.StatusOK, apischema.AdminUserRef{ID: id, Email: target.Email})
 }
 
 // deleteUser は DELETE /api/admin/users/{id}。取り消せないので、画面で打ち込んだメールアドレスが
 // 本人のものと一致しないと消さない（一覧が古いまま別の行を消す事故を、id だけに頼らず止める）。
-func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s *session) {
-	body, ok := readBody(w, r, defaultBodyLimit)
+func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
@@ -218,12 +219,12 @@ func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s
 	if !ok {
 		return
 	}
-	in := readObject(body.value())
-	email := in.string("email", stringRule{
-		min: 1, minMessage: "Too small: expected string to have >=1 characters",
-		max: adminUserIDMax, maxMessage: "Too big: expected string to have <=191 characters",
+	in := httpx.ReadObject(body.Value())
+	email := in.String("email", httpx.StringRule{
+		Min: 1, MinMessage: "Too small: expected string to have >=1 characters",
+		Max: adminUserIDMax, MaxMessage: "Too big: expected string to have <=191 characters",
 	})
-	if in.reject(w) {
+	if in.Reject(w) {
 		return
 	}
 
@@ -233,36 +234,36 @@ func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s
 	}
 	// メールの無い相手は、空白だけを打てば空文字どうしで一致してしまうので、比べる前に断る（Node と同じ）。
 	if target.Email == nil || *target.Email == "" {
-		writeError(w, http.StatusConflict, protectedMessages[protectedNoEmail])
+		httpx.WriteError(w, http.StatusConflict, protectedMessages[protectedNoEmail])
 		return
 	}
-	if !strings.EqualFold(*target.Email, jsTrim(email)) {
-		writeError(w, http.StatusBadRequest, "メールアドレスが一致しません")
+	if !strings.EqualFold(*target.Email, httpx.JSTrim(email)) {
+		httpx.WriteError(w, http.StatusBadRequest, "メールアドレスが一致しません")
 		return
 	}
 
 	removed, err := h.store.deleteUser(r.Context(), id)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin delete user: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin delete user: %w", err))
 		return
 	}
 	logAdminUserAction(r.Context(), s.UserID, "delete", target, "removed", removed)
-	writeJSON(w, http.StatusOK, apischema.AdminDeleteResult{ID: id, Email: target.Email, Removed: removed})
+	httpx.WriteJSON(w, http.StatusOK, apischema.AdminDeleteResult{ID: id, Email: target.Email, Removed: removed})
 }
 
 // operableTarget は停止・削除できる相手を引く。いなければ 404、守られていれば 409 を送って false を返す。
 func (h *adminUserHandlers) operableTarget(w http.ResponseWriter, r *http.Request, id, actorID string) (*adminTarget, bool) {
 	target, err := h.store.findTarget(r.Context(), id)
 	if err != nil {
-		internalError(w, r, fmt.Errorf("admin find user: %w", err))
+		httpx.InternalError(w, r, fmt.Errorf("admin find user: %w", err))
 		return nil, false
 	}
 	if target == nil {
-		writeError(w, http.StatusNotFound, "ユーザーが見つかりません")
+		httpx.WriteError(w, http.StatusNotFound, "ユーザーが見つかりません")
 		return nil, false
 	}
 	if reason, protected := target.protection(actorID); protected {
-		writeError(w, http.StatusConflict, protectedMessages[reason])
+		httpx.WriteError(w, http.StatusConflict, protectedMessages[reason])
 		return nil, false
 	}
 	return target, true
@@ -287,10 +288,10 @@ func adminUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	id := r.PathValue("id")
 	switch {
 	case id == "":
-		(&validationIssue{code: "too_small", field: "id", message: "Too small: expected string to have >=1 characters"}).write(w)
+		(&httpx.ValidationIssue{Code: "too_small", Field: "id", Message: "Too small: expected string to have >=1 characters"}).Write(w)
 		return "", false
-	case codePointLength(id) > adminUserIDMax:
-		(&validationIssue{code: "too_big", field: "id", message: "Too big: expected string to have <=191 characters"}).write(w)
+	case httpx.CodePointLength(id) > adminUserIDMax:
+		(&httpx.ValidationIssue{Code: "too_big", Field: "id", Message: "Too big: expected string to have <=191 characters"}).Write(w)
 		return "", false
 	}
 	return id, true
@@ -298,12 +299,12 @@ func adminUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 // readAdminUsersQuery は Node の listUsersQuerySchema と同じ規則でクエリを読む。Zod と同じく kind・q・page の順に
 // 確かめ、最初の1件で止める。Fastify は同じキーが2つ以上あると値を配列にするので、値の数で見分ける。
-func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string, int, *validationIssue) {
+func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string, int, *httpx.ValidationIssue) {
 	kind := apischema.UserKindReal // z.enum(USER_KINDS).default("real")
 	if values, ok := query["kind"]; ok {
 		if len(values) != 1 || !apischema.UserKind(values[0]).Valid() {
-			return "", "", 0, &validationIssue{code: "invalid_value", field: "kind",
-				message: `Invalid option: expected one of "real"|"sim"|"seed"|"demo"`}
+			return "", "", 0, &httpx.ValidationIssue{Code: "invalid_value", Field: "kind",
+				Message: `Invalid option: expected one of "real"|"sim"|"seed"|"demo"`}
 		}
 		kind = apischema.UserKind(values[0])
 	}
@@ -311,10 +312,10 @@ func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string,
 	q := "" // z.string().max(191).optional()
 	if values, ok := query["q"]; ok {
 		if len(values) != 1 {
-			return "", "", 0, invalidType("q", "string", []any{})
+			return "", "", 0, httpx.InvalidType("q", "string", []any{})
 		}
-		if codePointLength(values[0]) > 191 {
-			return "", "", 0, &validationIssue{code: "too_big", field: "q", message: "Too big: expected string to have <=191 characters"}
+		if httpx.CodePointLength(values[0]) > 191 {
+			return "", "", 0, &httpx.ValidationIssue{Code: "too_big", Field: "q", Message: "Too big: expected string to have <=191 characters"}
 		}
 		q = values[0]
 	}
@@ -327,7 +328,7 @@ func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string,
 }
 
 // readPageQuery は z.coerce.number().int().positive().max(max).default(1) の page を読む。
-func readPageQuery(query map[string][]string, max float64) (int, *validationIssue) {
+func readPageQuery(query map[string][]string, max float64) (int, *httpx.ValidationIssue) {
 	values, ok := query["page"]
 	if !ok {
 		return 1, nil
@@ -335,9 +336,9 @@ func readPageQuery(query map[string][]string, max float64) (int, *validationIssu
 	// z.coerce.number() は Number(値)。配列は "1,2" のように , でつないだ文字列として数に直る（["3"] は 3）。
 	f := jsNumberFromString(strings.Join(values, ","))
 	if math.IsNaN(f) {
-		return 0, &validationIssue{code: "invalid_type", field: "page", message: "Invalid input: expected number, received NaN"}
+		return 0, &httpx.ValidationIssue{Code: "invalid_type", Field: "page", Message: "Invalid input: expected number, received NaN"}
 	}
-	n, issue := checkNumber("page", jsonNumberOf(f), numberRule{int: true, positive: true, max: max})
+	n, issue := httpx.CheckNumber("page", jsonNumberOf(f), httpx.NumberRule{Int: true, Positive: true, Max: max})
 	if issue != nil {
 		return 0, issue
 	}
@@ -350,7 +351,7 @@ func readPageQuery(query map[string][]string, max float64) (int, *validationIssu
 //   - 0x・0o・0b で始まる整数（符号は付けられない）
 //   - 10進の数（1e3・.5・5. も可）。Go の ParseFloat だけが読む書き方（1_0・inf・0x1p3）は NaN
 func jsNumberFromString(s string) float64 {
-	s = jsTrim(s)
+	s = httpx.JSTrim(s)
 	switch s {
 	case "":
 		return 0
@@ -381,10 +382,10 @@ func jsNumberFromString(s string) float64 {
 
 var jsDecimalPattern = regexp.MustCompile(`^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$`)
 
-// jsonNumberOf は数を checkNumber に渡せる形（JSON から読んだ数）にする。
+// jsonNumberOf は数を httpx.CheckNumber に渡せる形（JSON から読んだ数）にする。
 func jsonNumberOf(f float64) any {
 	if math.IsInf(f, 0) {
-		// checkNumber は JSON から読んだ ±Infinity を json.Number の "±Inf" で受け取る（jsNumber が ParseFloat で読む）。
+		// httpx.CheckNumber は JSON から読んだ ±Infinity を json.Number の "±Inf" で受け取る（jsNumber が ParseFloat で読む）。
 		if f > 0 {
 			return json.Number("+Inf")
 		}
@@ -486,7 +487,7 @@ func (st *sqlAdminUserStore) listUsers(ctx context.Context, kind apischema.UserK
 	list := apischema.AdminUserList{Users: []apischema.AdminUser{}, Page: page, PageSize: adminUsersPageSize}
 	where := kindSQL + " = ?"
 	whereParams := append(append([]any{}, kindParams...), kind)
-	if q = jsTrim(q); q != "" {
+	if q = httpx.JSTrim(q); q != "" {
 		where += " AND u.email LIKE ?"
 		whereParams = append(whereParams, "%"+escapeLike(q)+"%")
 	}

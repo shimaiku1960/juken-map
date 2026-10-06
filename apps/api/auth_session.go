@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -77,7 +77,7 @@ func (st *sessionStore) create(ctx context.Context, r *http.Request, userID, rol
 	expiresAt = now.Add(policy.absolute)
 	if err := account.CreateSession(ctx, st.db, account.NewSession{
 		TokenHash: hash, UserID: userID, ExpiresAt: expiresAt, IdleTimeout: policy.idle, MFAVerified: mfaVerified,
-		IPAddress: truncate(clientIP(r), 64), UserAgent: truncate(r.UserAgent(), 512),
+		IPAddress: truncate(httpx.ClientIP(r), 64), UserAgent: truncate(r.UserAgent(), 512),
 	}, now); err != nil {
 		return "", time.Time{}, err
 	}
@@ -85,14 +85,14 @@ func (st *sessionStore) create(ctx context.Context, r *http.Request, userID, rol
 }
 
 // load はトークンからセッションを読む。期限（上限・使わないとき）を過ぎていれば (nil, nil)。
-func (st *sessionStore) load(ctx context.Context, raw string) (*session, error) {
+func (st *sessionStore) load(ctx context.Context, raw string) (*httpx.Session, error) {
 	hash := hashToken(raw)
 	if hash == nil {
 		return nil, nil
 	}
 	now := st.clock()
 	// 期限は DB の値とアプリの時刻で比べる（DB の NOW() は接続の時間帯に左右される。時刻を進めるテストもできる）。
-	var s session
+	var s httpx.Session
 	var email, role sql.NullString
 	var stale bool
 	err := st.db.QueryRowContext(ctx,
@@ -123,14 +123,14 @@ func (st *sessionStore) revoke(ctx context.Context, sessionID string) error {
 	return account.RevokeSession(ctx, st.db, sessionID)
 }
 
-// sessionAuth はルーター（router.go）にセッションの読み方を渡す。
+// sessionAuth はルーター（internal/httpx/router.go）にセッションの読み方を渡す。
 type sessionAuth struct {
 	store *sessionStore
 }
 
 // load はリクエストの Cookie からセッションを読む。ログインしていなければ (nil, nil)。
-// 断るかどうか（401・403）はルーター（router.go の requireSession）が決める。
-func (a *sessionAuth) load(r *http.Request) (*session, error) {
+// 断るかどうか（401・403）はルーター（internal/httpx/router.go の requireSession）が決める。
+func (a *sessionAuth) load(r *http.Request) (*httpx.Session, error) {
 	c, err := r.Cookie(sessionCookieName)
 	if err != nil {
 		return nil, nil
@@ -159,20 +159,6 @@ func setCookie(w http.ResponseWriter, name, value string, maxAge time.Duration, 
 
 func clearCookie(w http.ResponseWriter, name string, sameSite http.SameSite) {
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: sameSite})
-}
-
-// clientIP は接続元の IP。本番と開発の nginx は X-Forwarded-For を接続元（$remote_addr）で上書きして渡すので、
-// その値を使う（利用者が送ってきた値は nginx が捨てている）。nginx を通らないとき（テスト）は接続そのものの値。
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		first, _, _ := strings.Cut(xff, ",")
-		return strings.TrimSpace(first)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 // truncate は列の長さに収める。文字の途中で切れたバイトは捨てる（壊れた UTF-8 を DB に渡さない）。
