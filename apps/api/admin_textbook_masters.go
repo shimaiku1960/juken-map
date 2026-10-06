@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbookmaster"
 )
@@ -107,7 +108,7 @@ type textbookMasterInput struct {
 	name               string
 	publisher, edition *string
 	isbn               string
-	metrics            []AdminTextbookMasterMetric
+	metrics            []apischema.AdminTextbookMasterMetric
 }
 
 // record は持ち主に渡す形にする。
@@ -167,17 +168,17 @@ func normalizeISBN(s string) string {
 
 // readMetrics は総量の候補：z.array(metric).min(1).max(6).refine(単位が重ならない).refine(既定がちょうど1つ)。
 // 要素 → min・max → refine の順に確かめる。
-func readMetrics(in *objectInput) []AdminTextbookMasterMetric {
+func readMetrics(in *objectInput) []apischema.AdminTextbookMasterMetric {
 	items := in.array("metrics", "総量を1つ以上入力してください")
 	if in.issue != nil {
 		return nil
 	}
-	metrics := make([]AdminTextbookMasterMetric, 0, len(items))
+	metrics := make([]apischema.AdminTextbookMasterMetric, 0, len(items))
 	for i, item := range items {
 		m := readObjectAt(item, in.field("metrics")+"."+strconv.Itoa(i))
-		metric := AdminTextbookMasterMetric{
+		metric := apischema.AdminTextbookMasterMetric{
 			Unit: m.string("unit", stringRule{checks: []stringCheck{{
-				ok:   func(s string) bool { return TextbookMasterInputMetricsUnit(s).Valid() },
+				ok:   func(s string) bool { return apischema.TextbookMasterInputMetricsUnit(s).Valid() },
 				code: "invalid_range_unit", message: "単位を選んでください",
 			}}}),
 			// z.number({ error: "総量を入力してください" }).int(…).min(1, …).max(100000, …)。
@@ -222,7 +223,7 @@ func readMetrics(in *objectInput) []AdminTextbookMasterMetric {
 // ---- DB ----
 
 // selectAdminTextbookMasters は参考書マスターを、総量の候補と利用者の参考書の数をつけて引く（先頭200件まで）。
-func selectAdminTextbookMasters(ctx context.Context, db database.Runner, where string, args ...any) ([]AdminTextbookMaster, error) {
+func selectAdminTextbookMasters(ctx context.Context, db database.Runner, where string, args ...any) ([]apischema.AdminTextbookMaster, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT tm.id, tm.name, tm.publisher, tm.edition, tm.isbn,
 		        (SELECT COUNT(*) FROM Textbook t WHERE t.masterId = tm.id) AS textbookCount,
@@ -235,10 +236,10 @@ func selectAdminTextbookMasters(ctx context.Context, db database.Runner, where s
 	}
 	defer rows.Close()
 
-	masters := []AdminTextbookMaster{}
+	masters := []apischema.AdminTextbookMaster{}
 	for rows.Next() {
 		var (
-			tm          AdminTextbookMaster
+			tm          apischema.AdminTextbookMaster
 			unit        *string
 			totalAmount *int
 			isDefault   *bool
@@ -248,18 +249,18 @@ func selectAdminTextbookMasters(ctx context.Context, db database.Runner, where s
 		}
 		// 行は（参考書 × 総量の候補）の数だけ並ぶ。同じ参考書の行は隣り合うので、直前と比べて束ねる。
 		if n := len(masters); n == 0 || masters[n-1].ID != tm.ID {
-			tm.Metrics = []AdminTextbookMasterMetric{}
+			tm.Metrics = []apischema.AdminTextbookMasterMetric{}
 			masters = append(masters, tm)
 		}
 		if unit != nil {
 			last := &masters[len(masters)-1]
-			last.Metrics = append(last.Metrics, AdminTextbookMasterMetric{Unit: *unit, TotalAmount: *totalAmount, IsDefault: *isDefault})
+			last.Metrics = append(last.Metrics, apischema.AdminTextbookMasterMetric{Unit: *unit, TotalAmount: *totalAmount, IsDefault: *isDefault})
 		}
 	}
 	return masters, rows.Err()
 }
 
-func (st *sqlAdminMasterStore) listTextbookMasters(ctx context.Context, q string) ([]AdminTextbookMaster, error) {
+func (st *sqlAdminMasterStore) listTextbookMasters(ctx context.Context, q string) ([]apischema.AdminTextbookMaster, error) {
 	if q == "" {
 		return selectAdminTextbookMasters(ctx, st.db, "")
 	}
@@ -267,29 +268,29 @@ func (st *sqlAdminMasterStore) listTextbookMasters(ctx context.Context, q string
 	return selectAdminTextbookMasters(ctx, st.db, "WHERE tm.name LIKE ? OR tm.publisher LIKE ? OR tm.isbn LIKE ?", pattern, pattern, pattern)
 }
 
-func (st *sqlAdminMasterStore) createTextbookMaster(ctx context.Context, in textbookMasterInput) (masterOutcome[AdminTextbookMaster], error) {
+func (st *sqlAdminMasterStore) createTextbookMaster(ctx context.Context, in textbookMasterInput) (masterOutcome[apischema.AdminTextbookMaster], error) {
 	m, err := textbookmaster.Create(ctx, st.db, in.record(), nowMillis())
 	return masterOutcomeOf(adminTextbookMaster(m), err, st.textbookMastersChanged)
 }
 
-func (st *sqlAdminMasterStore) updateTextbookMaster(ctx context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[AdminTextbookMaster]], error) {
+func (st *sqlAdminMasterStore) updateTextbookMaster(ctx context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[apischema.AdminTextbookMaster]], error) {
 	c, err := textbookmaster.Update(ctx, st.db, id, in.record(), nowMillis())
-	change := masterChange[AdminTextbookMaster]{before: adminTextbookMaster(c.Before), after: adminTextbookMaster(c.After)}
+	change := masterChange[apischema.AdminTextbookMaster]{before: adminTextbookMaster(c.Before), after: adminTextbookMaster(c.After)}
 	return masterOutcomeOf(change, err, st.textbookMastersChanged)
 }
 
-func (st *sqlAdminMasterStore) deleteTextbookMaster(ctx context.Context, id int64) (masterOutcome[AdminTextbookMaster], error) {
+func (st *sqlAdminMasterStore) deleteTextbookMaster(ctx context.Context, id int64) (masterOutcome[apischema.AdminTextbookMaster], error) {
 	m, err := textbookmaster.Delete(ctx, st.db, id)
 	return masterOutcomeOf(adminTextbookMaster(m), err, st.textbookMastersChanged)
 }
 
 // adminTextbookMaster は持ち主の行を応答の形にする（総量の候補は項目の並びが同じなので型の変換だけ）。
-func adminTextbookMaster(m textbookmaster.Master) AdminTextbookMaster {
-	metrics := make([]AdminTextbookMasterMetric, len(m.Metrics))
+func adminTextbookMaster(m textbookmaster.Master) apischema.AdminTextbookMaster {
+	metrics := make([]apischema.AdminTextbookMasterMetric, len(m.Metrics))
 	for i, metric := range m.Metrics {
-		metrics[i] = AdminTextbookMasterMetric(metric)
+		metrics[i] = apischema.AdminTextbookMasterMetric(metric)
 	}
-	return AdminTextbookMaster{
+	return apischema.AdminTextbookMaster{
 		Edition: m.Edition, ID: m.ID, Isbn: m.Isbn, Metrics: metrics, Name: m.Name, Publisher: m.Publisher, TextbookCount: m.TextbookCount,
 	}
 }

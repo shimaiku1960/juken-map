@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/simulation"
@@ -51,7 +52,7 @@ type simStore struct {
 }
 
 // state は合成ユーザーの一覧（連番の昇順）と、次に使う連番。
-func (st *simStore) state(ctx context.Context) (SimulationState, error) {
+func (st *simStore) state(ctx context.Context) (apischema.SimulationState, error) {
 	// DATE 列はタイムゾーンの解釈を挟まないよう、文字列のまま返す（Node と同じ）。
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT simSeq, email, simCohort, createdAt,"+
@@ -60,15 +61,15 @@ func (st *simStore) state(ctx context.Context) (SimulationState, error) {
 			" FROM `user` WHERE simSeq IS NOT NULL AND email LIKE ? ORDER BY simSeq ASC",
 		simEmailLike)
 	if err != nil {
-		return SimulationState{}, err
+		return apischema.SimulationState{}, err
 	}
 	defer rows.Close()
 
-	state := SimulationState{NextSeq: 1, Users: make([]SimulationUser, 0)}
+	state := apischema.SimulationState{NextSeq: 1, Users: make([]apischema.SimulationUser, 0)}
 	for rows.Next() {
-		var u SimulationUser
+		var u apischema.SimulationUser
 		if err := rows.Scan(&u.Seq, &u.Email, &u.Cohort, &u.CreatedAt, &u.DormantFrom, &u.LastActedOn); err != nil {
-			return SimulationState{}, err
+			return apischema.SimulationState{}, err
 		}
 		u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)
 		state.Users = append(state.Users, u)
@@ -110,25 +111,25 @@ func positiveInt(v any) (int64, bool) {
 }
 
 // parseSimMark は POST /api/sim/users の本文を読む。余計なキーは無視する（Zod の object と同じ）。
-func parseSimMark(body any) (SimulationUserMark, bool) {
+func parseSimMark(body any) (apischema.SimulationUserMark, bool) {
 	m, ok := body.(map[string]any)
 	if !ok {
-		return SimulationUserMark{}, false
+		return apischema.SimulationUserMark{}, false
 	}
 	email, ok := m["email"].(string)
 	// シミュレーション用のアドレスは、Zod の email() も必ず通る形なので、この判定だけでよい。
 	if !ok || !isSimEmail(email) {
-		return SimulationUserMark{}, false
+		return apischema.SimulationUserMark{}, false
 	}
 	seq, ok := positiveInt(m["seq"])
 	if !ok {
-		return SimulationUserMark{}, false
+		return apischema.SimulationUserMark{}, false
 	}
 	cohort, ok := m["cohort"].(string)
-	if !ok || !SimulationCohort(cohort).Valid() {
-		return SimulationUserMark{}, false
+	if !ok || !apischema.SimulationCohort(cohort).Valid() {
+		return apischema.SimulationUserMark{}, false
 	}
-	return SimulationUserMark{Email: email, Seq: seq, Cohort: SimulationCohort(cohort)}, true
+	return apischema.SimulationUserMark{Email: email, Seq: seq, Cohort: apischema.SimulationCohort(cohort)}, true
 }
 
 // parseSimUpdate は PATCH /api/sim/users/{seq} の本文を読む。どちらの日付も、無い・null・"YYYY-MM-DD" のどれか。

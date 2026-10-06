@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
 )
@@ -194,7 +195,7 @@ func (h *textbookHandlers) create(w http.ResponseWriter, r *http.Request, s *ses
 	case err != nil:
 		internalError(w, r, fmt.Errorf("textbooks create: %w", err))
 	default:
-		writeJSON(w, http.StatusCreated, TextbookRow(created))
+		writeJSON(w, http.StatusCreated, apischema.TextbookRow(created))
 	}
 }
 
@@ -219,6 +220,6 @@ func (h *textbookHandlers) updateProgress(w http.ResponseWriter, r *http.Request
 	case err != nil:
 		internalError(w, r, fmt.Errorf("textbooks update: %w", err))
 	default:
-		writeJSON(w, http.StatusOK, TextbookRow(updated))
+		writeJSON(w, http.StatusOK, apischema.TextbookRow(updated))
 	}
 }

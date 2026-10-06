@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 // エラー応答は Node（apps/api/src/error-handling.ts）と同じ2つの形にする。
@@ -16,11 +18,11 @@ import (
 
 // code の値。Node の setErrorHandler・overload.ts・spa.ts と同じ（openapi/openapi.yaml の ServerError）。
 const (
-	codeInternal   = ServerErrorCodeInternal
-	codeOverloaded = ServerErrorCodeOverloaded
-	codeNotFound   = ServerErrorCodeNotFound
+	codeInternal   = apischema.ServerErrorCodeInternal
+	codeOverloaded = apischema.ServerErrorCodeOverloaded
+	codeNotFound   = apischema.ServerErrorCodeNotFound
 	// 利用者単位の回数制限（user_rate_limit.go）。Node には無い
-	codeTooManyRequests = ServerErrorCodeTooManyRequests
+	codeTooManyRequests = apischema.ServerErrorCodeTooManyRequests
 )
 
 // 利用者に見せる文言。5xx は原因を出さない（SQL やパスが画面に出ないように）。
@@ -31,13 +33,13 @@ const (
 )
 
 // clientMessages は 4xx のうち、code ごとに決まった文言を出すもの。Node の error-handling.ts の CLIENT_MESSAGES と同じ。
-var clientMessages = map[ServerErrorCode]string{
-	ServerErrorCodeBodyTooLarge:     "送信されたデータが大きすぎます",
-	ServerErrorCodeInvalidMediaType: "この形式のデータは受け取れません",
+var clientMessages = map[apischema.ServerErrorCode]string{
+	apischema.ServerErrorCodeBodyTooLarge:     "送信されたデータが大きすぎます",
+	apischema.ServerErrorCodeInvalidMediaType: "この形式のデータは受け取れません",
 }
 
 // newErrorBody は Node の errorBody と同じ規則で文言を選ぶ。
-func newErrorBody(status int, code ServerErrorCode, reqID string) ServerError {
+func newErrorBody(status int, code apischema.ServerErrorCode, reqID string) apischema.ServerError {
 	message := fallbackClientMessage
 	switch {
 	case code == codeOverloaded:
@@ -49,18 +51,18 @@ func newErrorBody(status int, code ServerErrorCode, reqID string) ServerError {
 	case clientMessages[code] != "":
 		message = clientMessages[code]
 	}
-	return ServerError{Error: message, Code: code, ReqID: reqID}
+	return apischema.ServerError{Error: message, Code: code, ReqID: reqID}
 }
 
 // writeErrorBody は code と reqId の付いたエラーを返す。
-func writeErrorBody(w http.ResponseWriter, r *http.Request, status int, code ServerErrorCode) {
+func writeErrorBody(w http.ResponseWriter, r *http.Request, status int, code apischema.ServerErrorCode) {
 	writeJSON(w, status, newErrorBody(status, code, requestIDFrom(r.Context())))
 }
 
 // writeError はルートが自分で断るときの {"error": "文言"} を返す。
 // Node の reply.code(400).send({ error: "..." }) にあたる。
 func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, Error{Error: message})
+	writeJSON(w, status, apischema.Error{Error: message})
 }
 
 // internalError は想定外の失敗を 500 で返し、原因はログにだけ残す。

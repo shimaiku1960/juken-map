@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 )
 
@@ -29,7 +30,7 @@ type validationIssue struct {
 }
 
 func (v *validationIssue) write(w http.ResponseWriter) {
-	body := ValidationError{Error: v.message, Code: v.code}
+	body := apischema.ValidationError{Error: v.message, Code: v.code}
 	if v.field != "" {
 		body.Field = &v.field
 	}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 // 学習記録・予定の一覧の API（JUK-73）。Node の routes/study-logs.ts・study-plans.ts の GET にあたる。
@@ -31,7 +33,7 @@ func (h *studyHandlers) listLogs(w http.ResponseWriter, r *http.Request, s *sess
 	today := dateOnTokyo(time.Now())
 	rng, ok := q.resolve(addDays(today, -(defaultLogDays-1)), nil)
 	if !ok {
-		writeJSON(w, http.StatusOK, []StudyLog{})
+		writeJSON(w, http.StatusOK, []apischema.StudyLog{})
 		return
 	}
 	logs, err := h.store.listStudyLogs(r.Context(), s.UserID, rng)
@@ -51,7 +53,7 @@ func (h *studyHandlers) listDaily(w http.ResponseWriter, r *http.Request, s *ses
 	today := dateOnTokyo(time.Now())
 	rng, ok := q.resolve(addDays(today, -(defaultDailyDays-1)), nil)
 	if !ok {
-		writeJSON(w, http.StatusOK, []DailyStudyMinutes{})
+		writeJSON(w, http.StatusOK, []apischema.DailyStudyMinutes{})
 		return
 	}
 	daily, err := h.store.listDailyStudyMinutes(r.Context(), s.UserID, rng)
@@ -72,7 +74,7 @@ func (h *studyHandlers) listPlans(w http.ResponseWriter, r *http.Request, s *ses
 	defaultTo := addDays(today, defaultPlanFutureDays)
 	rng, ok := q.resolve(addDays(today, -defaultPlanPastDays), &defaultTo)
 	if !ok {
-		writeJSON(w, http.StatusOK, []StudyPlan{})
+		writeJSON(w, http.StatusOK, []apischema.StudyPlan{})
 		return
 	}
 	plans, err := h.store.listStudyPlans(r.Context(), s.UserID, rng)

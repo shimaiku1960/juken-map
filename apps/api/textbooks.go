@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
@@ -40,8 +41,8 @@ func newTextbookStore(db *sql.DB) *textbookStore {
 const textbookRowColumns = "id, userId, masterId, name, totalAmount, rangeUnit, targetDate, subject, createdAt, updatedAt"
 
 // scanTextbook は textbookRowColumns の1行を読み、日時を ISO にする。scan は rows.Scan か row.Scan。
-func scanTextbook(scan func(...any) error) (TextbookRow, error) {
-	var t TextbookRow
+func scanTextbook(scan func(...any) error) (apischema.TextbookRow, error) {
+	var t apischema.TextbookRow
 	if err := scan(
 		&t.ID, &t.UserID, &t.MasterID, &t.Name, &t.TotalAmount, &t.RangeUnit,
 		&t.TargetDate, &t.Subject, &t.CreatedAt, &t.UpdatedAt,
@@ -58,7 +59,7 @@ func scanTextbook(scan func(...any) error) (TextbookRow, error) {
 }
 
 // listTextbooks は自分の参考書の一覧。名前は (userId, name) で UNIQUE なので、名前順だけで並びが決まる。
-func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]TextbookRow, error) {
+func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]apischema.TextbookRow, error) {
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT "+textbookRowColumns+" FROM Textbook WHERE userId = ? ORDER BY name ASC",
 		userID,
@@ -68,7 +69,7 @@ func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]Te
 	}
 	defer rows.Close()
 
-	textbooks := make([]TextbookRow, 0)
+	textbooks := make([]apischema.TextbookRow, 0)
 	for rows.Next() {
 		t, err := scanTextbook(rows.Scan)
 		if err != nil {
@@ -82,7 +83,7 @@ func (st *textbookStore) listTextbooks(ctx context.Context, userID string) ([]Te
 // listTextbookMasters は参考書マスターの一覧を、総量の候補（metrics）と一緒に返す。全員に同じもの。
 // マスター → 総量の候補は1対多なので、LEFT JOIN 1本で取り、マスターごとに束ねる。
 // 候補は id 順（登録時に「isDefault の候補、無ければ先頭」を使うので、先頭を決めておく）。
-func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]TextbookMaster, error) {
+func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]apischema.TextbookMaster, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT tm.id, tm.name, tm.publisher, tm.edition, tm.isbn, tm.createdAt, tm.updatedAt,
 		        m.id AS m_id, m.unit AS m_unit, m.totalAmount AS m_totalAmount,
@@ -96,10 +97,10 @@ func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]TextbookMas
 	}
 	defer rows.Close()
 
-	masters := make([]TextbookMaster, 0)
+	masters := make([]apischema.TextbookMaster, 0)
 	for rows.Next() {
 		var (
-			tm TextbookMaster
+			tm apischema.TextbookMaster
 			// LEFT JOIN の相手が居なければ全部 NULL になる
 			mID          *int64
 			mUnit        *string
@@ -118,12 +119,12 @@ func (st *textbookStore) listTextbookMasters(ctx context.Context) ([]TextbookMas
 		if len(masters) == 0 || masters[len(masters)-1].ID != tm.ID {
 			tm.CreatedAt = database.ISOFromDatetime(tm.CreatedAt)
 			tm.UpdatedAt = database.ISOFromDatetime(tm.UpdatedAt)
-			tm.Metrics = make([]TextbookMasterMetric, 0)
+			tm.Metrics = make([]apischema.TextbookMasterMetric, 0)
 			masters = append(masters, tm)
 		}
 		if mID != nil {
 			last := &masters[len(masters)-1]
-			last.Metrics = append(last.Metrics, TextbookMasterMetric{
+			last.Metrics = append(last.Metrics, apischema.TextbookMasterMetric{
 				ID:          *mID,
 				MasterID:    last.ID,
 				Unit:        *mUnit,

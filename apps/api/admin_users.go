@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
@@ -37,7 +38,7 @@ const (
 )
 
 // userKinds は種別の並び。概要ではこの順に全部並べる（Node の USER_KINDS）。
-var userKinds = []UserKind{UserKindReal, UserKindSim, UserKindSeed, UserKindDemo}
+var userKinds = []apischema.UserKind{apischema.UserKindReal, apischema.UserKindSim, apischema.UserKindSeed, apischema.UserKindDemo}
 
 // kindSQL は利用者の種別を SQL の中で決める。判定の順番に意味がある：sim は simSeq で、
 // seed はメールの印で、デモは固定アドレスで見分ける。? を含むので、使うたびに kindParams を同じ位置に並べる。
@@ -94,8 +95,8 @@ func (t *adminTarget) protection(actorID string) (protectedReason, bool) {
 
 // adminUserStore は DB の読み書き。テストでは偽物を渡す（Go の CI には DB が無い）。
 type adminUserStore interface {
-	overview(ctx context.Context, now time.Time) (AdminOverview, error)
-	listUsers(ctx context.Context, kind UserKind, q string, page int) (AdminUserList, error)
+	overview(ctx context.Context, now time.Time) (apischema.AdminOverview, error)
+	listUsers(ctx context.Context, kind apischema.UserKind, q string, page int) (apischema.AdminUserList, error)
 	// findTarget は相手を引く。いなければ nil。
 	findTarget(ctx context.Context, id string) (*adminTarget, error)
 	// ban は bannedAt を書き（すでに止まっていれば最初の日時のまま）、その人の session を消す（account.Suspend）。
@@ -171,7 +172,7 @@ func (h *adminUserHandlers) ban(w http.ResponseWriter, r *http.Request, s *sessi
 	}
 	removed := int(banned.SessionsRemoved)
 	logAdminUserAction(r.Context(), s.UserID, "ban", target, "sessionsRemoved", removed)
-	writeJSON(w, http.StatusOK, AdminBanResult{ID: id, Email: target.Email, BannedAt: banned.BannedAt, SessionsRemoved: removed})
+	writeJSON(w, http.StatusOK, apischema.AdminBanResult{ID: id, Email: target.Email, BannedAt: banned.BannedAt, SessionsRemoved: removed})
 }
 
 // unban は POST /api/admin/users/{id}/unban。守りは見ない（Node と同じ。止まっていなければ何も変わらない）。
@@ -202,7 +203,7 @@ func (h *adminUserHandlers) unban(w http.ResponseWriter, r *http.Request, s *ses
 		return
 	}
 	logAdminUserAction(r.Context(), s.UserID, "unban", target)
-	writeJSON(w, http.StatusOK, AdminUserRef{ID: id, Email: target.Email})
+	writeJSON(w, http.StatusOK, apischema.AdminUserRef{ID: id, Email: target.Email})
 }
 
 // deleteUser は DELETE /api/admin/users/{id}。取り消せないので、画面で打ち込んだメールアドレスが
@@ -246,7 +247,7 @@ func (h *adminUserHandlers) deleteUser(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	logAdminUserAction(r.Context(), s.UserID, "delete", target, "removed", removed)
-	writeJSON(w, http.StatusOK, AdminDeleteResult{ID: id, Email: target.Email, Removed: removed})
+	writeJSON(w, http.StatusOK, apischema.AdminDeleteResult{ID: id, Email: target.Email, Removed: removed})
 }
 
 // operableTarget は停止・削除できる相手を引く。いなければ 404、守られていれば 409 を送って false を返す。
@@ -297,14 +298,14 @@ func adminUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 // readAdminUsersQuery は Node の listUsersQuerySchema と同じ規則でクエリを読む。Zod と同じく kind・q・page の順に
 // 確かめ、最初の1件で止める。Fastify は同じキーが2つ以上あると値を配列にするので、値の数で見分ける。
-func readAdminUsersQuery(query map[string][]string) (UserKind, string, int, *validationIssue) {
-	kind := UserKindReal // z.enum(USER_KINDS).default("real")
+func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string, int, *validationIssue) {
+	kind := apischema.UserKindReal // z.enum(USER_KINDS).default("real")
 	if values, ok := query["kind"]; ok {
-		if len(values) != 1 || !UserKind(values[0]).Valid() {
+		if len(values) != 1 || !apischema.UserKind(values[0]).Valid() {
 			return "", "", 0, &validationIssue{code: "invalid_value", field: "kind",
 				message: `Invalid option: expected one of "real"|"sim"|"seed"|"demo"`}
 		}
-		kind = UserKind(values[0])
+		kind = apischema.UserKind(values[0])
 	}
 
 	q := "" // z.string().max(191).optional()
@@ -403,9 +404,9 @@ type sqlAdminUserStore struct {
 	db *sql.DB
 }
 
-func (st *sqlAdminUserStore) overview(ctx context.Context, now time.Time) (AdminOverview, error) {
+func (st *sqlAdminUserStore) overview(ctx context.Context, now time.Time) (apischema.AdminOverview, error) {
 	since7, since30 := now.Add(-7*24*time.Hour), now.Add(-30*24*time.Hour)
-	var o AdminOverview
+	var o apischema.AdminOverview
 
 	// 「記録した人」は StudyLog を作った日時（createdAt）で数える。学習した日（date）は
 	// 「あとから記録」で過去日にもなるので、来訪の指標には使わない。
@@ -423,9 +424,9 @@ func (st *sqlAdminUserStore) overview(ctx context.Context, now time.Time) (Admin
 	if err != nil {
 		return o, err
 	}
-	byKind := map[UserKind]KindStats{}
+	byKind := map[apischema.UserKind]apischema.KindStats{}
 	for rows.Next() {
-		var k KindStats
+		var k apischema.KindStats
 		var verified, new7, active7, active30 sql.NullInt64
 		if err := rows.Scan(&k.Kind, &k.Total, &verified, &new7, &active7, &active30); err != nil {
 			rows.Close()
@@ -460,13 +461,13 @@ func (st *sqlAdminUserStore) overview(ctx context.Context, now time.Time) (Admin
 	}
 	defer signups.Close()
 	o.RealSignupsByDay = make([]struct {
-		Count int     `json:"count"`
-		Date  IsoDate `json:"date"`
+		Count int               `json:"count"`
+		Date  apischema.IsoDate `json:"date"`
 	}, 0)
 	for signups.Next() {
 		var day struct {
-			Count int     `json:"count"`
-			Date  IsoDate `json:"date"`
+			Count int               `json:"count"`
+			Date  apischema.IsoDate `json:"date"`
 		}
 		if err := signups.Scan(&day.Date, &day.Count); err != nil {
 			return o, err
@@ -481,8 +482,8 @@ func escapeLike(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
-func (st *sqlAdminUserStore) listUsers(ctx context.Context, kind UserKind, q string, page int) (AdminUserList, error) {
-	list := AdminUserList{Users: []AdminUser{}, Page: page, PageSize: adminUsersPageSize}
+func (st *sqlAdminUserStore) listUsers(ctx context.Context, kind apischema.UserKind, q string, page int) (apischema.AdminUserList, error) {
+	list := apischema.AdminUserList{Users: []apischema.AdminUser{}, Page: page, PageSize: adminUsersPageSize}
 	where := kindSQL + " = ?"
 	whereParams := append(append([]any{}, kindParams...), kind)
 	if q = jsTrim(q); q != "" {
@@ -521,14 +522,14 @@ func (st *sqlAdminUserStore) listUsers(ctx context.Context, kind UserKind, q str
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var u AdminUser
+		var u apischema.AdminUser
 		var providers sql.NullString
 		if err := rows.Scan(&u.ID, &u.Email, &u.Nickname, &u.Name, &u.Kind, &u.Role, &u.EmailVerified,
 			&u.BannedAt, &u.CreatedAt, &providers, &u.LastLoginAt, &u.StudyLogCount, &u.LastStudyLogAt); err != nil {
 			return list, err
 		}
 		u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)
-		for _, p := range []*IsoDateTime{u.BannedAt, u.LastLoginAt, u.LastStudyLogAt} {
+		for _, p := range []*apischema.IsoDateTime{u.BannedAt, u.LastLoginAt, u.LastStudyLogAt} {
 			if p != nil {
 				*p = database.ISOFromDatetime(*p)
 			}

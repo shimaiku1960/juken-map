@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
@@ -106,7 +107,7 @@ func (st *universityStore) listForExplore(ctx context.Context) ([]exploreUnivers
 // 学部（FacultyWithTags）は志望校の学部と違い、大学を入れ子にしない。
 
 // findDetail は大学詳細ページ用。学部と、絞り込みに使うタグまで一度に引く。無ければ nil。
-func (st *universityStore) findDetail(ctx context.Context, id int64) (*UniversityDetail, error) {
+func (st *universityStore) findDetail(ctx context.Context, id int64) (*apischema.UniversityDetail, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT u.id, u.name, u.prefecture, u.type, u.createdAt,
 		        f.id AS f_id, f.name AS f_name, f.examDate AS f_examDate,
@@ -125,10 +126,10 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*Universit
 	}
 	defer rows.Close()
 
-	var detail *UniversityDetail
+	var detail *apischema.UniversityDetail
 	for rows.Next() {
 		var (
-			u                            UniversityDetail
+			u                            apischema.UniversityDetail
 			fID, fUniversityID, tID      *int64
 			fName, fExamDate, fCreatedAt *string
 			tName, tCreatedAt            *string
@@ -142,7 +143,7 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*Universit
 		}
 		if detail == nil {
 			u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)
-			u.Faculties = make([]FacultyWithTags, 0)
+			u.Faculties = make([]apischema.FacultyWithTags, 0)
 			detail = &u
 		}
 		// 学部が1つも無い大学は、学部の列が NULL の行が1行だけ来る
@@ -150,18 +151,18 @@ func (st *universityStore) findDetail(ctx context.Context, id int64) (*Universit
 			continue
 		}
 		if n := len(detail.Faculties); n == 0 || detail.Faculties[n-1].ID != *fID {
-			detail.Faculties = append(detail.Faculties, FacultyWithTags{
+			detail.Faculties = append(detail.Faculties, apischema.FacultyWithTags{
 				ID:           *fID,
 				Name:         *fName,
 				ExamDate:     database.ISOFromDatetime(*fExamDate),
 				CreatedAt:    database.ISOFromDatetime(*fCreatedAt),
 				UniversityID: *fUniversityID,
-				Tags:         make([]Tag, 0),
+				Tags:         make([]apischema.Tag, 0),
 			})
 		}
 		if tID != nil {
 			f := &detail.Faculties[len(detail.Faculties)-1]
-			f.Tags = append(f.Tags, Tag{ID: *tID, Name: *tName, CreatedAt: database.ISOFromDatetime(*tCreatedAt)})
+			f.Tags = append(f.Tags, apischema.Tag{ID: *tID, Name: *tName, CreatedAt: database.ISOFromDatetime(*tCreatedAt)})
 		}
 	}
 	return detail, rows.Err()
@@ -222,5 +223,5 @@ func (h *universityHandlers) detail(w http.ResponseWriter, r *http.Request, s *s
 		internalError(w, r, fmt.Errorf("universities/:id goals: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, UniversityDetailResponse{University: *university, RegisteredFacultyIds: registered})
+	writeJSON(w, http.StatusOK, apischema.UniversityDetailResponse{University: *university, RegisteredFacultyIds: registered})
 }

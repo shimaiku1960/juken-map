@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
@@ -26,8 +27,8 @@ import (
 
 // 科目と範囲の単位の .refine()。値の一覧は契約（openapi/openapi.yaml）の enum から作った型が持つ。
 var (
-	subjectCheck   = stringCheck{ok: func(s string) bool { return StudyLogInputSubject(s).Valid() }, code: "invalid_subject", message: "科目の値が不正です"}
-	rangeUnitCheck = stringCheck{ok: func(s string) bool { return StudyLogInputRangeUnit(s).Valid() }, code: "invalid_range_unit", message: "単位の値が不正です"}
+	subjectCheck   = stringCheck{ok: func(s string) bool { return apischema.StudyLogInputSubject(s).Valid() }, code: "invalid_subject", message: "科目の値が不正です"}
+	rangeUnitCheck = stringCheck{ok: func(s string) bool { return apischema.StudyLogInputRangeUnit(s).Valid() }, code: "invalid_range_unit", message: "単位の値が不正です"}
 	// memoRule は実績のメモ・予定の内容：.max(500).trim()（null は不可）。
 	memoRule = stringRule{max: 500, maxMessage: "500文字以内で入力してください", trim: true}
 )
@@ -116,10 +117,10 @@ func readCompleteInput(body any) (*objectInput, completeInput) {
 }
 
 // findStudyLogWithTextbook は実績と、その参考書の行（無ければ null）を読む。
-func findStudyLogWithTextbook(ctx context.Context, q database.QueryRower, id int64) (StudyLogWithTextbook, error) {
-	var l StudyLogWithTextbook
+func findStudyLogWithTextbook(ctx context.Context, q database.QueryRower, id int64) (apischema.StudyLogWithTextbook, error) {
+	var l apischema.StudyLogWithTextbook
 	var tbID *int64
-	var tb TextbookRow
+	var tb apischema.TextbookRow
 	var tbUserID, tbName, tbCreated, tbUpdated *string
 	err := q.QueryRowContext(ctx,
 		`SELECT
@@ -133,7 +134,7 @@ func findStudyLogWithTextbook(ctx context.Context, q database.QueryRower, id int
 		&l.RangeStart, &l.RangeEnd, &l.RangeUnit, &l.Memo, &l.StudyPlanID, &l.CreatedAt, &l.UpdatedAt,
 		&tbID, &tbUserID, &tb.MasterID, &tbName, &tb.TotalAmount, &tb.RangeUnit, &tb.TargetDate, &tb.Subject, &tbCreated, &tbUpdated)
 	if err != nil {
-		return StudyLogWithTextbook{}, err
+		return apischema.StudyLogWithTextbook{}, err
 	}
 	l.Date, l.CreatedAt, l.UpdatedAt = database.ISOFromDatetime(l.Date), database.ISOFromDatetime(l.CreatedAt), database.ISOFromDatetime(l.UpdatedAt)
 	if tbID != nil {
@@ -173,7 +174,7 @@ func (h *studyPlanWriteHandlers) create(w http.ResponseWriter, r *http.Request, 
 		writeStudyRecordError(w, r, "study-plans create", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, CreatedCount{Count: count})
+	writeJSON(w, http.StatusCreated, apischema.CreatedCount{Count: count})
 }
 
 // update は PATCH /api/study-plans/{id}。Node と同じく、入力チェックは自分の予定かを確かめるより先。
@@ -205,7 +206,7 @@ func (h *studyPlanWriteHandlers) update(w http.ResponseWriter, r *http.Request, 
 		writeStudyRecordError(w, r, "study-plans update", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, StudyPlanRow(updated))
+	writeJSON(w, http.StatusOK, apischema.StudyPlanRow(updated))
 }
 
 // delete は DELETE /api/study-plans/{id}。
@@ -221,7 +222,7 @@ func (h *studyPlanWriteHandlers) delete(w http.ResponseWriter, r *http.Request, 
 		writeStudyRecordError(w, r, "study-plans delete", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, Deleted{Message: DeletedMessageDeleted})
+	writeJSON(w, http.StatusOK, apischema.Deleted{Message: apischema.DeletedMessageDeleted})
 }
 
 // complete は POST /api/study-plans/{id}/complete。
@@ -252,7 +253,7 @@ func (h *studyPlanWriteHandlers) complete(w http.ResponseWriter, r *http.Request
 		internalError(w, r, fmt.Errorf("study-plans complete read: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusCreated, CompletedStudyPlan{
-		Log: log, Plan: StudyPlanRow(completed.Plan), IsFirstStudyLog: completed.IsFirstStudyLog,
+	writeJSON(w, http.StatusCreated, apischema.CompletedStudyPlan{
+		Log: log, Plan: apischema.StudyPlanRow(completed.Plan), IsFirstStudyLog: completed.IsFirstStudyLog,
 	})
 }

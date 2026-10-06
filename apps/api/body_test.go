@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 func TestReadBodyMediaTypes(t *testing.T) {
@@ -99,7 +101,7 @@ func prefsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := readObject(body.value())
-	p := NotificationPreference{
+	p := apischema.NotificationPreference{
 		EmailMorningEnabled: in.boolean("emailMorningEnabled"),
 		EmailEveningEnabled: in.boolean("emailEveningEnabled"),
 		LineMorningEnabled:  in.boolean("lineMorningEnabled"),

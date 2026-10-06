@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
@@ -29,12 +30,12 @@ type userStore struct {
 }
 
 // updateProfile はニックネームを書き換え、更新後の行を返す（Node と同じく UPDATE の後に SELECT し直す）。
-func (st *userStore) updateProfile(ctx context.Context, userID string, in ProfileInput) (User, error) {
+func (st *userStore) updateProfile(ctx context.Context, userID string, in apischema.ProfileInput) (apischema.User, error) {
 	if err := account.SetNickname(ctx, st.db, userID, in.Nickname, nowMillis()); err != nil {
-		return User{}, err
+		return apischema.User{}, err
 	}
 
-	var u User
+	var u apischema.User
 	err := st.db.QueryRowContext(ctx,
 		`SELECT id, name, email, image, nickname, createdAt, updatedAt,
 		        emailVerified, firstStudyLogAt, analyticsSignUpTrackedAt
@@ -44,11 +45,11 @@ func (st *userStore) updateProfile(ctx context.Context, userID string, in Profil
 		&u.EmailVerified, &u.FirstStudyLogAt, &u.AnalyticsSignUpTrackedAt)
 	if err != nil {
 		// 行が無い（sql.ErrNoRows）も 500。Node も「見つかりません」を throw して 500 にしている。
-		return User{}, err
+		return apischema.User{}, err
 	}
 	u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)
 	u.UpdatedAt = database.ISOFromDatetime(u.UpdatedAt)
-	for _, p := range []*IsoDateTime{u.FirstStudyLogAt, u.AnalyticsSignUpTrackedAt} {
+	for _, p := range []*apischema.IsoDateTime{u.FirstStudyLogAt, u.AnalyticsSignUpTrackedAt} {
 		if p != nil {
 			*p = database.ISOFromDatetime(*p)
 		}
@@ -67,7 +68,7 @@ func (h *profileHandlers) update(w http.ResponseWriter, r *http.Request, s *sess
 		return
 	}
 	in := readObject(body.value())
-	input := ProfileInput{Nickname: in.string("nickname", nicknameRule)}
+	input := apischema.ProfileInput{Nickname: in.string("nickname", nicknameRule)}
 	if in.reject(w) {
 		return
 	}

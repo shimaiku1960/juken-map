@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 // fakeClock はテストで進める時計。
@@ -133,7 +135,7 @@ func TestRouterRateLimit(t *testing.T) {
 	if got := res.Header().Get("Retry-After"); got != "2" {
 		t.Errorf("Retry-After = %q, want 2", got)
 	}
-	var body ServerError
+	var body apischema.ServerError
 	if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}

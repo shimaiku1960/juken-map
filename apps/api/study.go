@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
@@ -81,11 +82,11 @@ func (c *textbookCols) dest(ignore *sql.RawBytes) []any {
 }
 
 // dto は参考書の DTO を作る。JOIN の相手が居なければ nil（JSON では null）。
-func (c *textbookCols) dto() *Textbook {
+func (c *textbookCols) dto() *apischema.Textbook {
 	if c.id == nil {
 		return nil
 	}
-	tb := &Textbook{
+	tb := &apischema.Textbook{
 		ID:          *c.id,
 		MasterID:    c.masterID,
 		Name:        *c.name,
@@ -106,7 +107,7 @@ type studyStore struct {
 }
 
 // listStudyLogs は新しい日付から並べる。同じ日付の中は記録した順（id 昇順）。
-func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRange) ([]StudyLog, error) {
+func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRange) ([]apischema.StudyLog, error) {
 	where, args := r.where("l", userID)
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+logColumns+","+textbookColumns+`
@@ -124,10 +125,10 @@ func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRa
 	defer rows.Close()
 
 	// nil のままだと JSON で null になる。空でも [] を返すため、長さ0で作っておく。
-	logs := make([]StudyLog, 0)
+	logs := make([]apischema.StudyLog, 0)
 	for rows.Next() {
 		var (
-			l      StudyLog
+			l      apischema.StudyLog
 			date   string
 			tb     textbookCols
 			ignore sql.RawBytes
@@ -150,7 +151,7 @@ func (st *studyStore) listStudyLogs(ctx context.Context, userID string, r dateRa
 
 // listStudyPlans は古い日付から並べる。同じ日付の中は作った順（id 昇順）。
 // 実績は予定1件につき最大1件（StudyLog.studyPlanId が UNIQUE）なので、JOIN しても行は増えない。
-func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateRange) ([]StudyPlan, error) {
+func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateRange) ([]apischema.StudyPlan, error) {
 	where, args := r.where("p", userID)
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+planColumns+","+textbookColumns+`, l.id AS log_id
@@ -167,10 +168,10 @@ func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateR
 	}
 	defer rows.Close()
 
-	plans := make([]StudyPlan, 0)
+	plans := make([]apischema.StudyPlan, 0)
 	for rows.Next() {
 		var (
-			p      StudyPlan
+			p      apischema.StudyPlan
 			date   string
 			tb     textbookCols
 			ignore sql.RawBytes
@@ -191,7 +192,7 @@ func (st *studyStore) listStudyPlans(ctx context.Context, userID string, r dateR
 }
 
 // listDailyStudyMinutes は日ごとの合計学習時間を、新しい日付から返す。
-func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, r dateRange) ([]DailyStudyMinutes, error) {
+func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, r dateRange) ([]apischema.DailyStudyMinutes, error) {
 	where, args := r.where("l", userID)
 	// #nosec G202 -- where は dateRange.where が固定の列名と ? で作る。値は args で渡す
 	rows, err := st.db.QueryContext(ctx,
@@ -208,10 +209,10 @@ func (st *studyStore) listDailyStudyMinutes(ctx context.Context, userID string, 
 	}
 	defer rows.Close()
 
-	daily := make([]DailyStudyMinutes, 0)
+	daily := make([]apischema.DailyStudyMinutes, 0)
 	for rows.Next() {
 		var (
-			d    DailyStudyMinutes
+			d    apischema.DailyStudyMinutes
 			date string
 		)
 		// SUM() は DECIMAL で返ってくるが、整数の文字列なので int64 へそのまま入る。

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
@@ -175,15 +176,15 @@ func readTagIDs(in *objectInput, key string) []int64 {
 
 // ---- DB ----
 
-func (st *sqlAdminMasterStore) listTags(ctx context.Context) ([]AdminTag, error) {
+func (st *sqlAdminMasterStore) listTags(ctx context.Context) ([]apischema.AdminTag, error) {
 	rows, err := st.db.QueryContext(ctx, "SELECT id, name FROM Tag ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	tags := []AdminTag{}
+	tags := []apischema.AdminTag{}
 	for rows.Next() {
-		var t AdminTag
+		var t apischema.AdminTag
 		if err := rows.Scan(&t.ID, &t.Name); err != nil {
 			return nil, err
 		}
@@ -192,17 +193,17 @@ func (st *sqlAdminMasterStore) listTags(ctx context.Context) ([]AdminTag, error)
 	return tags, rows.Err()
 }
 
-func (st *sqlAdminMasterStore) createFaculty(ctx context.Context, in facultyInput) (masterOutcome[AdminFacultySnapshot], error) {
+func (st *sqlAdminMasterStore) createFaculty(ctx context.Context, in facultyInput) (masterOutcome[apischema.AdminFacultySnapshot], error) {
 	f, err := university.CreateFaculty(ctx, st.db, in.record(), nowMillis())
-	return masterOutcomeOf(AdminFacultySnapshot(f), err, st.universitiesChanged)
+	return masterOutcomeOf(apischema.AdminFacultySnapshot(f), err, st.universitiesChanged)
 }
 
-func (st *sqlAdminMasterStore) updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[AdminFacultySnapshot]], error) {
+func (st *sqlAdminMasterStore) updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[apischema.AdminFacultySnapshot]], error) {
 	c, err := university.UpdateFaculty(ctx, st.db, id, in.record())
-	return masterOutcomeOf(masterChange[AdminFacultySnapshot]{before: AdminFacultySnapshot(c.Before), after: AdminFacultySnapshot(c.After)}, err, st.universitiesChanged)
+	return masterOutcomeOf(masterChange[apischema.AdminFacultySnapshot]{before: apischema.AdminFacultySnapshot(c.Before), after: apischema.AdminFacultySnapshot(c.After)}, err, st.universitiesChanged)
 }
 
-func (st *sqlAdminMasterStore) deleteFaculty(ctx context.Context, id int64) (masterOutcome[AdminFacultySnapshot], error) {
+func (st *sqlAdminMasterStore) deleteFaculty(ctx context.Context, id int64) (masterOutcome[apischema.AdminFacultySnapshot], error) {
 	f, err := university.DeleteFaculty(ctx, st.db, id)
-	return masterOutcomeOf(AdminFacultySnapshot(f), err, st.universitiesChanged)
+	return masterOutcomeOf(apischema.AdminFacultySnapshot(f), err, st.universitiesChanged)
 }

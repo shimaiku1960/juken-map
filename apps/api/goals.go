@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
@@ -34,7 +35,7 @@ const fromGoalWithFaculty = `
 
 // goalDest は goalColumns の順に Scan の受け皿を並べる。日時は文字列で受けるので、
 // 読み終えたら fixGoalDates で ISO にする。
-func goalDest(g *FirstChoiceGoal) []any {
+func goalDest(g *apischema.FirstChoiceGoal) []any {
 	f, u := &g.Faculty, &g.Faculty.University
 	return []any{
 		&g.ID, &g.CreatedAt, &g.UserID, &g.FacultyID, &g.IsFirstChoice, &g.Note, &g.Status,
@@ -43,7 +44,7 @@ func goalDest(g *FirstChoiceGoal) []any {
 	}
 }
 
-func fixGoalDates(g *FirstChoiceGoal) {
+func fixGoalDates(g *apischema.FirstChoiceGoal) {
 	g.CreatedAt = database.ISOFromDatetime(g.CreatedAt)
 	g.Faculty.ExamDate = database.ISOFromDatetime(g.Faculty.ExamDate)
 	g.Faculty.CreatedAt = database.ISOFromDatetime(g.Faculty.CreatedAt)
@@ -52,14 +53,14 @@ func fixGoalDates(g *FirstChoiceGoal) {
 
 // withTags は第一志望の形に、学部のタグを足して一覧の1件にする。
 // タグが無い学部でも [] を返す（Node と同じ）ので、空のスライスで始める。
-func withTags(g FirstChoiceGoal) Goal {
+func withTags(g apischema.FirstChoiceGoal) apischema.Goal {
 	f := g.Faculty
-	return Goal{
+	return apischema.Goal{
 		ID: g.ID, CreatedAt: g.CreatedAt, UserID: g.UserID, FacultyID: g.FacultyID,
 		IsFirstChoice: g.IsFirstChoice, Note: g.Note, Status: g.Status,
-		Faculty: FacultyWithUniversityAndTags{
+		Faculty: apischema.FacultyWithUniversityAndTags{
 			ID: f.ID, Name: f.Name, ExamDate: f.ExamDate, CreatedAt: f.CreatedAt,
-			UniversityID: f.UniversityID, University: f.University, Tags: make([]Tag, 0),
+			UniversityID: f.UniversityID, University: f.University, Tags: make([]apischema.Tag, 0),
 		},
 	}
 }
@@ -70,7 +71,7 @@ type goalStore struct {
 
 // listGoals は志望校ページ用。学部・大学に加え、学部のタグまで引く。
 // 作った順に並べ、同じ日時どうしは id で、タグは id で並べる（Node と同じ）。
-func (st *goalStore) listGoals(ctx context.Context, userID string) ([]Goal, error) {
+func (st *goalStore) listGoals(ctx context.Context, userID string) ([]apischema.Goal, error) {
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+goalColumns+`,
 		        t.id AS t_id, t.name AS t_name, t.createdAt AS t_createdAt`+
@@ -86,10 +87,10 @@ func (st *goalStore) listGoals(ctx context.Context, userID string) ([]Goal, erro
 	}
 	defer rows.Close()
 
-	goals := make([]Goal, 0)
+	goals := make([]apischema.Goal, 0)
 	for rows.Next() {
 		var (
-			row      FirstChoiceGoal
+			row      apischema.FirstChoiceGoal
 			tagID    *int64
 			tagName  *string
 			tagAdded *string
@@ -105,7 +106,7 @@ func (st *goalStore) listGoals(ctx context.Context, userID string) ([]Goal, erro
 		// タグが1つも無い学部は、タグの列が NULL の行が1行だけ来る
 		if tagID != nil {
 			last := &goals[len(goals)-1]
-			last.Faculty.Tags = append(last.Faculty.Tags, Tag{
+			last.Faculty.Tags = append(last.Faculty.Tags, apischema.Tag{
 				ID: *tagID, Name: *tagName, CreatedAt: database.ISOFromDatetime(*tagAdded),
 			})
 		}
@@ -115,10 +116,10 @@ func (st *goalStore) listGoals(ctx context.Context, userID string) ([]Goal, erro
 
 // findFirstChoiceGoal はトップの「第一志望」表示専用。タグは画面で使わないので引かない。
 // 無ければ nil（JSON では null）。
-func (st *goalStore) findFirstChoiceGoal(ctx context.Context, userID string) (*FirstChoiceGoal, error) {
+func (st *goalStore) findFirstChoiceGoal(ctx context.Context, userID string) (*apischema.FirstChoiceGoal, error) {
 	// 第一志望は1ユーザー1校（Node の applyGoalPatch が保つ）。DB の制約ではないので、
 	// 万一2校あっても結果が揺れないよう id で並べて1件にする。
-	var g FirstChoiceGoal
+	var g apischema.FirstChoiceGoal
 	err := st.db.QueryRowContext(ctx,
 		"SELECT"+goalColumns+fromGoalWithFaculty+`
 		 WHERE g.userId = ? AND g.status = 'decided' AND g.isFirstChoice = TRUE

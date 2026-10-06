@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -28,7 +29,7 @@ func (st *analyticsStore) markSignUpTracked(ctx context.Context, userID string) 
 // findSignUpMethod は登録に使われた認証方法を判定する。登録と同時（1分以内）に作られた外部ログインの結びつきが
 // あれば、そのプロバイダー（Google・GitHub で登録した人）。無ければメールでの登録。あとから外部ログインを
 // 連携したメールの利用者を、外部ログインで登録したと数えないため。
-func (st *analyticsStore) findSignUpMethod(ctx context.Context, userID string) (RegistrationTrackingMethod, error) {
+func (st *analyticsStore) findSignUpMethod(ctx context.Context, userID string) (apischema.RegistrationTrackingMethod, error) {
 	var provider string
 	err := st.db.QueryRowContext(ctx,
 		"SELECT i.provider FROM AuthIdentity AS i JOIN `user` AS u ON u.id = i.userId"+
@@ -37,11 +38,11 @@ func (st *analyticsStore) findSignUpMethod(ctx context.Context, userID string) (
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
-	switch RegistrationTrackingMethod(provider) {
-	case SignUpMethodGoogle, SignUpMethodGithub:
-		return RegistrationTrackingMethod(provider), nil
+	switch apischema.RegistrationTrackingMethod(provider) {
+	case apischema.SignUpMethodGoogle, apischema.SignUpMethodGithub:
+		return apischema.RegistrationTrackingMethod(provider), nil
 	}
-	return SignUpMethodEmail, nil
+	return apischema.SignUpMethodEmail, nil
 }
 
 type analyticsHandlers struct {
@@ -60,7 +61,7 @@ func (h *analyticsHandlers) registration(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if !first {
-		writeJSON(w, http.StatusOK, RegistrationTracking{ShouldTrack: false})
+		writeJSON(w, http.StatusOK, apischema.RegistrationTracking{ShouldTrack: false})
 		return
 	}
 	method, err := h.store.findSignUpMethod(r.Context(), s.UserID)
@@ -68,5 +69,5 @@ func (h *analyticsHandlers) registration(w http.ResponseWriter, r *http.Request,
 		internalError(w, r, fmt.Errorf("analytics: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, RegistrationTracking{ShouldTrack: true, Method: &method})
+	writeJSON(w, http.StatusOK, apischema.RegistrationTracking{ShouldTrack: true, Method: &method})
 }

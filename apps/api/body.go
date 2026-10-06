@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 // 書き込みの本文の読み方（JUK-80・JUK-75）。Node の Fastify が本文を解析する部分（server.ts の
@@ -76,12 +78,12 @@ func readBody(w http.ResponseWriter, r *http.Request, limit int64) (body request
 		if isEmptyBody(r) {
 			return requestBody{}, true
 		}
-		rejectBody(w, r, http.StatusUnsupportedMediaType, ServerErrorCodeInvalidMediaType)
+		rejectBody(w, r, http.StatusUnsupportedMediaType, apischema.ServerErrorCodeInvalidMediaType)
 		return requestBody{}, false
 	}
 	asJSON, known := bodyMediaTypes[mediaType(ct[0])]
 	if !known {
-		rejectBody(w, r, http.StatusUnsupportedMediaType, ServerErrorCodeInvalidMediaType)
+		rejectBody(w, r, http.StatusUnsupportedMediaType, apischema.ServerErrorCodeInvalidMediaType)
 		return requestBody{}, false
 	}
 
@@ -138,12 +140,12 @@ func mediaType(header string) string {
 // Fastify は本文を UTF-8 として読み、読めないバイトを U+FFFD（3バイト）に置き換えてから長さを数える。
 // そのため、不正なバイトを含むと数えた長さが Content-Length と合わず 400 になる。ここでも置き換えた後の
 // 長さで同じ判定をする。
-func readBodyText(r *http.Request, limit int64) (text string, status int, code ServerErrorCode, err error) {
+func readBodyText(r *http.Request, limit int64) (text string, status int, code apischema.ServerErrorCode, err error) {
 	// chunked のときは -1（長さの申告が無い）。
 	declared := r.ContentLength
 	hasDeclared := declared >= 0
 	if hasDeclared && declared > limit {
-		return "", http.StatusRequestEntityTooLarge, ServerErrorCodeBodyTooLarge, nil
+		return "", http.StatusRequestEntityTooLarge, apischema.ServerErrorCodeBodyTooLarge, nil
 	}
 
 	// 上限より1バイト多く読めたら、上限を超えている。
@@ -152,15 +154,15 @@ func readBodyText(r *http.Request, limit int64) (text string, status int, code S
 		return "", 0, "", err
 	}
 	if int64(len(raw)) > limit {
-		return "", http.StatusRequestEntityTooLarge, ServerErrorCodeBodyTooLarge, nil
+		return "", http.StatusRequestEntityTooLarge, apischema.ServerErrorCodeBodyTooLarge, nil
 	}
 
 	text = decodeUTF8Like(raw)
 	if int64(len(text)) > limit {
-		return "", http.StatusRequestEntityTooLarge, ServerErrorCodeBodyTooLarge, nil
+		return "", http.StatusRequestEntityTooLarge, apischema.ServerErrorCodeBodyTooLarge, nil
 	}
 	if hasDeclared && int64(len(text)) != declared {
-		return "", http.StatusBadRequest, ServerErrorCodeInvalidContentLength, nil
+		return "", http.StatusBadRequest, apischema.ServerErrorCodeInvalidContentLength, nil
 	}
 	return text, 0, "", nil
 }
@@ -258,7 +260,7 @@ func jsNumber(n json.Number) float64 {
 }
 
 // rejectBody は本文を読まずに断る。Node の setErrorHandler と同じく、4xx は warn でログに残す。
-func rejectBody(w http.ResponseWriter, r *http.Request, status int, code ServerErrorCode) {
+func rejectBody(w http.ResponseWriter, r *http.Request, status int, code apischema.ServerErrorCode) {
 	slog.WarnContext(r.Context(), "request rejected", "statusCode", status, "code", code)
 	writeErrorBody(w, r, status, code)
 }

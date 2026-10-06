@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbookmaster"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
@@ -124,20 +125,20 @@ func logMasterChange(ctx context.Context, adminID, action, table string, id int6
 // adminMasterStore は DB の読み書き。テストでは偽物を渡す（Go の CI には DB が無い）。
 // 書き込みは、断ったときは failure を、想定外の失敗は error を返す。
 type adminMasterStore interface {
-	listUniversities(ctx context.Context, q string, page int) (AdminUniversityList, error)
+	listUniversities(ctx context.Context, q string, page int) (apischema.AdminUniversityList, error)
 	// universityDetail は大学と学部。大学が無ければ nil。
-	universityDetail(ctx context.Context, id int64) (*AdminUniversityDetail, error)
-	listTags(ctx context.Context) ([]AdminTag, error)
-	createUniversity(ctx context.Context, in universityInput) (masterOutcome[AdminUniversity], error)
-	updateUniversity(ctx context.Context, id int64, in universityInput) (masterOutcome[masterChange[AdminUniversity]], error)
-	deleteUniversity(ctx context.Context, id int64) (masterOutcome[AdminUniversity], error)
-	createFaculty(ctx context.Context, in facultyInput) (masterOutcome[AdminFacultySnapshot], error)
-	updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[AdminFacultySnapshot]], error)
-	deleteFaculty(ctx context.Context, id int64) (masterOutcome[AdminFacultySnapshot], error)
-	listTextbookMasters(ctx context.Context, q string) ([]AdminTextbookMaster, error)
-	createTextbookMaster(ctx context.Context, in textbookMasterInput) (masterOutcome[AdminTextbookMaster], error)
-	updateTextbookMaster(ctx context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[AdminTextbookMaster]], error)
-	deleteTextbookMaster(ctx context.Context, id int64) (masterOutcome[AdminTextbookMaster], error)
+	universityDetail(ctx context.Context, id int64) (*apischema.AdminUniversityDetail, error)
+	listTags(ctx context.Context) ([]apischema.AdminTag, error)
+	createUniversity(ctx context.Context, in universityInput) (masterOutcome[apischema.AdminUniversity], error)
+	updateUniversity(ctx context.Context, id int64, in universityInput) (masterOutcome[masterChange[apischema.AdminUniversity]], error)
+	deleteUniversity(ctx context.Context, id int64) (masterOutcome[apischema.AdminUniversity], error)
+	createFaculty(ctx context.Context, in facultyInput) (masterOutcome[apischema.AdminFacultySnapshot], error)
+	updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[apischema.AdminFacultySnapshot]], error)
+	deleteFaculty(ctx context.Context, id int64) (masterOutcome[apischema.AdminFacultySnapshot], error)
+	listTextbookMasters(ctx context.Context, q string) ([]apischema.AdminTextbookMaster, error)
+	createTextbookMaster(ctx context.Context, in textbookMasterInput) (masterOutcome[apischema.AdminTextbookMaster], error)
+	updateTextbookMaster(ctx context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[apischema.AdminTextbookMaster]], error)
+	deleteTextbookMaster(ctx context.Context, id int64) (masterOutcome[apischema.AdminTextbookMaster], error)
 }
 
 type adminMasterHandlers struct {
