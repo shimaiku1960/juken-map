@@ -6,7 +6,7 @@
 // テスト用 DB（juken_map_test）は他のテストが使っているので、別の DB（juken_map_migrate_test）を毎回作り直す。
 // 当てるのは本番と同じ migrate の権限（db/db-users.ts）のユーザー juken_migrations_test で、
 // その権限で db/migrations を全部当てられることも、ここで確かめる。ユーザーは test-db:prepare が作る。
-package main
+package migrate
 
 import (
 	"context"
@@ -33,7 +33,7 @@ import (
 const (
 	migrateTestDBName = "juken_map_migrate_test"
 	// go test はパッケージのディレクトリ（apps/api）で動く。
-	repoMigrationsDir = "../../db/migrations"
+	repoMigrationsDir = "../../../../db/migrations"
 )
 
 type migrateFixture struct {
@@ -82,7 +82,7 @@ func newMigrateFixture(t *testing.T) migrateFixture {
 }
 
 func (fx migrateFixture) apply(dir string) ([]string, error) {
-	return applyMigrations(context.Background(), fx.url, dir, io.Discard)
+	return Apply(context.Background(), fx.url, dir, io.Discard)
 }
 
 func (fx migrateFixture) mustApply(dir string) []string {
@@ -293,7 +293,7 @@ func TestMigrateDB(t *testing.T) {
 		fx.mustApply(dir)
 		writeMigration(t, dir, "001_a", "CREATE TABLE a (id bigint PRIMARY KEY);")
 		var log strings.Builder
-		got, err := applyMigrations(context.Background(), fx.url, dir, &log)
+		got, err := Apply(context.Background(), fx.url, dir, &log)
 		if err != nil || len(got) != 0 {
 			t.Fatalf("got %v, err %v", got, err)
 		}
@@ -318,7 +318,7 @@ func TestMigrateDB(t *testing.T) {
 		if appURL == "" {
 			appURL = dbtest.DefaultURL
 		}
-		_, err := applyMigrations(context.Background(), appURL, repoMigrationsDir, io.Discard)
+		_, err := Apply(context.Background(), appURL, repoMigrationsDir, io.Discard)
 		var myErr *mysql.MySQLError
 		// 1142 は ER_TABLEACCESS_DENIED_ERROR（_prisma_migrations の CREATE が拒まれる）
 		if !errors.As(err, &myErr) || myErr.Number != 1142 {

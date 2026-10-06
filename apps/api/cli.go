@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/migrate"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -22,7 +23,7 @@ import (
 //
 // 手元では pnpm incident・pnpm admin:grant（scripts/go-cli.sh）が .env を読んで同じものを呼ぶ。手順は docs/incident-response.md。
 // 変える操作は、実行の内容を OpsAuditLog に残す（internal/write/account の OpsAudit、JUK-138）。`incident log` で見る。
-// migrate（migrate.go）だけは本番でもデプロイが1回きりのコンテナで流し、手元では pnpm db:migrate が呼ぶ。
+// migrate（internal/migrate）だけは本番でもデプロイが1回きりのコンテナで流し、手元では pnpm db:migrate が呼ぶ。
 
 const incidentUsage = `使い方: incident <操作> [メールアドレス]
   sessions <メール>   ログイン中のセッションを見る
@@ -44,9 +45,9 @@ const cliTimeout = 30 * time.Second
 
 // runCommand は args（os.Args[1:]）の操作をして、終了コードを返す。
 func runCommand(args []string, stdout, stderr io.Writer) int {
-	// migrate（migrate.go）は繋ぐユーザー・接続の設定・かけてよい時間がほかと違うので、DB を開く前に分ける。
+	// migrate（internal/migrate）は繋ぐユーザー・接続の設定・かけてよい時間がほかと違うので、DB を開く前に分ける。
 	if args[0] == "migrate" {
-		return runMigrate(stdout, stderr)
+		return migrate.Run(stdout, stderr)
 	}
 	db, err := database.Open(os.Getenv("DATABASE_URL"))
 	if err != nil {

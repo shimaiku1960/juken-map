@@ -1,4 +1,4 @@
-package main
+package migrate
 
 // マイグレーション（テーブル定義の変更）を当てる `migrate` コマンド（JUK-125）。
 // Node の apps/api/src/infra/migrations.ts から移し、本番で Node を使う場面を無くした。
@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -55,16 +56,16 @@ const createLedgerSQL = `
     PRIMARY KEY (id)
   ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-// runMigrate は `migrate` コマンド。本番のアプリのユーザーはテーブルを作れない（db/db-users.ts）ので、
+// Run は `migrate` コマンド。本番のアプリのユーザーはテーブルを作れない（db/db-users.ts）ので、
 // テーブル定義を変えられるユーザーを MIGRATION_DATABASE_URL で渡す。無ければ DATABASE_URL で当てる（手元・CI）。
-func runMigrate(stdout, stderr io.Writer) int {
+func Run(stdout, stderr io.Writer) int {
 	databaseURL := os.Getenv("MIGRATION_DATABASE_URL")
 	if databaseURL == "" {
 		databaseURL = os.Getenv("DATABASE_URL")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), migrateTimeout)
 	defer cancel()
-	applied, err := applyMigrations(ctx, databaseURL, os.Getenv("MIGRATIONS_DIR"), stdout)
+	applied, err := Apply(ctx, databaseURL, os.Getenv("MIGRATIONS_DIR"), stdout)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -77,12 +78,12 @@ func runMigrate(stdout, stderr io.Writer) int {
 	return 0
 }
 
-// applyMigrations は、dir のマイグレーションのうちまだ当てていないものを名前順に当て、当てたものの名前を返す。
+// Apply は、dir のマイグレーションのうちまだ当てていないものを名前順に当て、当てたものの名前を返す。
 //
 // MySQL の CREATE TABLE / ALTER TABLE はトランザクションで取り消せない。途中で失敗すると
 // 半分だけ当たった状態が残るので、Prisma と同じく「失敗した」記録を残して止まり、
 // 人が DB を確かめて直すまで次の実行も止める。
-func applyMigrations(ctx context.Context, databaseURL, dir string, log io.Writer) ([]string, error) {
+func Apply(ctx context.Context, databaseURL, dir string, log io.Writer) ([]string, error) {
 	names, err := migrationNames(dir)
 	if err != nil {
 		return nil, err
@@ -231,7 +232,8 @@ func appliedMigrations(ctx context.Context, conn *sql.Conn) (map[string]string, 
 
 // newMigrationID は記録の id（varchar(36)）。Prisma と Node の版が入れていたのと同じ UUID v4 の形にする。
 func newMigrationID() string {
-	b := randomBytes(16)
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
 	b[6] = b[6]&0x0f | 0x40
 	b[8] = b[8]&0x3f | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])

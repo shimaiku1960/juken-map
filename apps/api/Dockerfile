@@ -22,7 +22,7 @@ FROM build AS web
 RUN mkdir -p /app/web
 
 # ---- マイグレーション ----
-# `/api migrate`（migrate.go、JUK-125）が当てる db/migrations。ビルドの文脈（apps/api）の外にあるので、
+# `/api migrate`（internal/migrate、JUK-125）が当てる db/migrations。ビルドの文脈（apps/api）の外にあるので、
 # 本番のデプロイは --build-context migrations=db/migrations でこの空のステージを差し替える。差し替えずに作ると
 # 中身が空で、migrate は「マイグレーションがありません」と止まる（古い表のままアプリを起こさない）。
 FROM scratch AS migrations

@@ -393,7 +393,7 @@ Go の自作に替えた（JUK-115）。いま Node の mysql2 を使うのは�
 
 ### マイグレーション（テーブル定義の変更）
 
-`prisma migrate deploy` の代わりに Go の `migrate` コマンド（`apps/api/migrate.go`、JUK-125）が当てる。
+`prisma migrate deploy` の代わりに Go の `migrate` コマンド（`apps/api/internal/migrate/`、JUK-125）が当てる。
 本番はデプロイがアプリを起動する前に、Go のイメージの1回きりのコンテナ（`/api migrate`）で流す。
 `db/migrations` はイメージの `/migrations` に入れてある（`deploy.yml` の `--build-context migrations=`）。
 ローカルは `pnpm dev` / `pnpm run db:migrate`、CI は E2E の前、テストは globalSetup で流す。
