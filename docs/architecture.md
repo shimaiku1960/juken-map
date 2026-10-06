@@ -251,8 +251,8 @@ apps/api/
   │ ├ auth/  study/  goals/  textbooks/  dashboard/
   │ └ admin/  line/  ops/
   ├ write/                書き込みの持ち主（操作とトランザクション）
-  │ ├ account/  studyrecord/  goal/  textbook/
-  │ └ …                   残りは書き込みの対応表（JUK-150）で決める
+  │ ├ account/  authguard/  studyrecord/  textbook/  goal/
+  │ └ university/  textbookmaster/  notification/  simulation/   （一覧は下の「持ち主の一覧」）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
   ├ database/             DB 接続
   ├ telemetry/            ログ・メトリクス・トレース
@@ -288,6 +288,8 @@ apps/api/
 5. **単純な更新にも持ち主を決める。** 志望校の更新が単純なら、`write/goal` は小さな具体型と関数だけでよい。
    例外を作らないのは、「INSERT・UPDATE・DELETE は `internal/write/` の下にしか無い」をテストで確かめられるように
    するためである。例外があると、テストが例外の一覧の管理になり、守られなくなる。
+   アプリのデータではないものを書く `internal/migrate`（マイグレーションの記録）と `internal/dbtest`
+   （テストデータの作成）の2つだけは、最初から対象の外にする。
 6. **インターフェースや追加の層は先に作らない。** 使う側が必要になったら、使う側で定義する。
    今、一部のストア（管理画面のマスター・利用者、LINE、通知）を interface にしているのは、DB を使わない
    テストで失敗を作るためで、DB を差し替えるためではない。
@@ -295,14 +297,42 @@ apps/api/
    済ませない。なお退会は、`DELETE FROM user` の1文で外部キーの `ON DELETE CASCADE` が全部消すので
    （`auth_delete_account.go`）、これに当たらない。
 
+#### 持ち主の一覧（2026-10-06、JUK-150）
+
+書き込みを含む約80の関数（アプリの表は27）を洗い出し、**1つのトランザクションで一緒に変える表どうしを同じ持ち主にした**。
+一緒に変える操作が無い表どうしは、関係が深くても分けた。
+
+| 持ち主 | 書く表 | 同じ持ち主にした根拠（一緒に確定する操作） |
+|---|---|---|
+| `account` | `user`（下の列を除く）・`AuthSession`・`AuthPassword`・`AuthToken`・`AuthIdentity`・`AuthTotp`・`AuthBackupCode`・`AuthMfaChallenge`・`OpsAuditLog` | 利用停止（停止の印＋セッション削除）、パスワードの再設定（パスワード＋セッション・トークン・確認待ちの削除）、OAuth の連携（利用者＋連携＋パスワード・セッション・トークンの削除）、2段階認証の設定とリセット（TOTP＋予備コード＋確認待ち）、退会と管理者の削除（`DELETE FROM user` と外部キーの連鎖） |
+| `authguard` | `AuthOAuthState`・`AuthThrottle`・`EmailSend` | ログインの途中の一時的な状態と、回数の制限。`account` の表と一緒に変える操作は無い |
+| `studyrecord` | `StudyLog`・`StudyPlan`・`user.firstStudyLogAt` | 予定の完了（予定＋実績＋初回記録日時）、実績の記録（実績＋初回記録日時） |
+| `textbook` | `Textbook` | 学習記録と一緒に変える操作は無い（予定の完了は総量を読むだけ） |
+| `goal` | `FinalGoal` | 単独 |
+| `university` | `University`・`Faculty`・`_FacultyToTag` | 学部の作成・変更（学部＋タグの付け替え） |
+| `textbookmaster` | `TextbookMaster`・`TextbookMasterMetric` | 参考書マスターの作成・変更（マスター＋測り方の付け替え）。大学と一緒に変える操作は無いので、`catalog` にはまとめない |
+| `notification` | `LineConnection`・`LineLinkNonce`・`LineOAuthAttempt`・`LineWebhookEvent`・`NotificationPreference`・`NotificationDelivery` | LINE の連携の解除（連携＋確認用の値＋通知の設定） |
+| `simulation` | `user.simSeq`・`simCohort`・`simLastActedOn`・`simDormantFrom` | 負荷のシミュレーション（`/admin/sim`）の利用者の印。ほかの持ち主の列と一緒に変える操作は無い |
+
+決めたこと：
+
+- **`user` は列ごとに持ち主を分ける。** 行を作る・消す・停止する・権限を変えるのは `account`。初回記録日時は、
+  実績と一緒に確定させるので `studyrecord`。シミュレーションの列は `simulation`。ニックネームの変更と、
+  登録の計測を送った印（`analyticsSignUpTrackedAt`）は `account` に置く。
+- **監査ログ（`OpsAuditLog`）は `account` に置く。** 書いているのは運用のコマンドだけで、記録する操作
+  （停止・解除・セッションの削除・権限・2段階認証のリセット）はすべて `account` の操作である。
+  今は操作と記録を別々にコミットしているので、操作と同じトランザクションで書く形にする（JUK-151 で利用停止から）。
+- **期限切れの行の掃除（`expired_cleanup.go`）は、持ち主をまたぐが境界を見直さない。** 表ごとに別々に消してよく、
+  同時に確定させる必要が無いため。各持ち主が「期限切れを消す」操作を出し、タイマーのジョブがそれを順に呼ぶ。
+- **退会は `account` の操作のまま。** ほかの持ち主の表も消えるが、それは外部キーの `ON DELETE CASCADE` という
+  DB の決まりで、コードが順番に消しているのではない。
+
 #### 移し方
 
-- **持ち主の一覧は、書き込みの対応表で確定する（JUK-150）。** 表はテーブル単位ではなく
-  「操作 → 持ち主 → 一緒に保証すること」で作る。根拠が実測で出ているのは
-  account（`user` の停止・権限・メール確認と `AuthSession`）と studyrecord（`StudyLog`・`StudyPlan`・
-  `firstStudyLogAt`）。大学・学部・参考書マスターをまとめるかは、書き込みの関係を見て決める。
 - **最初は account の利用停止で試す（JUK-151）。** 入口・持ち主・テストの分担がうまく分かれるかを確かめてから、
-  ほかへ広げる。
+  ほかへ広げる。その前に、持ち主が使う DB の補助（`inTx` は `line.go`、`placeholders` は `admin_masters.go`、
+  `isMySQLError` は `db.go` に散っている）を `internal/database` へ移す。`package main` は import できないので、
+  これが無いと持ち主のパッケージが作れない。
 - **移動だけの PR と、中身を変える PR を分ける。** 1回の PR で1パッケージにする。挙動は変えないので、
   `go build`・`go vet`・golangci-lint・`go test`・DB テスト・E2E と、ルート一覧が前と同じことで確かめる。
   多くのファイルを動かす PR は、ほかの worktree の作業とぶつかるので、並行する作業が無いときに出す。
