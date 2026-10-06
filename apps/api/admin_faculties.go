@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
 // 管理者ページのマスター編集のうち、学部とタグ（/api/admin/faculties・/api/admin/tags）。
@@ -106,6 +104,11 @@ type facultyInput struct {
 	universityID int64
 }
 
+// record は持ち主に渡す形にする。
+func (in facultyInput) record() university.FacultyInput {
+	return university.FacultyInput{Name: in.name, ExamDate: in.examDate, TagIDs: in.tagIDs, UniversityID: in.universityID}
+}
+
 // readFacultyInput は facultyInputSchema（withUniversity なら createFacultySchema）。
 // createFacultySchema は facultyInputSchema を extend したものなので、universityId は最後に確かめる。
 func readFacultyInput(body any, withUniversity bool) (facultyInput, *objectInput) {
@@ -189,179 +192,17 @@ func (st *sqlAdminMasterStore) listTags(ctx context.Context) ([]AdminTag, error)
 	return tags, rows.Err()
 }
 
-// findFacultySnapshot は学部を、監査ログと応答の形（タグは id だけ）で引く。無ければ nil。
-func findFacultySnapshot(ctx context.Context, db database.Runner, id int64) (*AdminFacultySnapshot, error) {
-	var f AdminFacultySnapshot
-	var examDate string
-	err := db.QueryRowContext(ctx, "SELECT id, universityId, name, examDate FROM Faculty WHERE id = ?", id).
-		Scan(&f.ID, &f.UniversityID, &f.Name, &examDate)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	f.ExamDate = examDate[:10]
-	rows, err := db.QueryContext(ctx, "SELECT B AS tagId FROM _FacultyToTag WHERE A = ? ORDER BY B ASC", id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	f.TagIds = []int64{}
-	for rows.Next() {
-		var tagID int64
-		if err := rows.Scan(&tagID); err != nil {
-			return nil, err
-		}
-		f.TagIds = append(f.TagIds, tagID)
-	}
-	return &f, rows.Err()
-}
-
-// hasFacultyNamed は、その大学に同じ名前の学部があるか（exceptID の学部を除く）。
-// Faculty には (universityId, name) の一意制約が無い（seed が名前で照合している）ので、ここで重複を断る。
-func hasFacultyNamed(ctx context.Context, tx *sql.Tx, universityID int64, name string, exceptID int64) (bool, error) {
-	var id int64
-	err := tx.QueryRowContext(ctx, "SELECT id FROM Faculty WHERE universityId = ? AND name = ? AND id <> ? LIMIT 1",
-		universityID, name, exceptID).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
-// allTagsExist は、送られたタグがすべて Tag にあるか。
-func allTagsExist(ctx context.Context, tx *sql.Tx, tagIDs []int64) (bool, error) {
-	if len(tagIDs) == 0 {
-		return true, nil
-	}
-	args := make([]any, len(tagIDs))
-	for i, id := range tagIDs {
-		args[i] = id
-	}
-	var count int
-	err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM Tag WHERE id IN ("+database.Placeholders(len(tagIDs), "?")+")", args...).Scan(&count)
-	return count == len(tagIDs), err
-}
-
-// replaceTags は学部のタグを送られたものに置き換える（中間テーブルの A = Faculty.id, B = Tag.id）。
-func replaceTags(ctx context.Context, tx *sql.Tx, facultyID int64, tagIDs []int64) error {
-	if _, err := tx.ExecContext(ctx, "DELETE FROM _FacultyToTag WHERE A = ?", facultyID); err != nil {
-		return err
-	}
-	if len(tagIDs) == 0 {
-		return nil
-	}
-	args := make([]any, 0, len(tagIDs)*2)
-	for _, tagID := range tagIDs {
-		args = append(args, facultyID, tagID)
-	}
-	// #nosec G202 -- 埋め込むのは件数ぶん並べた (?, ?) だけ。値は args で渡す
-	_, err := tx.ExecContext(ctx, "INSERT INTO _FacultyToTag (A, B) VALUES "+database.Placeholders(len(tagIDs), "(?, ?)"), args...)
-	return err
-}
-
-// checkFacultyInput は学部の作成・書き換えで、名前の重なりとタグの存在を確かめる。断るなら理由を返す。
-func checkFacultyInput(ctx context.Context, tx *sql.Tx, universityID int64, in facultyInput, exceptID int64) (masterFailure, error) {
-	taken, err := hasFacultyNamed(ctx, tx, universityID, in.name, exceptID)
-	if err != nil || taken {
-		return masterDuplicate, err
-	}
-	exist, err := allTagsExist(ctx, tx, in.tagIDs)
-	if err != nil || !exist {
-		return masterInvalidTags, err
-	}
-	return masterOK, nil
-}
-
-// トランザクションの中でキャッシュを捨てると、確定前に別のリクエストが古い一覧を読み直して置き直せる。
-// 学部の作成・書き換えは、確定（commit）してから捨てる。
-
 func (st *sqlAdminMasterStore) createFaculty(ctx context.Context, in facultyInput) (masterOutcome[AdminFacultySnapshot], error) {
-	var outcome masterOutcome[AdminFacultySnapshot]
-	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		// 大学を押さえてから学部を足す（確かめている間に大学が消されないように）。
-		var universityID int64
-		err := tx.QueryRowContext(ctx, "SELECT id FROM University WHERE id = ? FOR UPDATE", in.universityID).Scan(&universityID)
-		if errors.Is(err, sql.ErrNoRows) {
-			outcome.failure = masterNotFound
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if outcome.failure, err = checkFacultyInput(ctx, tx, in.universityID, in, 0); err != nil || outcome.failure != masterOK {
-			return err
-		}
-		res, err := tx.ExecContext(ctx, "INSERT INTO Faculty (name, examDate, universityId, createdAt) VALUES (?, ?, ?, ?)",
-			in.name, in.examDate, in.universityID, nowMillis())
-		if err != nil {
-			return err
-		}
-		id, err := res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		if err := replaceTags(ctx, tx, id, in.tagIDs); err != nil {
-			return err
-		}
-		outcome, err = foundOutcome(findFacultySnapshot(ctx, tx, id))
-		return err
-	})
-	if err == nil && outcome.failure == masterOK {
-		st.universitiesChanged()
-	}
-	return outcome, err
+	f, err := university.CreateFaculty(ctx, st.db, in.record(), nowMillis())
+	return universityOutcome(st, AdminFacultySnapshot(f), err)
 }
 
 func (st *sqlAdminMasterStore) updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[AdminFacultySnapshot]], error) {
-	var outcome masterOutcome[masterChange[AdminFacultySnapshot]]
-	err := database.InTx(ctx, st.db, func(tx *sql.Tx) error {
-		before, err := findFacultySnapshot(ctx, tx, id)
-		if err != nil || before == nil {
-			outcome.failure = masterNotFound
-			return err
-		}
-		if outcome.failure, err = checkFacultyInput(ctx, tx, before.UniversityID, in, id); err != nil || outcome.failure != masterOK {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, "UPDATE Faculty SET name = ?, examDate = ? WHERE id = ?", in.name, in.examDate, id); err != nil {
-			return err
-		}
-		if err := replaceTags(ctx, tx, id, in.tagIDs); err != nil {
-			return err
-		}
-		after, err := foundOutcome(findFacultySnapshot(ctx, tx, id))
-		outcome.value = masterChange[AdminFacultySnapshot]{before: *before, after: after.value}
-		return err
-	})
-	if err == nil && outcome.failure == masterOK {
-		st.universitiesChanged()
-	}
-	return outcome, err
+	c, err := university.UpdateFaculty(ctx, st.db, id, in.record())
+	return universityOutcome(st, masterChange[AdminFacultySnapshot]{before: AdminFacultySnapshot(c.Before), after: AdminFacultySnapshot(c.After)}, err)
 }
 
 func (st *sqlAdminMasterStore) deleteFaculty(ctx context.Context, id int64) (masterOutcome[AdminFacultySnapshot], error) {
-	faculty, err := findFacultySnapshot(ctx, st.db, id)
-	if err != nil || faculty == nil {
-		return masterOutcome[AdminFacultySnapshot]{failure: masterNotFound}, err
-	}
-	var goalCount int
-	if err := st.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM FinalGoal WHERE facultyId = ?", id).Scan(&goalCount); err != nil {
-		return masterOutcome[AdminFacultySnapshot]{}, err
-	}
-	inUse := masterOutcome[AdminFacultySnapshot]{failure: masterInUse, count: goalCount}
-	if goalCount > 0 {
-		return inUse, nil
-	}
-	// 中間テーブルの行は外部キーの CASCADE で一緒に消える。
-	_, err = st.db.ExecContext(ctx, "DELETE FROM Faculty WHERE id = ?", id)
-	if database.IsMySQLError(err, database.RowIsReferenced) {
-		return inUse, nil
-	}
-	if err != nil {
-		return masterOutcome[AdminFacultySnapshot]{}, err
-	}
-	st.universitiesChanged()
-	return masterOutcome[AdminFacultySnapshot]{value: *faculty}, nil
+	f, err := university.DeleteFaculty(ctx, st.db, id)
+	return universityOutcome(st, AdminFacultySnapshot(f), err)
 }
