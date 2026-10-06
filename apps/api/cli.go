@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 // 引数を付けて起動したときのコマンド（JUK-122）。サーバーとしては起動せず、DB に繋いで1つの操作をして終わる。
@@ -20,7 +21,7 @@ import (
 //	sudo docker exec juken-map-go /api grant-admin --list
 //
 // 手元では pnpm incident・pnpm admin:grant（scripts/go-cli.sh）が .env を読んで同じものを呼ぶ。手順は docs/incident-response.md。
-// 変える操作は、実行の内容を OpsAuditLog に残す（incident.go の recordOps、JUK-138）。`incident log` で見る。
+// 変える操作は、実行の内容を OpsAuditLog に残す（internal/write/account の OpsAudit、JUK-138）。`incident log` で見る。
 // migrate（migrate.go）だけは本番でもデプロイが1回きりのコンテナで流し、手元では pnpm db:migrate が呼ぶ。
 
 const incidentUsage = `使い方: incident <操作> [メールアドレス]
@@ -223,7 +224,8 @@ func runGrantAdmin(ctx context.Context, st incidentStore, args []string, out io.
 }
 
 func describeNotFound(err error, email string) error {
-	if errors.Is(err, errUserNotFound) {
+	// 引いた後に消えていれば、account の操作が ErrNotFound を返す。
+	if errors.Is(err, errUserNotFound) || errors.Is(err, account.ErrNotFound) {
 		return userNotFoundError(email)
 	}
 	return err

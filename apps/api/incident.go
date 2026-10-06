@@ -3,13 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 // 乗っ取りが起きたときの操作と、管理者の付け外し（cli.go のコマンドが使う。手順は docs/incident-response.md）。
@@ -100,34 +99,17 @@ func (st incidentStore) listSessions(ctx context.Context, email string) (inciden
 	return u, sessions, rows.Err()
 }
 
-// opsAuditRetention は OpsAuditLog を残す期間。CloudTrail（S3 に1年）とそろえ、突き合わせられる期間を同じにする。
-const opsAuditRetention = 365 * 24 * time.Hour
-
-// recordOps は、コマンドが変えたことを OpsAuditLog に1行書く（JUK-138、セキュリティ基準 H4）。
-// 本番では `docker exec` で動き、出力が実行した人の端末にしか出ないので、DB に残す。見るだけの操作
-// （sessions・grant-admin --list）は書かない。変えた後に書くので、書けなかったときはエラーを返して
-// コマンドを失敗（終了コード 1）にし、記録が無いことに実行した人が気づけるようにする。
-// 書いたついでに、残す期間を過ぎた行を消す（運用コマンドはめったに使わないので、行は少ない）。
+// recordOps は、コマンドが変えたことを OpsAuditLog に1行書く（JUK-138、セキュリティ基準 H4）。見るだけの操作
+// （sessions・grant-admin --list）は書かない。停止・解除は account の操作が同じトランザクションで書くので、
+// ここを通らない。
 func (st incidentStore) recordOps(ctx context.Context, action, targetID string, detail map[string]any) error {
-	raw, err := json.Marshal(detail)
-	if err != nil {
-		return err
-	}
-	var target any // 全員が対象の操作（revoke-all など）は NULL
-	if targetID != "" {
-		target = targetID
-	}
+	return account.RecordOps(ctx, st.db, opsAudit(), action, targetID, detail, st.now())
+}
+
+// opsAudit は運用のコマンドの記録に付ける実行場所。
+func opsAudit() account.OpsAudit {
 	host, _ := os.Hostname() // 本番ではコンテナ ID
-	now := st.now().UTC()
-	if _, err := st.db.ExecContext(ctx,
-		"INSERT INTO OpsAuditLog (action, targetId, detail, host, createdAt) VALUES (?, ?, ?, ?, ?)",
-		action, target, string(raw), host, now); err != nil {
-		return fmt.Errorf("操作はしましたが、記録（OpsAuditLog）に書けませんでした: %w", err)
-	}
-	if _, err := st.db.ExecContext(ctx, "DELETE FROM OpsAuditLog WHERE createdAt < ?", now.Add(-opsAuditRetention)); err != nil {
-		return fmt.Errorf("操作と記録はしましたが、1年より古い記録を消せませんでした: %w", err)
-	}
-	return nil
+	return account.OpsAudit{Host: host}
 }
 
 type opsAuditEntry struct {
@@ -172,44 +154,27 @@ func (st incidentStore) revokeSessions(ctx context.Context, email string) (int64
 	return removed, st.recordOps(ctx, "revoke", u.ID, map[string]any{"sessionsRemoved": removed})
 }
 
-// ban はその人を止め、セッションをすべて消す。止めた人は次のログインで断られる（auth_handlers.go）。
-// bannedAt を先に書くので、消している間に新しく入られても、そのログインは断られる。
-// 止め直しても最初に止めた日時を保つ（管理画面の停止と同じ）。
+// ban はその人を止め、セッションをすべて消し、記録を残す（account.Suspend が1つのトランザクションで行う）。
+// 止め直しても最初に止めた日時を保つ（管理画面の停止と同じ操作）。
 func (st incidentStore) ban(ctx context.Context, email string) (int64, error) {
 	u, err := st.findByEmail(ctx, email)
 	if err != nil {
 		return 0, err
 	}
-	// DATETIME(3) は端数を丸めるので、先にミリ秒で切っておき、記録の after と DB の値をそろえる。
-	now := st.now().UTC().Truncate(time.Millisecond)
-	if _, err := st.db.ExecContext(ctx,
-		"UPDATE `user` SET bannedAt = COALESCE(bannedAt, ?), updatedAt = ? WHERE id = ?", now, now, u.ID); err != nil {
-		return 0, err
-	}
-	removed, err := st.deleteSessions(ctx, u.ID)
-	if err != nil {
-		return 0, err
-	}
-	after := u.BannedAt
-	if after == nil {
-		iso := isoMillis(now)
-		after = &iso
-	}
-	return removed, st.recordOps(ctx, "ban", u.ID, map[string]any{
-		"before": map[string]any{"bannedAt": u.BannedAt}, "after": map[string]any{"bannedAt": after}, "sessionsRemoved": removed})
+	audit := opsAudit()
+	// DATETIME(3) は端数を丸めるので、先にミリ秒で切っておく（管理画面の nowMillis と同じ）。
+	banned, err := account.Suspend(ctx, st.db, u.ID, st.now().UTC().Truncate(time.Millisecond), &audit)
+	return banned.SessionsRemoved, err
 }
 
-// unban は止めたのを戻す。
+// unban は止めたのを戻し、記録を残す（account.Unsuspend）。
 func (st incidentStore) unban(ctx context.Context, email string) error {
 	u, err := st.findByEmail(ctx, email)
 	if err != nil {
 		return err
 	}
-	if _, err := st.db.ExecContext(ctx, "UPDATE `user` SET bannedAt = NULL, updatedAt = ? WHERE id = ?", st.now().UTC(), u.ID); err != nil {
-		return err
-	}
-	return st.recordOps(ctx, "unban", u.ID, map[string]any{
-		"before": map[string]any{"bannedAt": u.BannedAt}, "after": map[string]any{"bannedAt": nil}})
+	audit := opsAudit()
+	return account.Unsuspend(ctx, st.db, u.ID, st.now().UTC().Truncate(time.Millisecond), &audit)
 }
 
 // revokeAll は全員のセッションを消す（C5 の4）。ログインの不具合や、セッションを読める立場（DB）からの

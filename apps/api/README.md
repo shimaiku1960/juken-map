@@ -323,7 +323,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `cli.go` | 引数の読み取りと振り分け：`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）・`migrate`。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
-| `incident.go` | `incident`・`grant-admin` が使う SQL（セッションの取り消し・停止・2段階認証の解除・役割の付け外し）と、変えたことの記録（`OpsAuditLog`、`incident log` で見る。JUK-138）。手順は `docs/incident-response.md` |
+| `incident.go` | `incident`・`grant-admin` が使う SQL（セッションの取り消し・停止・2段階認証の解除・役割の付け外し）と、変えたことの記録（`OpsAuditLog`、書くのは `internal/write/account`。`incident log` で見る。JUK-138）。手順は `docs/incident-response.md` |
 | `migrate.go` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
 
 ### 共通の部品
@@ -338,6 +338,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `dates.go` | 東京の「今日」、月初・月末、日付のずらし |
 | `logger.go` | pino と同じ形の JSON ログ。reqId・trace_id を足し、`LOG_FILE` にも書く |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
+| `internal/write/account/` | アカウントへの書き込みの持ち主。今は利用停止・解除（`Suspend`・`Unsuspend`）と運用の記録（`OpsAuditLog`）。管理画面と `incident` の両方が呼ぶ（JUK-151、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `openapi.gen.go` | `openapi/openapi.yaml` から作った応答・リクエストの型（手で直さない。`pnpm openapi:generate`、設定は `oapi-codegen.yaml`） |
 
 ### 本物の DB に流す横断のテスト（dbtest タグ）

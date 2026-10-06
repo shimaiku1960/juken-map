@@ -27,6 +27,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
 const authTestPassword = "a long passphrase for tests"
@@ -464,9 +466,9 @@ func TestAuthDBSessionRevocation(t *testing.T) {
 
 	t.Run("C5-3 管理画面の停止でその人の全端末が消え、次のログインも断る", func(t *testing.T) {
 		a := e.signedIn(email, authTestPassword)
-		removed, err := (&sqlAdminUserStore{db: e.db}).ban(context.Background(), id, e.clock.Now())
-		if err != nil || removed == 0 {
-			t.Fatalf("ban = %d, %v", removed, err)
+		banned, err := account.Suspend(context.Background(), e.db, id, e.clock.Now(), nil)
+		if err != nil || banned.SessionsRemoved == 0 {
+			t.Fatalf("Suspend = %+v, %v", banned, err)
 		}
 		if a.sessionEmail() != "" {
 			t.Fatal("停止した人のセッションが残っている")
