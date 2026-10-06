@@ -15,10 +15,13 @@ const COLLECTOR_META = "faro-collector-url";
 // - /api/auth/reset-password/<token>（以前の Better Auth のリンク。トークンがパスにある）
 // - 上の URL がエンコードされて別の URL のクエリに入ったもの（linkToken%3D…）。Faro は読み込んだ
 //   通信の URL も送るので、GA4 への送信（dl=ページの URL）を通して入ってくる（JUK-124）
+// - メールアドレス（エンコードされた a%40example.com を含む）。エラーの文や URL に紛れ込んだときのため。
+//   サーバーのログ・トレースも同じ形で伏せる（apps/api/redact.go）
 const SECRET_PATTERNS: [RegExp, string][] = [
   [/([?&#](?:token|linkToken)=)[^&#\s"'<>]+/gi, "$1[REDACTED]"],
   [/((?:%3F|%26|%23)(?:token|linkToken)%3D)(?:(?!%26|%23)[^&#\s"'<>])+/gi, "$1[REDACTED]"],
   [/(\/api\/auth\/reset-password\/)[^/?#\s"'<>]+/g, "$1[REDACTED]"],
+  [/[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[REDACTED]"],
 ];
 
 export function redactSecrets<T>(value: T): T {

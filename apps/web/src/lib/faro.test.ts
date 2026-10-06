@@ -33,6 +33,18 @@ describe("redactSecrets", () => {
     );
   });
 
+  it("メールアドレスを伏せる（エンコードされたもの・エラーの文に入ったものも）", () => {
+    expect(redactSecrets("Failed: taro.yamada+1@example.co.jp は登録済みです")).toBe(
+      "Failed: [REDACTED] は登録済みです"
+    );
+    expect(redactSecrets("/login?email=taro%40example.com&from=mail")).toBe(
+      "/login?email=[REDACTED]&from=mail"
+    );
+    expect(
+      redactSecrets("https://juken-map.com/node_modules/@grafana/faro-web-sdk/index.js")
+    ).toBe("https://juken-map.com/node_modules/@grafana/faro-web-sdk/index.js");
+  });
+
   it("送信データの入れ子（meta・スタックトレース・配列）まで伏せ、元は書き換えない", () => {
     const item = {
       type: "exception",
@@ -40,7 +52,10 @@ describe("redactSecrets", () => {
         value: "Failed: /api/auth/verify-email?token=jwt.value",
         stacktrace: { frames: [{ filename: "https://juken-map.com/assets/a.js", lineno: 1 }] },
       },
-      meta: { page: { url: "https://juken-map.com/reset-password?token=secret" } },
+      meta: {
+        page: { url: "https://juken-map.com/reset-password?token=secret" },
+        user: { attributes: { contact: "hanako@example.com" } },
+      },
     };
 
     const redacted = redactSecrets(item);
@@ -51,6 +66,7 @@ describe("redactSecrets", () => {
     expect(redacted.meta.page.url).toBe(
       "https://juken-map.com/reset-password?token=[REDACTED]"
     );
+    expect(redacted.meta.user.attributes.contact).toBe("[REDACTED]");
     expect(redacted.payload.stacktrace.frames[0]).toEqual({
       filename: "https://juken-map.com/assets/a.js",
       lineno: 1,

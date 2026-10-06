@@ -32,6 +32,15 @@ func newLogger(w io.Writer, level slog.Level) *slog.Logger {
 	h := slog.NewJSONHandler(w, &slog.HandlerOptions{
 		Level: level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			// メッセージと、文字列・誤りの値からメールアドレスを伏せる（redact.go）。
+			switch a.Value.Kind() {
+			case slog.KindString:
+				a.Value = slog.StringValue(redactEmails(a.Value.String()))
+			case slog.KindAny:
+				if err, ok := a.Value.Any().(error); ok {
+					a.Value = slog.StringValue(redactEmails(err.Error()))
+				}
+			}
 			if len(groups) > 0 {
 				return a
 			}
