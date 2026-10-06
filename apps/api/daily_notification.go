@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 // 毎日の通知の文面と、「日本時間の今日」の範囲（JUK-74）。
@@ -57,10 +59,10 @@ func planLabel(p planSummary) string {
 	return "学習予定"
 }
 
-func buildDailyNotification(slot NotificationSlot, nickname string, plans []planSummary, logMinutes []int64) dailyMessage {
+func buildDailyNotification(slot apischema.NotificationSlot, nickname string, plans []planSummary, logMinutes []int64) dailyMessage {
 	safeName := escapeHTML(nickname)
 
-	if slot == NotificationSlotMorning {
+	if slot == apischema.NotificationSlotMorning {
 		planText := fmt.Sprintf("今日の予定は%d件です。", len(plans))
 		if len(plans) == 0 {
 			planText = "今日はまだ予定がありません。まず1つだけ決めてみましょう。"

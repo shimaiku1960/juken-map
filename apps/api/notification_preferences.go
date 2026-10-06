@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
@@ -19,15 +20,15 @@ type notificationPreferenceStore struct {
 }
 
 // find は自分の通知設定を返す。まだ保存していなければ、全部 false（Node の DEFAULT_PREFERENCE と同じ）。
-func (st *notificationPreferenceStore) find(ctx context.Context, userID string) (NotificationPreference, error) {
-	var p NotificationPreference
+func (st *notificationPreferenceStore) find(ctx context.Context, userID string) (apischema.NotificationPreference, error) {
+	var p apischema.NotificationPreference
 	err := st.db.QueryRowContext(ctx,
 		`SELECT morningEnabled, eveningEnabled, lineMorningEnabled, lineEveningEnabled
 		 FROM NotificationPreference WHERE userId = ?`,
 		userID,
 	).Scan(&p.EmailMorningEnabled, &p.EmailEveningEnabled, &p.LineMorningEnabled, &p.LineEveningEnabled)
 	if errors.Is(err, sql.ErrNoRows) {
-		return NotificationPreference{}, nil
+		return apischema.NotificationPreference{}, nil
 	}
 	return p, err
 }
@@ -53,7 +54,7 @@ func (h *notificationPreferenceHandlers) save(w http.ResponseWriter, r *http.Req
 		return
 	}
 	in := readObject(body.value())
-	input := NotificationPreference{
+	input := apischema.NotificationPreference{
 		EmailMorningEnabled: in.boolean("emailMorningEnabled"),
 		EmailEveningEnabled: in.boolean("emailEveningEnabled"),
 		LineMorningEnabled:  in.boolean("lineMorningEnabled"),

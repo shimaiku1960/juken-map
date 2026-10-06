@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 // クエリ文字列の読み方と、不正なときの 400 の形を Node（Fastify ＋ Zod）に揃える。
@@ -42,7 +44,7 @@ func unescapeQuery(s string) string {
 
 // writeValidationError は 400 を返す。Node と同じく、弾いた理由の最初の1件だけを返す。
 func writeValidationError(w http.ResponseWriter, code, field, message string) {
-	writeJSON(w, http.StatusBadRequest, ValidationError{Error: message, Code: code, Field: &field})
+	writeJSON(w, http.StatusBadRequest, apischema.ValidationError{Error: message, Code: code, Field: &field})
 }
 
 // ymdPattern は Node の ymdField（z.string().regex(/^\d{4}-\d{2}-\d{2}$/)）と同じ形。

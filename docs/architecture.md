@@ -54,7 +54,7 @@ src/shared/             2つのアプリが共有する、外部依存のない�
 apps/web  ──→  shared                      （TS の import）
 db        ──→  shared                      （seed が日付の関数を使う）
 apps/web  ── HTTP（JSON）──→  apps/api      （Go。TS のコードは import しない）
-openapi/openapi.yaml  ──生成──→  shared/openapi.gen.ts・apps/api/openapi.gen.go
+openapi/openapi.yaml  ──生成──→  shared/openapi.gen.ts・apps/api/internal/apischema/openapi.gen.go
 
 apps/api の中:  router.go（入口の種類で拒否）──→ ハンドラ（入力・状態コード）──→ ストア（SQL）
 ```
@@ -64,7 +64,7 @@ apps/api の中:  router.go（入口の種類で拒否）──→ ハンドラ�
 - **apps/web は apps/api の中身を呼べない。** これは約束ではなく**物理的に不可能**である。
   API は Go なので、TS から import する経路がそもそも無い。データが必要なら HTTP を通すしかない。
 - **画面と API が同じ形をやり取りすることは、契約から作った型が保証する。** 形の正は
-  `openapi/openapi.yaml` で、TS の型（`src/shared/openapi.gen.ts`）と Go の型（`apps/api/openapi.gen.go`）を
+  `openapi/openapi.yaml` で、TS の型（`src/shared/openapi.gen.ts`）と Go の型（`apps/api/internal/apischema/openapi.gen.go`）を
   `pnpm openapi:generate` で作る（JUK-76）。入力チェックの規則（Zod）は Go が手で同じものを書く（JUK-75、
   理由は `apps/api/README.md` の「書き込みのルート」）。
 - **API の中は、入口 → ハンドラ → ストアの順に呼ぶ。** 分担は下の「入口・ハンドラ・ストアの分担」。
@@ -143,7 +143,7 @@ Actions を使わない理由として書いていたが（URL が固定され�
 
 `POST /api/study-logs` に JSON を送るだけで、Web もアプリも同じ入口を使える。
 画面と API が同じ形をやり取りすることは、同じ契約（`openapi/openapi.yaml`）から作った型が保証している
-（画面は `src/shared/dto/`、Go は `apps/api/openapi.gen.go`）。予定と実績の一覧は、ストア
+（画面は `src/shared/dto/`、Go は `apps/api/internal/apischema/openapi.gen.go`）。予定と実績の一覧は、ストア
 （`study.go` の `listStudyPlans` / `listStudyLogs`）の戻り値の型をこの型にしている。
 
 ### 画面へ返す形は、SQL を読むところで組み立てる（2026-09-11〜）
@@ -389,7 +389,7 @@ Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移した�
 その後、API は Go（`database/sql`）へ移して Node から消し（JUK-70・JUK-84）、ログインも Better Auth から
 Go の自作に替えた（JUK-115）。いま Node の mysql2 を使うのは、開発用の seed とテストの準備（`db/`）だけで、
 `db/seed-helpers.ts` 経由で `db/connection.ts` の接続プールを使い、日時の扱い（UTC）を Go と揃えている。
-テーブル定義の正は `db/migrations` の SQL、Go の行の型は各ファイルの struct と、契約から作った `openapi.gen.go`。
+テーブル定義の正は `db/migrations` の SQL、Go の行の型は各ファイルの struct と、契約から作った `internal/apischema/openapi.gen.go`。
 
 ### マイグレーション（テーブル定義の変更）
 

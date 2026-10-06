@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
 
@@ -138,7 +139,7 @@ func (h *studyLogWriteHandlers) create(w http.ResponseWriter, r *http.Request, s
 		writeStudyRecordError(w, r, "study-logs create", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, CreatedStudyLog{
+	writeJSON(w, http.StatusCreated, apischema.CreatedStudyLog{
 		ID: created.ID, UserID: created.UserID, Date: created.Date, Subject: created.Subject, Minutes: created.Minutes,
 		TextbookID: created.TextbookID, RangeStart: created.RangeStart, RangeEnd: created.RangeEnd, RangeUnit: created.RangeUnit,
 		Memo: created.Memo, StudyPlanID: created.StudyPlanID, CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt,
@@ -176,7 +177,7 @@ func (h *studyLogWriteHandlers) update(w http.ResponseWriter, r *http.Request, s
 		writeStudyRecordError(w, r, "study-logs update", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, StudyLogRow(updated))
+	writeJSON(w, http.StatusOK, apischema.StudyLogRow(updated))
 }
 
 // delete は DELETE /api/study-logs/{id}。
@@ -192,5 +193,5 @@ func (h *studyLogWriteHandlers) delete(w http.ResponseWriter, r *http.Request, s
 		writeStudyRecordError(w, r, "study-logs delete", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, Deleted{Message: DeletedMessageDeleted})
+	writeJSON(w, http.StatusOK, apischema.Deleted{Message: apischema.DeletedMessageDeleted})
 }

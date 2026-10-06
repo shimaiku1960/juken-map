@@ -18,6 +18,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
@@ -99,7 +100,7 @@ func (h *lineHandlers) connection(w http.ResponseWriter, r *http.Request, s *ses
 		internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, LineConnectionStatus{Connected: connected})
+	writeJSON(w, http.StatusOK, apischema.LineConnectionStatus{Connected: connected})
 }
 
 // disconnect は DELETE /api/line/connection。LINE 通知の設定も一緒に落とす。
@@ -108,7 +109,7 @@ func (h *lineHandlers) disconnect(w http.ResponseWriter, r *http.Request, s *ses
 		internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, LineConnectionStatus{Connected: false})
+	writeJSON(w, http.StatusOK, apischema.LineConnectionStatus{Connected: false})
 }
 
 // accountLink は POST /api/line/account-link。トークのリンクから開いた画面が、ログインしたあとに呼ぶ。

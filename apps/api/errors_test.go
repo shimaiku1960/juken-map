@@ -4,13 +4,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 func TestNewErrorBody(t *testing.T) {
 	// 文言の選び方は Node の errorBody（error-handling.ts）と同じ。
 	tests := []struct {
 		status int
-		code   ServerErrorCode
+		code   apischema.ServerErrorCode
 		want   string
 	}{
 		{500, codeInternal, serverMessage},
@@ -19,7 +21,7 @@ func TestNewErrorBody(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := newErrorBody(tt.status, tt.code, "req-1")
-		if got != (ServerError{Error: tt.want, Code: tt.code, ReqID: "req-1"}) {
+		if got != (apischema.ServerError{Error: tt.want, Code: tt.code, ReqID: "req-1"}) {
 			t.Errorf("newErrorBody(%d, %q) = %+v", tt.status, tt.code, got)
 		}
 	}

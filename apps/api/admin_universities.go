@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
@@ -154,7 +155,7 @@ func readUniversityInput(body any) (universityInput, *objectInput) {
 	v := universityInput{
 		name:       in.string("name", masterNameRule("大学名")),
 		prefecture: in.string("prefecture", stringRule{checks: []stringCheck{oneOf(prefectures, "invalid_prefecture", "都道府県を選んでください")}}),
-		typ:        in.enum("type", func(s string) bool { return UniversityInputType(s).Valid() }, "種別を選んでください"),
+		typ:        in.enum("type", func(s string) bool { return apischema.UniversityInputType(s).Valid() }, "種別を選んでください"),
 	}
 	return v, in
 }
@@ -165,14 +166,14 @@ const adminUniversityColumns = `u.id, u.name, u.prefecture, u.type,
   (SELECT COUNT(*) FROM Faculty f WHERE f.universityId = u.id) AS facultyCount,
   (SELECT COUNT(*) FROM FinalGoal g JOIN Faculty f ON f.id = g.facultyId WHERE f.universityId = u.id) AS goalCount`
 
-func scanAdminUniversity(scan func(...any) error) (AdminUniversity, error) {
-	var u AdminUniversity
+func scanAdminUniversity(scan func(...any) error) (apischema.AdminUniversity, error) {
+	var u apischema.AdminUniversity
 	err := scan(&u.ID, &u.Name, &u.Prefecture, &u.Type, &u.FacultyCount, &u.GoalCount)
 	return u, err
 }
 
-func (st *sqlAdminMasterStore) listUniversities(ctx context.Context, q string, page int) (AdminUniversityList, error) {
-	list := AdminUniversityList{Universities: []AdminUniversity{}, Page: page, PageSize: adminUniversitiesPageSize}
+func (st *sqlAdminMasterStore) listUniversities(ctx context.Context, q string, page int) (apischema.AdminUniversityList, error) {
+	list := apischema.AdminUniversityList{Universities: []apischema.AdminUniversity{}, Page: page, PageSize: adminUniversitiesPageSize}
 	where, params := "", []any{}
 	if q != "" {
 		where, params = "WHERE u.name LIKE ?", append(params, "%"+escapeLike(q)+"%")
@@ -199,7 +200,7 @@ func (st *sqlAdminMasterStore) listUniversities(ctx context.Context, q string, p
 }
 
 // findAdminUniversity は大学を1件引く。無ければ nil。
-func findAdminUniversity(ctx context.Context, db database.Runner, id int64) (*AdminUniversity, error) {
+func findAdminUniversity(ctx context.Context, db database.Runner, id int64) (*apischema.AdminUniversity, error) {
 	u, err := scanAdminUniversity(db.QueryRowContext(ctx, "SELECT "+adminUniversityColumns+" FROM University u WHERE u.id = ?", id).Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -210,7 +211,7 @@ func findAdminUniversity(ctx context.Context, db database.Runner, id int64) (*Ad
 	return &u, nil
 }
 
-func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (*AdminUniversityDetail, error) {
+func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (*apischema.AdminUniversityDetail, error) {
 	university, err := findAdminUniversity(ctx, st.db, id)
 	if err != nil || university == nil {
 		return nil, err
@@ -229,10 +230,10 @@ func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (
 	}
 	defer rows.Close()
 
-	detail := &AdminUniversityDetail{University: *university, Faculties: []AdminFaculty{}}
+	detail := &apischema.AdminUniversityDetail{University: *university, Faculties: []apischema.AdminFaculty{}}
 	for rows.Next() {
 		var (
-			f        AdminFaculty
+			f        apischema.AdminFaculty
 			examDate string
 			tagID    *int64
 			tagName  *string
@@ -243,28 +244,28 @@ func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (
 		// 行は（学部 × タグ）の数だけ並ぶ。同じ学部の行は隣り合うので、直前と比べて束ねる。
 		if n := len(detail.Faculties); n == 0 || detail.Faculties[n-1].ID != f.ID {
 			f.ExamDate = examDate[:10] // DATETIME の日付の部分（Node の toISOString().slice(0, 10)）
-			f.Tags = []AdminTag{}
+			f.Tags = []apischema.AdminTag{}
 			detail.Faculties = append(detail.Faculties, f)
 		}
 		if tagID != nil && tagName != nil {
 			last := &detail.Faculties[len(detail.Faculties)-1]
-			last.Tags = append(last.Tags, AdminTag{ID: *tagID, Name: *tagName})
+			last.Tags = append(last.Tags, apischema.AdminTag{ID: *tagID, Name: *tagName})
 		}
 	}
 	return detail, rows.Err()
 }
 
-func (st *sqlAdminMasterStore) createUniversity(ctx context.Context, in universityInput) (masterOutcome[AdminUniversity], error) {
+func (st *sqlAdminMasterStore) createUniversity(ctx context.Context, in universityInput) (masterOutcome[apischema.AdminUniversity], error) {
 	u, err := university.CreateUniversity(ctx, st.db, in.record(), nowMillis())
-	return masterOutcomeOf(AdminUniversity(u), err, st.universitiesChanged)
+	return masterOutcomeOf(apischema.AdminUniversity(u), err, st.universitiesChanged)
 }
 
-func (st *sqlAdminMasterStore) updateUniversity(ctx context.Context, id int64, in universityInput) (masterOutcome[masterChange[AdminUniversity]], error) {
+func (st *sqlAdminMasterStore) updateUniversity(ctx context.Context, id int64, in universityInput) (masterOutcome[masterChange[apischema.AdminUniversity]], error) {
 	c, err := university.UpdateUniversity(ctx, st.db, id, in.record())
-	return masterOutcomeOf(masterChange[AdminUniversity]{before: AdminUniversity(c.Before), after: AdminUniversity(c.After)}, err, st.universitiesChanged)
+	return masterOutcomeOf(masterChange[apischema.AdminUniversity]{before: apischema.AdminUniversity(c.Before), after: apischema.AdminUniversity(c.After)}, err, st.universitiesChanged)
 }
 
-func (st *sqlAdminMasterStore) deleteUniversity(ctx context.Context, id int64) (masterOutcome[AdminUniversity], error) {
+func (st *sqlAdminMasterStore) deleteUniversity(ctx context.Context, id int64) (masterOutcome[apischema.AdminUniversity], error) {
 	u, err := university.DeleteUniversity(ctx, st.db, id)
-	return masterOutcomeOf(AdminUniversity(u), err, st.universitiesChanged)
+	return masterOutcomeOf(apischema.AdminUniversity(u), err, st.universitiesChanged)
 }

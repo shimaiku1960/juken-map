@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
 )
 
@@ -27,12 +28,12 @@ var facultyIDRule = numberRule{int: true, positive: true, positiveMessage: "志�
 var goalNoteRule = stringRule{max: 500, maxMessage: "500文字以内で入力してください"}
 
 // findGoalWithFaculty は登録した志望校を学部・大学つきで読む（画面が学部名・大学名を出すため）。
-func (st *goalStore) findGoalWithFaculty(ctx context.Context, id int64) (FirstChoiceGoal, error) {
-	var g FirstChoiceGoal
+func (st *goalStore) findGoalWithFaculty(ctx context.Context, id int64) (apischema.FirstChoiceGoal, error) {
+	var g apischema.FirstChoiceGoal
 	if err := st.db.QueryRowContext(ctx,
 		"SELECT"+goalColumns+fromGoalWithFaculty+" WHERE g.id = ?", id,
 	).Scan(goalDest(&g)...); err != nil {
-		return FirstChoiceGoal{}, fmt.Errorf("FinalGoal %d が見つかりません: %w", id, err)
+		return apischema.FirstChoiceGoal{}, fmt.Errorf("FinalGoal %d が見つかりません: %w", id, err)
 	}
 	fixGoalDates(&g)
 	return g, nil
@@ -97,7 +98,7 @@ func (h *goalHandlers) replace(w http.ResponseWriter, r *http.Request, s *sessio
 		writeGoalError(w, r, "replace", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, GoalFields(updated))
+	writeJSON(w, http.StatusOK, apischema.GoalFields(updated))
 }
 
 // update は PATCH /api/goals/{id}。
@@ -123,7 +124,7 @@ func (h *goalHandlers) update(w http.ResponseWriter, r *http.Request, s *session
 		writeGoalError(w, r, "patch", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, OkMessage{Message: OkMessageOK})
+	writeJSON(w, http.StatusOK, apischema.OkMessage{Message: apischema.OkMessageOK})
 }
 
 // delete は DELETE /api/goals/{id}。
@@ -139,5 +140,5 @@ func (h *goalHandlers) delete(w http.ResponseWriter, r *http.Request, s *session
 		writeGoalError(w, r, "delete", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, Deleted{Message: DeletedMessageDeleted})
+	writeJSON(w, http.StatusOK, apischema.Deleted{Message: apischema.DeletedMessageDeleted})
 }

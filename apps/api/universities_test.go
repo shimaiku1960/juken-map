@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 func TestExploreTypesMatchOpenAPI(t *testing.T) {
@@ -16,9 +18,9 @@ func TestExploreTypesMatchOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	generated, err := json.Marshal(ExploreUniversity{
+	generated, err := json.Marshal(apischema.ExploreUniversity{
 		ID: 1, Name: "大学", Prefecture: "東京都", Type: "国立",
-		Faculties: []ExploreFaculty{{Tags: []ExploreTag{{Name: "文系"}}}},
+		Faculties: []apischema.ExploreFaculty{{Tags: []apischema.ExploreTag{{Name: "文系"}}}},
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 func TestMatchesETag(t *testing.T) {
@@ -169,7 +171,7 @@ func TestWriteJSONSnapshot(t *testing.T) {
 // GET /api/textbook-masters もキャッシュから返す（db は nil なので、DB を引けば panic する）。
 func TestTextbookMastersFromCache(t *testing.T) {
 	st := newTextbookStore(nil)
-	snap, err := newJSONSnapshot([]TextbookMaster{}, time.Now().Add(time.Minute))
+	snap, err := newJSONSnapshot([]apischema.TextbookMaster{}, time.Now().Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
 // マスター編集（admin_masters.go）のテスト。DB は偽物にする（Go の CI には DB が無い）。
@@ -28,74 +30,74 @@ type fakeAdminMasterStore struct {
 	deleted         []int64
 }
 
-func (f *fakeAdminMasterStore) listUniversities(_ context.Context, q string, page int) (AdminUniversityList, error) {
-	return AdminUniversityList{Universities: []AdminUniversity{{ID: 1, Name: q}}, Total: 1, Page: page, PageSize: adminUniversitiesPageSize}, nil
+func (f *fakeAdminMasterStore) listUniversities(_ context.Context, q string, page int) (apischema.AdminUniversityList, error) {
+	return apischema.AdminUniversityList{Universities: []apischema.AdminUniversity{{ID: 1, Name: q}}, Total: 1, Page: page, PageSize: adminUniversitiesPageSize}, nil
 }
 
-func (f *fakeAdminMasterStore) universityDetail(_ context.Context, id int64) (*AdminUniversityDetail, error) {
+func (f *fakeAdminMasterStore) universityDetail(_ context.Context, id int64) (*apischema.AdminUniversityDetail, error) {
 	if id != 1 {
 		return nil, nil
 	}
-	return &AdminUniversityDetail{University: AdminUniversity{ID: 1, Name: "東京大学"}, Faculties: []AdminFaculty{}}, nil
+	return &apischema.AdminUniversityDetail{University: apischema.AdminUniversity{ID: 1, Name: "東京大学"}, Faculties: []apischema.AdminFaculty{}}, nil
 }
 
-func (f *fakeAdminMasterStore) listTags(context.Context) ([]AdminTag, error) {
-	return []AdminTag{{ID: 1, Name: "文系"}}, nil
+func (f *fakeAdminMasterStore) listTags(context.Context) ([]apischema.AdminTag, error) {
+	return []apischema.AdminTag{{ID: 1, Name: "文系"}}, nil
 }
 
-func (f *fakeAdminMasterStore) createUniversity(_ context.Context, in universityInput) (masterOutcome[AdminUniversity], error) {
+func (f *fakeAdminMasterStore) createUniversity(_ context.Context, in universityInput) (masterOutcome[apischema.AdminUniversity], error) {
 	f.universities = append(f.universities, in)
-	return masterOutcome[AdminUniversity]{failure: f.failure, count: f.count, value: AdminUniversity{ID: 9, Name: in.name, Prefecture: in.prefecture, Type: in.typ}}, nil
+	return masterOutcome[apischema.AdminUniversity]{failure: f.failure, count: f.count, value: apischema.AdminUniversity{ID: 9, Name: in.name, Prefecture: in.prefecture, Type: in.typ}}, nil
 }
 
-func (f *fakeAdminMasterStore) updateUniversity(_ context.Context, id int64, in universityInput) (masterOutcome[masterChange[AdminUniversity]], error) {
+func (f *fakeAdminMasterStore) updateUniversity(_ context.Context, id int64, in universityInput) (masterOutcome[masterChange[apischema.AdminUniversity]], error) {
 	f.universities = append(f.universities, in)
-	after := AdminUniversity{ID: id, Name: in.name, Prefecture: in.prefecture, Type: in.typ}
-	return masterOutcome[masterChange[AdminUniversity]]{failure: f.failure, value: masterChange[AdminUniversity]{before: AdminUniversity{ID: id, Name: "前"}, after: after}}, nil
+	after := apischema.AdminUniversity{ID: id, Name: in.name, Prefecture: in.prefecture, Type: in.typ}
+	return masterOutcome[masterChange[apischema.AdminUniversity]]{failure: f.failure, value: masterChange[apischema.AdminUniversity]{before: apischema.AdminUniversity{ID: id, Name: "前"}, after: after}}, nil
 }
 
-func (f *fakeAdminMasterStore) deleteUniversity(_ context.Context, id int64) (masterOutcome[AdminUniversity], error) {
+func (f *fakeAdminMasterStore) deleteUniversity(_ context.Context, id int64) (masterOutcome[apischema.AdminUniversity], error) {
 	f.deleted = append(f.deleted, id)
-	return masterOutcome[AdminUniversity]{failure: f.failure, count: f.count, value: AdminUniversity{ID: id}}, nil
+	return masterOutcome[apischema.AdminUniversity]{failure: f.failure, count: f.count, value: apischema.AdminUniversity{ID: id}}, nil
 }
 
-func (f *fakeAdminMasterStore) createFaculty(_ context.Context, in facultyInput) (masterOutcome[AdminFacultySnapshot], error) {
+func (f *fakeAdminMasterStore) createFaculty(_ context.Context, in facultyInput) (masterOutcome[apischema.AdminFacultySnapshot], error) {
 	f.faculties = append(f.faculties, in)
-	return masterOutcome[AdminFacultySnapshot]{failure: f.failure, value: AdminFacultySnapshot{ID: 5, UniversityID: in.universityID, Name: in.name, ExamDate: in.examDate.Format(time.DateOnly), TagIds: in.tagIDs}}, nil
+	return masterOutcome[apischema.AdminFacultySnapshot]{failure: f.failure, value: apischema.AdminFacultySnapshot{ID: 5, UniversityID: in.universityID, Name: in.name, ExamDate: in.examDate.Format(time.DateOnly), TagIds: in.tagIDs}}, nil
 }
 
-func (f *fakeAdminMasterStore) updateFaculty(_ context.Context, id int64, in facultyInput) (masterOutcome[masterChange[AdminFacultySnapshot]], error) {
+func (f *fakeAdminMasterStore) updateFaculty(_ context.Context, id int64, in facultyInput) (masterOutcome[masterChange[apischema.AdminFacultySnapshot]], error) {
 	f.faculties = append(f.faculties, in)
-	after := AdminFacultySnapshot{ID: id, UniversityID: 1, Name: in.name, ExamDate: in.examDate.Format(time.DateOnly), TagIds: in.tagIDs}
-	return masterOutcome[masterChange[AdminFacultySnapshot]]{failure: f.failure, value: masterChange[AdminFacultySnapshot]{after: after}}, nil
+	after := apischema.AdminFacultySnapshot{ID: id, UniversityID: 1, Name: in.name, ExamDate: in.examDate.Format(time.DateOnly), TagIds: in.tagIDs}
+	return masterOutcome[masterChange[apischema.AdminFacultySnapshot]]{failure: f.failure, value: masterChange[apischema.AdminFacultySnapshot]{after: after}}, nil
 }
 
-func (f *fakeAdminMasterStore) deleteFaculty(_ context.Context, id int64) (masterOutcome[AdminFacultySnapshot], error) {
+func (f *fakeAdminMasterStore) deleteFaculty(_ context.Context, id int64) (masterOutcome[apischema.AdminFacultySnapshot], error) {
 	f.deleted = append(f.deleted, id)
-	return masterOutcome[AdminFacultySnapshot]{failure: f.failure, count: f.count}, nil
+	return masterOutcome[apischema.AdminFacultySnapshot]{failure: f.failure, count: f.count}, nil
 }
 
-func (f *fakeAdminMasterStore) listTextbookMasters(_ context.Context, q string) ([]AdminTextbookMaster, error) {
-	return []AdminTextbookMaster{{ID: 1, Name: q, Metrics: []AdminTextbookMasterMetric{}}}, nil
+func (f *fakeAdminMasterStore) listTextbookMasters(_ context.Context, q string) ([]apischema.AdminTextbookMaster, error) {
+	return []apischema.AdminTextbookMaster{{ID: 1, Name: q, Metrics: []apischema.AdminTextbookMasterMetric{}}}, nil
 }
 
-func (f *fakeAdminMasterStore) createTextbookMaster(_ context.Context, in textbookMasterInput) (masterOutcome[AdminTextbookMaster], error) {
+func (f *fakeAdminMasterStore) createTextbookMaster(_ context.Context, in textbookMasterInput) (masterOutcome[apischema.AdminTextbookMaster], error) {
 	f.textbookMasters = append(f.textbookMasters, in)
-	return masterOutcome[AdminTextbookMaster]{failure: f.failure, value: textbookMasterOf(3, in)}, nil
+	return masterOutcome[apischema.AdminTextbookMaster]{failure: f.failure, value: textbookMasterOf(3, in)}, nil
 }
 
-func (f *fakeAdminMasterStore) updateTextbookMaster(_ context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[AdminTextbookMaster]], error) {
+func (f *fakeAdminMasterStore) updateTextbookMaster(_ context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[apischema.AdminTextbookMaster]], error) {
 	f.textbookMasters = append(f.textbookMasters, in)
-	return masterOutcome[masterChange[AdminTextbookMaster]]{failure: f.failure, value: masterChange[AdminTextbookMaster]{after: textbookMasterOf(id, in)}}, nil
+	return masterOutcome[masterChange[apischema.AdminTextbookMaster]]{failure: f.failure, value: masterChange[apischema.AdminTextbookMaster]{after: textbookMasterOf(id, in)}}, nil
 }
 
-func (f *fakeAdminMasterStore) deleteTextbookMaster(_ context.Context, id int64) (masterOutcome[AdminTextbookMaster], error) {
+func (f *fakeAdminMasterStore) deleteTextbookMaster(_ context.Context, id int64) (masterOutcome[apischema.AdminTextbookMaster], error) {
 	f.deleted = append(f.deleted, id)
-	return masterOutcome[AdminTextbookMaster]{failure: f.failure, count: f.count}, nil
+	return masterOutcome[apischema.AdminTextbookMaster]{failure: f.failure, count: f.count}, nil
 }
 
-func textbookMasterOf(id int64, in textbookMasterInput) AdminTextbookMaster {
-	return AdminTextbookMaster{ID: id, Name: in.name, Publisher: in.publisher, Edition: in.edition, Isbn: in.isbn, Metrics: in.metrics}
+func textbookMasterOf(id int64, in textbookMasterInput) apischema.AdminTextbookMaster {
+	return apischema.AdminTextbookMaster{ID: id, Name: in.name, Publisher: in.publisher, Edition: in.edition, Isbn: in.isbn, Metrics: in.metrics}
 }
 
 func newAdminMasterTestRouter(store *fakeAdminMasterStore) *router {
@@ -325,7 +327,7 @@ func TestAdminMasterInputValues(t *testing.T) {
 	t.Run("一覧：q は削ってから渡し、空なら絞らない", func(t *testing.T) {
 		for raw, want := range map[string]string{"?q=%20%E6%9D%B1%20": "東", "?q=%20%20": "", "": ""} {
 			rec := adminRequest(newAdminMasterTestRouter(&fakeAdminMasterStore{}), "GET", "/api/admin/universities"+raw, "")
-			var list AdminUniversityList
+			var list apischema.AdminUniversityList
 			if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
 				t.Fatal(err)
 			}

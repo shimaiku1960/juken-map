@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
@@ -167,13 +168,13 @@ func TestAdminUsersDB(t *testing.T) {
 		sim := fx.adminUser(mark+"-sim@example.test", "user", newer, testSimSeq())
 		seed := fx.adminUser(mark+"@synthetic.juken-map.invalid", "user", newer, nil)
 
-		list := func(query string) AdminUserList {
+		list := func(query string) apischema.AdminUserList {
 			t.Helper()
-			var l AdminUserList
+			var l apischema.AdminUserList
 			app.expect(app.send("GET", "/api/admin/users?"+query, "", adminID), 200, &l)
 			return l
 		}
-		ids := func(l AdminUserList) []string {
+		ids := func(l apischema.AdminUserList) []string {
 			out := []string{}
 			for _, u := range l.Users {
 				out = append(out, u.ID)
@@ -189,7 +190,7 @@ func TestAdminUsersDB(t *testing.T) {
 			t.Errorf("page=%d pageSize=%d", real.Page, real.PageSize)
 		}
 		got := real.Users[0]
-		if got.Kind != UserKindReal || got.StudyLogCount != 2 || !slices.Equal(got.Providers, []string{"credential", "google"}) {
+		if got.Kind != apischema.UserKindReal || got.StudyLogCount != 2 || !slices.Equal(got.Providers, []string{"credential", "google"}) {
 			t.Errorf("active: kind=%s studyLogCount=%d providers=%v", got.Kind, got.StudyLogCount, got.Providers)
 		}
 		if got.LastLoginAt == nil || got.LastStudyLogAt == nil || got.BannedAt != nil {
@@ -232,14 +233,14 @@ func TestAdminUsersDB(t *testing.T) {
 	})
 
 	t.Run("概要：新しい利用者と記録が、種別ごとの数と日別の登録に入る", func(t *testing.T) {
-		overview := func() AdminOverview {
+		overview := func() apischema.AdminOverview {
 			t.Helper()
-			var o AdminOverview
+			var o apischema.AdminOverview
 			app.expect(app.send("GET", "/api/admin/overview", "", adminID), 200, &o)
 			return o
 		}
 		before := overview()
-		kinds := []UserKind{}
+		kinds := []apischema.UserKind{}
 		for _, k := range before.Kinds {
 			kinds = append(kinds, k.Kind)
 		}
@@ -256,7 +257,7 @@ func TestAdminUsersDB(t *testing.T) {
 			t.Errorf("real の増え方: before=%+v after=%+v（どれも1つ増えるはず）", b, a)
 		}
 		today := todayTokyo()
-		countOn := func(o AdminOverview) int {
+		countOn := func(o apischema.AdminOverview) int {
 			for _, d := range o.RealSignupsByDay {
 				if string(d.Date) == today {
 					return d.Count
@@ -292,7 +293,7 @@ func TestAdminUsersDB(t *testing.T) {
 			return &v.String
 		}
 
-		var ban AdminBanResult
+		var ban apischema.AdminBanResult
 		app.expect(app.send("POST", "/api/admin/users/"+id+"/ban", "", adminID), 200, &ban)
 		if ban.ID != id || ban.Email == nil || *ban.Email != email || ban.SessionsRemoved != 2 {
 			t.Fatalf("停止の応答: %+v", ban)
@@ -303,7 +304,7 @@ func TestAdminUsersDB(t *testing.T) {
 		}
 
 		// 押し直しても最初に止めた日時のまま。消す session はもう無い
-		var again AdminBanResult
+		var again apischema.AdminBanResult
 		app.expect(app.send("POST", "/api/admin/users/"+id+"/ban", "", adminID), 200, &again)
 		if again.SessionsRemoved != 0 || again.BannedAt != ban.BannedAt {
 			t.Errorf("押し直しの応答: %+v（最初は %s）", again, ban.BannedAt)
@@ -312,7 +313,7 @@ func TestAdminUsersDB(t *testing.T) {
 			t.Errorf("押し直しで bannedAt が変わった: %s → %v", *first, nullable(second))
 		}
 
-		var unban AdminUserRef
+		var unban apischema.AdminUserRef
 		app.expect(app.send("POST", "/api/admin/users/"+id+"/unban", "", adminID), 200, &unban)
 		if unban.ID != id || bannedAt() != nil {
 			t.Fatalf("解除: 応答 %+v、bannedAt=%v", unban, bannedAt())
@@ -325,7 +326,7 @@ func TestAdminUsersDB(t *testing.T) {
 		}
 
 		// 大文字と前後の空白は無視して比べる
-		var removed AdminDeleteResult
+		var removed apischema.AdminDeleteResult
 		app.expect(app.send("DELETE", "/api/admin/users/"+id, `{"email":"  `+strings.ToUpper(email)+`  "}`, adminID), 200, &removed)
 		if removed.ID != id || removed.Removed.StudyLogs != 2 || removed.Removed.StudyPlans != 1 ||
 			removed.Removed.Textbooks != 1 || removed.Removed.FinalGoals != 1 {
@@ -399,7 +400,7 @@ func TestAdminMastersDB(t *testing.T) {
 			t.Fatal("作る前から一覧にある")
 		}
 
-		var a, b AdminUniversity
+		var a, b apischema.AdminUniversity
 		app.expect(app.send("POST", "/api/admin/universities", `{"name":" `+nameA+` ","prefecture":"北海道","type":"私立"}`, adminID), 201, &a)
 		if a.Name != nameA || a.Prefecture != "北海道" || a.Type != "私立" || a.FacultyCount != 0 || a.GoalCount != 0 {
 			t.Fatalf("作った大学: %+v", a)
@@ -411,7 +412,7 @@ func TestAdminMastersDB(t *testing.T) {
 		app.expectError(app.send("POST", "/api/admin/universities", `{"name":"`+nameA+`","prefecture":"北海道","type":"私立"}`, adminID),
 			409, universityMessages.duplicate)
 
-		var updated AdminUniversity
+		var updated apischema.AdminUniversity
 		app.expect(app.send("PATCH", fmt.Sprintf("/api/admin/universities/%d", a.ID), `{"name":"`+nameA+`","prefecture":"東京都","type":"国立"}`, adminID), 200, &updated)
 		if updated.ID != a.ID || updated.Prefecture != "東京都" || updated.Type != "国立" {
 			t.Errorf("書き換えた大学: %+v", updated)
@@ -422,14 +423,14 @@ func TestAdminMastersDB(t *testing.T) {
 		app.expectError(app.send("PATCH", "/api/admin/universities/999999999", `{"name":"`+mark+`-x","prefecture":"東京都","type":"国立"}`, adminID),
 			404, universityMessages.notFound)
 
-		var list AdminUniversityList
+		var list apischema.AdminUniversityList
 		app.expect(app.send("GET", "/api/admin/universities?q="+mark, "", adminID), 200, &list)
 		if list.Total != 2 || len(list.Universities) != 2 || list.Universities[0].ID != a.ID || list.Universities[1].ID != b.ID {
 			t.Errorf("検索: total=%d universities=%+v（名前の順）", list.Total, list.Universities)
 		}
 
 		// 学部：タグは送った順に関わらず id の順で返る
-		var faculty AdminFacultySnapshot
+		var faculty apischema.AdminFacultySnapshot
 		facultyBody := fmt.Sprintf(`{"name":" 法学部 ","examDate":"2027-02-15","tagIds":[%d,%d],"universityId":%d}`, tag2, tag1, a.ID)
 		app.expect(app.send("POST", "/api/admin/faculties", facultyBody, adminID), 201, &faculty)
 		if faculty.Name != "法学部" || faculty.ExamDate != "2027-02-15" || faculty.UniversityID != a.ID || !slices.Equal(faculty.TagIds, []int64{tag1, tag2}) {
@@ -437,7 +438,7 @@ func TestAdminMastersDB(t *testing.T) {
 		}
 		app.expectError(app.send("POST", "/api/admin/faculties", facultyBody, adminID), 409, facultyMessages.duplicate)
 		// 同じ名前でも別の大学なら作れる
-		var other AdminFacultySnapshot
+		var other apischema.AdminFacultySnapshot
 		app.expect(app.send("POST", "/api/admin/faculties", fmt.Sprintf(`{"name":"法学部","examDate":"2027-02-15","tagIds":[],"universityId":%d}`, b.ID), adminID), 201, &other)
 		app.expectError(app.send("POST", "/api/admin/faculties", `{"name":"法学部","examDate":"2027-02-15","tagIds":[],"universityId":999999999}`, adminID),
 			404, facultyMessages.notFound)
@@ -447,7 +448,7 @@ func TestAdminMastersDB(t *testing.T) {
 			t.Fatalf("断ったはずの学部が増えた: %d", n)
 		}
 
-		var changed AdminFacultySnapshot
+		var changed apischema.AdminFacultySnapshot
 		app.expect(app.send("PATCH", fmt.Sprintf("/api/admin/faculties/%d", faculty.ID), fmt.Sprintf(`{"name":"経済学部","examDate":"2028-01-15","tagIds":[%d]}`, tag2), adminID), 200, &changed)
 		if changed.Name != "経済学部" || changed.ExamDate != "2028-01-15" || !slices.Equal(changed.TagIds, []int64{tag2}) {
 			t.Errorf("書き換えた学部: %+v", changed)
@@ -456,7 +457,7 @@ func TestAdminMastersDB(t *testing.T) {
 			t.Errorf("タグの付け替えで中間テーブルが %d 行（1行のはず）", n)
 		}
 
-		var detail AdminUniversityDetail
+		var detail apischema.AdminUniversityDetail
 		app.expect(app.send("GET", fmt.Sprintf("/api/admin/universities/%d", a.ID), "", adminID), 200, &detail)
 		if detail.University.FacultyCount != 1 || len(detail.Faculties) != 1 {
 			t.Fatalf("詳細: %+v", detail)
@@ -499,18 +500,18 @@ func TestAdminMastersDB(t *testing.T) {
 		}
 
 		// 利用者が選ぶ一覧（GET /api/textbook-masters）での見え方。キャッシュを捨てられているかを見る。
-		listed := func(id int64) *TextbookMaster {
+		listed := func(id int64) *apischema.TextbookMaster {
 			t.Helper()
-			var list []TextbookMaster
+			var list []apischema.TextbookMaster
 			app.expect(app.send("GET", "/api/textbook-masters", "", adminID), 200, &list)
-			if i := slices.IndexFunc(list, func(m TextbookMaster) bool { return m.ID == id }); i >= 0 {
+			if i := slices.IndexFunc(list, func(m apischema.TextbookMaster) bool { return m.ID == id }); i >= 0 {
 				return &list[i]
 			}
 			return nil
 		}
 		listed(0) // 作る前に一覧をキャッシュに載せておく
 
-		var created AdminTextbookMaster
+		var created apischema.AdminTextbookMaster
 		app.expect(app.send("POST", "/api/admin/textbook-masters", body(name, isbn), adminID), 201, &created)
 		if listed(created.ID) == nil {
 			t.Error("作った参考書が利用者の一覧に出ない（キャッシュが残っている）")
@@ -519,7 +520,7 @@ func TestAdminMastersDB(t *testing.T) {
 			created.Edition != nil || created.TextbookCount != 0 {
 			t.Fatalf("作った参考書: %+v", created)
 		}
-		if want := []AdminTextbookMasterMetric{{Unit: "page", TotalAmount: 300, IsDefault: true}, {Unit: "chapter", TotalAmount: 12}}; !slices.Equal(created.Metrics, want) {
+		if want := []apischema.AdminTextbookMasterMetric{{Unit: "page", TotalAmount: 300, IsDefault: true}, {Unit: "chapter", TotalAmount: 12}}; !slices.Equal(created.Metrics, want) {
 			t.Errorf("総量の候補: %+v, want %+v", created.Metrics, want)
 		}
 		app.expectError(app.send("POST", "/api/admin/textbook-masters", body(mark+"-dup", isbn), adminID), 409, textbookMasterMessages.duplicate)
@@ -527,7 +528,7 @@ func TestAdminMastersDB(t *testing.T) {
 			t.Errorf("重なりで断ったのに行がある（トランザクションが戻っていない）")
 		}
 
-		var other AdminTextbookMaster
+		var other apischema.AdminTextbookMaster
 		app.expect(app.send("POST", "/api/admin/textbook-masters", body(mark+"-other", isbn2), adminID), 201, &other)
 		// ほかの参考書の ISBN に書き換えようとすると重なり、総量の候補も元のまま
 		app.expectError(app.send("PATCH", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID), body(name, isbn2), adminID),
@@ -536,11 +537,11 @@ func TestAdminMastersDB(t *testing.T) {
 			t.Errorf("断った書き換えで総量の候補が %d 行（2行のはず）", n)
 		}
 
-		var updated AdminTextbookMaster
+		var updated apischema.AdminTextbookMaster
 		app.expect(app.send("PATCH", fmt.Sprintf("/api/admin/textbook-masters/%d", created.ID),
 			fmt.Sprintf(`{"name":%q,"publisher":null,"edition":" 第3版 ","isbn":%q,"metrics":[{"unit":"question","totalAmount":450,"isDefault":true}]}`, name, isbn), adminID), 200, &updated)
 		if updated.Publisher != nil || updated.Edition == nil || *updated.Edition != "第3版" ||
-			!slices.Equal(updated.Metrics, []AdminTextbookMasterMetric{{Unit: "question", TotalAmount: 450, IsDefault: true}}) {
+			!slices.Equal(updated.Metrics, []apischema.AdminTextbookMasterMetric{{Unit: "question", TotalAmount: 450, IsDefault: true}}) {
 			t.Errorf("書き換えた参考書: %+v", updated)
 		}
 		if m := listed(created.ID); m == nil || m.Edition == nil || *m.Edition != "第3版" || len(m.Metrics) != 1 {
@@ -550,7 +551,7 @@ func TestAdminMastersDB(t *testing.T) {
 
 		// 名前でも ISBN でも探せる
 		for _, q := range []string{name, strings.ReplaceAll(isbn, "-", "")} {
-			var found []AdminTextbookMaster
+			var found []apischema.AdminTextbookMaster
 			app.expect(app.send("GET", "/api/admin/textbook-masters?q="+q, "", adminID), 200, &found)
 			if len(found) != 1 || found[0].ID != created.ID {
 				t.Errorf("q=%s: %+v", q, found)
@@ -560,7 +561,7 @@ func TestAdminMastersDB(t *testing.T) {
 		// 利用者の参考書が使っていれば消せない
 		user := fx.User()
 		fx.Exec("INSERT INTO Textbook (userId, name, masterId, updatedAt) VALUES (?, ?, ?, ?)", user, name, created.ID, time.Now())
-		var used []AdminTextbookMaster
+		var used []apischema.AdminTextbookMaster
 		app.expect(app.send("GET", "/api/admin/textbook-masters?q="+name, "", adminID), 200, &used)
 		if len(used) != 1 || used[0].TextbookCount != 1 {
 			t.Errorf("使われている数: %+v", used)
@@ -583,7 +584,7 @@ func TestAdminMastersDB(t *testing.T) {
 		// LIKE の % と _ を含んでも、そのままの文字列として扱われる。連結で組み立てていれば、構文エラー（500）か
 		// 別の SQL になる。
 		name := mark + `-x'); DROP TABLE University; -- \' " %_`
-		var created AdminUniversity
+		var created apischema.AdminUniversity
 		body, _ := json.Marshal(map[string]string{"name": name, "prefecture": "東京都", "type": "私立"})
 		app.expect(app.send("POST", "/api/admin/universities", string(body), adminID), 201, &created)
 		if created.Name != name {
@@ -595,7 +596,7 @@ func TestAdminMastersDB(t *testing.T) {
 		}
 
 		// 検索語にも同じ文字を入れる。LIKE の % と _ も文字として扱うので、ちょうどこの大学だけに当たる
-		var list AdminUniversityList
+		var list apischema.AdminUniversityList
 		app.expect(app.send("GET", "/api/admin/universities?q="+url.QueryEscape(`'); DROP TABLE University; -- \' " %_`), "", adminID), 200, &list)
 		if list.Total != 1 || len(list.Universities) != 1 || list.Universities[0].ID != created.ID {
 			t.Errorf("検索: total=%d universities=%+v", list.Total, list.Universities)
@@ -607,9 +608,9 @@ func TestAdminMastersDB(t *testing.T) {
 	})
 
 	t.Run("タグの一覧", func(t *testing.T) {
-		var tags []AdminTag
+		var tags []apischema.AdminTag
 		app.expect(app.send("GET", "/api/admin/tags", "", adminID), 200, &tags)
-		i := slices.IndexFunc(tags, func(tag AdminTag) bool { return tag.ID == tag1 })
+		i := slices.IndexFunc(tags, func(tag apischema.AdminTag) bool { return tag.ID == tag1 })
 		if i < 0 || i+1 >= len(tags) || tags[i].Name != mark+"-tag1" || tags[i+1].ID != tag2 {
 			t.Errorf("作ったタグが id の順に並んでいない: %+v", tags)
 		}

@@ -1,5 +1,5 @@
 # 受験マップの API の契約（JUK-76）。このファイルが正で、型はここから生成する。
-#   - Go（apps/api/openapi.gen.go）：oapi-codegen（apps/api/oapi-codegen.yaml）
+#   - Go（apps/api/internal/apischema/openapi.gen.go）：oapi-codegen（apps/api/internal/apischema/oapi-codegen.yaml）
 #   - TypeScript（src/shared/openapi.gen.ts）：openapi-typescript
 # 形を変えるときはこのファイルを直し、`pnpm openapi:generate` を流す。CI は生成し直して差分が出たら落とす。
 #

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -70,28 +71,28 @@ func TestReadAdminUsersQuery(t *testing.T) {
 	// 期待値は Node（Zod の listUsersQuerySchema）に同じ値を渡して得たもの。
 	tests := []struct {
 		raw       string
-		wantKind  UserKind
+		wantKind  apischema.UserKind
 		wantQ     string
 		wantPage  int
 		wantIssue string // "code field message"。空なら通る
 	}{
-		{"", UserKindReal, "", 1, ""},
-		{"kind=sim&q=%20a%20&page=3", UserKindSim, " a ", 3, ""},
+		{"", apischema.UserKindReal, "", 1, ""},
+		{"kind=sim&q=%20a%20&page=3", apischema.UserKindSim, " a ", 3, ""},
 		{"kind=x", "", "", 0, `invalid_value kind Invalid option: expected one of "real"|"sim"|"seed"|"demo"`},
 		{"kind=", "", "", 0, `invalid_value kind Invalid option: expected one of "real"|"sim"|"seed"|"demo"`},
 		{"kind=real&kind=sim", "", "", 0, `invalid_value kind Invalid option: expected one of "real"|"sim"|"seed"|"demo"`},
 		{"q=a&q=b", "", "", 0, "invalid_type q Invalid input: expected string, received array"},
 		{"q=" + strings.Repeat("a", 192), "", "", 0, "too_big q Too big: expected string to have <=191 characters"},
-		{"q=" + strings.Repeat("あ", 191), UserKindReal, strings.Repeat("あ", 191), 1, ""},
+		{"q=" + strings.Repeat("あ", 191), apischema.UserKindReal, strings.Repeat("あ", 191), 1, ""},
 		{"page=abc", "", "", 0, "invalid_type page Invalid input: expected number, received NaN"},
 		{"page=", "", "", 0, "too_small page Too small: expected number to be >0"},
 		{"page=0", "", "", 0, "too_small page Too small: expected number to be >0"},
 		{"page=-1", "", "", 0, "too_small page Too small: expected number to be >0"},
 		{"page=1.5", "", "", 0, "invalid_type page Invalid input: expected int, received number"},
 		{"page=10001", "", "", 0, "too_big page Too big: expected number to be <=10000"},
-		{"page=1e3", UserKindReal, "", 1000, ""},
-		{"page=%202%20", UserKindReal, "", 2, ""},
-		{"page=0x10", UserKindReal, "", 16, ""},
+		{"page=1e3", apischema.UserKindReal, "", 1000, ""},
+		{"page=%202%20", apischema.UserKindReal, "", 2, ""},
+		{"page=0x10", apischema.UserKindReal, "", 16, ""},
 		{"page=Infinity", "", "", 0, "invalid_type page Invalid input: expected number, received Infinity"},
 		{"page=3&page", "", "", 0, "invalid_type page Invalid input: expected number, received NaN"},
 		{"page=1&page=2", "", "", 0, "invalid_type page Invalid input: expected number, received NaN"},
@@ -139,12 +140,12 @@ type fakeAdminUserStore struct {
 	deleted []string
 }
 
-func (f *fakeAdminUserStore) overview(context.Context, time.Time) (AdminOverview, error) {
-	return AdminOverview{}, nil
+func (f *fakeAdminUserStore) overview(context.Context, time.Time) (apischema.AdminOverview, error) {
+	return apischema.AdminOverview{}, nil
 }
 
-func (f *fakeAdminUserStore) listUsers(_ context.Context, kind UserKind, q string, page int) (AdminUserList, error) {
-	return AdminUserList{Users: []AdminUser{}, Page: page, PageSize: adminUsersPageSize}, nil
+func (f *fakeAdminUserStore) listUsers(_ context.Context, kind apischema.UserKind, q string, page int) (apischema.AdminUserList, error) {
+	return apischema.AdminUserList{Users: []apischema.AdminUser{}, Page: page, PageSize: adminUsersPageSize}, nil
 }
 
 func (f *fakeAdminUserStore) findTarget(_ context.Context, id string) (*adminTarget, error) {
