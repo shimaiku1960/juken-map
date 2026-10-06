@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"crypto/aes"
@@ -57,7 +57,7 @@ func totpCode(secret []byte, step int64) string {
 	return fmt.Sprintf("%0*d", totpDigits, value%1_000_000)
 }
 
-// matchTOTP は code が now の前後 totpSkew ステップのどれかに合うかを確かめ、合ったステップを返す。
+// matchTOTP は code が Now の前後 totpSkew ステップのどれかに合うかを確かめ、合ったステップを返す。
 // lastUsedStep 以下のステップは、合っていても通さない（一度通ったコードを二度と使わせない）。
 // 最後の判定（そのステップを使用済みにできたか）は、同時のリクエストに備えて DB の条件つき UPDATE が行う。
 func matchTOTP(secret []byte, code string, now time.Time, lastUsedStep *int64) (int64, bool) {
@@ -120,12 +120,12 @@ type totpKeyring struct {
 
 var errTOTPKeyUnknown = errors.New("TOTP の秘密の鍵の版が見つかりません")
 
-// newTOTPKeyring は AUTH_TOTP_KEYS（「版:base64 の 32 バイト」をカンマで並べたもの。先頭が今の版）を読む。
+// NewTOTPKeyring は AUTH_TOTP_KEYS（「版:base64 の 32 バイト」をカンマで並べたもの。先頭が今の版）を読む。
 //
 // 空なら、BETTER_AUTH_SECRET から HKDF で導いた鍵を版 v0 として使う。切り替えの時点で新しい秘密を
 // 用意しなくて済むようにするため。BETTER_AUTH_SECRET は Cookie の署名に使わなくなったので、
 // この用途だけになる（1つの秘密を複数の用途に使わない。I2）。いずれ AUTH_TOTP_KEYS に版を足して移す。
-func newTOTPKeyring(spec, fallbackSecret string) (*totpKeyring, error) {
+func NewTOTPKeyring(spec, fallbackSecret string) (*totpKeyring, error) {
 	k := &totpKeyring{keys: map[string][]byte{}}
 	if fallbackSecret != "" {
 		derived, err := hkdf.Key(sha256.New, []byte(fallbackSecret), nil, "juken-map totp secret encryption v0", 32)

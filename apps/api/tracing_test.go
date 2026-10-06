@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
@@ -47,7 +48,7 @@ func spanAttr(s sdktrace.ReadOnlySpan, key string) string {
 func TestRequestSpanUsesRouteTemplate(t *testing.T) {
 	buf := captureLogs(t)
 	tp, sr := recordSpans()
-	h := newServerHandler(newTestRouter(), newMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
+	h := newServerHandler(newTestRouter(), auth.NewMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
 
 	res := serve(h, "DELETE", "/api/mine/log-123?token=secret-in-query", "alice")
 
@@ -87,7 +88,7 @@ func TestRequestSpanStatus(t *testing.T) {
 	rt.Public("GET /api/missing", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErrorBody(w, r, http.StatusNotFound, httpx.CodeNotFound)
 	})
-	h := newServerHandler(rt, newMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
+	h := newServerHandler(rt, auth.NewMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
 
 	serve(h, "GET", "/api/boom", "")
 	serve(h, "GET", "/api/missing", "")
@@ -114,7 +115,7 @@ func TestRequestSpanStatus(t *testing.T) {
 
 func TestNoTracerStillServes(t *testing.T) {
 	buf := captureLogs(t)
-	h, _ := newTestServer(newMetrics(), 10)
+	h, _ := newTestServer(auth.NewMetrics(), 10)
 
 	if res := serve(h, "GET", "/api/public", ""); res.Code != http.StatusOK {
 		t.Fatalf("status = %d", res.Code)
@@ -211,7 +212,7 @@ func TestWebSpansAreNotSent(t *testing.T) {
 	sr := tracetest.NewSpanRecorder()
 	// 本番と同じく、送る手前に telemetry.SkipWebSpans を挟む。
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(telemetry.SkipWebSpans{SpanProcessor: sr}))
-	h := newServerHandler(newSPATestRouter(t, pageScripts{}), newMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
+	h := newServerHandler(newSPATestRouter(t, pageScripts{}), auth.NewMetrics(), serverOptions{maxInFlight: 10, tracer: tp.Tracer("test")})
 
 	serve(h, "GET", "/", "")
 	serve(h, "GET", "/api/health", "")

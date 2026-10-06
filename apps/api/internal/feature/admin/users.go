@@ -30,7 +30,7 @@ import (
 // 画面がメニューを出し分けているのは見た目のためだけ。
 //
 // 停止：bannedAt を書き、その人のセッション（AuthSession）を消して今の画面を落とす。次のログインは、
-// ログインの入口（auth_handlers.go など）が bannedAt を見て断る。
+// ログインの入口（internal/feature/auth/handlers.go など）が bannedAt を見て断る。
 
 const (
 	adminUsersPageSize = 50

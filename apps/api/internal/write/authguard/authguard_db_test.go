@@ -10,7 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
-// ログインの守りの操作を、本物の MySQL で確かめる。入口からの流れ（429・メールが届くか）は package main の auth_db_test.go にある。
+// ログインの守りの操作を、本物の MySQL で確かめる。入口からの流れ（429・メールが届くか）は internal/feature/auth の auth_db_test.go にある。
 func TestAuthGuardDB(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)

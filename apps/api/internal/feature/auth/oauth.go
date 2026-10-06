@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -64,7 +64,7 @@ type oauthEndpoints struct {
 	githubAuth, githubToken, githubAPI string
 }
 
-var defaultOAuthEndpoints = oauthEndpoints{
+var DefaultOAuthEndpoints = oauthEndpoints{
 	googleAuth:  "https://accounts.google.com/o/oauth2/v2/auth",
 	googleToken: "https://oauth2.googleapis.com/token",
 	githubAuth:  "https://github.com/login/oauth/authorize",
@@ -72,9 +72,9 @@ var defaultOAuthEndpoints = oauthEndpoints{
 	githubAPI:   "https://api.github.com",
 }
 
-// newOAuthProviders は設定のあるプロバイダーだけを作る。scope はログインに要る最小限（ID とメール）にする（F3）。
+// NewOAuthProviders は設定のあるプロバイダーだけを作る。scope はログインに要る最小限（ID とメール）にする（F3）。
 // 表示名や画像のための profile（Google）・read:user（GitHub）は求めない。
-func newOAuthProviders(webOrigin string, ep oauthEndpoints, googleID, googleSecret, githubID, githubSecret string) map[string]*oauthProvider {
+func NewOAuthProviders(webOrigin string, ep oauthEndpoints, googleID, googleSecret, githubID, githubSecret string) map[string]*oauthProvider {
 	providers := map[string]*oauthProvider{}
 	if googleID != "" && googleSecret != "" {
 		providers["google"] = &oauthProvider{
@@ -106,7 +106,7 @@ func newOAuthProviders(webOrigin string, ep oauthEndpoints, googleID, googleSecr
 
 // oauthStart は POST /api/auth/oauth/{provider}。同意画面の URL を返し、画面がそこへ移る。
 // GET で始めないのは、状態（DB の往復の行）を作る処理を別のサイトから踏ませないため（10 D2）。
-func (h *authHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) oauthStart(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	var in struct {
 		CallbackURL string `json:"callbackURL"`
 	}
@@ -139,7 +139,7 @@ func (h *authHandlers) oauthStart(w http.ResponseWriter, r *http.Request, s *htt
 
 // oauthCallback は GET /api/auth/callback/{provider}。プロバイダーから画面遷移で戻ってくる。
 // 失敗はすべてログインの画面へ戻し、理由の詳しいところはログにだけ残す。
-func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
+func (h *Handlers) oauthCallback(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
 	ctx := r.Context()
 	providerName := r.PathValue("provider")
 	clearCookie(w, oauthCookieName, http.SameSiteLaxMode)
@@ -217,7 +217,7 @@ func (h *authHandlers) oauthCallback(w http.ResponseWriter, r *http.Request, pre
 //  4. いても未確認なら、その利用者はまだ誰のものとも確かめられていない。相手が先に被害者のメールアドレスで
 //     登録しておく乗っ取りを防ぐため、パスワード・セッション・トークンを消してから結びつけ、確認済みにする
 //  5. いなければ新しく作り、運営者へ知らせる
-func (h *authHandlers) resolveOAuthUser(r *http.Request, provider string, ident *oauthIdentity) (*authUser, error) {
+func (h *Handlers) resolveOAuthUser(r *http.Request, provider string, ident *oauthIdentity) (*authUser, error) {
 	ctx := r.Context()
 	userID, err := h.store.identityUser(ctx, provider, ident.Subject)
 	if err != nil {

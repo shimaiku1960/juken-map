@@ -33,7 +33,7 @@ func expiringRows(fx dbFixture, userID string, expiresAt time.Time) {
 	fx.Exec("INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt) VALUES (?, ?, ?, ?, ?, ?)",
 		dbtest.Hex(16), h(), userID, now, expiresAt, now)
 	fx.Exec("INSERT INTO AuthToken (tokenHash, purpose, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?)",
-		h(), tokenPurposePasswordReset, userID, now, expiresAt)
+		h(), "password-reset", userID, now, expiresAt)
 	fx.Exec("INSERT INTO AuthMfaChallenge (tokenHash, userId, createdAt, expiresAt) VALUES (?, ?, ?, ?)", h(), userID, now, expiresAt)
 	state := h()
 	fx.Exec("INSERT INTO AuthOAuthState (stateHash, provider, codeVerifier, nonce, redirectTo, createdAt, expiresAt) VALUES (?, 'google', ?, ?, '/', ?, ?)",

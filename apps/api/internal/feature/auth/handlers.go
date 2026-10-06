@@ -1,4 +1,6 @@
-package main
+// Package auth はログイン（/api/auth/*）とプロフィールの入口。セッションの読み方（LoadSession）と、
+// ログインの入口の一覧（RegisterRoutes）も持つ。書き込みは internal/write/account・authguard が持つ。
+package auth
 
 import (
 	"context"
@@ -35,11 +37,11 @@ import (
 //	POST password/reset          メールのリンクのトークンでパスワードを決め直す
 //	POST password/change         ログイン中にパスワードを変える（今のパスワードを入れ直す）
 //	GET  accounts                ログインの手段（パスワードの有無・連携している外部サービス）
-//	POST delete-account          退会（本人の確認をし直してから、利用者とデータを消す。auth_delete_account.go）
-//	POST mfa/setup・mfa/confirm  2段階認証を設定する（auth_mfa.go）
-//	POST mfa/verify              ログインの途中で2段階認証のコードを確かめる（auth_mfa.go）
-//	POST oauth/{provider}        外部ログインを始める（auth_oauth.go）
-//	GET  callback/{provider}     外部ログインから戻ってくる（auth_oauth.go）
+//	POST delete-account          退会（本人の確認をし直してから、利用者とデータを消す。delete_account.go）
+//	POST mfa/setup・mfa/confirm  2段階認証を設定する（mfa.go）
+//	POST mfa/verify              ログインの途中で2段階認証のコードを確かめる（mfa.go）
+//	POST oauth/{provider}        外部ログインを始める（oauth.go）
+//	GET  callback/{provider}     外部ログインから戻ってくる（oauth.go）
 
 const (
 	// authBodyLimit は認証の入口で受け取る本文の上限。パスワード（256 バイトまで）より十分大きく、小さく保つ。
@@ -56,8 +58,8 @@ const (
 	bannedMessage             = "このアカウントは利用を停止されています。"
 )
 
-// authHandlers は認証の入口が使うものをまとめる。
-type authHandlers struct {
+// Handlers は認証の入口が使うものをまとめる。
+type Handlers struct {
 	store     *authStore
 	sessions  *sessionStore
 	hasher    *passwordHasher
@@ -69,7 +71,7 @@ type authHandlers struct {
 	now       func() time.Time
 }
 
-func (h *authHandlers) clock() time.Time {
+func (h *Handlers) clock() time.Time {
 	return h.now().UTC().Truncate(time.Millisecond)
 }
 
@@ -136,7 +138,7 @@ func safeRedirectPath(p, fallback string) string {
 
 // startSession はログインを完了させる。新しいセッションを作り（C4）、前のセッション（同じブラウザで
 // 別の人・同じ人がログインしていたもの）があれば消す。
-func (h *authHandlers) startSession(w http.ResponseWriter, r *http.Request, u *authUser, mfaVerified bool, previous *httpx.Session) error {
+func (h *Handlers) startSession(w http.ResponseWriter, r *http.Request, u *authUser, mfaVerified bool, previous *httpx.Session) error {
 	raw, expiresAt, err := h.sessions.create(r.Context(), r, u.ID, u.Role, mfaVerified)
 	if err != nil {
 		return err
@@ -154,7 +156,7 @@ func (h *authHandlers) startSession(w http.ResponseWriter, r *http.Request, u *a
 
 // startMFAChallenge は「パスワード（か外部ログイン）は通ったが、2段階認証がまだ」の状態を作る（G3）。
 // セッションではない一時的な状態で、できるのはコードの確認だけ。
-func (h *authHandlers) startMFAChallenge(w http.ResponseWriter, r *http.Request, userID string) error {
+func (h *Handlers) startMFAChallenge(w http.ResponseWriter, r *http.Request, userID string) error {
 	raw, err := h.store.createMFAChallenge(r.Context(), userID)
 	if err != nil {
 		return err
@@ -191,7 +193,7 @@ type SessionInfo struct {
 }
 
 // session は GET /api/auth/session。ログインしていなければ null（200）を返す。
-func (h *authHandlers) session(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) session(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s == nil || s.Banned {
 		httpx.WriteJSON(w, http.StatusOK, nil)
 		return
@@ -220,7 +222,7 @@ func (h *authHandlers) session(w http.ResponseWriter, r *http.Request, s *httpx.
 // まだ確認していないアカウントへの登録し直しは、パスワードを新しいものに置き換えて確認メールを送り直す
 // （古い確認のリンクは無効になる）。相手が先に被害者のメールアドレスで登録しておき、被害者が確認した後も
 // 相手のパスワードで入れる、という乗っ取りを防ぐため（10 F2 の迷ったら と同じ考え方）。
-func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
+func (h *Handlers) signUp(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	var in struct {
 		Email       string `json:"email"`
 		Password    string `json:"password"`
@@ -285,7 +287,7 @@ func (h *authHandlers) signUp(w http.ResponseWriter, r *http.Request, _ *httpx.S
 
 // sendVerification は確認のトークンを作り、メールを送る（送るのは応答のあと）。
 // リンクは確認の画面を開くだけで、トークンを使うのは画面のボタンからの POST（10 E2）。
-func (h *authHandlers) sendVerification(ctx context.Context, userID, email, callback string) error {
+func (h *Handlers) sendVerification(ctx context.Context, userID, email, callback string) error {
 	raw, err := h.store.issueToken(ctx, userID, tokenPurposeVerifyEmail, verifyEmailTTL)
 	if err != nil {
 		return err
@@ -299,7 +301,7 @@ func (h *authHandlers) sendVerification(ctx context.Context, userID, email, call
 }
 
 // allowAnonymous はログインしていなくても呼べる入口の、IP 単位の回数制限（H1）。止めたら 429 を返して false。
-func (h *authHandlers) allowAnonymous(w http.ResponseWriter, r *http.Request) bool {
+func (h *Handlers) allowAnonymous(w http.ResponseWriter, r *http.Request) bool {
 	ok, retry, err := h.throttle.hit(r.Context(), authguard.AnonymousIP, httpx.ClientIP(r))
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("throttle: %w", err))
@@ -314,7 +316,7 @@ func (h *authHandlers) allowAnonymous(w http.ResponseWriter, r *http.Request) bo
 }
 
 // signIn は POST /api/auth/sign-in。
-func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
+func (h *Handlers) signIn(w http.ResponseWriter, r *http.Request, previous *httpx.Session) {
 	var in struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -403,7 +405,7 @@ func (h *authHandlers) signIn(w http.ResponseWriter, r *http.Request, previous *
 
 // rehash は、合っていたパスワードを今の方式で作り直して保存する（B2）。失敗してもログインは止めない
 // （次のログインでまた作り直す）。
-func (h *authHandlers) rehash(r *http.Request, userID, password string) {
+func (h *Handlers) rehash(r *http.Request, userID, password string) {
 	hash, err := h.hasher.hash(r.Context(), password)
 	if err == nil {
 		err = h.store.setPassword(r.Context(), userID, hash, h.clock())
@@ -416,7 +418,7 @@ func (h *authHandlers) rehash(r *http.Request, userID, password string) {
 }
 
 // signOut は POST /api/auth/sign-out。この端末のセッションを消す（C5 の1）。
-func (h *authHandlers) signOut(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) signOut(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s != nil {
 		if err := h.sessions.revoke(r.Context(), s.ID); err != nil {
 			httpx.InternalError(w, r, fmt.Errorf("sign-out: %w", err))
@@ -430,7 +432,7 @@ func (h *authHandlers) signOut(w http.ResponseWriter, r *http.Request, s *httpx.
 }
 
 // accounts は GET /api/auth/accounts。ログインの手段の一覧（2段階認証の設定の前に、パスワードがあるかを見る）。
-func (h *authHandlers) accounts(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
+func (h *Handlers) accounts(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s == nil {
 		httpx.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
@@ -443,39 +445,60 @@ func (h *authHandlers) accounts(w http.ResponseWriter, r *http.Request, s *httpx
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"hasPassword": hasPassword, "providers": providers})
 }
 
-// authConfig は認証の入口の設定（main.go が環境変数から作る）。
-type authConfig struct {
-	webOrigin       string
-	totpKeys        *totpKeyring
-	hashConcurrency int
-	metrics         *telemetry.Metrics
-	adminTo         string
-	sender          emailSender
-	oauth           map[string]*oauthProvider
-	now             func() time.Time
-	// async はメールなどを応答のあとに動かす。nil なら goroutine（テストはその場で動かす）。
-	async func(func())
+// Config は認証の入口の設定（main.go が環境変数から作る）。
+type Config struct {
+	WebOrigin       string
+	TOTPKeys        *totpKeyring
+	HashConcurrency int
+	Metrics         *telemetry.Metrics
+	AdminTo         string
+	Sender          emailSender
+	OAuth           map[string]*oauthProvider
+	Now             func() time.Time
+	// Async はメールなどを応答のあとに動かす。nil なら goroutine（テストはその場で動かす）。
+	Async func(func())
 }
 
-func newAuthHandlers(db *sql.DB, cfg authConfig) *authHandlers {
-	if cfg.now == nil {
-		cfg.now = time.Now
+func New(db *sql.DB, cfg Config) *Handlers {
+	if cfg.Now == nil {
+		cfg.Now = time.Now
 	}
-	if cfg.async == nil {
-		cfg.async = func(f func()) { go f() }
+	if cfg.Async == nil {
+		cfg.Async = func(f func()) { go f() }
 	}
-	if cfg.metrics == nil {
-		cfg.metrics = newMetrics()
+	if cfg.Metrics == nil {
+		cfg.Metrics = NewMetrics()
 	}
-	return &authHandlers{
-		store:     &authStore{db: db, now: cfg.now},
-		sessions:  &sessionStore{db: db, now: cfg.now},
-		hasher:    newPasswordHasher(cfg.hashConcurrency),
-		throttle:  &throttle{db: db, now: cfg.now},
-		mailer:    &authMailer{db: db, sender: cfg.sender, metrics: cfg.metrics, adminTo: cfg.adminTo, now: cfg.now, async: cfg.async},
-		totpKeys:  cfg.totpKeys,
-		oauth:     cfg.oauth,
-		webOrigin: cfg.webOrigin,
-		now:       cfg.now,
+	return &Handlers{
+		store:     &authStore{db: db, now: cfg.Now},
+		sessions:  &sessionStore{db: db, now: cfg.Now},
+		hasher:    newPasswordHasher(cfg.HashConcurrency),
+		throttle:  &throttle{db: db, now: cfg.Now},
+		mailer:    &authMailer{db: db, sender: cfg.Sender, metrics: cfg.Metrics, adminTo: cfg.AdminTo, now: cfg.Now, async: cfg.Async},
+		totpKeys:  cfg.TOTPKeys,
+		oauth:     cfg.OAuth,
+		webOrigin: cfg.WebOrigin,
+		now:       cfg.Now,
 	}
+}
+
+// RegisterRoutes はログインの入口を登録する。本番では /api/auth/ で始まるものを
+// すべて Go へ送る（infra/nginx/juken-map-go-routes.conf）。
+func RegisterRoutes(rt *httpx.Router, h *Handlers) {
+	rt.Auth("GET /api/auth/session", h.session)
+	rt.Auth("POST /api/auth/sign-up", h.signUp)
+	rt.Auth("POST /api/auth/sign-in", h.signIn)
+	rt.Auth("POST /api/auth/sign-out", h.signOut)
+	rt.Auth("POST /api/auth/verify-email", h.verifyEmail)
+	rt.Auth("POST /api/auth/verify-email/resend", h.resendVerification)
+	rt.Auth("POST /api/auth/password/forgot", h.forgotPassword)
+	rt.Auth("POST /api/auth/password/reset", h.resetPassword)
+	rt.Auth("POST /api/auth/password/change", h.changePassword)
+	rt.Auth("GET /api/auth/accounts", h.accounts)
+	rt.Auth("POST /api/auth/delete-account", h.deleteAccount)
+	rt.Auth("POST /api/auth/mfa/setup", h.mfaSetup)
+	rt.Auth("POST /api/auth/mfa/confirm", h.mfaConfirm)
+	rt.Auth("POST /api/auth/mfa/verify", h.mfaVerify)
+	rt.Auth("POST /api/auth/oauth/{provider}", h.oauthStart)
+	rt.Auth("GET /api/auth/callback/{provider}", h.oauthCallback)
 }

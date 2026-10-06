@@ -2,7 +2,7 @@ import * as nodeCrypto from "node:crypto";
 import { promisify } from "node:util";
 
 // seed で作る利用者のパスワードのハッシュと ID（JUK-115）。ログインを確かめるのは Go
-// （apps/api の auth_password.go）なので、同じ形・同じ強さで作る。
+// （apps/api/internal/feature/auth/password.go）なので、同じ形・同じ強さで作る。
 //
 //   形：PHC 文字列 $argon2id$v=19$m=19456,t=2,p=1$塩$ハッシュ（塩とハッシュは = の無い base64）
 //   入力：NFKC で正規化してからハッシュにする

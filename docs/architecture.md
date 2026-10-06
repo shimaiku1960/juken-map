@@ -302,7 +302,7 @@ apps/api/
    テストで失敗を作るためで、DB を差し替えるためではない。
 7. **持ち主をまたいで同時に確定させたい操作が出たら、境界を見直す。** 別々にコミットする関数を順番に呼んで
    済ませない。なお退会は、`DELETE FROM user` の1文で外部キーの `ON DELETE CASCADE` が全部消すので
-   （`auth_delete_account.go`）、これに当たらない。
+   （`internal/feature/auth/delete_account.go`）、これに当たらない。
 
 #### 持ち主の一覧（2026-10-06、JUK-150）
 

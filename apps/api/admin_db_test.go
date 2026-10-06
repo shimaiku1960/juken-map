@@ -35,7 +35,7 @@ import (
 )
 
 // dbAdminApp は本番と同じ registerRoutes で組んだルーター。Cookie「test」の値を、2段階認証を通した管理者の
-// 利用者 ID として読む（Better Auth の Cookie と session 表の読み方は auth_test.go が確かめる）。
+// 利用者 ID として読む（Better Auth の Cookie と session 表の読み方は internal/feature/auth/auth_test.go が確かめる）。
 type dbAdminApp struct {
 	t  *testing.T
 	rt *httpx.Router
@@ -105,7 +105,8 @@ func (fx dbFixture) adminUser(email, role string, createdAt time.Time, simSeq an
 }
 
 func (fx dbFixture) session(userID string, createdAt time.Time) {
-	_, hash := newToken()
+	hash := make([]byte, 32)
+	rand.Read(hash)
 	fx.Exec("INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt) VALUES (?, ?, ?, ?, ?, ?)",
 		dbtest.Hex(16), hash, userID, createdAt, createdAt.Add(time.Hour), createdAt)
 }
