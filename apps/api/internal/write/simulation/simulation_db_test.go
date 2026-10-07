@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
 // シミュレーションの利用者の印を、本物の MySQL で確かめる。本文の読み方（400）は internal/feature/sim の sim_test.go にある。

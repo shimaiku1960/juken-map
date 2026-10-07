@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
 // 操作が断る理由。Error() は利用者に見せる文言（入口が 404・409・400 に直す）。

@@ -329,6 +329,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify と同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）、受け付けるなら gzip で返す（`gzip.go`。画面・sitemap・ブログの中継）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
 | `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node と同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
+| `internal/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `httpx.Optional` を `.Field()` で変換する。持ち主ではないので `internal/write` の外に置く（JUK-160） |
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `internal/write/studyrecord/` | 学習記録（実績・予定・初回記録の日時）への書き込みの持ち主。実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |
 | `internal/write/textbook/` | 利用者の参考書への書き込みの持ち主。名前・参考書マスターからの登録と、逆算設定の変更（JUK-154） |
@@ -341,7 +342,6 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/write/expired/` | 期限の切れた行の消し方（主キーで選んで主キーで消す）。消す表は持ち主（account・authguard・notification）が渡す。書き込みの SQL は `internal/write/` の下だけに置く決まり（JUK-157）のため、`internal/database` から移した |
 | `internal/write/sql_boundary_test.go` | 書き込みの SQL（INSERT・UPDATE・DELETE・REPLACE）が `internal/write/` の下（と `internal/migrate`・`internal/dbtest`）にしか無いことを確かめるテスト（JUK-157） |
 | `internal/write/import_boundary_test.go`・`internal/feature/import_boundary_test.go` | write が HTTP と画面の形（`net/http`・`httpx`・`apischema`・feature など）を import しないこと、feature 同士が import し合わないことを確かめるテスト（JUK-159） |
-| `internal/write/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `optional` を `.field()` で変換する |
 | `internal/apischema/` | `openapi/openapi.yaml` から作った応答・リクエストの型（`openapi.gen.go`。手で直さない。`pnpm openapi:generate`、設定は同じディレクトリの `oapi-codegen.yaml`）。入口と持ち主の両方が使う（JUK-155） |
 
 ### 本物の DB に流す横断のテスト（dbtest タグ）

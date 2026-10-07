@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
 // 参考書の操作を、本物の MySQL で確かめる。画面の形（入力チェックの 400・応答の形）は internal/feature/textbooks のテストにある。

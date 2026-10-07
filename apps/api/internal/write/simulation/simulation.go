@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
 // EmailLike は SQL の LIKE で「シミュレーションの利用者」だけを選ぶ条件。src/shared/synthetic.ts と同じ。

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
 // LogInput は実績の作成・変更で書く値。Date はその日の 00:00 UTC（Node の new Date("YYYY-MM-DD")）。
