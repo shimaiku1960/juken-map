@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
 // 書き込みの API の入力チェック（JUK-75）。

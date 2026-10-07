@@ -254,12 +254,14 @@ apps/api/
   │ └ sim/  analytics/  cspreport/
   ├ write/                書き込みの持ち主（操作とトランザクション）
   │ ├ account/  authguard/  studyrecord/  textbook/  goal/
-  │ └ university/  textbookmaster/  notification/  simulation/   （一覧は下の「持ち主の一覧」）
+  │ ├ university/  textbookmaster/  notification/  simulation/   （一覧は下の「持ち主の一覧」）
+  │ └ expired/            持ち主ではなく、持ち主たちが使う期限切れの行の消し方（下の「決まり」の5）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
   │ └ httpxtest/          入口を使うテストの補助（偽のセッション・JSON の比べ方）
   ├ dates/                日付と時刻（日本時間の今日・Node の Date と同じ値へのそろえ方）
   ├ site/                 サイトの URL
   ├ database/             DB 接続
+  ├ opt/                  「送られなかった」と null を区別する値（入口が読み、持ち主の操作に渡す）
   ├ telemetry/            ログ・メトリクス・トレース
   ├ apischema/            OpenAPI から生成した型
   ├ spa/                  画面と SEO の配信
@@ -359,8 +361,8 @@ apps/api/
   - 決まり（自分の参考書か・範囲が参考書の逆算設定に合うか・実績のある予定を未完了に戻さない）は、ハンドラから
     持ち主の操作の中へ移し、確かめと書き込みを1つのトランザクションにした（変える行は `FOR UPDATE` で押さえる）。
     断る理由は持ち主のエラー（`ErrNotFound`・`RangeError` など）で返し、入口の `writeStudyRecordError` が 404・400・409 に直す。
-  - 「送られなかった」と null の区別は `internal/write/opt` の `opt.Field` で受ける（最初は studyrecord の中に置き、
-    参考書の持ち主でも要ったので共通にした。JUK-154）。入力の形の確かめ（Zod と同じ 400）は入口に残す。
+  - 「送られなかった」と null の区別は `internal/opt` の `opt.Field` で受ける（最初は studyrecord の中に置き、
+    参考書の持ち主でも要ったので共通にした。JUK-154。持ち主ではないので JUK-160 で write の外へ移した）。入力の形の確かめ（Zod と同じ 400）は入口に残す。
   - 持ち主の行の型（`Log`・`Plan`）は、項目の並びを `apischema` の型とそろえ、入口は型の変換だけで応答にする。
     予定の完了の応答に付ける参考書の行は画面の形なので、確定した後に入口が読む。
   - 実績の変更は「無ければ本文に関わらず 404」を保つため、入口が本文の確かめの前に有るかだけを見る（Node と同じ順）。

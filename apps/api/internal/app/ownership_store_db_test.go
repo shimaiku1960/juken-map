@@ -14,8 +14,8 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
 )
