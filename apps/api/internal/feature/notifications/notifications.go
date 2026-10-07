@@ -420,7 +420,7 @@ func (h *CronHandler) DailyNotifications(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// 全員へ送り終えるまで、ふだんのリクエストの上限（main.go の requestTimeout・WriteTimeout）より長くかかる。
+	// 全員へ送り終えるまで、ふだんのリクエストの上限（internal/app の requestTimeout・WriteTimeout）より長くかかる。
 	// 呼び出し元（curl）が切れても送るのは続けたいので、リクエストの context から切り離して別の上限を付ける。
 	// （テストの httptest.ResponseRecorder は書き込みの期限を持たないので、ErrNotSupported は気にしない）
 	err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(notificationBudget + 10*time.Second))

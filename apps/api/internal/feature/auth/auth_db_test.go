@@ -135,7 +135,7 @@ func newAuthEnv(t *testing.T) *authEnv {
 	e.rt = httpx.NewRouter(e.h.LoadSession)
 	RegisterRoutes(e.rt, e.h)
 	// ログイン以外の入口は、セッションで通るか断られるかだけを見る。本番と同じ入口の種類（利用者・管理者）で、
-	// 200 を返すだけのものを置く（本番のルートが入口の種類を合っているかは main_test.go の TestRegisteredRoutes が見る）。
+	// 200 を返すだけのものを置く（本番のルートが入口の種類を合っているかは internal/app の TestRegisteredRoutes が見る）。
 	ok := func(w http.ResponseWriter, _ *http.Request, _ *httpx.Session) { w.WriteHeader(http.StatusOK) }
 	e.rt.User("GET /api/dashboard", ok)
 	e.rt.User("POST /api/study-logs", ok)

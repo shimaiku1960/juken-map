@@ -19,4 +19,4 @@ set +a
 export MIGRATIONS_DIR="${MIGRATIONS_DIR:-$ROOT/db/migrations}"
 
 cd "$ROOT/apps/api"
-exec go run . "$@"
+exec go run ./cmd/api "$@"

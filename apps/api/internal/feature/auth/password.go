@@ -44,7 +44,7 @@ const (
 	argon2SaltLen = 16
 	// DefaultHashConcurrency は同時にハッシュを計算する数の既定値。計算は CPU を使い切るので、
 	// vCPU の数（本番は2）より多く並べても速くならず、メモリ（1つ 19MiB）が増えるだけ。
-	// 待っているリクエストは、リクエストの上限時間（main.go の requestTimeout）で打ち切られる。
+	// 待っているリクエストは、リクエストの上限時間（internal/app の requestTimeout）で打ち切られる。
 	DefaultHashConcurrency = 2
 	// passwordMinRunes はパスワードの最低の長さ（A2）。パスワードだけでログインできるので 15 文字。
 	// 2段階認証を必須にしているのは管理者だけで、一般の利用者はパスワードだけで入れる。

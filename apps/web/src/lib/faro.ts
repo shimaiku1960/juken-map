@@ -16,7 +16,7 @@ const COLLECTOR_META = "faro-collector-url";
 // - 上の URL がエンコードされて別の URL のクエリに入ったもの（linkToken%3D…）。Faro は読み込んだ
 //   通信の URL も送るので、GA4 への送信（dl=ページの URL）を通して入ってくる（JUK-124）
 // - メールアドレス（エンコードされた a%40example.com を含む）。エラーの文や URL に紛れ込んだときのため。
-//   サーバーのログ・トレースも同じ形で伏せる（apps/api/redact.go）
+//   サーバーのログ・トレースも同じ形で伏せる（apps/api/internal/telemetry/redact.go）
 const SECRET_PATTERNS: [RegExp, string][] = [
   [/([?&#](?:token|linkToken)=)[^&#\s"'<>]+/gi, "$1[REDACTED]"],
   [/((?:%3F|%26|%23)(?:token|linkToken)%3D)(?:(?!%26|%23)[^&#\s"'<>])+/gi, "$1[REDACTED]"],

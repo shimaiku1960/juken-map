@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// テストの補助。main のテストにも同じもの（router_support_test.go・helpers_test.go）があるが、
+// テストの補助。internal/app のテストにも同じもの（router_support_test.go）があるが、
 // _test.go はパッケージをまたいで import できないので、ここにも置く。
 
 // fakeSessions は DB の代わりに、Cookie の値で決まったセッションを返す。

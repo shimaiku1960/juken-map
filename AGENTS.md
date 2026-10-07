@@ -8,7 +8,7 @@ DB の道具（seed・テスト用 DB の準備・Node の DB 接続）は `db/`
 App Router・Server Components・Server Actions・`next/*` の作法を持ち込まないこと。
 
 DBは MySQL 8.4 で、ORM は使わず SQL を直接書く（Go は `database/sql`、Node の seed は `mysql2`）。
-ルートの一覧は `apps/api/main.go` の `registerRoutes`、入口の種類ごとの拒否は `apps/api/internal/httpx/router.go` にある。
+ルートの一覧は `apps/api/internal/app/main.go` の `registerRoutes`、入口の種類ごとの拒否は `apps/api/internal/httpx/router.go` にある。
 
 ## 依存関係とlockfile
 

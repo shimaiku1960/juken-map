@@ -1,6 +1,6 @@
 //go:build dbtest
 
-package main
+package app
 
 import (
 	"context"

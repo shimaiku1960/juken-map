@@ -5,7 +5,7 @@ Node から消した（JUK-84）。ダッシュボード・学習記録と予定
 毎日の通知・LINE 連携・管理画面・登録の計測・CSP の報告・シミュレーションを、書き込みも含めて Go が返す。
 本番では nginx がこれらのパスを Go へ振り分ける（JUK-72、下の「本番」）。
 
-ログイン（`/api/auth/*`）も Better Auth（Node）から移し、Go で自作した（JUK-115、`auth_*.go`）。
+ログイン（`/api/auth/*`）も Better Auth（Node）から移し、Go で自作した（JUK-115、`internal/feature/auth/`）。
 判定の基準は dev-standards の `targets/10_authentication.md`（認証 基準）で、コメントの B1・C3 などはその項目。
 画面（SPA・SSG の HTML・静的ファイル）・sitemap・ブログの中継（`/api/blog`）・`/line/settings` も Node から移した
 （JUK-111、`internal/spa/`・`internal/feature/blog/`）。本番で動くアプリのコンテナは Go だけ（JUK-109 で Node のコンテナを外した）。
@@ -21,7 +21,7 @@ Go だけを動かすときは次のとおり。
 ```sh
 cd apps/api
 set -a; source ../../.env; set +a   # DATABASE_URL と BETTER_AUTH_SECRET などを読む
-go run .                             # PORT を指定しなければ 8080
+go run ./cmd/api                     # PORT を指定しなければ 8080
 go test ./...
 ```
 
@@ -37,7 +37,7 @@ go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./... 
 ログは本番と同じ1行1つの JSON。人が読みたいときは、Node と同じ pino-pretty に通す。
 
 ```sh
-go run . | pnpm exec pino-pretty
+go run ./cmd/api | pnpm exec pino-pretty
 ```
 
 ログインした Cookie（`__Host-jm_session`）をそのまま付ければ、ほかの API も叩ける。
@@ -136,12 +136,12 @@ path の ID は `pathID(w, r, "id")` で読む（数字でなければ 400）。
 利用者の持ち物（志望校・参考書・実績・予定）を読む・変える関数は、引数に `userID` を取り、
 SQL を `WHERE id = ? AND userId = ?` にする。ハンドラーも先に持ち主を確かめる（他人のものは 404）が、
 それを書き忘れても他人の行が変わらないようにするため（JUK-54）。新しく足す関数もこの形にし、
-`ownership_store_db_test.go` に1件足す。
+`internal/app/ownership_store_db_test.go` に1件足す。
 
 ルートを足したら、次の3か所に足す。
 
-1. `main.go` の `registerRoutes` と、`main_test.go` の一覧（入口の種類）
-2. user のルートなら、`ownership_db_test.go`（他人の ID、A3）と `forbidden_fields_db_test.go`（禁止項目、A4）の表。
+1. `internal/app/main.go` の `registerRoutes` と、`internal/app/main_test.go` の一覧（入口の種類）
+2. user のルートなら、`internal/app` の `ownership_db_test.go`（他人の ID、A3）と `forbidden_fields_db_test.go`（禁止項目、A4）の表。
    書かなければ CI のこの2本が落ちる（下の「DB に流すテスト」）
 3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスの別のメソッドを Node に残すなら、
    GET・HEAD 以外を Node へ回す名前付きの location が要る（JUK-84 で使う所が無くなり外した `@node`。
@@ -233,12 +233,13 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `main.go` | 設定の読み込み、ルートの登録（`registerRoutes`）、ミドルウェアの順番、起動と停止 |
-| `middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 |
-| `overload.go` | 同時処理数の上限を超えたら 503 |
+| `cmd/api/main.go` | 起動の入口。`internal/app` の `Main` を呼ぶだけ（JUK-156） |
+| `internal/app/main.go` | 設定の読み込み、ルートの登録（`registerRoutes`）、ミドルウェアの順番、起動と停止 |
+| `internal/app/middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 |
+| `internal/app/overload.go` | 同時処理数の上限を超えたら 503 |
 | `Dockerfile` | 本番のイメージ（distroless の static に実行ファイル1つ） |
 
-### ログイン（`auth_*.go`、JUK-115）
+### ログイン（`internal/feature/auth/`、JUK-115）
 
 | ファイル | 中身 |
 | --- | --- |
@@ -250,9 +251,9 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/feature/auth/oauth.go` | Google・GitHub ログイン（PKCE・nonce・アカウントの結びつけ） |
 | `internal/feature/auth/throttle.go`・`internal/feature/auth/email.go` | 回数制限と、上限つきのメール送信（数え方と上限は `internal/write/authguard`） |
 | `internal/feature/auth/delete_account.go` | 本人の退会（確かめ直してから、利用者とぶら下がるデータをすべて消す。JUK-123） |
-| `expired_cleanup.go` | 期限の切れたセッション・トークン・ログインの途中の値・LINE 連携の途中の値を、起動時と1時間ごとに500行ずつ消す（06 G1、JUK-140）。どの表を消すかは持ち主（`internal/write/account`・`authguard`・`notification` の `expired.go`）が決め、このジョブはそれを順に呼ぶ（JUK-154） |
+| `internal/app/expired_cleanup.go` | 期限の切れたセッション・トークン・ログインの途中の値・LINE 連携の途中の値を、起動時と1時間ごとに500行ずつ消す（06 G1、JUK-140）。どの表を消すかは持ち主（`internal/write/account`・`authguard`・`notification` の `expired.go`）が決め、このジョブはそれを順に呼ぶ（JUK-154） |
 
-テストは `internal/feature/auth/auth_test.go`（DB なし）と `internal/feature/auth/auth_db_test.go`・`internal/feature/auth/delete_account_db_test.go`・`expired_cleanup_db_test.go`（本物の MySQL）。
+テストは `internal/feature/auth/auth_test.go`（DB なし）と `internal/feature/auth/auth_db_test.go`・`internal/feature/auth/delete_account_db_test.go`・`internal/app/expired_cleanup_db_test.go`（本物の MySQL）。
 
 ### 学習記録・志望校・参考書（利用者の画面の API）
 
@@ -314,7 +315,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `cli.go` | 引数を付けて起動したときの振り分け：`migrate` は `internal/migrate`、`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）は `internal/feature/ops` へ渡す。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
+| `internal/app/cli.go` | 引数を付けて起動したときの振り分け：`migrate` は `internal/migrate`、`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）は `internal/feature/ops` へ渡す。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
 | `internal/feature/ops/` | `incident`・`grant-admin` の引数の読み取り（`commands.go`）と、使う読み取り（`incident.go`）と、`internal/write/account` の操作（セッションの取り消し・停止・2段階認証の解除・役割の付け外し。変えたことは `OpsAuditLog` に残り、`incident log` で見る。JUK-138）の呼び出し。手順は `docs/incident-response.md` |
 | `internal/migrate/` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
 
@@ -322,7 +323,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `http.go` | ヘルスチェック |
+| `internal/app/http.go` | ヘルスチェック |
 | `internal/dates/` | 東京の「今日」、月初・月末、日付のずらし、`YYYY-MM-DD` の読み方（Node の `new Date` と同じ繰り越し）、DB に書く時刻（ミリ秒で切り捨て）と ISO 文字列。機能をまたいで使う（JUK-156） |
 | `internal/site/` | 本番の画面のオリジン（`site.URL`）。通知の本文・SEO・LINE の連携先が使う（JUK-156） |
 | `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify と同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）、受け付けるなら gzip で返す（`gzip.go`。画面・sitemap・ブログの中継）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
@@ -348,10 +349,10 @@ DB テストは名前に `DB` を入れる。`pnpm test:go-db`（CI も同じ）
 
 | ファイル | 中身 |
 | --- | --- |
-| `ownership_db_test.go`・`ownership_store_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3。入口からと、ストアを直接呼んで）と禁止項目（A4）を確かめる |
-| `internal/dbtest/` | DB テストの補助。テスト用 DB への接続（名前が `_test` で終わる DB にだけ繋ぐ）と、テスト用の利用者・データの作り方。どのパッケージの DB テストからも使う（JUK-158）。ルーターを組んで叩く `dbTestApp` は `registerRoutes` を使うので `dbtest_support_test.go` に残す |
+| `internal/app` の `ownership_db_test.go`・`ownership_store_db_test.go`・`forbidden_fields_db_test.go`・`dbtest_support_test.go` | 他人の ID（A3。入口からと、ストアを直接呼んで）と禁止項目（A4）を確かめる |
+| `internal/dbtest/` | DB テストの補助。テスト用 DB への接続（名前が `_test` で終わる DB にだけ繋ぐ）と、テスト用の利用者・データの作り方。どのパッケージの DB テストからも使う（JUK-158）。ルーターを組んで叩く `dbTestApp` は `registerRoutes` を使うので `internal/app/dbtest_support_test.go` に置く |
 | `internal/httpx/httpxtest/` | 入口と入力チェックを使うテストの補助。Cookie で選ぶ偽のセッション（`FakeSessions`・`Sessions`）、JSON の比べ方、入力チェックの 400 の本文。feature のテストが共通で使う（JUK-156）。本番のコードからは import しない |
-| `list_limits_db_test.go` | 学習記録・予定の一覧が 1000 件で切り詰められることを確かめる（06 E2） |
+| `internal/app/list_limits_db_test.go` | 学習記録・予定の一覧が 1000 件で切り詰められることを確かめる（06 E2） |
 
 ## Node と揃えていること
 

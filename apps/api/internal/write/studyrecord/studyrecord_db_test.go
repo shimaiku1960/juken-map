@@ -15,7 +15,7 @@ import (
 )
 
 // 学習記録の操作を、本物の MySQL で確かめる。画面の形（入力チェックの 400・応答の形）は
-// package main の study_*_writes の DB テストにある。
+// internal/feature/study の study_*_writes のテストにある。
 
 // textbookWithSettings は逆算設定（単位 page・総量 300）を持つ参考書を作る。
 func textbookWithSettings(fx dbtest.Fixture, userID string) int64 {

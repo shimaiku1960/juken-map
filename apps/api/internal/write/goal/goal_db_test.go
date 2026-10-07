@@ -12,7 +12,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/opt"
 )
 
-// 志望校の操作を、本物の MySQL で確かめる。画面の形（入力チェックの 400・応答の形）は package main にある。
+// 志望校の操作を、本物の MySQL で確かめる。画面の形（入力チェックの 400・応答の形）は internal/feature/goals のテストにある。
 func TestGoalDB(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)

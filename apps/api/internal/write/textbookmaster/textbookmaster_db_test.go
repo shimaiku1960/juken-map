@@ -11,7 +11,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 )
 
-// 参考書マスターの操作を、本物の MySQL で確かめる。管理画面の入口を通した流れ（文言・監査ログ）は package main の TestAdminMastersDB にある。
+// 参考書マスターの操作を、本物の MySQL で確かめる。管理画面の入口を通した流れ（文言・監査ログ）は internal/app の TestAdminMastersDB にある。
 func TestTextbookMasterDB(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)

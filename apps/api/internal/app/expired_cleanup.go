@@ -9,7 +9,7 @@
 //   - どの表を消すかは表の持ち主（internal/write/account・authguard・notification）が決め、それぞれの
 //     DeleteExpired を順に呼ぶ（JUK-154）。表ごとに別々に消してよく、まとめて確定させる必要は無い。
 //     消し方（主キーで選んで主キーで消す）は internal/write/expired の Delete。
-package main
+package app
 
 import (
 	"context"

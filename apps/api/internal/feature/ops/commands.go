@@ -1,4 +1,4 @@
-// Package ops は運用のコマンド（incident・grant-admin）。サーバーとしては動かず、cli.go が引数を見て呼ぶ。
+// Package ops は運用のコマンド（incident・grant-admin）。サーバーとしては動かず、internal/app の cli.go が引数を見て呼ぶ。
 // 変える操作は internal/write/account を呼び、OpsAuditLog に残す。
 package ops
 

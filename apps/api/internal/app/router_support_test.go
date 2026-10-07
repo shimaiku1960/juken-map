@@ -1,4 +1,4 @@
-package main
+package app
 
 // 入口（internal/httpx のルーター）を使うテストの補助。偽のセッションなどの共通の補助は internal/httpx/httpxtest にある。
 

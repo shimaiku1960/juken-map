@@ -105,7 +105,7 @@ type Removed struct {
 // DeleteUser は利用者を消す。本人の退会と管理者の削除の両方が使う。いなければ ErrNotFound。
 //
 // 利用者を指す表は、すべて外部キーの ON DELETE CASCADE で一緒に消える。すべての表に本人の行が
-// 残らないことは package main の TestAuthDBDeleteLeavesNoRows が確かめる。
+// 残らないことは internal/feature/auth の TestAuthDBDeleteLeavesNoRows が確かめる。
 func DeleteUser(ctx context.Context, db *sql.DB, userID string) (Removed, error) {
 	var c Removed
 	err := database.InTx(ctx, db, func(tx *sql.Tx) error {

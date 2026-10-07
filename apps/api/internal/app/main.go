@@ -1,10 +1,11 @@
-// juken-map のサーバー。API・ログイン・画面の配信・運用のコマンド・マイグレーションの適用を受け持つ。
+// Package app は juken-map のサーバーの組み立て。API・ログイン・画面の配信・運用のコマンド・マイグレーションの適用を
+// 1つのバイナリで受け持つ。入口は cmd/api/main.go で、ここの Main を呼ぶだけ（JUK-156）。
 // もとは Node の業務 API を1本ずつ Go へ移すために作った（JUK-70）。移し終えて Node を消したあと、
 // apps/api-go から apps/api へ名前を変えた（JUK-131）。本番では nginx が全部のパスを Go へ送る（infra/nginx/juken-map-go-routes.conf）。
 //
 // LINE 連携（JUK-79）と管理画面の API（JUK-78）も Go が受ける。ログイン（/api/auth/*）も Better Auth から移し、
-// Go で自作した（JUK-115、auth_*.go）。
-package main
+// Go で自作した（JUK-115、internal/feature/auth）。
+package app
 
 import (
 	"context"
@@ -45,25 +46,27 @@ import (
 // 下の WriteTimeout（応答を書き終えるまでの上限）より短くして、打ち切る前に 500 を返せるようにする。
 const requestTimeout = 10 * time.Second
 
-func main() {
+// Main は cmd/api の main から呼ばれる本体で、終了コードを返す。args は os.Args[1:]。
+func Main(args []string) int {
 	// 引数があれば、サーバーではなくコマンド（incident・grant-admin・migrate）として動く（cli.go）。
-	if len(os.Args) > 1 {
-		os.Exit(runCommand(os.Args[1:], os.Stdout, os.Stderr))
+	if len(args) > 0 {
+		return runCommand(args, os.Stdout, os.Stderr)
 	}
 	logOut, err := telemetry.LogOutput(os.Stdout, os.Getenv("LOG_FILE"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "LOG_FILE を開けません:", err)
-		os.Exit(1)
+		return 1
 	}
 	slog.SetDefault(telemetry.NewLogger(logOut, telemetry.ParseLevel(os.Getenv("LOG_LEVEL"))))
 	if err := run(); err != nil {
 		slog.Error("api stopped", "err", err.Error())
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
-// run は main から切り出した本体。エラーを返す形にしておくと、defer（DB を閉じるなど）が
-// 必ず走ってから終了できる。main で os.Exit や log.Fatal を呼ぶと defer は走らない。
+// run は Main から切り出したサーバーの本体。エラーを返す形にしておくと、defer（DB を閉じるなど）が
+// 必ず走ってから終了できる。os.Exit や log.Fatal を呼ぶと defer は走らない。
 func run() error {
 	secret := os.Getenv("BETTER_AUTH_SECRET")
 	if secret == "" {

@@ -136,7 +136,7 @@ func (rt *Router) limitUser(w http.ResponseWriter, r *http.Request, s *Session) 
 }
 
 // UseUp は、時計を止めたうえで利用者たちの札（読み取り・書き込みとも）を使い切る。
-// main のテストで、登録したどのルートも回数制限を通る（ハンドラまで来ずに 429 になる）かを確かめるためのもの。
+// internal/app のテストで、登録したどのルートも回数制限を通る（ハンドラまで来ずに 429 になる）かを確かめるためのもの。
 func (rt *Router) UseUp(userIDs ...string) {
 	frozen := time.Now()
 	rt.rateLimiter = newUserRateLimiter(func() time.Time { return frozen })

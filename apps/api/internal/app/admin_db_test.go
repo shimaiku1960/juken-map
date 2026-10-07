@@ -11,7 +11,7 @@
 //
 // juken_map_test は Node のテストと共有なので、ほかのテストの行があっても結果が変わらないように、
 // このテストで作る行はすべて名前やメールに印（prefix）を付け、印で絞って確かめる。
-package main
+package app
 
 import (
 	"crypto/rand"
