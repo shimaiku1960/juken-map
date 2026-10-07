@@ -267,7 +267,7 @@ apps/api/
   └ dbtest/               DB テストの補助（テスト用 DB への接続・テスト用の利用者やデータ）
 ```
 
-`feature/` と `write/` の直下には Go のファイルを置かず、その下の `study` や `studyrecord` を
+`feature/` と `write/` の直下には、境界を確かめるテスト（下の「決まり」）のほかに Go のファイルを置かず、その下の `study` や `studyrecord` を
 パッケージにする。ディレクトリを見ただけで、「どの入口の処理か」と「誰が変更に責任を持つか」が分かる。
 機能ごとのファイル数は処理の量に合わせてよく、全機能に同じファイル一式をそろえる必要はない。
 
@@ -281,9 +281,12 @@ apps/api/
 
 #### 決まり
 
-1. **feature 同士は呼び合わない。** 必要な読み取りは自分で書き、変更は write を呼ぶ。
+1. **feature 同士は呼び合わない。** 必要な読み取りは自分で書き、変更は write を呼ぶ。同じ読み取りを使う入口どうしは
+   1つの feature にまとめる（ダッシュボードを `study` に含めたように）。確かめるテストは
+   `apps/api/internal/feature/import_boundary_test.go`（JUK-159）。`_test.go` も含め、別の feature の import があれば落ちる。
 2. **write は HTTP を知らない。** `httpx` や `apischema`（画面に返す形）に依存せず、操作に必要な引数と
-   結果の型を自分で決める。作った行を画面へ返すときは、feature がその形へ直す。
+   結果の型を自分で決める。作った行を画面へ返すときは、feature がその形へ直す。確かめるテストは
+   `apps/api/internal/write/import_boundary_test.go`（JUK-159）。`net/http`・`httpx`・`apischema`・`feature`・`app`・`spa` の import があれば落ちる。
 3. **持ち主が外に出すのは「操作」。** `account.Suspend` が停止の印とセッションの削除をまとめて行い、
    `studyrecord.CompletePlan` が予定の完了・実績の作成・初回記録日時の更新をまとめて行う。
    呼ぶ側に、複数の関数を正しい順番で呼ぶ責任を残さない。
