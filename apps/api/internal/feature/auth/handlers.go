@@ -445,7 +445,7 @@ func (h *Handlers) accounts(w http.ResponseWriter, r *http.Request, s *httpx.Ses
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"hasPassword": hasPassword, "providers": providers})
 }
 
-// Config は認証の入口の設定（main.go が環境変数から作る）。
+// Config は認証の入口の設定（internal/app の main.go が環境変数から作る）。
 type Config struct {
 	WebOrigin       string
 	TOTPKeys        *totpKeyring

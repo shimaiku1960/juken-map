@@ -1,6 +1,6 @@
 //go:build dbtest
 
-// 本物の MySQL に流すテスト（dbtest タグ、JUK-97）のうち、package main のテストだけが使う下ごしらえ。
+// 本物の MySQL に流すテスト（dbtest タグ、JUK-97）のうち、internal/app のテストだけが使う下ごしらえ。
 // DB への繋ぎ方とテストデータの作り方は internal/dbtest にある（JUK-158）。
 //
 // DB は db/ のテストと同じ juken_map_test を使う。本番と同じマイグレーションが当たっていて、
@@ -8,7 +8,7 @@
 //
 // テストごとに使い捨てのユーザーを作り、データはすべてそのユーザーにぶら下げる（db/test-db/fixtures.ts と同じ）。
 // ユーザーを消せば、志望校・予定・実績などは外部キーの CASCADE で一緒に消える。
-package main
+package app
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
-// dbFixture は dbtest.Fixture に、package main のテストだけが使う作り方（ログイン・運用のコマンドなど）を足したもの。
+// dbFixture は dbtest.Fixture に、internal/app のテストだけが使う作り方（ログイン・運用のコマンドなど）を足したもの。
 type dbFixture struct{ dbtest.Fixture }
 
 func newDBFixture(t *testing.T, db *sql.DB) dbFixture {

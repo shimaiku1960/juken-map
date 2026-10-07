@@ -24,7 +24,7 @@ trap cleanup EXIT
 trap 'exit 143' TERM INT
 
 pnpm --dir "$ROOT" --filter @juken-map/web build
-(cd "$ROOT/apps/api" && go build -o "$WORK/api" .)
+(cd "$ROOT/apps/api" && go build -o "$WORK/api" ./cmd/api)
 
 # Go は .env を自分では読まないので、ここで読む（CI は .env が無く、ジョブの環境変数だけで動く）。
 # 先に決めた値が .env で上書きされないよう、読んだ後に改めて渡す。

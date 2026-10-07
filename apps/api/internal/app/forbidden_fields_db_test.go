@@ -12,7 +12,7 @@
 //   - 呼んだ人の行の id が、送った id になっていない
 //
 // を見る。Better Auth の登録・更新は Node の auth.forbidden-fields.test.ts が見る。
-package main
+package app
 
 import (
 	"encoding/json"

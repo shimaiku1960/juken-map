@@ -17,5 +17,5 @@ source "$ROOT/scripts/local-ports.sh"
 export PORT=$GO_PORT WEB_ORIGIN="http://localhost:$WEB_PORT"
 # go run ではなく、作ってから exec する。止めるときの SIGTERM がサーバー本体に直接届く。
 BIN="${TMPDIR:-/tmp}/juken-map-api-$GO_PORT"
-(cd "$ROOT/apps/api" && go build -o "$BIN" .)
+(cd "$ROOT/apps/api" && go build -o "$BIN" ./cmd/api)
 exec "$BIN"

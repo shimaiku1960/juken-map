@@ -5,7 +5,7 @@ import mysql, {
 } from "mysql2/promise";
 
 // Node から DB に繋ぐときの接続プール。seed（db/seed-helpers.ts）と、本物の DB に流す
-// テスト（test-db/）が使う。アプリの接続は Go 側（apps/api/db.go）にあり、時間帯と真偽値の
+// テスト（test-db/）が使う。アプリの接続は Go 側（apps/api/internal/database）にあり、時間帯と真偽値の
 // 扱いはそちらと揃える（Go が書いた行を seed やテストが読み、その逆もあるため）。
 
 const pool: Pool = mysql.createPool({

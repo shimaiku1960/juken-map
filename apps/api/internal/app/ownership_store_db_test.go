@@ -4,7 +4,7 @@
 //
 // TestA3OwnershipDB は入口（ハンドラーが先に持ち主を確かめる）を通して確かめる。こちらはその確かめを通らずに
 // ストアや持ち主（internal/write）の操作を直接呼び、確かめを書き忘れたルートがあっても SQL の WHERE userId = ? で他人の行が守られることを見る。
-package main
+package app
 
 import (
 	"context"

@@ -1,5 +1,5 @@
 // Package opt は、持ち主（internal/write）の操作に渡す「送られなかった」と「null」を区別する値。
-// 入口が本文を読んだ結果（package main の optional）を、持ち主が import できる形にしたもの。
+// 入口が本文を読んだ結果（httpx.Optional）を、持ち主が import できる形にしたもの。
 package opt
 
 // Field は Present が false ならキーが無く、Value が nil なら null。

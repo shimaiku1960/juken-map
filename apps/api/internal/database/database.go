@@ -1,6 +1,6 @@
 // Package database は MySQL への接続と、書き込み・読み取りの両方で使う補助を持つ。
 // 書き込みの持ち主（internal/write）と読み取り（internal/feature）が同じものを使えるよう、
-// package main から分けた（JUK-152、docs/architecture.md「バックエンドの構成」）。
+// もとの package main から分けた（JUK-152、docs/architecture.md「バックエンドの構成」）。
 package database
 
 import (

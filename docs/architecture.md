@@ -21,7 +21,7 @@ apps/web/               画面（React + Vite の SPA）
 └ public/                 favicon, PWA アイコン, manifest, robots.txt, LP 素材
 
 apps/api/            バックエンド一式（Go）。ファイルの分け方は apps/api/README.md
-                     （今は package main 1つ。cmd/・internal/ へ移す途中、下の「バックエンドの構成」、JUK-148）
+                     （入口は cmd/api、中身は internal/ のパッケージ。下の「バックエンドの構成」、JUK-148）
 
 db/                     DB の道具。開発でしか使わない Node の TS（workspace の @juken-map/db、JUK-130）
 ├ migrations/             マイグレーションの SQL（当てるのは Go の migrate、JUK-125）
@@ -196,13 +196,13 @@ Node の頃は、予定の完了時の範囲チェックや「実績済みの予
 `findUnique` が書かれていた（`docs/performance.md` の TASK 3）。片方だけ `select` を直せば、
 画面と API で返るデータが静かにずれる。
 
-API に集約すれば直す場所は1つになる。加えて全リクエストがアクセスログと計測（`apps/api/middleware.go`）を
+API に集約すれば直す場所は1つになる。加えて全リクエストがアクセスログと計測（`apps/api/internal/app/middleware.go`）を
 通るので、どの API が遅いかがログとメトリクスから追える（Node の頃は全サービスが `measured()` を通していた）。
 画面に直書きされたクエリはこの計測から漏れる。
 
 分離後は、このルールは ESLint ではなく構成そのものが保証している（上記「依存の向き」）。
 
-### バックエンドの構成：読み取りは入口の近く、書き込みは持ち主へ（2026-10-06 決定、JUK-148 で移行中）
+### バックエンドの構成：読み取りは入口の近く、書き込みは持ち主へ（2026-10-06 決定、2026-10-07 JUK-148 で移行済み）
 
 テーブルごとに読み書きを隠すリポジトリ層（`GoalRepository` のようなもの）は入れない。そのかわり、
 **決まりを含む書き込みだけ、データのまとまりごとに持ち主を1か所に決める**。読み取りは、
@@ -238,7 +238,7 @@ API に集約すれば直す場所は1つになる。加えて全リクエスト
 読み取りと書き込みで設計を分けるのは CQRS の軽い形にあたり、書き込みを「一緒に変わるまとまり」で
 持つのは DDD の集約（aggregate）にあたる。
 
-#### 目標の構成
+#### 構成
 
 外枠は Go 公式の構成ガイド（https://go.dev/doc/modules/layout ）の `cmd/`・`internal/` に従う。
 その下の分け方は受験マップに合わせたもの。
@@ -250,7 +250,8 @@ apps/api/
   ├ app/                  起動・終了、依存の組み立て、ルートとアクセス条件の一覧
   ├ feature/              画面・入口ごとの処理（ハンドラと読み取りの SQL）
   │ ├ auth/  study/  goals/  textbooks/   （study はダッシュボードも持つ。同じ読み取りを使うため）
-  │ └ admin/  line/  notifications/  ops/  blog/  universities/  sim/  analytics/  cspreport/
+  │ ├ admin/  line/  notifications/  ops/  blog/  universities/
+  │ └ sim/  analytics/  cspreport/
   ├ write/                書き込みの持ち主（操作とトランザクション）
   │ ├ account/  authguard/  studyrecord/  textbook/  goal/
   │ └ university/  textbookmaster/  notification/  simulation/   （一覧は下の「持ち主の一覧」）
@@ -463,8 +464,8 @@ ORM を外すと、次のことを自分で持つことになる。どれも Go 
   防げず、ルールが要る。
 - `apps/**` は独自の tsconfig と依存を持つ別パッケージなので、ルートの lint 対象から外している。
 
-Go の API の中は、今は `package main` 1つなので、ファイル同士の境界を何も検査していない。
-`internal/` のパッケージに分けると、非公開の名前と循環 import の禁止で、コンパイラが境界を守る。
+Go の API の中は `internal/` のパッケージに分けてあり、非公開の名前と循環 import の禁止で、コンパイラが境界を守る
+（JUK-156 までは `package main` 1つで、ファイル同士の境界を何も検査していなかった）。
 書き込みの SQL を `internal/write/` の下にしか書かないことは、テストで確かめる（上の「バックエンドの構成」、JUK-148）。
 
 ## テスト
@@ -478,7 +479,7 @@ Go の API の中は、今は `package main` 1つなので、ファイル同士�
 | 通し | Playwright | 記録→可視化の毎日ループ、デモ閲覧専用、モバイルナビ |
 
 Go の API の DB テストは、本番と同じ `registerRoutes` で組んだルーターに `httptest` でリクエストを送る
-（`apps/api/dbtest_support_test.go` の `dbTestApp`）。ハンドラを直接呼ばないのは、
+（`apps/api/internal/app/dbtest_support_test.go` の `dbTestApp`）。ハンドラを直接呼ばないのは、
 **本物のルーティングと入口の拒否・本文の読み取りを通すため**である。たとえば本文は
 「壊れた JSON でも 400 にせず、入口の拒否（未ログイン・デモ）を先に効かせる」ように読んでおり
 （`apps/api/internal/httpx/body.go`）、ハンドラ直呼びではここが素通りしてしまう。Node の頃（JUK-121 まで）は

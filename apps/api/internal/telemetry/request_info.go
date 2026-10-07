@@ -2,7 +2,7 @@ package telemetry
 
 import "context"
 
-// RequestInfo はリクエストごとの情報。一番外側の observe（apps/api/middleware.go）が作って ctx に入れる。
+// RequestInfo はリクエストごとの情報。一番外側の observe（internal/app/middleware.go）が作って ctx に入れる。
 // ポインタで持つので、内側（ルーター）が route を書き込むと外側からも見える。
 type RequestInfo struct {
 	ID    string

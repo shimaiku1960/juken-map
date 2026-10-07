@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 # CGO_ENABLED=0 で C のライブラリに頼らない1つの実行ファイルにする（下の static イメージで動く）。
 # -trimpath はビルドした PC のパスを実行ファイルに残さない。-s -w はデバッグ情報を省いて小さくする。
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
 
 # ---- 画面のビルド成果物 ----
 # Go が画面（SPA・SSG の HTML）も配る（JUK-111）。画面のビルドは Node のイメージ（ルートの Dockerfile の web-builder）が

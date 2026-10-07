@@ -5,7 +5,7 @@
 // 学習記録・予定の一覧は、利用者が期間（?from=&to=）を好きなだけ広く指定できる。その代わり SQL の LIMIT で
 // 1000 件（study.MaxLogs・study.MaxPlans）に切り詰め、1回の応答の重さに上限を置いている。上限を超える件数を入れて、
 // 超えた分が返らないこと（どちらの端が切れるか）を見る。LIMIT を外すと、どれも 1001 件が返って落ちる。
-package main
+package app
 
 import (
 	"database/sql"

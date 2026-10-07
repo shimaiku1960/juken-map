@@ -8,7 +8,7 @@ import { execute, pool } from "../connection";
 // ユーザーで分けておけば、互いの行が見えないので並列でも干渉しない。
 //
 // 志望校・予定・参考書・マスターを作る関数は、それを使う Node の API とテストを消したときに一緒に消した（JUK-84）。
-// Go の DB テストの下ごしらえは apps/api/dbtest_support_test.go にある。
+// Go の DB テストの下ごしらえは apps/api/internal/dbtest/dbtest.go にある。
 
 const createdUserIds: string[] = [];
 

@@ -214,7 +214,7 @@ func (p Scripts) injectMeta(html string, meta pageMeta) string {
 	return strings.Replace(html, "</head>", "  "+strings.Join(tags, "\n    ")+"\n  </head>", 1)
 }
 
-// pageCSP は画面（HTML）に付ける Content-Security-Policy。API の応答は middleware.go の securityHeaders が
+// pageCSP は画面（HTML）に付ける Content-Security-Policy。API の応答は internal/app の securityHeaders が
 // もっと狭い default-src 'none' を付けるので、HTML を返すときだけこれで上書きする。
 //
 // 2026-09-19 から2日ほど Report-Only で流し、本番の主要画面を実ブラウザでひと通り踏んでも違反が0件だったため、

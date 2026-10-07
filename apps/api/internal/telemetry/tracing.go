@@ -21,7 +21,7 @@ import (
 // Node の instrumentation.ts にあたる（JUK-126）。
 //
 // Node は import を横取りしてライブラリに計測を仕込んだが、Go にその仕組みは無いので、
-// 計測する場所を自分で包む。リクエストは observe（apps/api/middleware.go）、SQL は database.Open の otelsql、
+// 計測する場所を自分で包む。リクエストは observe（internal/app/middleware.go）、SQL は database.Open の otelsql、
 // 外部 API は NewOutboundClient。
 //
 // トークンを残さないため、スパンには URL のパスも ? 以降も入れない。リクエストはルートの型
