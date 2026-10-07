@@ -140,7 +140,7 @@ SQL を `WHERE id = ? AND userId = ?` にする。ハンドラーも先に持ち
 
 ルートを足したら、次の3か所に足す。
 
-1. `internal/app/main.go` の `registerRoutes` と、`internal/app/main_test.go` の一覧（入口の種類）
+1. `internal/app/routes.go` の `registerRoutes` と、`internal/app/main_test.go` の一覧（入口の種類）
 2. user のルートなら、`internal/app` の `ownership_db_test.go`（他人の ID、A3）と `forbidden_fields_db_test.go`（禁止項目、A4）の表。
    書かなければ CI のこの2本が落ちる（下の「DB に流すテスト」）
 3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスの別のメソッドを Node に残すなら、
@@ -234,7 +234,9 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `cmd/api/main.go` | 起動の入口。`internal/app` の `Main` を呼ぶだけ（JUK-156） |
-| `internal/app/main.go` | 設定の読み込み、ルートの登録（`registerRoutes`）、ミドルウェアの順番、起動と停止 |
+| `internal/app/main.go` | 設定の読み込み、各機能の組み立て、起動と停止 |
+| `internal/app/routes.go` | ルートの登録（`registerRoutes`）。一覧と入口の種類は `main_test.go` の `TestRegisteredRoutes` が確かめる（JUK-161） |
+| `internal/app/server.go` | ミドルウェアの順番（`newServerHandler`）と、1リクエストの時間の上限（`requestTimeout`） |
 | `internal/app/middleware.go` | reqId、アクセスログ、panic の 500、セキュリティヘッダー、時間の上限 |
 | `internal/app/overload.go` | 同時処理数の上限を超えたら 503 |
 | `Dockerfile` | 本番のイメージ（distroless の static に実行ファイル1つ） |

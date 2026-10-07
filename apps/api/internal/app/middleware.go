@@ -17,7 +17,7 @@ import (
 
 // ミドルウェアは「http.Handler を受け取り、前後に処理を足した http.Handler を返す関数」。
 // Fastify のフック（onRequest・onResponse など）にあたるものを、包む順番で表す。
-// 組み立ては main.go の newServerHandler にある。リクエストごとの情報（RequestInfo）・ログ・計測・トレースは internal/telemetry にある。
+// 組み立ては server.go の newServerHandler にある。リクエストごとの情報（RequestInfo）・ログ・計測・トレースは internal/telemetry にある。
 
 // newRequestID は UUID（v4）を作る。Node と同じく、本番は36文字、開発は先頭8文字にする
 // （開発は人が目で読むので短さを取る。observability/logger.ts の genReqId）。
