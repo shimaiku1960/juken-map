@@ -132,9 +132,8 @@ func readFacultyInput(body any, withUniversity bool) (facultyInput, *httpx.Objec
 	return v, in
 }
 
-// examDateOf は受験日（YYYY-MM-DD）を、Node が保存する new Date("YYYY-MM-DD")（UTC の0時）と同じ日時にする。
-// JavaScript の new Date は月が 01〜12・日が 01〜31 なら受け付け、その月に無い日は繰り上げる
-// （2027-02-30 は 3月2日）。time.Date も同じく繰り上げる。形（httpx.YMDPattern）は呼ぶ前に確かめておくこと。
+// examDateOf は受験日（YYYY-MM-DD）を、その日の UTC の0時にする。月が 01〜12・日が 01〜31 なら受け付け、
+// その月に無い日は time.Date が繰り上げる（2027-02-30 は 3月2日。JavaScript の new Date も同じ）。形（httpx.YMDPattern）は呼ぶ前に確かめておくこと。
 func examDateOf(s string) (time.Time, bool) {
 	year, _ := strconv.Atoi(s[0:4])
 	month, _ := strconv.Atoi(s[5:7])

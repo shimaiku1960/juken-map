@@ -17,19 +17,16 @@ import (
 )
 
 // OpenTelemetry のトレース。1回のリクエストの中で、どこに何 ms かかったか（リクエスト全体・SQL 1本ずつ・
-// 外部 API の呼び出し）を記録し、OTLP/HTTP で送る（手元は Tempo、本番は Alloy → Grafana Cloud）。
-// Node の instrumentation.ts にあたる（JUK-126）。
+// 外部 API の呼び出し）を記録し、OTLP/HTTP で送る（手元は Tempo、本番は Alloy → Grafana Cloud。JUK-126）。
 //
-// Node は import を横取りしてライブラリに計測を仕込んだが、Go にその仕組みは無いので、
-// 計測する場所を自分で包む。リクエストは observe（internal/app/middleware.go）、SQL は database.Open の otelsql、
+// Go には読み込んだライブラリへ自動で計測を仕込む仕組みが無いので、計測する場所を自分で包む。リクエストは observe（internal/app/middleware.go）、SQL は database.Open の otelsql、
 // 外部 API は NewOutboundClient。
 //
 // トークンを残さないため、スパンには URL のパスも ? 以降も入れない。リクエストはルートの型
-// （/api/x/:id）で名付け、外部 API は送り先のホスト名だけを入れる。Node は URL をそのまま入れる
-// ライブラリの計測を使ったので、送る直前に取り除いていた（redact.ts）。
+// （/api/x/:id）で名付け、外部 API は送り先のホスト名だけを入れる。
 
-// ServiceName は Tempo で探すときの名前。Node と同じにして、Grafana のダッシュボードの絞り込み
-// （resource.service.name）をそのまま使う。
+// ServiceName は Tempo で探すときの名前。Grafana のダッシュボードの絞り込み
+// （resource.service.name）がこの名前で探す。
 const ServiceName = "juken-map-api"
 
 // SetupTracing は OTEL_EXPORTER_OTLP_ENDPOINT を設定したときだけトレースを送る準備をする。
@@ -140,7 +137,7 @@ func StartRequestSpan(ctx context.Context, tracer trace.Tracer, method string) (
 }
 
 // EndRequestSpan はルートの型で名付け直し、結果を書いて閉じる。
-// 名前は Node（Fastify の計測）と同じ「GET /api/x/:id」にする。ダッシュボードが
+// 名前は「GET /api/x/:id」の形にする。ダッシュボードが
 // 「GET /api/health」の根を除く絞り込みを持っているため。
 func EndRequestSpan(span trace.Span, method, route string, status int, info *RequestInfo) {
 	span.SetName(method + " " + route)

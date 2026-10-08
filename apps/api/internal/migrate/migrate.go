@@ -1,12 +1,10 @@
 package migrate
 
 // マイグレーション（テーブル定義の変更）を当てる `migrate` コマンド（JUK-125）。
-// Node の apps/api/src/infra/migrations.ts から移し、本番で Node を使う場面を無くした。
 //
 // <MIGRATIONS_DIR>/<名前>/migration.sql を名前順に見て、まだ当てていないものだけを流す。
-// 当てた記録は、Prisma が使っていた表 _prisma_migrations にそのまま書く。本番の DB には Prisma と Node が
-// 当てた記録が残っているので、表を引き継げば移し替えは要らない（表の名前に prisma が残るのはそのため）。
-// checksum も Prisma と同じ「ファイルの SHA-256」。
+// 当てた記録は表 _prisma_migrations に書く。名前に prisma が残るのは、以前使っていた Prisma の表を
+// 引き継いだため（本番の DB に過去の記録が入っている）。checksum は「ファイルの SHA-256」。
 //
 // 本番はデプロイがアプリの起動前に、Go のイメージの1回きりのコンテナで `/api migrate` を流す
 // （.github/scripts/deploy-ec2.sh）。手元は `pnpm db:migrate`（`pnpm dev` も最初に流す）、CI は E2E の前に流す。
@@ -33,7 +31,6 @@ import (
 )
 
 // 同時に2つ動かないようにする MySQL のロック名。デプロイが重なっても二重に当てない。
-// Node の版と同じ名前なので、切り替えの前後で重なっても取り合いになる。
 const (
 	migrationLockName           = "juken_map_migrate"
 	migrationLockTimeoutSeconds = 60
@@ -42,7 +39,7 @@ const (
 // migrateTimeout は1回の実行にかけてよい時間。ロック待ち（60秒）と、大きな表の ALTER を見込んで長めにする。
 const migrateTimeout = 10 * time.Minute
 
-// Prisma が作っていたのと同じ形。新しい DB（テスト・CI）ではここで作る。
+// 記録の表。本番の DB にある表と同じ形で、新しい DB（テスト・CI）ではここで作る。
 const createLedgerSQL = `
   CREATE TABLE IF NOT EXISTS _prisma_migrations (
     id varchar(36) NOT NULL,
@@ -81,7 +78,7 @@ func Run(stdout, stderr io.Writer) int {
 // Apply は、dir のマイグレーションのうちまだ当てていないものを名前順に当て、当てたものの名前を返す。
 //
 // MySQL の CREATE TABLE / ALTER TABLE はトランザクションで取り消せない。途中で失敗すると
-// 半分だけ当たった状態が残るので、Prisma と同じく「失敗した」記録を残して止まり、
+// 半分だけ当たった状態が残るので、「失敗した」記録を残して止まり、
 // 人が DB を確かめて直すまで次の実行も止める。
 func Apply(ctx context.Context, databaseURL, dir string, log io.Writer) ([]string, error) {
 	names, err := migrationNames(dir)
@@ -140,8 +137,8 @@ func Apply(ctx context.Context, databaseURL, dir string, log io.Writer) ([]strin
 		checksum := hex.EncodeToString(sum[:])
 
 		if recorded, ok := applied[name]; ok {
-			// 当てたあとでファイルを書き換えても DB には反映されない。気づけるよう知らせるだけにする
-			// （Prisma の migrate deploy も Node の版も、当て済みのものは流し直さなかった）。
+			// 当てたあとでファイルを書き換えても DB には反映されない（当て済みのものは流し直さない）。
+			// 気づけるよう知らせるだけにする。
 			if recorded != checksum {
 				fmt.Fprintf(log, "警告: %s は当てたあとで migration.sql が書き換えられています\n", name)
 			}
@@ -230,7 +227,7 @@ func appliedMigrations(ctx context.Context, conn *sql.Conn) (map[string]string, 
 	return applied, nil
 }
 
-// newMigrationID は記録の id（varchar(36)）。Prisma と Node の版が入れていたのと同じ UUID v4 の形にする。
+// newMigrationID は記録の id（varchar(36)）。過去の記録と同じ UUID v4 の形にする。
 func newMigrationID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)

@@ -16,10 +16,10 @@ import (
 // SPA は誰が来ても同じ index.html を返すため、クローラーと SNS が読む head をサーバー側で作り直す（JUK-111）。
 // Node の apps/api/src/seo.ts から移した。差し込む中身と順番は Node と同じにしてある（spa_test.go で確かめる）。
 
-// siteName は画面の名前。Node の src/shared/pageMeta.ts の SITE_NAME と同じ値。
+// siteName は画面の名前。画面の src/shared/pageMeta.ts の SITE_NAME と同じ値。
 const siteName = "受験マップ"
 
-// ogImage は記事以外の OGP 画像。Node の src/shared/pageMeta.ts の OG_IMAGE と同じ値。
+// ogImage は記事以外の OGP 画像。画面の src/shared/pageMeta.ts の OG_IMAGE と同じ値。
 const ogImage = site.URL + "/opengraph-image.png"
 
 const defaultDescription = "学習の開始から時間記録、予定と実績の確認、科目別の振り返りまでをひとつにつなぐ、大学受験生向け学習管理アプリです。"
@@ -77,7 +77,7 @@ var attributeEscaper = strings.NewReplacer(
 	"'", "&#039;",
 )
 
-// escapeAttribute は値を HTML の属性に安全に埋め込める形にする（Node の escapeAttribute と同じ5文字）。
+// escapeAttribute は値を HTML の属性に安全に埋め込める形にする（& < > " ' の5文字）。
 func escapeAttribute(v string) string {
 	return attributeEscaper.Replace(v)
 }
@@ -207,7 +207,7 @@ func (p Scripts) injectMeta(html string, meta pageMeta) string {
 		}
 	}
 
-	// Node の String.prototype.replace と同じく、最初の1か所だけを置き換える。
+	// 最初の1か所だけを置き換える。
 	if loc := titleTag.FindStringIndex(html); loc != nil {
 		html = html[:loc[0]] + "<title>" + escapeAttribute(meta.Title) + "</title>" + html[loc[1]:]
 	}
@@ -218,7 +218,7 @@ func (p Scripts) injectMeta(html string, meta pageMeta) string {
 // もっと狭い default-src 'none' を付けるので、HTML を返すときだけこれで上書きする。
 //
 // 2026-09-19 から2日ほど Report-Only で流し、本番の主要画面を実ブラウザでひと通り踏んでも違反が0件だったため、
-// 2026-09-21 に止めるモードへ切り替えた（Node の security-headers.ts から移した）。許可の漏れがあると画面が壊れるので、
+// 2026-09-21 に止めるモードへ切り替えた。許可の漏れがあると画面が壊れるので、
 // 一覧を増やすときは先に Report-Only で確かめること。違反は internal/feature/cspreport が受けて Loki に `csp violation` で残る。
 func (p Scripts) pageCSP() string {
 	// GA4 の計測の送り先。gtag.js は地域ごとのサブドメインへ送る。
@@ -322,7 +322,7 @@ func buildSitemap(articles []sitemapArticle) []byte {
 }
 
 // sitemapLastModified は記事の更新日時を JavaScript の toISOString() と同じ形（UTC・ミリ秒3桁・Z）にする。
-// 読めなければ空（lastmod を出さない。Node は読めない日付で起動に失敗していた）。
+// 読めなければ空（lastmod を出さない。読めない日付1件で起動に失敗しないため）。
 func sitemapLastModified(v string) string {
 	t, err := time.Parse(time.RFC3339Nano, v)
 	if err != nil {

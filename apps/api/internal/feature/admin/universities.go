@@ -18,7 +18,7 @@ import (
 
 // ---- 入口 ----
 
-// prefectures は47都道府県。Node の src/shared/prefectures.ts の PREFECTURES と同じ並び。
+// prefectures は47都道府県。画面の src/shared/prefectures.ts の PREFECTURES と同じ並び。
 var prefectures = []string{
 	"北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
 	"茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
@@ -97,7 +97,7 @@ func (h *MasterHandlers) UpdateUniversity(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	// Node と同じく path を先に、本文を後に確かめる。
+	// path を先に、本文を後に確かめる。
 	id, ok := masterID(w, r)
 	if !ok {
 		return
@@ -120,7 +120,7 @@ func (h *MasterHandlers) UpdateUniversity(w http.ResponseWriter, r *http.Request
 
 // DeleteUniversity は DELETE /api/admin/universities/{id}。
 func (h *MasterHandlers) DeleteUniversity(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
-	// 本文は使わないが、Node（Fastify）はハンドラより先に本文を読むので、受け付けない形なら同じく 415・413 にする。
+	// 本文は使わないが、ほかの書き込みと同じく、受け付けない形の本文なら 415・413 にする。
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
@@ -245,7 +245,7 @@ func (st *sqlAdminMasterStore) universityDetail(ctx context.Context, id int64) (
 		}
 		// 行は（学部 × タグ）の数だけ並ぶ。同じ学部の行は隣り合うので、直前と比べて束ねる。
 		if n := len(detail.Faculties); n == 0 || detail.Faculties[n-1].ID != f.ID {
-			f.ExamDate = examDate[:10] // DATETIME の日付の部分（Node の toISOString().slice(0, 10)）
+			f.ExamDate = examDate[:10] // DATETIME の日付の部分
 			f.Tags = []apischema.AdminTag{}
 			detail.Faculties = append(detail.Faculties, f)
 		}

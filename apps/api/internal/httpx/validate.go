@@ -17,14 +17,13 @@ import (
 
 // 書き込みの API の入力チェック（JUK-75）。
 //
-// 規則の正は src/shared/validations/ の Zod のスキーマで、画面のフォームと Node が使う。Go はそれと
+// 規則の正は src/shared/validations/ の Zod のスキーマで、画面のフォームが使う。Go はそれと
 // 同じ規則をここで手で書く（契約の OpenAPI には形だけを書き、規則は2か所に持つと決めた。
 // 項目をまたぐ規則や「今日より未来は不可」はスキーマに書けないため）。
-// Zod の規則を変えたら、ここと各 *_writes_test.go のケースも直す（Node と応答を比べるテストは JUK-84 で消した）。
+// Zod の規則を変えたら、ここと各 *_writes_test.go のケースも直す。
 //
-// Node は Zod の issue のうち最初の1件だけを返す（routes/validation-error.ts）。Zod はスキーマに
-// 書いた項目の順に、項目の中では書いたチェックの順に issue を積むので、ここでも同じ順に確かめ、
-// 最初に見つかった1件で止める。
+// 応答で返す理由は1件だけ。Zod はスキーマに書いた項目の順に、項目の中では書いたチェックの順に
+// issue を積むので、ここでも同じ順に確かめ、最初に見つかった1件（Zod の最初の issue にあたるもの）で止める。
 
 // ValidationIssue は弾いた理由の1件。field が "" なら本文そのもの（応答の field は null）。
 type ValidationIssue struct {
@@ -284,18 +283,17 @@ func CheckNumber(key string, v any, rule NumberRule) (float64, *ValidationIssue)
 }
 
 // Optional は .optional()（と .nullable()）の付いた項目の値。Zod と同じく、キーが無い（undefined）・null・値を区別する。
-// Node の `data.x ?? null` は ptr()、`data.x !== current` は differs() にあたる。
 type Optional[T comparable] struct {
 	Present bool // キーがある（null を含む）
 	Value   *T   // null かキーが無いなら nil
 }
 
-// Ptr は DB に書く値。キーが無いときも null として書く（Node の ?? null）。
+// Ptr は DB に書く値。キーが無いときも null として書く。
 func (o Optional[T]) Ptr() *T {
 	return o.Value
 }
 
-// IsNull は Node の `x == null`（undefined と null のどちらも true）。
+// IsNull はキーが無いか null か（どちらも true）。
 func (o Optional[T]) IsNull() bool {
 	return o.Value == nil
 }
@@ -472,14 +470,14 @@ func YMDDateRule(minMessage string, extra ...StringCheck) StringRule {
 	}
 }
 
-// YMDPattern は Node の ymdField（z.string().regex(/^\d{4}-\d{2}-\d{2}$/)）と同じ形。
+// YMDPattern は Zod の z.string().regex(/^\d{4}-\d{2}-\d{2}$/) と同じ形。
 // 形だけを見て、13月や2月30日は通す（dates.ParseYMD で扱う）。
 var YMDPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 const YMDMessage = "日付は YYYY-MM-DD で指定してください"
 
 // IsCalendarYMD は "YYYY-MM-DD"（形は確かめ済み）が暦にある日付か。2026-02-30・2026-13-01 は false。
-// Node の isCalendarYmd（src/shared/date.ts）と同じ算数で判定する。time.Date は範囲外の日を翌月へ
+// 画面の isCalendarYmd（src/shared/date.ts）と同じ算数で判定する。time.Date は範囲外の日を翌月へ
 // 繰り越してしまうので使わない。
 func IsCalendarYMD(s string) bool {
 	y, _ := strconv.Atoi(s[0:4])

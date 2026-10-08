@@ -14,9 +14,8 @@ import (
 )
 
 // 学習記録と予定の読み取り。ダッシュボード（dashboard.go）と一覧の API（study_handlers.go）が共有する。
-// Node 側の study-log-service.ts・study-plan-service.ts の list 系にあたる。
 
-// 応答の件数の上限。期間で絞ったうえでの安全網で、ページングではない（Node と同じ値）。
+// 応答の件数の上限。期間で絞ったうえでの安全網で、ページングではない。
 const (
 	MaxLogs  = 1000
 	MaxPlans = 1000
@@ -26,14 +25,14 @@ const (
 // json タグが JSON のキー名になる。NULL になりうる列はポインタにして、nil が null になる。
 
 // dateRange は「自分のものを、ある期間ぶんだけ」取るときの期間。from・to はどちらも日付（その日の 00:00 UTC）。
-// to が nil なら上限なし。Node 側の DateRange（services/date-range.ts）にあたる。
+// to が nil なら上限なし。
 type dateRange struct {
 	from time.Time
 	to   *time.Time
 }
 
 // where は期間を SQL の条件にする。to の当日ぶんを含めたいので、上限は to の翌日の 00:00 にする
-// （date は「その日の 00:00 UTC」で入っている）。Node の userDateConditions と同じ形。
+// （date は「その日の 00:00 UTC」で入っている）。
 //
 // alias は SQL に直接埋める。値ではなく識別子なので ? では渡せない。渡すのは各クエリに書いた
 // 固定の別名だけで、利用者の入力は入らない。
@@ -47,9 +46,8 @@ func (d dateRange) where(alias, userID string) (string, []any) {
 	return cond, args
 }
 
-// SQL は Node 側（study-columns.ts・study-log-service.ts・study-plan-service.ts）と
-// 同じ列・同じ条件にしている。応答に使わない列（userId・createdAt など）も同じく読む。
-// 比べたいのは言語の差なので、DB から受け取る量を揃えるため。
+// 応答に使わない列（userId・createdAt など）も読んでいる。Node の API と速さを比べたときに、
+// DB から受け取る量を揃えた名残で、今は減らしてよい。
 
 const logColumns = `
   l.id, l.userId, l.date, l.subject, l.minutes, l.textbookId,

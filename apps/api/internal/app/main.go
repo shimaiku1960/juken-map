@@ -1,10 +1,7 @@
 // Package app は juken-map のサーバーの組み立て。API・ログイン・画面の配信・運用のコマンド・マイグレーションの適用を
 // 1つのバイナリで受け持つ。入口は cmd/api/main.go で、ここの Main を呼ぶだけ（JUK-156）。
-// もとは Node の業務 API を1本ずつ Go へ移すために作った（JUK-70）。移し終えて Node を消したあと、
-// apps/api-go から apps/api へ名前を変えた（JUK-131）。本番では nginx が全部のパスを Go へ送る（infra/nginx/juken-map-go-routes.conf）。
-//
-// LINE 連携（JUK-79）と管理画面の API（JUK-78）も Go が受ける。ログイン（/api/auth/*）も Better Auth から移し、
-// Go で自作した（JUK-115、internal/feature/auth）。
+// 本番では nginx が全部のパスをここへ送る（infra/nginx/juken-map-go-routes.conf）。
+// ログイン（/api/auth/*）は internal/feature/auth にある。
 package app
 
 import (
@@ -167,7 +164,7 @@ func run() error {
 		Addr: ":" + envOr("PORT", "8080"),
 		Handler: newServerHandler(rt, m, serverOptions{
 			maxInFlight: maxInFlight,
-			// 本番は reqId を UUID のまま、開発は短くする（Node と同じ）。
+			// 本番は reqId を UUID のまま、開発は短くする。
 			shortRequestIDs: os.Getenv("NODE_ENV") != "production",
 			tracer:          tp.Tracer(telemetry.ServiceName),
 		}),

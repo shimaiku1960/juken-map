@@ -112,7 +112,7 @@ func newJSONSnapshot(v any, expiresAt time.Time) (*JSONSnapshot, error) {
 	if err := w.Close(); err != nil {
 		return nil, err
 	}
-	// ETag は JSON の SHA-1 を base64url にしたもの（Node の頃と同じ作り方）。JSON が同じなら値も同じなので、
+	// ETag は JSON の SHA-1 を base64url にしたもの。JSON が同じなら値も同じなので、
 	// 作り直しやプロセスの入れ替えをまたいでも、ブラウザが持っている ETag で 304 が返る。
 	sum := sha1.Sum(body)
 	return &JSONSnapshot{
@@ -192,7 +192,7 @@ func AcceptsGzip(acceptEncoding string) bool {
 	return false
 }
 
-// isZeroQ は q の値が 0 か。空文字（"q="）も 0 とみなす（Node の Number(q) === 0 と同じ）。
+// isZeroQ は q の値が 0 か。空文字（"q="）も 0 とみなす。
 func isZeroQ(q string) bool {
 	q = strings.TrimSpace(q)
 	if q == "" {

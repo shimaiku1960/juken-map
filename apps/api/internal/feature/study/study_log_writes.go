@@ -13,10 +13,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
 
-// 学習記録（実績）の書き込み（JUK-75）。Node の次の部分にあたる。
-//   - routes/study-logs.ts の POST、routes/study-log-item.ts の PATCH・DELETE
-//   - services/study-log-service.ts の createStudyLog・updateStudyLog・deleteStudyLog・findOwnedStudyLog
-//   - services/textbook-service.ts の findOwnedTextbook、domain/textbookRange.ts
+// 学習記録（実績）の書き込み（JUK-75）。
 //
 // 書き込みと、その決まり（自分の参考書か・範囲が逆算設定に合うか・初回記録の印）は持ち主の
 // internal/write/studyrecord にある（JUK-153）。ここは本文を読んで確かめ、操作を呼び、結果を応答の形にする。
@@ -24,7 +21,7 @@ import (
 // 入力チェックの規則の正は Zod の createStudyLogSchema（src/shared/validations/studyLog.ts）。
 
 // studyLogInput は POST・PATCH の本文を読んだもの。任意の項目は「無い」と null を区別する
-// （PATCH の「範囲が変わったか」の判定が、Node の undefined !== null に頼っているため）。
+// （PATCH の「範囲が変わったか」の判定は、キーが無いときも「変わった」とみなすため。opt.Field.Differs）。
 type studyLogInput struct {
 	date       string
 	minutes    int64
@@ -52,7 +49,7 @@ func readStudyLogInput(body any, today string) (*httpx.ObjectInput, studyLogInpu
 	in := httpx.ReadObject(body)
 	var v studyLogInput
 	v.date = in.String("date", httpx.YMDDateRule("日付を選択してください",
-		// Node と同じく文字列のまま比べる（形は httpx.YMDDateRule で確かめてある）。
+		// 文字列のまま比べる（形は httpx.YMDDateRule で確かめてある）。
 		httpx.StringCheck{OK: func(s string) bool { return s <= today }, Code: "future_date", Message: "未来日は実績として記録できません"}))
 	v.minutes = int64(in.Number("minutes", minutesRule))
 	v.subject = in.OptionalString("subject", httpx.StringRule{Checks: []httpx.StringCheck{subjectCheck}}, true)
@@ -139,7 +136,7 @@ func (h *LogWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *htt
 	})
 }
 
-// Update は PATCH /api/study-logs/{id}。Node と同じく、本文は先に読み（415・413 は ID の確かめより先）、
+// Update は PATCH /api/study-logs/{id}。本文は先に読み（415・413 は ID の確かめより先）、
 // 自分の実績かを本文の確かめより先に見る（無ければ本文に関わらず 404）。
 func (h *LogWriteHandlers) Update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)

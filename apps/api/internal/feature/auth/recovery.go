@@ -40,7 +40,7 @@ func (h *Handlers) verifyEmail(w http.ResponseWriter, r *http.Request, _ *httpx.
 		httpx.InternalError(w, r, fmt.Errorf("verify-email: %w", err))
 		return
 	}
-	// 初めて確認できたときだけ、運営者へ新しい利用者を知らせる（Better Auth の afterEmailVerification と同じ）。
+	// 初めて確認できたときだけ、運営者へ新しい利用者を知らせる。
 	if first {
 		if u, err := h.store.findUserByID(ctx, userID); err == nil && u != nil {
 			h.mailer.notifyAdminOfNewUser(u.Name, u.Email, now)

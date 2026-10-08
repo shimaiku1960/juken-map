@@ -1,5 +1,5 @@
-// Package dates は日付と時刻の共通の扱い。日本時間の「今日」と、Node（JavaScript の Date）と同じ値への
-// そろえ方を持つ。機能をまたいで使うので、feature の外に置く（JUK-156）。
+// Package dates は日付と時刻の共通の扱い。日本時間の「今日」と、画面（JavaScript の Date）が
+// 読める形への整え方を持つ。機能をまたいで使うので、feature の外に置く（JUK-156）。
 package dates
 
 import (
@@ -12,7 +12,7 @@ var Tokyo = time.FixedZone("Asia/Tokyo", 9*60*60)
 
 // OnTokyo は now が東京で何日かを、その日の 00:00 UTC の time.Time で返す。
 // 「日付」だけを扱うときは、時差で日がずれないよう UTC の 0時に揃えておく。
-// Node 側の todayYmdTokyo（src/shared/date.ts）にあたる。
+// 画面の todayYmdTokyo（src/shared/date.ts）と同じ日になる。
 func OnTokyo(now time.Time) time.Time {
 	y, m, d := now.In(Tokyo).Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
@@ -51,19 +51,19 @@ func YMD(t time.Time) string {
 }
 
 // NowMillis は今の時刻をミリ秒で切り捨てたもの。DB の DATETIME(3) に書く値に使う。
-// Node の new Date() はミリ秒までしか持たない。Go の time.Now() はナノ秒まで持ち、そのまま渡すと
-// MySQL が小数第3位へ丸める（切り上がることがある）ので、先に切り捨てて Node と同じ値にする。
+// Go の time.Now() はナノ秒まで持ち、そのまま渡すと MySQL が小数第3位へ丸める（切り上がることが
+// あり、応答に返した値と DB の値がずれる）ので、先に切り捨てる。
 func NowMillis() time.Time {
 	return time.Now().UTC().Truncate(time.Millisecond)
 }
 
-// ISOMillis は時刻を Node の Date#toISOString と同じ形にする。
+// ISOMillis は時刻を ISO の形（JavaScript の Date#toISOString と同じ）にする。
 func ISOMillis(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15:04:05.000Z")
 }
 
 // FromYMD は "YYYY-MM-DD"（暦にある日付だと確かめ済み）を、その日の 00:00 UTC にする。
-// Node の new Date("YYYY-MM-DD") と同じ値。
+// JavaScript の new Date("YYYY-MM-DD") と同じ値。
 func FromYMD(s string) time.Time {
 	t, _ := time.Parse(time.DateOnly, s)
 	return t

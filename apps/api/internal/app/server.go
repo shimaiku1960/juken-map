@@ -31,8 +31,6 @@ type serverOptions struct {
 //  4. limitInFlight 同時処理数の上限を超えたら 503
 //  5. withDeadline  1リクエストの時間の上限
 //  6. ルーター       入口の種類ごとの拒否（internal/httpx/router.go）→ ハンドラ
-//
-// 順番は Node の server.ts と同じ考え方（メトリクス → エラー処理 → 過負荷 → 認証）。
 func newServerHandler(rt *httpx.Router, m *telemetry.Metrics, opts serverOptions) http.Handler {
 	var h http.Handler = rt
 	h = withDeadline(requestTimeout, h)

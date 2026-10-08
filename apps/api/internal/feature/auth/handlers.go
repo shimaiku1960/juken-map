@@ -21,7 +21,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
-// ログイン（/api/auth/*）。Better Auth（Node）が受けていたものを Go で自作した（JUK-115）。
+// ログイン（/api/auth/*）。ライブラリを使わず自作している（JUK-115）。
 // 判定の基準は dev-standards の targets/10_authentication.md（認証 基準 v1.0）で、コメントの
 // A1・B3 などはその項目の記号。06 で始まるものは 06_security.md の項目。
 //

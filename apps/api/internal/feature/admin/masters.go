@@ -15,8 +15,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
-// 管理者ページのマスター編集（/admin/masters、JUK-78）。Node の routes/admin-masters.ts と
-// services/master-service.ts にあたる。どれも rt.Admin（管理者＋2段階認証を通したセッションだけ）で登録する。
+// 管理者ページのマスター編集（/admin/masters、JUK-78）。どれも rt.Admin（管理者＋2段階認証を通したセッションだけ）で登録する。
 //
 // 削除は「誰にも使われていない行」に限る。
 //   - 学部：志望校（FinalGoal）が参照していれば消せない（DB も ON DELETE RESTRICT で拒む）
@@ -30,7 +29,7 @@ import (
 // store はその操作を呼んで結果を masterOutcome に直す。
 //
 // 大学・学部を変えたら、大学を探す画面の一覧のキャッシュ（internal/feature/universities）を捨てる。成功したときだけ。
-// 変更はすべて構造化ログ「admin master change」に「誰が・何を・前→後」で残す（Node と同じ項目。Grafana の Loki で追える）。
+// 変更はすべて構造化ログ「admin master change」に「誰が・何を・前→後」で残す（Grafana の Loki で追える）。
 //
 // ファイルは対象ごとに分け、それぞれに入口・入力・DB をまとめる（JUK-135）。
 //   - universities.go：大学（/api/admin/universities）
@@ -41,7 +40,7 @@ import (
 
 const (
 	adminUniversitiesPageSize = 50
-	// adminUniversitiesMaxPage は Node の listQuerySchema の page の上限。
+	// adminUniversitiesMaxPage は一覧の page の上限。
 	adminUniversitiesMaxPage = 1_000
 	// adminMasterQueryMax は一覧の検索語（q）の上限。前後の空白を削ってから数える。
 	adminMasterQueryMax = 100
@@ -76,7 +75,7 @@ type masterChange[T any] struct {
 	before, after T
 }
 
-// masterMessages は断ったときの文言。Node の MESSAGES と同じ。inUse は件数を %d で入れる。
+// masterMessages は断ったときの文言。inUse は件数を %d で入れる。
 type masterMessages struct {
 	notFound, duplicate, inUse string
 }
@@ -99,7 +98,7 @@ var (
 	}
 )
 
-// rejectMasterFailure は断った結果なら Node の sendFailure と同じ status・文言を送って true を返す。
+// rejectMasterFailure は断った結果なら status と文言を送って true を返す。
 func rejectMasterFailure(w http.ResponseWriter, m masterMessages, failure masterFailure, count int) bool {
 	switch failure {
 	case masterOK:
@@ -116,7 +115,7 @@ func rejectMasterFailure(w http.ResponseWriter, m masterMessages, failure master
 	return true
 }
 
-// logMasterChange は、誰が・何を・前→後に変えたかを残す（Node の logChange と同じ項目・同じ文言・info）。
+// logMasterChange は、誰が・何を・前→後に変えたかを残す（info）。
 // detail は "before", 値, "after", 値 のように並べる。
 func logMasterChange(ctx context.Context, adminID, action, table string, id int64, detail ...any) {
 	attrs := append([]any{"adminId", adminID, "action", action, "table", table, "id", id}, detail...)
@@ -159,8 +158,8 @@ func NewMasterHandlers(db *sql.DB, universitiesChanged, textbookMastersChanged f
 // ---- 入力 ----
 // 規則の正は src/shared/validations/master.ts の Zod のスキーマ（internal/httpx/validate.go の冒頭を参照）。
 
-// masterID は path の {id} を読む。判定は httpx.PathID と同じだが、Node のマスター編集は readIdParam を通さず
-// idParamsSchema を sendValidationError で返すので、本文は ValidationError の形になる。
+// masterID は path の {id} を読む。判定は httpx.PathID と同じだが、マスター編集の契約（openapi.yaml）では
+// 断ったときの本文が ValidationError の形になっている。
 func masterID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := r.PathValue("id")
 	if !httpx.IDPattern.MatchString(raw) {
@@ -173,13 +172,13 @@ func masterID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 // readMasterSearchQuery は一覧の q（z.string().trim().max(100).optional()）を読む。
-// Node は空の q を「絞らない」として扱う（q || undefined）ので、"" はそのまま返す。
+// 空の q は「絞らない」として扱うので、"" はそのまま返す。
 func readMasterSearchQuery(query map[string][]string) (string, *httpx.ValidationIssue) {
 	values, ok := query["q"]
 	if !ok {
 		return "", nil
 	}
-	// Fastify は同じキーが2つ以上あると値を配列にする。
+	// 同じキーが2つ以上あるときは、文字列ではない（配列）として断る。
 	if len(values) != 1 {
 		return "", httpx.InvalidType("q", "string", []any{})
 	}
@@ -190,7 +189,7 @@ func readMasterSearchQuery(query map[string][]string) (string, *httpx.Validation
 	return q, nil
 }
 
-// masterNameRule は Node の name(label)：z.string().trim().min(1).max(100)。
+// masterNameRule は名前の規則：z.string().trim().min(1).max(100)。
 func masterNameRule(label string) httpx.StringRule {
 	return httpx.StringRule{
 		TrimFirst: true,

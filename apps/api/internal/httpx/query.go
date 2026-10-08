@@ -5,14 +5,13 @@ import (
 	"strings"
 )
 
-// ParseQuery は ?a=1&b=2 を Fastify の既定（fast-querystring）と同じ規則で読む。
-// Go の url.ParseQuery と違うところがあり、そのままでは Node と応答がずれるため自前で読む。
+// ParseQuery は ?a=1&b=2 を読む。Go の url.ParseQuery は次の点で黙って値を捨てるので、自前で読む。
 //   - 区切りは & だけ。; は値の一部（Go は ; を含む組を捨てる）
 //   - = の無い組（?from）は空文字の値
 //   - % のデコードに失敗した値（?from=%ZZ）は元の文字のまま（Go は組ごと捨てる）
 //   - キーもデコードする（?fr%6Fm=… は from）
 //
-// 同じキーが2回以上出ると、Fastify ではその値が配列になる。ここでは値の数で表す。
+// 同じキーが2回以上出たら、値の数で表す。
 func ParseQuery(raw string) map[string][]string {
 	q := map[string][]string{}
 	for _, pair := range strings.Split(raw, "&") {
