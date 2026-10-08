@@ -34,6 +34,12 @@ unzip -q /tmp/awscliv2.zip -d /tmp
 sudo -u ubuntu -H git clone https://github.com/shimaiku1960/juken-map.git /home/ubuntu/juken-map
 sudo -u ubuntu -H git -C /home/ubuntu/juken-map checkout --detach "$REPO_REF"
 
+# Go（apps/api/go.mod と同じ版）。pnpm db:migrate（scripts/go-cli.sh、JUK-125）と、seed・負荷試験の
+# 下ごしらえのパスワードのハッシュ・セッション（scripts/go-devtool.sh、JUK-143）が go run で使う。
+go_version="$(awk '$1 == "go" { print $2 }' /home/ubuntu/juken-map/apps/api/go.mod)"
+curl -fsSL "https://go.dev/dl/go${go_version}.linux-amd64.tar.gz" | tar -C /usr/local -xz
+ln -sf /usr/local/go/bin/go /usr/local/bin/go
+
 # 試験用の DATABASE_URL と BETTER_AUTH_SECRET（本番の値ではない）。
 umask 077
 aws ssm get-parameter --region ap-northeast-1 --name "$PARAM_NAME" --with-decryption \

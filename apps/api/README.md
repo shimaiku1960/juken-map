@@ -320,6 +320,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/app/cli.go` | 引数を付けて起動したときの振り分け：`migrate` は `internal/migrate`、`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）は `internal/feature/ops` へ渡す。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
 | `internal/feature/ops/` | `incident`・`grant-admin` の引数の読み取り（`commands.go`）と、使う読み取り（`incident.go`）と、`internal/write/account` の操作（セッションの取り消し・停止・2段階認証の解除・役割の付け外し。変えたことは `OpsAuditLog` に残り、`incident log` で見る。JUK-138）の呼び出し。手順は `docs/incident-response.md` |
 | `internal/migrate/` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
+| `cmd/devtool/`・`internal/devtool/` | 開発でしか使わない道具（JUK-143）。`hash-password`・`email-token`・`sessions` で、seed・E2E・負荷試験の利用者のパスワードのハッシュ、メールのリンクのトークン、ログイン済みのセッションを、`internal/feature/auth` の `devtool.go` の関数（ログインと同じ作り方）で作る。手元は `scripts/go-devtool.sh`。Dockerfile は `cmd/api` だけを作るので、本番のイメージには入らない |
 
 ### 共通の部品
 

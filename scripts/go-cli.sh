@@ -3,6 +3,7 @@
 #   pnpm incident <操作> [メールアドレス]        → bash scripts/go-cli.sh incident ...
 #   pnpm admin:grant <メールアドレス> [--revoke]  → bash scripts/go-cli.sh grant-admin ...
 #   pnpm db:migrate                               → bash scripts/go-cli.sh migrate
+# GO_CLI_CMD=devtool で、開発でしか使わない道具（cmd/devtool）を同じ設定で動かす（scripts/go-devtool.sh、JUK-143）。
 # .env（と .env.worktree）の DATABASE_URL に繋ぐ。.env が無い CI（E2E の db:migrate）では、環境変数をそのまま使う。
 # 本番では EC2 の Go のコンテナの中で（migrate はデプロイが1回きりのコンテナで流す）
 # `sudo docker exec juken-map-go /api incident ...` と実行する（docs/incident-response.md）。
@@ -19,4 +20,4 @@ set +a
 export MIGRATIONS_DIR="${MIGRATIONS_DIR:-$ROOT/db/migrations}"
 
 cd "$ROOT/apps/api"
-exec go run ./cmd/api "$@"
+exec go run "./cmd/${GO_CLI_CMD:-api}" "$@"

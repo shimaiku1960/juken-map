@@ -5,13 +5,22 @@ import { login } from "./utils";
 
 // ログイン（Go の /api/auth/*、JUK-115）の画面の流れ。API の細かい判定（期限・回数制限・取り消しなど）は
 // apps/api/internal/feature/auth/auth_db_test.go が見る。ここでは、画面とサーバーがつながっていることを確かめる。
-// メールは送られないので、メールのリンクに載るトークンは db/e2e-auth.ts で発行する。
+// メールは送られないので、メールのリンクに載るトークンは Go の開発用の道具（scripts/go-devtool.sh）で発行する。
 
 const PASSWORD = "e2e passphrase for sign up";
 const emails: string[] = [];
 
 function helper(...args: string[]) {
   const out = execFileSync("pnpm", ["exec", "tsx", "--env-file-if-exists=.env", "db/e2e-auth.ts", ...args], {
+    encoding: "utf8",
+    env: process.env,
+  });
+  return out.trim().split("\n").pop() ?? "";
+}
+
+/** メールのリンクに載るトークン。ログイン（Go）と同じ作り方・同じ寿命で発行する（JUK-143）。 */
+function emailToken(email: string, purpose: "verify-email" | "password-reset") {
+  const out = execFileSync("bash", ["scripts/go-devtool.sh", "email-token", email, purpose], {
     encoding: "utf8",
     env: process.env,
   });
@@ -61,7 +70,7 @@ test("登録して、メールのリンクから確認し、ログインでき�
   await expect(page.getByText("メールアドレスの確認が完了していません")).toBeVisible();
 
   // リンクを開いただけでは確認されない。開いたら URL からトークンが消える（D3）。
-  const token = helper("token", email, "verify-email");
+  const token = emailToken(email, "verify-email");
   await page.goto(`/verify-email/confirm?token=${token}`);
   await expect(page.getByRole("button", { name: "メールアドレスを確認する" })).toBeVisible();
   await expect(page).toHaveURL(/\/verify-email\/confirm$/);
@@ -80,7 +89,7 @@ test("パスワードを忘れたら、メールのリンクから決め直せ�
   await page.getByRole("button", { name: "再設定リンクを送信" }).click();
   await expect(page.getByText("再設定用のリンクを送りました")).toBeVisible();
 
-  const token = helper("token", email, "password-reset");
+  const token = emailToken(email, "password-reset");
   await page.goto(`/reset-password?token=${token}`);
   await expect(page).toHaveURL(/\/reset-password$/);
   await page.getByLabel("新しいパスワード").fill("a brand new e2e passphrase");

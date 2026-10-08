@@ -6,16 +6,18 @@
 //   - 実際の利用者は毎回ログインし直さない。セッションを持って来訪する。
 //     毎回ログインさせると、測っているのがパスワードのハッシュ（Argon2id）の重さになる。
 //
-// セッションの Cookie は 256 ビットの乱数のトークンで、DB にはその SHA-256 を置く
-// （apps/api/internal/feature/auth の session.go・token.go と同じ作り方）。
-import { createHash, randomBytes } from "node:crypto";
+// セッションはログイン（Go）の本物の関数で作る（scripts/go-devtool.sh sessions、JUK-143）。トークンの形・
+// DB に置くハッシュ・期限・Cookie の名前が、ログインしたときと同じになる。ここでは利用者を選ぶだけにする。
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { SEED_EMAIL_DOMAIN } from "../src/shared/synthetic";
 import { execute, runSeed, select } from "./seed-helpers";
 
 const COUNT = Number(process.env.COUNT ?? 500);
 const ACTIVE_DAYS = Number(process.env.ACTIVE_DAYS ?? 7);
-// Go の sessionCookieName と同じ。手元の http でも同じ名前（ブラウザは localhost を安全な場所として扱う）。
-const COOKIE_NAME = "__Host-jm_session";
+// 試験で作ったセッションの印。次の試験の前に、これの付いたものだけを消す。
+const USER_AGENT = "juken-map-loadtest";
+const DEVTOOL = fileURLToPath(new URL("../scripts/go-devtool.sh", import.meta.url));
 
 runSeed(async () => {
   // 毎日来ている層から選ぶ。直近30日まで広げると、登録したてで数件しか持っていない人が
@@ -39,29 +41,20 @@ runSeed(async () => {
 
   // 前回の試験で作ったセッションは消す（実利用者のセッションには触れない）。
   await execute(
-    "DELETE FROM AuthSession WHERE userAgent = 'juken-map-loadtest' AND userId IN (SELECT id FROM `user` WHERE email LIKE ?)",
-    [`%${SEED_EMAIL_DOMAIN}`]
+    "DELETE FROM AuthSession WHERE userAgent = ? AND userId IN (SELECT id FROM `user` WHERE email LIKE ?)",
+    [USER_AGENT, `%${SEED_EMAIL_DOMAIN}`]
   );
 
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 7 * 86400000);
-  const cookies: string[] = [];
-  const values: unknown[][] = [];
-  for (const row of rows) {
-    const token = randomBytes(32).toString("base64url");
-    cookies.push(`${COOKIE_NAME}=${token}`);
-    const tokenHash = createHash("sha256").update(token).digest();
-    values.push([randomBytes(16).toString("hex"), tokenHash, row.id, now, expiresAt, now, "127.0.0.1", "juken-map-loadtest"]);
-  }
-
-  for (let i = 0; i < values.length; i += 200) {
-    const chunk = values.slice(i, i + 200);
-    await execute(
-      // eslint-disable-next-line no-restricted-syntax -- 埋め込むのは件数ぶん並べた ? だけ。値は chunk.flat() で渡す
-      `INSERT INTO AuthSession (id, tokenHash, userId, createdAt, expiresAt, lastUsedAt, ipAddress, userAgent)
-       VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(", ")}`,
-      chunk.flat()
-    );
+  // 利用者 ID を1行に1つ渡すと、Cookie（名前=値）が1行に1つ返る。
+  const out = execFileSync("bash", [DEVTOOL, "sessions", USER_AGENT], {
+    input: rows.map((row) => row.id).join("\n"),
+    encoding: "utf8",
+    env: process.env,
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+  const cookies = out.trim().split("\n");
+  if (cookies.length !== rows.length) {
+    throw new Error(`セッションを ${rows.length} 件頼んで ${cookies.length} 件返ってきました`);
   }
 
   const counts = rows.map((row) => Number(row.logs)).sort((a, b) => a - b);
