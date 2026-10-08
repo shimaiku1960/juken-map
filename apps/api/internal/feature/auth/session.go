@@ -71,13 +71,18 @@ func (st *sessionStore) clock() time.Time {
 // create は新しいセッションを作り、Cookie に入れるトークンと期限を返す。
 // ログインの成功・2段階認証の完了のたびに呼び、前のトークンを使い続けない（C4）。
 func (st *sessionStore) create(ctx context.Context, r *http.Request, userID, role string, mfaVerified bool) (raw string, expiresAt time.Time, err error) {
+	return st.issue(ctx, userID, role, mfaVerified, httpx.ClientIP(r), r.UserAgent())
+}
+
+// issue は create の本体。リクエストを持たない開発用の道具（IssueSession）も、同じ作り方でセッションを作る。
+func (st *sessionStore) issue(ctx context.Context, userID, role string, mfaVerified bool, ip, userAgent string) (raw string, expiresAt time.Time, err error) {
 	now := st.clock()
 	policy := policyFor(role)
 	raw, hash := newToken()
 	expiresAt = now.Add(policy.absolute)
 	if err := account.CreateSession(ctx, st.db, account.NewSession{
 		TokenHash: hash, UserID: userID, ExpiresAt: expiresAt, IdleTimeout: policy.idle, MFAVerified: mfaVerified,
-		IPAddress: truncate(httpx.ClientIP(r), 64), UserAgent: truncate(r.UserAgent(), 512),
+		IPAddress: truncate(ip, 64), UserAgent: truncate(userAgent, 512),
 	}, now); err != nil {
 		return "", time.Time{}, err
 	}

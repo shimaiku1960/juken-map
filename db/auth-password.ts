@@ -1,41 +1,33 @@
-import * as nodeCrypto from "node:crypto";
-import { promisify } from "node:util";
+import { execFile } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
-// seed で作る利用者のパスワードのハッシュと ID（JUK-115）。ログインを確かめるのは Go
-// （apps/api/internal/feature/auth/password.go）なので、同じ形・同じ強さで作る。
+// seed で作る利用者のパスワードのハッシュと ID（JUK-115）。
 //
-//   形：PHC 文字列 $argon2id$v=19$m=19456,t=2,p=1$塩$ハッシュ（塩とハッシュは = の無い base64）
-//   入力：NFKC で正規化してからハッシュにする
-//
-// Argon2id は Node 24.7 から node:crypto に入っている（依存を足さずに済む）。
+// ハッシュはログイン（Go）の本物の関数で作る（scripts/go-devtool.sh hash-password、JUK-143）。
+// 前はここで同じ形・同じ強さをなぞっていたが、Go 側を変えたときの直し忘れで seed の利用者が
+// ログインできなくなるので、二重に書くのをやめた。初回は Go のビルドで数秒かかる。
 
-const MEMORY_KIB = 19 * 1024;
-const PASSES = 2;
-const PARALLELISM = 1;
+const DEVTOOL = fileURLToPath(new URL("../scripts/go-devtool.sh", import.meta.url));
 
-// ルートの @types/node は 20 で argon2 の型を持たないので、使う形だけをここで書く（実行は Node 24）。
-type Argon2 = (
-  algorithm: "argon2id",
-  parameters: { message: string; nonce: Buffer; parallelism: number; tagLength: number; memory: number; passes: number },
-  callback: (error: Error | null, key: Buffer) => void
-) => void;
-const argon2Async = promisify((nodeCrypto as unknown as { argon2: Argon2 }).argon2);
-
-export async function hashPassword(password: string) {
-  const nonce = nodeCrypto.randomBytes(16);
-  const key = await argon2Async("argon2id", {
-    message: password.normalize("NFKC"),
-    nonce,
-    parallelism: PARALLELISM,
-    tagLength: 32,
-    memory: MEMORY_KIB,
-    passes: PASSES,
+export function hashPassword(password: string) {
+  return new Promise<string>((resolve, reject) => {
+    // パスワードはコマンドラインに出さず、標準入力で渡す。
+    const child = execFile("bash", [DEVTOOL, "hash-password"], { encoding: "utf8" }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`パスワードのハッシュを作れません（Go）: ${stderr.trim() || error.message}`));
+        return;
+      }
+      resolve(stdout.trim());
+    });
+    child.stdin?.end(password);
   });
-  const b64 = (buf: Buffer) => buf.toString("base64").replace(/=+$/, "");
-  return `$argon2id$v=19$m=${MEMORY_KIB},t=${PASSES},p=${PARALLELISM}$${b64(nonce)}$${b64(key)}`;
 }
 
-/** 利用者の ID。Go の newUserID と同じ形（16 バイトの乱数の hex、32 文字）。 */
+/**
+ * 利用者の ID。Go の account.NewUserID と同じ形（16 バイトの乱数の hex、32 文字）。
+ * ログインは ID の形を見ないので、ずれても壊れない。合成データで何万人分も作るため、Go を呼ばずにここで作る。
+ */
 export function newUserId() {
-  return nodeCrypto.randomBytes(16).toString("hex");
+  return randomBytes(16).toString("hex");
 }
