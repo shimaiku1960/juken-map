@@ -2,7 +2,7 @@
 # Node のイメージ（ルートの Dockerfile）とは別に作り、本番では別のコンテナとして並べて動かす（JUK-72）。
 
 # ---- ビルド ----
-FROM golang:1.27.1-bookworm AS build
+FROM golang:1.27.2-bookworm AS build
 WORKDIR /src
 # 依存を先に取っておくと、コードだけ変えたときはこの層がキャッシュから使われる。
 COPY go.mod go.sum ./
