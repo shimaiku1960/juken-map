@@ -1,7 +1,7 @@
 import type { TransportItem } from "@grafana/faro-web-sdk";
 
 // 画面（ブラウザ）で起きたエラーと Web Vitals を Grafana Cloud（Frontend Observability）へ送る。
-// ブラウザのエラーは Fastify に届かないので、サーバー側のログ・トレースでは見えない。
+// ブラウザのエラーはサーバー（Go）に届かないので、サーバー側のログ・トレースでは見えない。
 //
 // 送り先はサーバーが本番の環境変数 FARO_COLLECTOR_URL から <meta> で差し込む（apps/api/internal/spa/seo.go）。
 // GA4 と同じく、バンドルに焼き込まず実行時の設定のまま扱うため。meta が無い環境（手元の開発・

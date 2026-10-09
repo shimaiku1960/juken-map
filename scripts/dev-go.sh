@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 開発中の Go の API（apps/api）を起動する（pnpm dev の dev:go、JUK-96）。
-# Node の dev と同じく .env を読み、.env.worktree の値で上書きする。ポートは scripts/local-ports.sh の GO_PORT。
+# .env を読み、.env.worktree の値で上書きする。ポートは scripts/local-ports.sh の GO_PORT。
 # 自動で再起動はしないので、Go を書き換えたら pnpm dev を起動し直すか、このスクリプトだけ起動し直す。
 set -euo pipefail
 

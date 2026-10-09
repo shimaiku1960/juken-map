@@ -1,11 +1,11 @@
 // シミュレータの HTTP クライアント。画面（ブラウザ）が送るのと同じ形で API を叩く。
 //
 // ブラウザがやってくれていることを、ここで代わりにやる：
-//   - Cookie を覚えて次のリクエストに付ける（Node の fetch は覚えない）
+//   - Cookie を覚えて次のリクエストに付ける（Node.js の fetch は覚えない）
 //   - Origin を付ける（画面と同じ。別のサイトからの書き込みとして断られないように）
 // シミュレータだけの約束事：
 //   - X-Sim-Run ヘッダー＝ API のログに sim:true が付き、Grafana で実ユーザーと分けて読める
-//   - ログイン・登録の間隔を空ける（Better Auth の組み込み制限が 10 秒 3 回）
+//   - ログイン・登録の間隔を空ける（Go のログインの回数制限。apps/api/internal/write/authguard/throttle.go）
 //   - 429 は指定秒だけ待って1回だけやり直す
 
 export class HttpError extends Error {

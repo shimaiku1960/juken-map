@@ -4,7 +4,7 @@
 
 ## Phase 0
 
-Better AuthのVU別Cookie維持と、同じ学習予定を同時完了した場合の競合応答を確認する。
+ログインのCookieをVUごとに持てることと、同じ学習予定を同時完了した場合の競合応答を確認する。
 
 1. ビルド済みSPAを配信するAPIを3000番で起動する（`bash scripts/e2e-server.sh`）。
 2. `bash scripts/run-loadtest-phase0.sh`を実行する。
@@ -36,8 +36,8 @@ RPSを段階的に上げ、最初に基準を割った段階を限界点とし�
    USERS=42000 MONTHS=36 pnpm db:seed:synthetic
    ```
 
-2. 本番と同じ構成（Fastify が API と SPA を配る）を3000番で起動する。
-   本番は `NODE_ENV=production` なので、合わせないとSQLログの分だけ遅くなる。
+2. 本番と同じ構成（nginx の後ろで Go が API と SPA を配る）を3000番で起動する。
+   本番に合わせて `NODE_ENV=production` を付ける。
 
    ```
    NODE_ENV=production bash scripts/e2e-server.sh

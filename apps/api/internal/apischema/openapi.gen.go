@@ -929,7 +929,7 @@ type ExploreTag struct {
 	Name string `json:"name"`
 }
 
-// ExploreUniversity 大学を探す画面の1件。画面が使うのは大学の列と学部ごとのタグ名だけ。 Go はこの形を手書きの型で返す（JSON のキーの順番を Node と同じにして ETag をそろえるため）
+// ExploreUniversity 大学を探す画面の1件。画面が使うのは大学の列と学部ごとのタグ名だけ。 Go はこの形を手書きの型で返す（Go へ移したときに JSON のキーの順番と ETag を以前と同じにするため）
 type ExploreUniversity struct {
 	Faculties  []ExploreFaculty `json:"faculties"`
 	ID         int64            `json:"id"`
@@ -1536,7 +1536,7 @@ type User struct {
 // UserKind 利用者の種別。real は実際の利用者、sim は本番のシミュレーション、seed は手元の負荷検証用、 demo は面接官向けのデモアカウント
 type UserKind string
 
-// ValidationError 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の internal/httpx/response.go）
+// ValidationError 入力チェックで弾いたときのエラー（Go の internal/httpx/response.go）
 type ValidationError struct {
 	// Code 種類。自分で書いた規則は名前（range_end_before_start など）、 組み込みのチェックは Zod の code（too_small・invalid_type・invalid_format など）
 	Code string `json:"code"`

@@ -45,7 +45,7 @@ export default defineConfig({
         // 本番と同じ構成（nginx の後ろに Go だけ。Go が API と SPA を配る）を e2ePort（既定 3000）で起動する。
         // apps/web のビルドを含むので、初回は少し時間がかかる。
         command: "bash scripts/e2e-server.sh",
-        // nginx はここで待ち受け、内側の Node・Go のポートは scripts/local-ports.sh が決める。
+        // nginx はここで待ち受け、内側の Go のポートは scripts/local-ports.sh が決める。
         env: { E2E_PORT: String(e2ePort) },
         // 既定の SIGKILL だと e2e-server.sh の後片付けが動かず、nginx のコンテナが残る（Docker は SIGTERM で止まる）。
         gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },

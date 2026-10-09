@@ -34,7 +34,7 @@ go vet ./... && go vet -tags dbtest ./...
 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...   # 初回はビルドに1分ほどかかる
 ```
 
-ログは本番と同じ1行1つの JSON。人が読みたいときは、Node と同じ pino-pretty に通す。
+ログは本番と同じ1行1つの JSON。人が読みたいときは、pino と同じ形なので pino-pretty に通す。
 
 ```sh
 go run ./cmd/api | pnpm exec pino-pretty
@@ -56,7 +56,7 @@ curl -b jar localhost:8080/api/dashboard
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | なし | 指定したときだけ、トレースをこの送り先（OTLP/HTTP、`/v1/traces` を足す）へ送る。手元は Tempo、本番は Alloy（JUK-126） |
 | `LOG_LEVEL` | info | pino と同じ名前（debug・info・warn・error） |
 | `NODE_ENV` | なし | `production` のとき reqId を UUID のまま出す（開発は8文字） |
-| `DATABASE_URL` | なし | 必須。Node と同じ形（`mysql://…`） |
+| `DATABASE_URL` | なし | 必須。`mysql://…` の形（`db/` の道具と同じ） |
 | `BETTER_AUTH_SECRET` | なし | 必須。2段階認証の秘密を暗号化する鍵（版 v0）をここから導く（`AUTH_TOTP_KEYS` が無いとき）。名前は Better Auth の名残 |
 | `AUTH_TOTP_KEYS` | なし | 2段階認証の秘密を暗号化する鍵。`版:base64の32バイト` をカンマで並べ、先頭が今の版。鍵を作り直すときは新しい版を先頭に足す（古い版も残す） |
 | `AUTH_HASH_CONCURRENCY` | 2 | パスワードのハッシュ（Argon2id、1回 19MiB）を同時に計算する数 |
@@ -65,7 +65,7 @@ curl -b jar localhost:8080/api/dashboard
 | `ADMIN_NOTIFICATION_EMAIL` | なし | 新しい利用者を知らせる宛先。空ならログに残すだけ |
 | `DAILY_NOTIFICATION_SECRET` | なし | 毎日の通知の入口の共有トークン。空なら、その入口は必ず 401 |
 | `RESEND_API_KEY` | なし | メール（毎日の通知・確認・再設定・本人への知らせ）を送る Resend のキー |
-| `RESEND_BASE_URL` | `https://api.resend.com` | Resend の送り先。手元の比較で偽のサーバーへ向けるときだけ変える（Node の SDK と同じ名前） |
+| `RESEND_BASE_URL` | `https://api.resend.com` | Resend の送り先。手元の比較で偽のサーバーへ向けるときだけ変える（Resend の SDK と同じ名前） |
 | `LINE_CHANNEL_ACCESS_TOKEN` | なし | 毎日の通知を LINE で送るトークン |
 | `LINE_API_BASE` | `https://api.line.me/v2/bot` | LINE の送り先（Messaging API）。テスト用 |
 | `LINE_CHANNEL_SECRET` | なし | LINE の Webhook の署名を確かめる。空なら Webhook は必ず 401 |
@@ -103,18 +103,18 @@ nginx ─┬─ /api/dashboard・/api/health/go             ─▶ juken-map-go�
 ```
 
 - イメージはこのディレクトリの `Dockerfile` で作り、ECR の `juken-map-go` に置く（`deploy.yml`）。
-  Node のイメージと同じコミットのタグで、同じデプロイ（`.github/scripts/deploy-ec2.sh`）の中で入れ替える。
-  Node のイメージはマイグレーションを当てる1回きりのコンテナにだけ使い、アプリとしては動かさない（JUK-109）。
+  画面のビルド成果物は、同じコミットのタグの画面のイメージ（ECR の `juken-map`。ルートの `Dockerfile`、実行はしない）から写す。
+  マイグレーションも、このイメージの1回きりのコンテナ（`/api migrate`、JUK-125）で当てる（`.github/scripts/deploy-ec2.sh`）。
   スモークテストが通ったときだけ、nginx を1回の reload で切り替える
-- 振り分けるパスは `infra/nginx/juken-map-go-routes.conf`。ルートを移したらここに足す。
-  Node のサーバーのコードは消した（JUK-121）ので、振り分けを外しても戻る先は無い
+- nginx の振り分けは `infra/nginx/juken-map-go-routes.conf`。最後の `location ~ ^/` が残りを全部 Go へ送り、
+  その前の location はパスごとの設定（JSON の gzip・ヘッダー）のためにある
 - 応答の圧縮は nginx が行う（上のファイルの `gzip`）。Go 自身は圧縮しない。
   例外は大学の一覧で、全員に同じ 80KB なので、Go が1回だけ gzip にした形を持って返す
 - 大学の一覧は Go のメモリに10分持つ。管理画面で大学・学部を編集したら（`internal/feature/admin/universities.go`・`internal/feature/admin/faculties.go`）その場で捨てるので、
   編集はすぐ大学を探す画面に出る。10分の期限は、DB を直接書き換えたとき（seed など）の保険
 - RDS へは TLS で繋ぐ（`internal/database`。ホスト名が `.rds.amazonaws.com` のときだけ）。証明書は
   `rds-ca-ap-northeast-1.pem` を実行ファイルに埋め込む
-- ログとメトリクスは Node と同じ `job="juken-map-api"` で Grafana Cloud に入り、
+- ログとメトリクスは Node のころと同じ `job="juken-map-api"` で Grafana Cloud に入り、
   `runtime="go"` で分けられる（`observability/alloy/production.alloy`）
 - 外形監視は `https://juken-map.com/api/health/go`（Go の `/api/health` を返す）
 
@@ -143,47 +143,46 @@ SQL を `WHERE id = ? AND userId = ?` にする。ハンドラーも先に持ち
 1. `internal/app/routes.go` の `registerRoutes` と、`internal/app/main_test.go` の一覧（入口の種類）
 2. user のルートなら、`internal/app` の `ownership_db_test.go`（他人の ID、A3）と `forbidden_fields_db_test.go`（禁止項目、A4）の表。
    書かなければ CI のこの2本が落ちる（下の「DB に流すテスト」）
-3. 本番に出すときは `infra/nginx/juken-map-go-routes.conf`。同じパスの別のメソッドを Node に残すなら、
-   GET・HEAD 以外を Node へ回す名前付きの location が要る（JUK-84 で使う所が無くなり外した `@node`。
-   形は `git log -S '@node' -- infra/nginx/juken-map-go-routes.conf` で探せる）
+3. 本番では、書かなくても `infra/nginx/juken-map-go-routes.conf` の最後の `location ~ ^/` で Go に届く。
+   JSON の gzip のようにパスごとに変えたい設定があれば、そのファイルに location を足す
 
 ## 書き込みのルート
 
 本文は `httpx.ReadBody`（`internal/httpx/body.go`）で読み、入力は `httpx.ReadObject`（`internal/httpx/validate.go`）で確かめる。
 
 ```go
-body, ok := readBody(w, r, defaultBodyLimit)   // 415・413 はここで返す。壊れた JSON は「本文なし」になる（Node と同じ）
+body, ok := readBody(w, r, defaultBodyLimit)   // 415・413 はここで返す。壊れた JSON は「本文なし」になる
 if !ok {
 	return
 }
-in := readObject(body.value())   // value() は Node の request.body と同じ値（本文なしと null を区別する）
+in := readObject(body.value())   // value() は本文の値（本文なしと null を区別する）
 input := ProfileInput{Nickname: in.string("nickname", nicknameRule)}
 if in.reject(w) {            // 最初の1件を {error, code, field} の 400 で返す
 	return
 }
 ```
 
-- **入力チェックの規則の正は Zod**（`src/shared/validations/`）で、画面のフォームと Node が使う。
+- **入力チェックの規則の正は Zod**（`src/shared/validations/`）で、画面のフォームが使う。
   Go は同じ規則を手で書く。契約（`openapi/openapi.yaml`）には形（型・必須・長さ）だけを書き、Go の型はそこから作る。
   項目をまたぐ規則や「今日より未来は不可」はスキーマに書けないため、規則は2か所に持つと決めた（JUK-75）
 - Zod の規則を変えたら、Go も直して `*_writes_test.go` にケースを足す。移すあいだは Node と応答を比べるテスト
   （`parity.sh`）でずれを見つけていたが、比べる相手の Node の API を消したので一緒に消した（JUK-84）
-- Zod の issue は「スキーマに書いた項目の順、項目の中では書いたチェックの順」に積まれ、Node は最初の1件だけを返す。
+- Zod の issue は「スキーマに書いた項目の順、項目の中では書いたチェックの順」に積まれ、API は最初の1件だけを返す（Node のころから）。
   `ReadObject` の読み取りも書いた順に確かめ、最初の1件で止まる。文字列の長さは Zod 4.5 と同じくコードポイントで数え、
   trim は JavaScript の `String#trim` と同じ文字を削る
 - Cookie で認証する書き込みは、別のサイトから送られたら 403（`internal/httpx/router.go` の `sameOrigin`、標準の
-  `http.CrossOriginProtection`）。Node の自前 API には無く、Go だけが持つ
-- DB に書く時刻は `dates.NowMillis()`（`internal/dates`。ミリ秒で切り捨て）。そのまま渡すと MySQL が DATETIME(3) へ丸め、Node とずれる
+  `http.CrossOriginProtection`）。Node の自前 API には無く、Go で足した
+- DB に書く時刻は `dates.NowMillis()`（`internal/dates`。ミリ秒で切り捨て）。そのまま渡すと MySQL が DATETIME(3) へ丸め、切り捨てで書いてきた既存の行とずれる
 - 任意の項目は `optional[T]`（`in.optionalString`・`in.optionalInt`）で読み、「キーが無い」と null を区別する。
-  Node は `data.x ?? null` で書き、`data.x !== current` で「変わったか」を見るので、`ptr()` と `differs()` で同じにする
+  キーが無ければ null を書き、`differs()` で今の値と比べて「変わったか」を見る（Node の `data.x ?? null`・`data.x !== current` と同じ規則）
 - 数は `json.Number` のまま受け、`httpx.CheckNumber` で Zod の `number().int().positive().max()` と同じ順・同じ文言で確かめる
   （範囲外の数は ±Infinity、安全な整数の外は too_big・too_small）
 - 入れ子のオブジェクトは `readObjectAt(element, "items.0")` で読み、`in.take(item)` で外側の issue にする。
   field は Zod と同じ `items.0.content` の形になる。配列は `in.array`（`.min(1)` も確かめる）
 
 クエリ文字列は `r.URL.Query()` ではなく `httpx.ParseQuery`（`internal/httpx/query.go`）で読む。Go の標準は `;` を含む組や
-壊れた `%` を黙って捨てるが、Node（Fastify）は値として受け取るので、そのままでは応答がずれる。
-不正な入力の 400 は、Node の Zod と同じ形（`httpx.ValidationIssue`）で返す。
+壊れた `%` を黙って捨てるが、Fastify のころは値として受け取っていたので、画面との約束をそちらに合わせてある。
+不正な入力の 400 は、Zod の issue と同じ形（`httpx.ValidationIssue`）で返す。
 
 ## DB に流すテスト（A3・A4）
 
@@ -199,7 +198,7 @@ LINE 連携の SQL（`internal/feature/line/line_db_test.go` の `TestLineStoreD
 - `dbtest` タグのテスト（`*_db_test.go` のうち `//go:build dbtest` のもの）。ふだんの `go test` では動かない
 - DB は `db/` のテストと同じ `juken_map_test`。本番と同じマイグレーションが当たり、本番と同じ DML だけの権限で繋ぐ。
   `pnpm --filter @juken-map/db test-db:prepare`（`db/test-db/`）が用意する（`pnpm test:go-db` は先にこれを呼ぶ）
-- セッションは Cookie「test」の値を利用者 ID として読む（Better Auth の Cookie の確かめは `internal/feature/auth/auth_test.go`）
+- セッションは Cookie「test」の値を利用者 ID として読む（本物のログインの Cookie の確かめは `internal/feature/auth/` のテスト）
 - CI は MySQL のある check のジョブで回す（go のジョブには DB が無い）
 - 守りを外すと落ちることは確かめた（参考書の持ち主の確認を外すと A3 が2本、プロフィールの更新で role を書くと A4 が1本落ちる）
 
@@ -329,8 +328,8 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/app/http.go` | ヘルスチェック |
 | `internal/dates/` | 東京の「今日」、月初・月末、日付のずらし、`YYYY-MM-DD` の読み方（Node の `new Date` と同じ繰り越し）、DB に書く時刻（ミリ秒で切り捨て）と ISO 文字列。機能をまたいで使う（JUK-156） |
 | `internal/site/` | 本番の画面のオリジン（`site.URL`）。通知の本文・SEO・LINE の連携先が使う（JUK-156） |
-| `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify と同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）、受け付けるなら gzip で返す（`gzip.go`。画面・sitemap・ブログの中継）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
-| `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node と同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
+| `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify のころと同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）、受け付けるなら gzip で返す（`gzip.go`。画面・sitemap・ブログの中継）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
+| `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node のころと同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
 | `internal/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `httpx.Optional` を `.Field()` で変換する。持ち主ではないので `internal/write` の外に置く（JUK-160） |
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |
@@ -358,7 +357,10 @@ DB テストは名前に `DB` を入れる。`pnpm test:go-db`（CI も同じ）
 | `internal/httpx/httpxtest/` | 入口と入力チェックを使うテストの補助。Cookie で選ぶ偽のセッション（`FakeSessions`・`Sessions`）、JSON の比べ方、入力チェックの 400 の本文。feature のテストが共通で使う（JUK-156）。本番のコードからは import しない |
 | `internal/app/list_limits_db_test.go` | 学習記録・予定の一覧が 1000 件で切り詰められることを確かめる（06 E2） |
 
-## Node と揃えていること
+## Node のころから変えていないこと
+
+画面・監視・運用の手順がこの形に頼っているので、変えるときはそちらも直す。
+
 
 - 応答の形。エラーは `{"error"}`（ルートが断ったとき）と `{"error","code","reqId"}`（想定外・混雑・404）の2つ
 - 拒否の判定と文言。401 Unauthorized、停止中・管理者でない・デモの書き込みは 403
@@ -368,10 +370,8 @@ DB テストは名前に `DB` を入れる。`pnpm test:go-db`（CI も同じ）
 - 同時処理数の上限 160、断るときは 503 と `Retry-After: 1`
 - SQL（同じ列・同じ条件・同じ並び）、接続プールの上限 15、`?` への埋め込みはドライバ側（1クエリ1往復）
 
-## まだ揃えていないこと
+## Node のころから変えたこと
 
-- 応答の圧縮（Node は br・gzip。Go は持たず、本番では nginx が gzip にする。比べるときは `Accept-Encoding: identity`）
-- セッションの有効期限の延長（Better Auth は古くなったセッションを更新するが、Go は読むだけ）。
-  画面は Better Auth のセッションの確認（`/api/auth/get-session`、Node）も呼ぶので、そちらで延長される
-- OpenTelemetry のトレース
-- Node に無いもの：1リクエスト10秒の上限（DB の照会と接続待ちもここで止まる）
+- 応答の圧縮（Node は br・gzip を自分でしていた。Go は持たず、本番では nginx が gzip にする）
+- OpenTelemetry のトレース（`internal/telemetry/tracing.go`）
+- 1リクエスト10秒の上限（`internal/app/server.go` の `requestTimeout`。DB の照会と接続待ちもここで止まる）

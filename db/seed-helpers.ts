@@ -1,8 +1,7 @@
 // seed スクリプトで共通に使う書き込み。Node の接続プール（db/connection.ts）を
 // 使う。日時は UTC で保存し、真偽値の扱いもアプリ（Go）と揃えてある。
 //
-// Prisma のときは各 seed が同じ「確認済みユーザー＋パスワード」の upsert を
-// それぞれ書いていたので、ここに1つにまとめた。
+// 「確認済みユーザー＋パスワード」の upsert は各 seed が使うので、ここに1つにまとめる。
 import { execute, pool, select } from "./connection";
 import { hashPassword, newUserId } from "./auth-password";
 import { ymdAfterDays } from "../src/shared/date";

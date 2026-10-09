@@ -11,7 +11,7 @@
 # 書けないため）。ここの制約は読む人と生成する型のためのもので、実行時にこのファイルで検証はしない。
 #
 # 書き方の決まり：
-#   - Node と Go はキーを必ず出す（値が無ければ null）。そのため項目は基本すべて required にし、
+#   - API はキーを必ず出す（値が無ければ null）。そのため項目は基本すべて required にし、
 #     null になりうるものに nullable を付ける。required でない項目は「キーごと無いことがある」の意味
 #   - 日時は Date を JSON にしたときの ISO 文字列（"2026-09-24T00:00:00.000Z"）。IsoDateTime を使う
 openapi: 3.0.3
@@ -1366,7 +1366,7 @@ components:
       name: id
       in: path
       required: true
-      description: 利用者の ID（Better Auth の user.id）
+      description: 利用者の ID（user 表の id）
       schema: { type: string, minLength: 1, maxLength: 191 }
     AdminMasterID:
       name: id
@@ -1397,7 +1397,7 @@ components:
 
   headers:
     ETag:
-      description: JSON の SHA-1 を base64url にしたもの（Node と Go で同じ値）
+      description: JSON の SHA-1 を base64url にしたもの
       schema: { type: string }
     CacheControl:
       description: private, no-cache
@@ -1760,7 +1760,7 @@ components:
         error: { type: string }
 
     ValidationError:
-      description: 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の internal/httpx/response.go）
+      description: 入力チェックで弾いたときのエラー（Go の internal/httpx/response.go）
       type: object
       required: [error, code, field]
       properties:
@@ -1785,7 +1785,7 @@ components:
         error: { type: string }
         code:
           type: string
-          # FST_ERR_CTP_* は Fastify の code をそのまま使っている（Node の error-handling.ts）
+          # FST_ERR_CTP_* は以前の Fastify の code を引き継いでいる（画面と契約を変えないため）
           # FST_ERR_CTP_INVALID_CONTENT_LENGTH は本文が UTF-8 として不正で、読んだ長さが Content-Length と合わないとき（400）
           enum:
             - INTERNAL_ERROR
@@ -2313,7 +2313,7 @@ components:
     ExploreUniversity:
       description: >-
         大学を探す画面の1件。画面が使うのは大学の列と学部ごとのタグ名だけ。
-        Go はこの形を手書きの型で返す（JSON のキーの順番を Node と同じにして ETag をそろえるため）
+        Go はこの形を手書きの型で返す（Go へ移したときに JSON のキーの順番と ETag を以前と同じにするため）
       type: object
       required: [id, name, prefecture, type, faculties]
       properties:
