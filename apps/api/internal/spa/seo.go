@@ -14,7 +14,7 @@ import (
 )
 
 // SPA は誰が来ても同じ index.html を返すため、クローラーと SNS が読む head をサーバー側で作り直す（JUK-111）。
-// Node の apps/api/src/seo.ts から移した。差し込む中身と順番は Node と同じにしてある（spa_test.go で確かめる）。
+// 差し込む中身と順番は spa_test.go で確かめる。
 
 // siteName は画面の名前。画面の src/shared/pageMeta.ts の SITE_NAME と同じ値。
 const siteName = "受験マップ"

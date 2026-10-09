@@ -15,7 +15,7 @@ import (
 
 func TestTextbookMasterJSON(t *testing.T) {
 	// 手元のマスターはどれも総量の候補と出版社・版を持つので、その逆の場合は応答一致テストで確かめられない。
-	// Node の形（候補が無くても "metrics": []、出版社・版が無ければ null）をここで確かめる。
+	// 画面が前提にしている形（候補が無くても "metrics": []、出版社・版が無ければ null）をここで確かめる。
 	raw, err := json.Marshal(apischema.TextbookMaster{Metrics: []apischema.TextbookMasterMetric{}})
 	if err != nil {
 		t.Fatal(err)

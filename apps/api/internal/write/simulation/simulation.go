@@ -51,7 +51,7 @@ type Activity struct {
 }
 
 // RecordActivity は連番の利用者に Activity を記録する。
-// 変える項目が無ければ、その連番が無くても成功にする（Node と同じく SQL を流さない）。
+// 変える項目が無ければ、その連番が無くても成功にする（SQL を流さない）。
 func RecordActivity(ctx context.Context, db *sql.DB, seq int64, a Activity) error {
 	var sets []string
 	var args []any

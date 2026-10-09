@@ -27,14 +27,14 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
-// LINE 連携（JUK-79）。Node の routes/line.ts と services/line-connection-service.ts にあたる。
+// LINE 連携（JUK-79）。
 //
 //   - 連携の確認・解除：GET・DELETE /api/line/connection
 //   - トークからの連携（Account Link）：Webhook で「連携」と届く → リンクを返信 → 画面で
 //     POST /api/line/account-link → LINE の画面 → Webhook の AccountLink イベントで確定
 //   - プロフィールからの連携（LINE Login）：GET /api/line/oauth/start → LINE の同意画面 → /callback
 //
-// /line/settings（LINE のメッセージが案内する行き先）はページの振り分けなので Node に残す。
+// /line/settings（LINE のメッセージが案内する行き先）は画面を持たない振り分けで、Settings が行う。
 //
 // DB の書き込み（連携・解除・nonce・試行・Webhook の印）は持ち主の internal/write/notification にある（JUK-154）。
 
@@ -135,7 +135,7 @@ func (h *Handlers) AccountLink(w http.ResponseWriter, r *http.Request, s *httpx.
 	var body struct {
 		LinkToken *string `json:"linkToken"`
 	}
-	// Node の z.object({ linkToken: z.string().min(1).max(255) }) と同じ条件。文言も同じ。
+	// linkToken は 1〜255 文字の文字列。
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil ||
 		body.LinkToken == nil || len(*body.LinkToken) == 0 || len([]rune(*body.LinkToken)) > 255 {
 		httpx.WriteError(w, http.StatusBadRequest, "連携情報が正しくありません")
@@ -156,7 +156,7 @@ func (h *Handlers) AccountLink(w http.ResponseWriter, r *http.Request, s *httpx.
 const notificationSettingsPath = "/profile#notification-settings"
 
 // Settings は GET /line/settings。LINE のメッセージ本文が案内する入口で、画面を持たずにログイン状態で行き先を変えるだけ
-// （JUK-111 で Node の routes/line.ts から移した）。SPA のルートにしないのは、描画が要らず、画面で判定すると一瞬ちらつくため。
+// （JUK-111）。SPA のルートにしないのは、描画が要らず、画面で判定すると一瞬ちらつくため。
 func (h *Handlers) Settings(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if s != nil {
 		http.Redirect(w, r, h.webOrigin+notificationSettingsPath, http.StatusFound)
@@ -246,7 +246,7 @@ func (h *Handlers) completeOAuth(ctx context.Context, s *httpx.Session, attempt 
 	if err != nil {
 		return "", err
 	}
-	// ID トークンの確認と友だち状態は互いに関係しないので、同時に LINE へ問い合わせる（Node の Promise.all と同じ）。
+	// ID トークンの確認と友だち状態は互いに関係しないので、同時に LINE へ問い合わせる。
 	// 順番に待つと、1リクエストの上限（requestTimeout）に LINE の待ち時間が積み上がる。
 	var identity lineIdentity
 	var friend bool
@@ -312,7 +312,7 @@ type lineEvent struct {
 // Webhook は POST /api/line/webhook。LINE のサーバーが、友だち追加・メッセージ・連携の結果を送ってくる。
 //
 // 署名は、JSON として読む前の本文で確かめる（C1）。同じイベントの再送は webhookEventId で見分けて、
-// 2回目は何もしない。イベントごとの失敗はログに残して 200 を返す（Node と同じ。LINE に再送させても、
+// 2回目は何もしない。イベントごとの失敗はログに残して 200 を返す（LINE に再送させても、
 // 返信のトークンは1回しか使えないので、やり直しにならない）。
 func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, lineWebhookBodyLimit))
@@ -439,7 +439,7 @@ func singleValue(q map[string][]string, key string) string {
 	return q[key][0]
 }
 
-// randomToken は n バイトの乱数を base64url（= なし）にした文字列。Node の randomBytes(n).toString("base64url")。
+// randomToken は n バイトの乱数を base64url（= なし）にした文字列。
 func randomToken(n int) string {
 	b := make([]byte, n)
 	rand.Read(b) // crypto/rand の Read は失敗しない

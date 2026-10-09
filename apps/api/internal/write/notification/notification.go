@@ -45,7 +45,7 @@ func SavePreference(ctx context.Context, db *sql.DB, userID string, p Preference
 				return err
 			}
 		}
-		// 「無ければ INSERT、あれば UPDATE」を1文で行う（userId に UNIQUE 制約がある）。SQL は Node と同じ。
+		// 「無ければ INSERT、あれば UPDATE」を1文で行う（userId に UNIQUE 制約がある）。
 		// new は「INSERT しようとした行」の別名で、createdAt は更新しない。
 		_, err := tx.ExecContext(ctx,
 			`INSERT INTO NotificationPreference

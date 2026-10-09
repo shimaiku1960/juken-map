@@ -87,7 +87,7 @@ func sameString(a, b *string) bool {
 }
 
 func TestParseSeq(t *testing.T) {
-	// Node の Number(params.seq) と Number.isInteger・seq > 0 と同じ判定
+	// 0 より大きい整数だけを通す
 	for _, tt := range []struct {
 		in   string
 		want int64
@@ -96,7 +96,7 @@ func TestParseSeq(t *testing.T) {
 		{"1", 1, true},
 		{"1e3", 1000, true},
 		{"1.0", 1, true},
-		{"99999999999999999999", -1, true}, // Node は SQL まで行って見つからない。どの行にも当たらない値にする
+		{"99999999999999999999", -1, true}, // どの行にも当たらない値にする
 		{"0", 0, false},
 		{"-1", 0, false},
 		{"1.5", 0, false},

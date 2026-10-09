@@ -14,12 +14,10 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
-// 参考書の読み取り（JUK-73）。Node の routes/textbooks.ts・textbook-masters.ts の GET と、
-// services/textbook-service.ts の listTextbooks・listTextbookMasters にあたる。
+// 参考書の読み取り（JUK-73）。
 // 書き込み（POST /api/textbooks・PATCH /api/textbooks/:id）は textbook_writes.go。
 
-// ここから下の型が応答の形。Node は DB の行をそのまま返している（src/shared/dto には無い）ので、
-// 列の名前と並びも Node の TEXTBOOK_COLUMNS・groupMasters に揃える。
+// ここから下の型が応答の形。DB の列の名前をそのまま JSON のキーにする（src/shared/dto には無い）。
 // 日時は Date を JSON にしたときと同じ ISO 文字列。
 
 type store struct {
@@ -40,7 +38,7 @@ func newStore(db *sql.DB) *store {
 	return st
 }
 
-// textbookRowColumns は Node の TEXTBOOK_COLUMNS と同じ列と並び。scanTextbook で読む。
+// textbookRowColumns は応答に出す列と並び。scanTextbook で読む。
 const textbookRowColumns = "id, userId, masterId, name, totalAmount, rangeUnit, targetDate, subject, createdAt, updatedAt"
 
 // scanTextbook は textbookRowColumns の1行を読み、日時を ISO にする。scan は rows.Scan か row.Scan。

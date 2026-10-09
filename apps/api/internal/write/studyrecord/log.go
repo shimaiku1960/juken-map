@@ -10,7 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
-// LogInput は実績の作成・変更で書く値。Date はその日の 00:00 UTC（Node の new Date("YYYY-MM-DD")）。
+// LogInput は実績の作成・変更で書く値。Date はその日の 00:00 UTC（JavaScript の new Date("YYYY-MM-DD") と同じ値）。
 // 任意の項目は「送られなかった」と null を区別する（変更で「範囲が変わったか」を見るため）。
 type LogInput struct {
 	Date       time.Time
@@ -58,7 +58,7 @@ func findLog(ctx context.Context, q database.QueryRower, id int64, userID, suffi
 }
 
 // CreateLog は実績を1件記録する。参考書を指定したら、自分のものか・範囲が逆算設定に合うかを確かめる。
-// 初回記録の印付けと同じトランザクションで行う（Node と同じ）。
+// 初回記録の印付けと同じトランザクションで行う。
 func CreateLog(ctx context.Context, db *sql.DB, userID string, in LogInput, now time.Time) (CreatedLog, error) {
 	var created CreatedLog
 	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
@@ -99,7 +99,7 @@ func CreateLog(ctx context.Context, db *sql.DB, userID string, in LogInput, now 
 
 // UpdateLog は userID の人の実績を書き換え、書き換えた後の行を返す。
 //
-// 予定から作られた実績は、予定との紐づきを壊す項目（日付・科目・参考書）を今の値のまま書き戻す（Node と同じ）。
+// 予定から作られた実績は、予定との紐づきを壊す項目（日付・科目・参考書）を今の値のまま書き戻す。
 // 参考書の範囲を確かめるのは、範囲か参考書を変えたときだけ。時間・メモだけの修正では、後から変わった
 // 参考書の設定を過去の実績へさかのぼって当てはめない。
 func UpdateLog(ctx context.Context, db *sql.DB, userID string, id int64, in LogInput, now time.Time) (Log, error) {

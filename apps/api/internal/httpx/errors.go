@@ -32,13 +32,13 @@ const (
 	OverloadedMessage     = "ただいま混み合っています。少し待ってからもう一度お試しください"
 )
 
-// clientMessages は 4xx のうち、code ごとに決まった文言を出すもの。Node の error-handling.ts の CLIENT_MESSAGES と同じ。
+// clientMessages は 4xx のうち、code ごとに決まった文言を出すもの。
 var clientMessages = map[apischema.ServerErrorCode]string{
 	apischema.ServerErrorCodeBodyTooLarge:     "送信されたデータが大きすぎます",
 	apischema.ServerErrorCodeInvalidMediaType: "この形式のデータは受け取れません",
 }
 
-// newErrorBody は Node の errorBody と同じ規則で文言を選ぶ。
+// newErrorBody は status と code から応答の文言を選ぶ。
 func newErrorBody(status int, code apischema.ServerErrorCode, reqID string) apischema.ServerError {
 	message := FallbackClientMessage
 	switch {

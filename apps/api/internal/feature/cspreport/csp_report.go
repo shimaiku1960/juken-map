@@ -1,5 +1,5 @@
 // Package cspreport は、ブラウザが送ってくる CSP の違反の報告を、ログ（本番は Grafana の Loki）に残す（JUK-80）。
-// Node の routes/csp-report.ts にあたる。CSP は止めるモードなので、ここに出たものは
+// CSP は止めるモードなので、ここに出たものは
 // 「実際にブラウザが読み込みを拒んだ箇所」になる。
 //
 // 報告の形は2種類ある。
@@ -25,10 +25,10 @@ const (
 	cspBodyLimit  = 16 * 1024
 )
 
-// cspViolation はログに残す1件。無い項目はキーごと出さない（Node の undefined と同じ）。
+// cspViolation はログに残す1件。無い項目はキーごと出さない。
 type cspViolation struct {
 	DocumentURL string `json:"documentUrl,omitempty"`
-	// Directive は Node が String(... ?? "") で必ず文字列にしているので、空でも出す。
+	// Directive は無くても空文字で出す（ログを directive で絞り込めるように、キーは必ず置く）。
 	Directive   string      `json:"directive"`
 	BlockedURL  string      `json:"blockedUrl,omitempty"`
 	SourceFile  string      `json:"sourceFile,omitempty"`
@@ -36,15 +36,14 @@ type cspViolation struct {
 	Disposition string      `json:"disposition,omitempty"`
 }
 
-// resetPasswordToken は Better Auth のパスワード再設定のリンク（トークンがパスに入る）。Node の redactPath と同じ。
+// resetPasswordToken は以前の Better Auth のパスワード再設定のリンク（トークンがパスに入る）。画面の lib/faro.ts と同じ。
 var resetPasswordToken = regexp.MustCompile(`^(/api/auth/reset-password/)[^/]+`)
 
 // safeURL はログに残す URL から、クエリと再設定のトークンを取り除く（origin ＋ パス）。
 // "inline"・"eval"・"data" のような URL でない値は、200 文字までにしてそのまま残す。
 //
-// Node は new URL() で読めるものを URL として扱うので、data: や blob: も「null」＋パスの形になる。
-// Go では http・https だけを URL として扱い、それ以外は長さを切ってそのまま残す
-// （data: の中身を丸ごとログに入れないため。ログの形だけの違いで、応答は変わらない）。
+// http・https だけを URL として扱い、data: や blob: などは長さを切ってそのまま残す
+// （data: の中身を丸ごとログに入れないため）。
 func safeURL(value any) string {
 	s, ok := value.(string)
 	if !ok {
@@ -86,7 +85,7 @@ func toViolation(report map[string]any) cspViolation {
 		BlockedURL:  safeURL(pick("blockedURL", "blocked-uri")),
 		SourceFile:  safeURL(pick("sourceFile", "source-file")),
 	}
-	// ブラウザが送るのは文字列。それ以外（Node なら String() で "[object Object]" など）は空にする。
+	// ブラウザが送るのは文字列。それ以外は空にする。
 	v.Directive, _ = pick("effectiveDirective", "effective-directive", "violated-directive").(string)
 	v.LineNumber, _ = pick("lineNumber", "line-number").(json.Number)
 	v.Disposition, _ = pick("disposition").(string)

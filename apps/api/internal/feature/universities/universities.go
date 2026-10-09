@@ -1,4 +1,4 @@
-// Package universities は大学の読み取り（JUK-73）。Node の routes/universities.ts と services/university-service.ts にあたる。
+// Package universities は大学の読み取り（JUK-73）。
 //   - GET /api/universities       大学を探す画面の一覧。全員に同じもの
 //   - GET /api/universities/{id}  大学詳細。学部・タグと、自分が志望校に登録済みの学部
 //
@@ -17,9 +17,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
-// 一覧の応答の形。画面が使うのは大学の列と「学部ごとのタグ名」だけなので、Node と同じくそれだけ返す。
-// JSON のバイト列を Node の JSON.stringify と同じにする（下の ETag を Node と揃えるため）ので、
-// キーの並びも Node の組み立てと同じにしてある。
+// 一覧の応答の形。画面が使うのは大学の列と「学部ごとのタグ名」だけなので、それだけ返す。
 type exploreUniversityDTO struct {
 	ID         int64               `json:"id"`
 	Name       string              `json:"name"`
@@ -212,7 +210,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request, _ *httpx.Session
 	httpx.WriteJSONSnapshot(w, r, snap)
 }
 
-// detail は GET /api/universities/{id}。無い大学は 404（Node と同じ文言）。
+// detail は GET /api/universities/{id}。無い大学は 404。
 func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	id, ok := httpx.PathID(w, r, "id")
 	if !ok {

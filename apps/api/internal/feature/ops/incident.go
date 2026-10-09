@@ -17,7 +17,7 @@ import (
 // 管理画面に入れないときでも使えるよう、ここではその守りを置かない。そのぶん画面からは呼べず、本番では
 // EC2 で動いている Go のコンテナの中からしか実行できない（RDS には外から繋げない）。
 //
-// JUK-109 で本番の Node のコンテナが無くなったので、Node の incident-service.ts・user-service.ts から移した（JUK-122）。
+// 本番から Node のコンテナが無くなったとき（JUK-109）に Go へ移した（JUK-122）。
 
 // errUserNotFound は、そのメールアドレスの利用者がいないとき。
 var errUserNotFound = errors.New("user not found")

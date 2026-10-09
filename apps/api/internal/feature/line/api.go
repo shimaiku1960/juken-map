@@ -18,7 +18,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// LINE の API を呼ぶ部分（JUK-79）。Node の infra/line.ts（Messaging API）と infra/lineLogin.ts（LINE Login）にあたる。
+// LINE の API（Messaging API と LINE Login）を呼ぶ部分（JUK-79）。
 // DB も HTTP の入口も知らない。ハンドラ（line.go）はこの interface を通して呼ぶので、テストでは偽物を渡せる。
 
 type Client interface {
@@ -68,7 +68,7 @@ func lineAccountLinkURL(linkToken string) string {
 	return site.URL + "/line/link?" + url.Values{"linkToken": {linkToken}}.Encode()
 }
 
-// HTTPClient は LINE の API を直接呼ぶ（SDK は使わない。Node も同じ）。
+// HTTPClient は LINE の API を直接呼ぶ（SDK は使わない。呼ぶ API が少なく、依存を増やさずに済むため）。
 type HTTPClient struct {
 	HTTP *http.Client
 	// BotBase は Messaging API の根元（既定 https://api.line.me/v2/bot）。
@@ -186,7 +186,7 @@ func (c *HTTPClient) exchangeCode(ctx context.Context, code, codeVerifier, redir
 }
 
 // verifyIDToken は ID トークンの署名・期限・宛先（client_id）・nonce を LINE に確かめてもらう。
-// 自分で JWT を検証せず LINE の verify を呼ぶのは Node と同じ（鍵の取得と更新を持たずに済む）。
+// 自分で JWT を検証せず LINE の verify を呼ぶ（鍵の取得と更新を持たずに済む）。
 func (c *HTTPClient) verifyIDToken(ctx context.Context, idToken, nonce string) (lineIdentity, error) {
 	var identity lineIdentity
 	if c.LoginChannelID == "" {

@@ -9,7 +9,6 @@ import (
 )
 
 func TestNewErrorBody(t *testing.T) {
-	// 文言の選び方は Node の errorBody（error-handling.ts）と同じ。
 	tests := []struct {
 		status int
 		Code   apischema.ServerErrorCode
@@ -28,7 +27,7 @@ func TestNewErrorBody(t *testing.T) {
 }
 
 func TestPathID(t *testing.T) {
-	// Node の idParamsSchema と同じ境目（routes/params.test.ts）。
+	// ID として受け付ける境目。
 	tests := []struct {
 		Raw    string
 		want   int64

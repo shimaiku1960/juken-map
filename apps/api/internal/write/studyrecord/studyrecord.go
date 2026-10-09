@@ -101,9 +101,9 @@ func findTextbookSettings(ctx context.Context, q database.QueryRower, id int64, 
 	return tb, err
 }
 
-// checkRange は Node の textbookRangeError（domain/textbookRange.ts）と同じ。問題なければ nil。
-// rangeEnd・rangeUnit は書く値（無い・null なら nil）。Node の `data.rangeUnit !== textbook.rangeUnit` は、
-// undefined でも null でも「違う」になるので、nil はどちらも同じに扱える。
+// checkRange は範囲が参考書の逆算設定に合うかを確かめる。問題なければ nil。
+// rangeEnd・rangeUnit は書く値（無い・null なら nil）。参考書に単位があるのに
+// rangeUnit が nil なら、単位が違うとして弾く。
 func (tb textbookSettings) checkRange(rangeEnd *int64, rangeUnit *string) error {
 	if rangeEnd == nil {
 		return nil

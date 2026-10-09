@@ -16,7 +16,7 @@ const (
 	EmailGlobalPerDay = 80
 	// KindAdminNewUser は運営者への新規登録の通知。宛先が1つなので、宛先ごとの上限にはかけない（全体の数には入れる）。
 	KindAdminNewUser = "admin-new-user"
-	// emailSendLock は「数えてから記録する」までを1件ずつ通す MySQL の名前付きロック（Node と同じ名前）。
+	// emailSendLock は「数えてから記録する」までを1件ずつ通す MySQL の名前付きロック。
 	emailSendLock        = "juken-map:email-send"
 	emailLockWaitSeconds = 5
 )

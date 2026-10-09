@@ -3,7 +3,7 @@ package opt
 import "testing"
 
 func TestDiffers(t *testing.T) {
-	// Node の `data.x !== current`。current は DB の値で、null か値。
+	// 送られた値が DB の値と違うか。current は DB の値で、null か値。
 	one, two := int64(1), int64(2)
 	missing, null, value := Field[int64]{}, Field[int64]{Present: true}, Of(one)
 	tests := []struct {

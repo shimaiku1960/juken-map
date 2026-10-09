@@ -11,7 +11,7 @@
 //   - 別の人の行が1つも増えず変わらない（userId に別の人を入れて付け替える攻撃）
 //   - 呼んだ人の行の id が、送った id になっていない
 //
-// を見る。Better Auth の登録・更新は Node の auth.forbidden-fields.test.ts が見る。
+// を見る。ログイン（/api/auth/*。登録など）は registerRoutes の外（internal/feature/auth）にあり、この表には入らない。
 package app
 
 import (

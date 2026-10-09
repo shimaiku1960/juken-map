@@ -13,15 +13,14 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
-// 通知設定の読み取り（JUK-73）と保存（JUK-75）。Node の routes/notification-preferences.ts と、
-// services/notification-service.ts の findNotificationPreference・findLineConnection・saveNotificationPreference にあたる。
+// 通知設定の読み取り（JUK-73）と保存（JUK-75）。
 // 保存（LINE と連携していなければ LINE 通知を ON にできない、も含む）は持ち主の internal/write/notification にある（JUK-154）。
 
 type preferenceStore struct {
 	db *sql.DB
 }
 
-// find は自分の通知設定を返す。まだ保存していなければ、全部 false（Node の DEFAULT_PREFERENCE と同じ）。
+// find は自分の通知設定を返す。まだ保存していなければ、全部 false。
 func (st *preferenceStore) find(ctx context.Context, userID string) (apischema.NotificationPreference, error) {
 	var p apischema.NotificationPreference
 	err := st.db.QueryRowContext(ctx,
