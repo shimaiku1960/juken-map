@@ -62,7 +62,7 @@ func TestReadBodyMediaTypes(t *testing.T) {
 }
 
 func TestReadBodyErrors(t *testing.T) {
-	// 断るときの本文は Node の setErrorHandler と同じ（code は Fastify のもの）。
+	// 断るときの code は、以前の Fastify のものを引き継いでいる。
 	for _, tt := range []struct {
 		name, contentType, body, want string
 	}{
@@ -113,7 +113,7 @@ func prefsHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, p)
 }
 
-func TestReadBodyLikeNode(t *testing.T) {
+func TestReadBodyCases(t *testing.T) {
 	const valid = `{"emailMorningEnabled":true,"emailEveningEnabled":false,"lineMorningEnabled":false,"lineEveningEnabled":false}`
 	undefinedBody := `{"error":"Invalid input: expected object, received undefined","code":"invalid_type","field":null}`
 	missingFirst := `{"error":"Invalid input: expected boolean, received undefined","code":"invalid_type","field":"emailMorningEnabled"}`
@@ -195,7 +195,7 @@ func TestReadBodyLikeNode(t *testing.T) {
 }
 
 func TestReadBodyDeclaredTooLarge(t *testing.T) {
-	// Content-Length の申告だけで上限を超えていれば、本文を読まずに 413（Fastify と同じ）。
+	// Content-Length の申告だけで上限を超えていれば、本文を読まずに 413。
 	req := httptest.NewRequest("PUT", "/", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	req.ContentLength = 2000000

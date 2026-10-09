@@ -11,8 +11,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// ログは Node（pino）と同じ形の JSON を1行ずつ書く。本番では Alloy が Docker のログを読み、
-// pino の形を前提に Loki へ送っている（observability/alloy/production.alloy）。形が違うと、
+// ログは pino（Node のロガー）と同じ形の JSON を1行ずつ書く。本番では Alloy が Docker のログを読み、
+// この形を前提に Loki へ送っている（observability/alloy/production.alloy）。形が違うと、
 // 時刻とレベルの取り出しや、Grafana の「5xx の行」パネル（req_url・res_statusCode）が空になる。
 //
 // pino との違いは次の2つで、slog の書き方を ReplaceAttr で pino に寄せる。
@@ -89,12 +89,10 @@ func ParseLevel(name string) slog.Level {
 }
 
 // requestContextHandler は、ctx にリクエストの情報があれば reqId（と sim）を行に足す。
-// トレースのスパンがあれば trace_id・span_id も足す（Node の pino の計測と同じ名前）。Grafana で
+// トレースのスパンがあれば trace_id・span_id も足す。Grafana で
 // Loki のログから Tempo のトレースを開くリンクは、この trace_id を拾って作る（provisioning/datasources/loki.yml）。
 //
-// Node は AsyncLocalStorage で「今どのリクエストの処理中か」を持ち回っていた
-// （observability/requestContext.ts）。Go は ctx を引数で渡すのが決まりなので、
-// slog.InfoContext(ctx, ...) のように ctx 付きで書けば、ここで reqId が付く。
+// Go は ctx を引数で渡すのが決まりなので、slog.InfoContext(ctx, ...) のように ctx 付きで書けば、ここで reqId が付く。
 type requestContextHandler struct {
 	slog.Handler
 }

@@ -122,8 +122,8 @@ async function main() {
   const now = new Date();
 
   // 1. 全国の大学マスターを upsert（name が UNIQUE）。
-  //    Prisma は1校ずつ「探す → 作成か更新」をしていた（823校で約2,500往復）。
-  //    ここでは複数行の INSERT ... ON DUPLICATE KEY UPDATE を数本流すだけで済ませる。
+  //    1校ずつ「探す → 作成か更新」をすると823校で約2,500往復になるので、
+  //    複数行の INSERT ... ON DUPLICATE KEY UPDATE を数本流すだけで済ませる。
   //    University の UNIQUE は name だけ（id は自動採番で指定しない）なので、ON DUPLICATE KEY で安全。
   for (let i = 0; i < universities.length; i += CHUNK_SIZE) {
     const chunk = universities.slice(i, i + CHUNK_SIZE);
@@ -146,7 +146,7 @@ async function main() {
   );
 
   // 3. 大学ごとに学部と系統タグを投入（学部データは facultyData を手動で拡充する）。
-  //    既存の学部はタグの付け替えだけ行い、受験日は変えない（Prisma 版と同じ）。
+  //    既存の学部はタグの付け替えだけ行い、受験日は変えない。
   for (const [universityName, faculties] of Object.entries(facultyData)) {
     const [university] = await select<{ id: number }>(
       "SELECT id FROM University WHERE name = ?",
@@ -163,7 +163,7 @@ async function main() {
       let facultyId: number;
       if (existing) {
         facultyId = existing.id;
-        // タグを指定どおりに置き換える（Prisma の set）。中間テーブルの A = Faculty.id, B = Tag.id
+        // タグを指定どおりに置き換える。中間テーブルの A = Faculty.id, B = Tag.id
         await execute("DELETE FROM _FacultyToTag WHERE A = ?", [facultyId]);
       } else {
         const created = await execute(

@@ -22,8 +22,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
 )
 
-// 認証のメール（確認・再設定・本人への知らせ・運営者への通知）。Node の infra/email.ts と
-// email-limits.ts を移したもの（JUK-115）。
+// 認証のメール（確認・再設定・本人への知らせ・運営者への通知。JUK-115）。
 //
 // 送信には宛先ごと・全体の上限をかける（06 E1）。確認メールの再送と再設定は、ログインしていなくても
 // 宛先を指定して送らせられるので、上限が無いと同じ人へ送り続けたり（嫌がらせ）、Resend の無料枠
@@ -132,7 +131,8 @@ func (m *authMailer) reserve(ctx context.Context, kind emailKind, to string) (bo
 	return true, nil
 }
 
-// recipientHash は宛先を小文字にした SHA-256（宛先をそのまま DB に残さない）。Node と同じ値になる。
+// recipientHash は宛先を小文字にした SHA-256（宛先をそのまま DB に残さない）。
+// 過去の行と合わせて数えるので、作り方を変えないこと。
 func recipientHash(to string) string {
 	sum := sha256.Sum256([]byte(normalizeEmail(to)))
 	return hex.EncodeToString(sum[:])

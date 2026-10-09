@@ -14,12 +14,11 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
-// 志望校の読み取り（JUK-73）。Node の routes/goals.ts・home.ts の GET と、
-// services/goal-service.ts の listGoals・findFirstChoiceGoal にあたる。
+// 志望校の読み取り（JUK-73）。
 // 書き込み（POST /api/goals・PUT/PATCH/DELETE /api/goals/:id）は goal_writes.go。
 
 // 応答の型は openapi/openapi.yaml から生成した Goal（一覧。学部のタグつき）と
-// FirstChoiceGoal（第一志望。タグは無く、キーごと出さない）。Node の pickGoal・pickFaculty と同じ形。
+// FirstChoiceGoal（第一志望。タグは無く、キーごと出さない）。
 // 日時は Date を JSON にしたときと同じ ISO 文字列。
 
 // 志望校 → 学部 → 大学は「多対1」の連なりなので、JOIN しても行は増えない。
@@ -55,7 +54,7 @@ func fixGoalDates(g *apischema.FirstChoiceGoal) {
 }
 
 // withTags は第一志望の形に、学部のタグを足して一覧の1件にする。
-// タグが無い学部でも [] を返す（Node と同じ）ので、空のスライスで始める。
+// タグが無い学部でも [] を返す（画面は null を想定していない）ので、空のスライスで始める。
 func withTags(g apischema.FirstChoiceGoal) apischema.Goal {
 	f := g.Faculty
 	return apischema.Goal{
@@ -73,7 +72,7 @@ type store struct {
 }
 
 // listGoals は志望校ページ用。学部・大学に加え、学部のタグまで引く。
-// 作った順に並べ、同じ日時どうしは id で、タグは id で並べる（Node と同じ）。
+// 作った順に並べ、同じ日時どうしは id で、タグは id で並べる。
 func (st *store) listGoals(ctx context.Context, userID string) ([]apischema.Goal, error) {
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT"+goalColumns+`,
@@ -120,7 +119,7 @@ func (st *store) listGoals(ctx context.Context, userID string) ([]apischema.Goal
 // findFirstChoiceGoal はトップの「第一志望」表示専用。タグは画面で使わないので引かない。
 // 無ければ nil（JSON では null）。
 func (st *store) findFirstChoiceGoal(ctx context.Context, userID string) (*apischema.FirstChoiceGoal, error) {
-	// 第一志望は1ユーザー1校（Node の applyGoalPatch が保つ）。DB の制約ではないので、
+	// 第一志望は1ユーザー1校（write/goal の ApplyPatch が保つ）。DB の制約ではないので、
 	// 万一2校あっても結果が揺れないよう id で並べて1件にする。
 	var g apischema.FirstChoiceGoal
 	err := st.db.QueryRowContext(ctx,
@@ -156,7 +155,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request, s *httpx.Session
 	httpx.WriteJSON(w, http.StatusOK, goals)
 }
 
-// FirstChoice は GET /api/goals/first-choice。第一志望が無ければ null を返す（Node と同じ）。
+// FirstChoice は GET /api/goals/first-choice。第一志望が無ければ null を返す。
 func (h *Handlers) FirstChoice(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	goal, err := h.store.findFirstChoiceGoal(r.Context(), s.UserID)
 	if err != nil {

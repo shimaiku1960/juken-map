@@ -1,4 +1,4 @@
-// Package sim はシミュレーション（sim/）専用の API（JUK-80）。Node の routes/sim.ts と services/simulation-service.ts にあたる。
+// Package sim はシミュレーション（sim/）専用の API（JUK-80）。
 //
 // 守りは3重：
 //  1. SIMULATION_ENABLED=on のときだけ登録する。付けなければ存在しない（404）。
@@ -42,7 +42,7 @@ func isSimEmail(email string) bool {
 	return simEmailPattern.MatchString(strings.ToLower(email))
 }
 
-// Node の Zod（z.string().regex(/^\d{4}-\d{2}-\d{2}$/)）と同じ形。日付として正しいかは DB に任せる。
+// YYYY-MM-DD の形。日付として正しいかは DB に任せる。
 var simDatePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 const invalidInput = "入力が不正です"
@@ -53,7 +53,7 @@ type store struct {
 
 // State は合成ユーザーの一覧（連番の昇順）と、次に使う連番。
 func (st *store) state(ctx context.Context) (apischema.SimulationState, error) {
-	// DATE 列はタイムゾーンの解釈を挟まないよう、文字列のまま返す（Node と同じ）。
+	// DATE 列はタイムゾーンの解釈を挟まないよう、文字列のまま返す。
 	rows, err := st.db.QueryContext(ctx,
 		"SELECT simSeq, email, simCohort, createdAt,"+
 			" DATE_FORMAT(simDormantFrom, '%Y-%m-%d') AS dormantFrom,"+
@@ -92,7 +92,8 @@ func (u simUpdate) activity() simulation.Activity {
 	}
 }
 
-// ここから下は、本文とパスの値を Node（Zod と Number()）と同じ規則で読む部分。
+// ここから下は、本文とパスの値を読む部分。規則は Node の API（Zod と Number()）にそろえたもの。
+// 呼ぶのは sim/ のクライアントだけなので、簡単にしてよい。
 
 // positiveInt は Zod の z.number().int().positive() と同じ判定（1.0 は整数、1e20 は安全な範囲の外）。
 func positiveInt(v any) (int64, bool) {
@@ -160,9 +161,8 @@ func parseSimUpdate(body any) (simUpdate, bool) {
 	return u, true
 }
 
-// parseSeq はパスの連番を Node と同じく Number() で読む（"1e3" も 1000 になる）。
-// 16進（"0x10"）のような書き方は Go の ParseFloat が読まないので 400 になる（Node は 16 と読む）。
-// 整数で安全な範囲を超えるものは、どの利用者にも当たらない連番として -1 を返す（Node は SQL まで行って見つからない）。
+// parseSeq はパスの連番を数として読む（"1e3" も 1000 になる。16進の "0x10" は ParseFloat が読まないので 400）。
+// 整数で安全な範囲を超えるものは、どの利用者にも当たらない連番として -1 を返す。
 func parseSeq(s string) (int64, bool) {
 	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	if err != nil || math.IsInf(f, 0) || f != math.Trunc(f) || f <= 0 {

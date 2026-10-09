@@ -2,12 +2,8 @@
 
 受験マップは **React + Vite の SPA（`apps/web`）** と **Go の API（`apps/api`）** の
 2つのアプリからなる。本番では Go が API・ログイン・ビルド済みの画面のすべてを配る（JUK-70・JUK-111・JUK-115）。
-開発でしか使わない DB の道具（seed・テスト用 DB の準備・Node の DB 接続）は `db/` に置く。以前の `apps/api`（Node）は、
-Fastify のサーバーを JUK-121 で、マイグレーションの適用を JUK-125 で Go へ移し、残りを JUK-130 で `db/` へ寄せて消した。
+開発でしか使わない DB の道具（seed・テスト用 DB の準備・Node の DB 接続）は `db/` に置く（JUK-130）。
 画面と共有するコードは `src/shared` に置く。Go のファイルの分け方とルートの足し方は `apps/api/README.md`。
-
-もとは Next.js のモジュラーモノリスだった。2026-09-10 に分離へ切り替え、Next.js は削除した。
-経緯と手順は `docs/split-migration-plan.md`、性能まわりの計測は `docs/performance.md` にある。
 
 ## ディレクトリ
 
@@ -43,10 +39,7 @@ src/shared/             2つのアプリが共有する、外部依存のない�
 解決結果はルートの`pnpm-lock.yaml`へ集約し、pnpmのバージョンもルートの
 `packageManager`で固定する。ルートの`pnpm install`で全パッケージを導入できる。
 
-`src/shared`は今回パッケージ化せず、既存のパス参照を維持する。そこから使うZodは
-ルートに宣言する。Dockerは`node_modules/.pnpm`とAPI側の相対リンクを同じ階層で
-コピーするため、手作業でルートの`node_modules`をアプリへリンクする処理は不要。
-開発時は従来どおりAPIと画面を別ターミナルで起動する。
+`src/shared`はパッケージにせず、相対パスで参照する。そこから使うZodはルートに宣言する。
 
 ## 依存の向き
 
@@ -68,18 +61,7 @@ apps/api の中:  httpx/router.go（入口の種類で拒否）──→ ハン�
   `pnpm openapi:generate` で作る（JUK-76）。入力チェックの規則（Zod）は Go が手で同じものを書く（JUK-75、
   理由は `apps/api/README.md` の「書き込みのルート」）。
 - **API の中は、入口 → ハンドラ → ストアの順に呼ぶ。** 分担は下の「入口・ハンドラ・ストアの分担」。
-- **バックエンドのコードは `apps/api` に全部ある。** 以前は `src/backend` にも分散していたが、
-  それは Next.js のモノリスを分割したときの名残で、利用者が `apps/api` だけになった時点で
-  置き場所としての理由を失っていた。`src/` に残すのは 2 つのアプリが共有する `shared` だけ。
-
-### Next.js のときとの違い
-
-以前は `app/` が frontend と backend の両方を import できる唯一の入口だった。同じプロセスに
-同居していたので、境界は**フォルダと ESLint による約束**にすぎなかった。
-
-プロセスを分けたことで、その約束は**型解決の仕組みそのもの**に置き換わった。画面から
-API の中身を直接呼ぶコードは、書いても import が解決しない。守り方としてはこちらが強い。
-API を Go に移した（JUK-70）今は、言語も違うので、なおさら混ざらない。
+- **バックエンドのコードは `apps/api` に全部ある。** `src/` に置くのは 2 つのアプリが共有する `shared` だけ。
 
 ## 判断とその理由
 
@@ -88,72 +70,57 @@ API を Go に移した（JUK-70）今は、言語も違うので、なおさら
 
 ### 1つのコンテナが API と画面の両方を配る
 
-分離した当初（2026-09）は Node の Fastify が配り、2026-10 に Go へ移した（JUK-111）。下の理由はどちらにも当てはまる。
-
-nginx に静的ファイルを配らせ、`/api` だけ Fastify へ振る構成も検討した（当初の計画はこちら）。
-採らなかった理由は**性能ではなくリスクの形**である。
+Go のコンテナが API と画面の両方を配る（JUK-111）。nginx に静的ファイルを配らせ、`/api` だけ
+アプリへ振る構成も検討したが、採らなかった。理由は**性能ではなくリスクの形**である。
 
 デプロイはコンテナ単位でスモークテストと自動ロールバックが組まれている
 （`.github/scripts/deploy-ec2.sh`）。静的ファイルをホストに置くと、戻す対象が「コンテナ」と
 「静的ファイル」の2系統に割れ、既存の安全網が片方しか守らなくなる。
 
-Fastify を 3000 番で待ち受けさせれば、nginx は
-`location / { proxy_pass http://localhost:3000; }` のままでよい。結果として：
+1つのコンテナにまとめると：
 
-- **切り替えで本番ホストに一切触らずに済んだ**（SSM での手作業がゼロ）
-- 既存のスモークテストと自動ロールバックがそのまま効く
-- SPA と API のバージョンがずれることが原理的に起きない
+- nginx は `location / { proxy_pass http://localhost:3000; }` のままでよく、配信の変更で本番ホストに触らない
+- スモークテストと自動ロールバックが画面と API の両方を守る
+- 画面のビルド成果物は画面のイメージ（ルートの `Dockerfile`）から写して Go のイメージに入れるので、画面と API の版がずれることが原理的に起きない
 
-代償は、静的配信を nginx ではなくアプリ（当時は Node、今は Go）が担うこと。この規模では実測で問題にならない。
-必要になれば nginx に `location /api` を足すだけで移せる（アプリ側は無変更）。
-
-**2026-10、JUK-111 で配る役目を Go（`apps/api`）へ移した。** 考え方は同じで、Go のコンテナが API と画面の
-両方を配る。画面のビルド成果物は Node のイメージから写して Go のイメージに入れるので、画面と API の版がずれない
-ことも、デプロイのスモークテストが両方を守ることも変わらない。dist は起動時にメモリへ読み、圧縮できるものは
-gzip を作り置く（`apps/api/internal/spa/spa.go`）。
+代償は、静的配信を nginx ではなく Go が担うこと。この規模では実測で問題にならない。dist は起動時にメモリへ読み、
+圧縮できるものは gzip を作り置く（`apps/api/internal/spa/spa.go`）。必要になれば nginx に `location /api` を足すだけで
+移せる（アプリ側は無変更）。
 
 ### SPA 化で失う SEO を、サーバー側で作り直した
 
 SPA は誰が来ても同じ `index.html` を返す。JS を実行する前の HTML しか読まないクローラーと
-SNS には、中身が空に見える。Next.js が黙って担っていた分をサーバー側で作り直した
-（はじめは Node の `seo.ts`、JUK-111 から Go の `apps/api/internal/spa/seo.go`）。
+SNS には、中身が空に見える。その分をサーバー側で補っている（`apps/api/internal/spa/seo.go`）。
 
 - `robots.txt` と OGP 画像は `apps/web/public` の実ファイル
 - `sitemap.xml` は SSG した記事から起動時に作るので API サーバーのルート
 - `index.html` を返すときに head を差し込む。ログイン後ページと認証フローには `noindex` を付ける
 - 記事（`/articles/:id`）はビルドで microCMS から全件取り、本文入りの HTML と meta（`dist/ssg/meta.json`）を
   作り置く（JUK-110）。記事を更新したら、デプロイ（`deploy.yml`）をやり直して作り直す。
-  以前は表示のたびにサーバーで描いていた（SSR）が、本番のサーバーを Go だけにするため（JUK-109）、
-  Go では描けない React の描画をビルドへ移した。規約・プライバシーポリシーも同じ仕組みで SSG している
+  表示のたびに描く（SSR）のではなくビルドで作るのは、Go では React を描けず、本番のサーバーを Go だけにするため（JUK-109）。
+  規約・プライバシーポリシーも同じ仕組みで SSG している
 
-**放置すると `/robots.txt` が 200 で HTML を返す**という、404 より質の悪い状態になっていた。
+**`robots.txt` を実ファイルで置かないと、SPA の振り分けで `/robots.txt` が 200 で HTML を返す**という、
+404 より質の悪い状態になる。
 
-なお `/` も、ほかの画面と同じく head を差し込んでから返す（`apps/api/internal/spa/spa.go`）。Node の頃は
-`fastify-static` の `index` を切って同じことをしていた。切らないと `/` に `index.html` が直接返り、
-一番 SEO が要るトップページだけ meta が入らなかった。
+なお `/` も、ほかの画面と同じく head を差し込んでから返す（`apps/api/internal/spa/spa.go`）。静的ファイルとして
+`index.html` を直接返すと、一番 SEO が要るトップページだけ meta が入らない。
 
 一覧やアプリ内の画面は今も JS 実行後にしか中身が出ない。これは SPA である限り残る弱点で、
 実害と認識のうえで許容している。
 
 ### データ取得の入口は REST API に統一している
 
-**理由: 将来スマートフォンアプリから同じサーバーを使いたいから。** Next.js 時代は Server
-Actions を使わない理由として書いていたが（URL が固定されない、識別子がビルドごとに変わる、
-ボディが React 独自形式）、分離した今はそもそも選択肢が存在しない。
-
+**理由: 将来スマートフォンアプリから同じサーバーを使いたいから。**
 `POST /api/study-logs` に JSON を送るだけで、Web もアプリも同じ入口を使える。
 画面と API が同じ形をやり取りすることは、同じ契約（`openapi/openapi.yaml`）から作った型が保証している
 （画面は `src/shared/dto/`、Go は `apps/api/internal/apischema/openapi.gen.go`）。予定と実績の一覧は、ストア
 （`internal/feature/study` の `listStudyPlans` / `listStudyLogs`）の戻り値の型をこの型にしている。
 
-### 画面へ返す形は、SQL を読むところで組み立てる（2026-09-11〜）
+### 画面へ返す形は、SQL を読むところで組み立てる
 
-以前は `apps/api/src/dto/study-mapper.ts`（Node）に変換関数を置き、routes から呼んでいた。
-Next.js 時代に同じ変換が画面3箇所と API に重複していたのを集めたものだった。
-
-SPA に分けたあとは、変換を使うのが予定と実績の一覧の GET の2か所だけになった。
-流れを追うときに開くファイルが1つ増えるだけだったので、ファイルを消し、
-SQL を読むところで最初から画面の形に組み立てるようにした。Go でも同じで、日時は `time.Time` にせず
+DB の行から画面の形への変換を別のファイル（mapper）に分けない。変換を使うのは予定と実績の一覧の GET の
+2か所だけで、分けると流れを追うときに開くファイルが1つ増えるだけになるため。日時は `time.Time` にせず
 DB の文字列のまま受けて ISO 文字列に直す（`apps/api/internal/database` の `ParseTime = false`）。
 
 **見直す条件:** 日時を時刻の値のまま計算したい呼び出し元が増えたとき。そのときは読む型を
@@ -163,8 +130,7 @@ DB の文字列のまま受けて ISO 文字列に直す（`apps/api/internal/da
 
 Go の API は、1つの機能を1つのファイル（大きいものは数ファイル）に置き、その中を
 **ハンドラ**（HTTP を読み書きする）と**ストア**（SQL を流す）に分ける。その手前に、入口の種類ごとの
-拒否（`internal/httpx/router.go`）がある。Node の頃の `routes/` と `services/` の分担を、Go へ移すとき（JUK-70）に
-フォルダではなくファイルの中の分担にした。
+拒否（`internal/httpx/router.go`）がある。
 
 1. **入口（`internal/httpx/router.go`）**：未ログイン・停止中・管理者でない・デモの書き込みを断る。ルートは
    `rt.user` や `rt.admin` のように種類を選んで登録し、種類を選ばずに登録する方法が無いので、書き忘れが起きない
@@ -175,15 +141,12 @@ Go の API は、1つの機能を1つのファイル（大きいものは数フ�
    一意制約違反の判定（`database.IsMySQLError(err, database.DuplicateEntry)`、`internal/database`）もストアの中で済ませる
 
 **この順番に意味がある。** 誰か分からない人に入力の良し悪しを教えないため、
-入口の拒否 → 入力の順で門番を並べている。入力の確認は「自分の行か」より先に行う（Node と同じ応答にするため）。
+入口の拒否 → 入力の順で門番を並べている。入力の確認は「自分の行か」より先に行う。
 
-Node の頃は、予定の完了時の範囲チェックや「実績済みの予定は未完了に戻せない」がルートに
-書かれていて、サービスを直接呼ぶと素通りできた（JUK-17 で services へ移した）。Go では予定を完了にする
-ストア（`studyPlanWriteStore`）をハンドラ以外から呼ぶ所が無いので、範囲チェックのようなルールはハンドラに置いている。
-ハンドラの外（タイマーのジョブや運用のコマンド）から同じ書き込みをすることになったら、ルールをストアか共通の関数へ移す。
-この条件は、運用のコマンド（`incident.go`）が管理画面と同じ利用停止を行うようになった時点で満たしていたので、
-利用停止は持ち主の操作（`internal/write/account` の `Suspend`）にして、両方から呼ぶようにした（JUK-151）。
-書き込みは持ち主へ集める（下の「バックエンドの構成」、JUK-148）。
+決まりを含む書き込み（予定の完了時の範囲チェック、「実績済みの予定は未完了に戻せない」、利用停止など）は、
+ハンドラではなく持ち主の操作（`internal/write/studyrecord`・`internal/write/account` など）に置く。
+ハンドラに置くと、ほかの入口（運用のコマンドやタイマーのジョブ）から同じ書き込みをしたときに素通りできるため。
+詳しくは下の「バックエンドの構成」（JUK-148）。
 
 所有者チェックは `WHERE id = ? AND userId = ?` の形に統一している（`findStudyPlan` など）。取得と判定が
 1回のクエリで済み、比較の書き忘れも起きない。他人の ID を渡しても読み書きできないことは
@@ -191,16 +154,13 @@ Node の頃は、予定の完了時の範囲チェックや「実績済みの予
 
 ### 画面から DB を触らない
 
-**理由は「DB を隠すため」ではなく「同じクエリが増殖するのを防ぐため」。** Next.js 時代、
-`app/profile/page.tsx` と `app/api/notification-preferences/route.ts` に1文字違わず同じ
-`findUnique` が書かれていた（`docs/performance.md` の TASK 3）。片方だけ `select` を直せば、
-画面と API で返るデータが静かにずれる。
+**理由は「DB を隠すため」ではなく「同じクエリが増殖するのを防ぐため」。** 画面と API が別々に同じ
+クエリを持つと、片方だけ列を直したときに、返るデータが静かにずれる。
 
 API に集約すれば直す場所は1つになる。加えて全リクエストがアクセスログと計測（`apps/api/internal/app/middleware.go`）を
-通るので、どの API が遅いかがログとメトリクスから追える（Node の頃は全サービスが `measured()` を通していた）。
-画面に直書きされたクエリはこの計測から漏れる。
+通るので、どの API が遅いかがログとメトリクスから追える。
 
-分離後は、このルールは ESLint ではなく構成そのものが保証している（上記「依存の向き」）。
+このルールは約束ではなく構成そのものが保証している（上記「依存の向き」）。
 
 ### バックエンドの構成：読み取りは入口の近く、書き込みは持ち主へ（2026-10-06 決定、2026-10-07 JUK-148 で移行済み）
 
@@ -259,7 +219,7 @@ apps/api/
   │ └ expired/            持ち主ではなく、持ち主たちが使う期限切れの行の消し方（下の「決まり」の5）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
   │ └ httpxtest/          入口を使うテストの補助（偽のセッション・JSON の比べ方）
-  ├ dates/                日付と時刻（日本時間の今日・Node の Date と同じ値へのそろえ方）
+  ├ dates/                日付と時刻（日本時間の今日・画面が読める ISO の形）
   ├ site/                 サイトの URL
   ├ database/             DB 接続
   ├ opt/                  「送られなかった」と null を区別する値（入口が読み、持ち主の操作に渡す）
@@ -367,7 +327,7 @@ apps/api/
     参考書の持ち主でも要ったので共通にした。JUK-154。持ち主ではないので JUK-160 で write の外へ移した）。入力の形の確かめ（Zod と同じ 400）は入口に残す。
   - 持ち主の行の型（`Log`・`Plan`）は、項目の並びを `apischema` の型とそろえ、入口は型の変換だけで応答にする。
     予定の完了の応答に付ける参考書の行は画面の形なので、確定した後に入口が読む。
-  - 実績の変更は「無ければ本文に関わらず 404」を保つため、入口が本文の確かめの前に有るかだけを見る（Node と同じ順）。
+  - 実績の変更は「無ければ本文に関わらず 404」を保つため、入口が本文の確かめの前に有るかだけを見る。
     書き込みの正しさは持ち主の中の確かめが守り、入口の確認は応答の順番のためだけにある。
 - **移動だけの PR と、中身を変える PR を分ける。** 1回の PR で1パッケージにする。挙動は変えないので、
   `go build`・`go vet`・golangci-lint・`go test`・DB テスト・E2E と、ルート一覧が前と同じことで確かめる。
@@ -387,27 +347,19 @@ apps/api/
 **見直す条件：** 持ち主をまたぐ操作が続けて出て、境界の見直しが繰り返されるとき。または、書き込みの
 置き場所を確かめるテストに例外を足したくなったとき。
 
-### ORM をやめて生 SQL へ（2026-09-11 完了）
+### ORM を使わず SQL を直接書く
 
-Prisma を段階的に外し、`mysql2` で SQL を直接書く形へ移した。
-クエリ・Better Auth・マイグレーション・seed のすべてから Prisma を無くした。
+Go は `database/sql`、開発用の seed とテストの準備（`db/`）は `mysql2` で SQL を直接書く。
 
-**理由: 「ORM があると処理が追いにくい」ため。学習目的も兼ねる。** 1回の呼び出しの裏で
-何本の SQL が流れるか（`include` は JOIN ではなく `IN (...)` の別クエリになる）、
-`updateMany` の条件付き更新がどんな SQL か、が API の書き方に隠れていた。
+**理由: ORM があると処理が追いにくいため。学習目的も兼ねる。** 1回の呼び出しの裏で何本の SQL が流れるか、
+条件付きの更新がどんな SQL になるかが、ORM の書き方に隠れる。
 
-当時の Node の `services/`（study-plan・study-log・textbook・university・user・notification・sendDailyNotifications・goal・line-connection）は
-すべて mysql2 へ移した。Better Auth も同じ mysql2 のプールを使っていた。`schema.prisma`・生成コード・Prisma の
-依存パッケージも消した（2026-09-11）。
-
-その後、API は Go（`database/sql`）へ移して Node から消し（JUK-70・JUK-84）、ログインも Better Auth から
-Go の自作に替えた（JUK-115）。いま Node の mysql2 を使うのは、開発用の seed とテストの準備（`db/`）だけで、
-`db/seed-helpers.ts` 経由で `db/connection.ts` の接続プールを使い、日時の扱い（UTC）を Go と揃えている。
+`db/` は `db/seed-helpers.ts` 経由で `db/connection.ts` の接続プールを使い、日時の扱い（UTC）を Go と揃えている。
 テーブル定義の正は `db/migrations` の SQL、Go の行の型は各ファイルの struct と、契約から作った `internal/apischema/openapi.gen.go`。
 
 ### マイグレーション（テーブル定義の変更）
 
-`prisma migrate deploy` の代わりに Go の `migrate` コマンド（`apps/api/internal/migrate/`、JUK-125）が当てる。
+Go の `migrate` コマンド（`apps/api/internal/migrate/`、JUK-125）が当てる。
 本番はデプロイがアプリを起動する前に、Go のイメージの1回きりのコンテナ（`/api migrate`）で流す。
 `db/migrations` はイメージの `/migrations` に入れてある（`deploy.yml` の `--build-context migrations=`）。
 ローカルは `pnpm dev` / `pnpm run db:migrate`、CI は E2E の前、テストは globalSetup で流す。
@@ -418,50 +370,42 @@ Go の自作に替えた（JUK-115）。いま Node の mysql2 を使うのは�
   動かすので、アプリが DML 以外の SQL を使い始めるとテストが落ちる。
 
 - `db/migrations/<名前>/migration.sql` を名前順に見て、まだ当てていないものだけを流す。
-  既存の22本はそのまま使う（ディレクトリ名に prisma が残るのはそのため）。
-- 当てた記録は、Prisma が使っていた表 `_prisma_migrations` にそのまま書く。本番の DB に残る
-  Prisma の記録を引き継げるので、移し替えは要らない。checksum も Prisma と同じ「ファイルの SHA-256」。
-  Prisma で当てた DB と、この仕組みで当てた DB のテーブル定義・記録が一致することを確かめてある。
+- 当てた記録は表 `_prisma_migrations` に書き、checksum は「ファイルの SHA-256」。表の名前と形は、以前使っていた
+  Prisma が本番の DB に残した記録を引き継ぐためのもの（`apps/api/internal/migrate/migrate.go`）。
 - MySQL の CREATE / ALTER はトランザクションで取り消せない。途中で失敗したら「失敗した」記録を
   残して止まり、人が DB を直して記録の `rolled_back_at`（やり直す）か `finished_at`（手で当て終えた）
-  を埋めるまで、次の実行も止まる（Prisma と同じ振る舞い）。本番では起動が止まるので、
+  を埋めるまで、次の実行も止まる。本番では起動が止まるので、
   デプロイのスモークテストが落ちて前のイメージに戻る。
 - `GET_LOCK` で、同時に2つ動いても二重に当てない。
-- **新しいマイグレーションは SQL を手で書く。** ORM がスキーマの差分から作ってくれることはもう無い。
+- **新しいマイグレーションは SQL を手で書く。**
   `db/migrations/<YYYYMMDDHHMMSS>_<内容>/migration.sql` を足し、その列を読み書きする Go の SQL と struct
   （応答に出る列なら `openapi/openapi.yaml` も）を合わせて直す。当てたあとの migration.sql は書き換えない（変えても DB には
   反映されず、警告だけが出る）。直すときは新しいマイグレーションを足す。
 
-ORM を外すと、次のことを自分で持つことになる。どれも Go の `apps/api/internal/database`、seed とテスト用の `db/connection.ts` とテストで押さえている。
+ORM を使わないので、次のことを自分で持つ。どれも Go の `apps/api/internal/database`、seed とテスト用の `db/connection.ts` とテストで押さえている。
 
-- **日時の時間帯。** MySQL の `DATETIME` は時間帯を持たない。Prisma は UTC として読み書き
-  していたが、ドライバの既定はプロセスのローカル時刻で、Mac（JST）では9時間ずれる。
+- **日時の時間帯。** MySQL の `DATETIME` は時間帯を持たない。ドライバの既定はプロセスのローカル時刻で、
+  Mac（JST）では9時間ずれる。
   Go は `cfg.Loc = time.UTC`、Node（`db/connection.ts`）は `timezone: "Z"` で UTC に揃えている。
 - **真偽値。** `BOOLEAN` は `TINYINT(1)` なので `1 / 0` が返る。Go は `bool` へ Scan すれば変換され、
   Node は `typeCast` で直している。
-- **`updatedAt`。** Prisma の `@updatedAt` は DB の機能ではなく Prisma が毎回値を足していた。
-  列に既定値は無いので、INSERT / UPDATE で必ず書く。
-- **一意制約違反。** Prisma の `P2002` の代わりに MySQL の `ER_DUP_ENTRY`（1062）で判定する
+- **`updatedAt`。** 列に既定値も自動更新も無いので、INSERT / UPDATE で必ず書く。
+- **一意制約違反。** MySQL の `ER_DUP_ENTRY`（1062）で判定する
   （Go は `internal/database` の `IsMySQLError(err, DuplicateEntry)`）。
-- **型。** Prisma の型推論は失われた。Go の行の型は struct に手で書いており、列を足しても
+- **型。** Go の行の型は struct に手で書いており、列を足しても
   直し忘れはコンパイルでは分からない（SELECT の列と Scan の受け皿の数が合わなければ、DB に流すテストで落ちる）。
-- **入れ子の組み立てと SQL の本数。** `include` は JOIN ではなく、親を取ってから子を
-  `IN (...)` で別に取る。生 SQL では自分で選ぶ。大学 → 学部 → タグのような一本道の
+- **入れ子の組み立てと SQL の本数。** 大学 → 学部 → タグのような一本道の
   1対多は JOIN 1本で取って詰め直す。ユーザー → 予定・実績のように1対多が並ぶときは、
   JOIN すると（予定 × 実績）の行に膨らみ合計がずれるので、別々の SQL に分ける
-  （毎日の通知の宛先を集める SQL。今は Go の `internal/feature/notifications/notifications.go`）。
-- **並び順。** Prisma が子を取る SQL には `ORDER BY` が無く、並びは DB が返した順だった
-  （大学一覧のタグの順がそうだった）。親の `ORDER BY` も、同じ値の行どうしの順番までは決めない
-  （予定・実績の一覧は同じ日付の中の順番が DB 任せだった）。生 SQL では最後に id で並べて順番を固定している。
-- **`upsert`。** Prisma は MySQL では SELECT してから INSERT か UPDATE を選ぶ。
-  生 SQL では `INSERT ... ON DUPLICATE KEY UPDATE` の1文で行い、その間に割り込む隙間が無い。
+  （毎日の通知の宛先を集める SQL。`internal/feature/notifications/notifications.go`）。
+- **並び順。** `ORDER BY` は同じ値の行どうしの順番までは決めず、そこは DB が返した順になる
+  （予定・実績の一覧なら同じ日付の中の順番）。最後に id で並べて順番を固定している。
+- **`upsert`。** `INSERT ... ON DUPLICATE KEY UPDATE` の1文で行い、SELECT してから INSERT か UPDATE を
+  選ぶ形と違って、その間に割り込む隙間が無い。
   ただし UNIQUE が2つ以上あるテーブルでは使わない。ON DUPLICATE KEY はどの UNIQUE の重複でも
   発動するので、`LineConnection`（`userId` と `lineUserId` が UNIQUE）で他人の LINE とぶつかると、
   エラーにならず他人の行を更新してしまう（テスト用 DB で実際に確かめた）。そこでは
   `userId` で UPDATE し、1行も変わらなければ INSERT する。
-
-テーブルごとのリポジトリ層を入れないこと（上の「バックエンドの構成」）は変わらない。何を取るかを書いた SQL がそのまま業務のルールで、
-それをルールと一緒に置くという考えは、ORM の有無とも、Node か Go かとも関係なく同じだった。
 
 ## 境界の強制
 
@@ -472,7 +416,6 @@ ORM を外すと、次のことを自分で持つことになる。どれも Go 
 - `apps/**` は独自の tsconfig と依存を持つ別パッケージなので、ルートの lint 対象から外している。
 
 Go の API の中は `internal/` のパッケージに分けてあり、非公開の名前と循環 import の禁止で、コンパイラが境界を守る
-（JUK-156 までは `package main` 1つで、ファイル同士の境界を何も検査していなかった）。
 書き込みの SQL を `internal/write/` の下にしか書かないことは、テストで確かめる（上の「バックエンドの構成」、JUK-148）。
 
 ## テスト
@@ -489,8 +432,7 @@ Go の API の DB テストは、本番と同じ `registerRoutes` で組んだ�
 （`apps/api/internal/app/dbtest_support_test.go` の `dbTestApp`）。ハンドラを直接呼ばないのは、
 **本物のルーティングと入口の拒否・本文の読み取りを通すため**である。たとえば本文は
 「壊れた JSON でも 400 にせず、入口の拒否（未ログイン・デモ）を先に効かせる」ように読んでおり
-（`apps/api/internal/httpx/body.go`）、ハンドラ直呼びではここが素通りしてしまう。Node の頃（JUK-121 まで）は
-Fastify の `inject()` で同じことをしていた。
+（`apps/api/internal/httpx/body.go`）、ハンドラ直呼びではここが素通りしてしまう。
 
 差し替えるのはセッションの取得（Cookie の値を利用者 ID として読む）と外部サービスという境界だけで、
 門番のロジックは実物を動かす。
@@ -521,5 +463,5 @@ Fastify の `inject()` で同じことをしていた。
 `apps/web` のビルド成果物と Go の API（`apps/api`）を1つのイメージに入れ、EC2 上の Docker で動かす。
 nginx（EC2 ホスト上）が 443 を受けて 3000 番へ流す。設定の実物は `infra/nginx/README.md`。
 
+画面はルートの `Dockerfile` の Node のステージでビルドし、成果物だけを Go のイメージ（`apps/api/Dockerfile`）へ写す。
 `src/shared` は `apps/*` の外にあるが、pnpm workspaceのルート依存からZodなどを解決できる。
-Dockerイメージにもworkspaceと同じ階層でpnpmの依存をコピーするため、個別のsymlinkは不要である。

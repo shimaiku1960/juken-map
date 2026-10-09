@@ -25,7 +25,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
-// 管理者ページ（/admin）の利用者の管理（JUK-78）。Node の routes/admin.ts と services/admin-service.ts にあたる。
+// 管理者ページ（/admin）の利用者の管理（JUK-78）。
 // どれも rt.Admin（管理者＋2段階認証を通したセッションだけ）で登録する。守るのはルーターで、
 // 画面がメニューを出し分けているのは見た目のためだけ。
 //
@@ -34,15 +34,15 @@ import (
 
 const (
 	adminUsersPageSize = 50
-	// adminUsersMaxPage は Node の listUsersQuerySchema の page の上限。
+	// adminUsersMaxPage は一覧の page の上限。
 	adminUsersMaxPage = 10_000
-	// adminUserIDMax は Node の userIdParamsSchema の上限（user.id は VARCHAR(191)）。
+	// adminUserIDMax は path の {id} の長さの上限（user.id は VARCHAR(191)）。
 	adminUserIDMax = 191
-	// seedEmailLike は手元の負荷検証用 seed の合成ユーザーのメールの印（Node の src/shared/synthetic.ts）。
+	// seedEmailLike は手元の負荷検証用 seed の合成ユーザーのメールの印（src/shared/synthetic.ts と同じ値）。
 	seedEmailLike = "%@synthetic.juken-map.invalid"
 )
 
-// userKinds は種別の並び。概要ではこの順に全部並べる（Node の USER_KINDS）。
+// userKinds は種別の並び。概要ではこの順に全部並べる（画面の src/shared/dto/admin.ts の USER_KINDS と同じ）。
 var userKinds = []apischema.UserKind{apischema.UserKindReal, apischema.UserKindSim, apischema.UserKindSeed, apischema.UserKindDemo}
 
 // kindSQL は利用者の種別を SQL の中で決める。判定の順番に意味がある：sim は simSeq で、
@@ -82,7 +82,7 @@ type adminTarget struct {
 	BannedAt *string // ISO 文字列。null なら止まっていない
 }
 
-// protection は守られている相手なら理由を返す。守りは3つで、Node の findTarget と同じ順に見る。
+// protection は守られている相手なら理由を返す。守りは3つで、この順に見る。
 //   - 自分自身：最後の管理者が自分を締め出して誰も入れなくなるのを防ぐ
 //   - 他の管理者：管理者どうしで潰し合えないようにする（付け替えは pnpm admin:grant だけ）
 //   - デモ：面接官向けの共有アカウント。消えると /login のデモボタンが動かなくなる
@@ -156,7 +156,7 @@ func (h *UserHandlers) ListUsers(w http.ResponseWriter, r *http.Request, _ *http
 
 // Ban は POST /api/admin/users/{id}/ban。
 func (h *UserHandlers) Ban(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
-	// 本文は使わないが、Node（Fastify）はハンドラより先に本文を読むので、受け付けない形なら同じく 415・413 にする。
+	// 本文は使わないが、ほかの書き込みと同じく、受け付けない形の本文なら 415・413 にする。
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}
@@ -169,7 +169,7 @@ func (h *UserHandlers) Ban(w http.ResponseWriter, r *http.Request, s *httpx.Sess
 		return
 	}
 
-	// 押し直しても最初に止めた日時を保つ（Node の COALESCE と同じ。account.Suspend が DB の値を返す）。
+	// 押し直しても最初に止めた日時を保つ（SQL の COALESCE。account.Suspend が DB の値を返す）。
 	banned, err := h.store.ban(r.Context(), id, dates.NowMillis())
 	if errors.Is(err, account.ErrNotFound) {
 		httpx.WriteError(w, http.StatusNotFound, "ユーザーが見つかりません")
@@ -184,7 +184,7 @@ func (h *UserHandlers) Ban(w http.ResponseWriter, r *http.Request, s *httpx.Sess
 	httpx.WriteJSON(w, http.StatusOK, apischema.AdminBanResult{ID: id, Email: target.Email, BannedAt: banned.BannedAt, SessionsRemoved: removed})
 }
 
-// Unban は POST /api/admin/users/{id}/unban。守りは見ない（Node と同じ。止まっていなければ何も変わらない）。
+// Unban は POST /api/admin/users/{id}/unban。守りは見ない（止まっていなければ何も変わらない）。
 func (h *UserHandlers) Unban(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
@@ -222,7 +222,7 @@ func (h *UserHandlers) DeleteUser(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
-	// Node と同じく path を先に、本文を後に確かめる。
+	// path を先に、本文を後に確かめる。
 	id, ok := adminUserID(w, r)
 	if !ok {
 		return
@@ -240,7 +240,7 @@ func (h *UserHandlers) DeleteUser(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
-	// メールの無い相手は、空白だけを打てば空文字どうしで一致してしまうので、比べる前に断る（Node と同じ）。
+	// メールの無い相手は、空白だけを打てば空文字どうしで一致してしまうので、比べる前に断る。
 	if target.Email == nil || *target.Email == "" {
 		httpx.WriteError(w, http.StatusConflict, protectedMessages[protectedNoEmail])
 		return
@@ -278,7 +278,7 @@ func (h *UserHandlers) operableTarget(w http.ResponseWriter, r *http.Request, id
 }
 
 // logAdminUserAction は、誰が・誰に・何をしたかを構造化ログに残す（監査ログ、セキュリティ基準 H4）。
-// Node の logUserAction と同じ項目・同じ文言（warn）なので、Grafana の Loki で Node の記録と並べて追える。
+// 文言（warn）は Node の API のときから変えていないので、Grafana の Loki で過去の記録と続けて追える。
 func logAdminUserAction(ctx context.Context, adminID, action string, target *adminTarget, detail ...any) {
 	// *string のまま渡すと、ログの形式によってはアドレスが出る。値（無ければ null）にしてから渡す。
 	var email any
@@ -289,9 +289,7 @@ func logAdminUserAction(ctx context.Context, adminID, action string, target *adm
 	slog.WarnContext(ctx, "admin user action", attrs...)
 }
 
-// adminUserID は path の {id} を Node の z.string().min(1).max(191) と同じく確かめる。
-// Node はこれより先に Fastify の maxParamLength（既定 100文字）で 414 を返すので、101〜191文字の ID は
-// Node と結果が違う（Go は 404 など）。正しい ID は32文字で、画面の操作では起きないので揃えていない。
+// adminUserID は path の {id} が1〜191文字か確かめる（正しい ID は32文字）。
 func adminUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	id := r.PathValue("id")
 	switch {
@@ -305,8 +303,8 @@ func adminUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return id, true
 }
 
-// readAdminUsersQuery は Node の listUsersQuerySchema と同じ規則でクエリを読む。Zod と同じく kind・q・page の順に
-// 確かめ、最初の1件で止める。Fastify は同じキーが2つ以上あると値を配列にするので、値の数で見分ける。
+// readAdminUsersQuery は一覧のクエリを読む。kind・q・page の順に確かめ、最初の1件で止める。
+// 同じキーが2つ以上あるときは、文字列ではない（配列）として断る。
 func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string, int, *httpx.ValidationIssue) {
 	kind := apischema.UserKindReal // z.enum(USER_KINDS).default("real")
 	if values, ok := query["kind"]; ok {

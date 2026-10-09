@@ -13,7 +13,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
-// プロフィールの更新（JUK-75）。Node の routes/profile.ts と services/user-service.ts の updateProfile にあたる。
+// プロフィールの更新（JUK-75）。
 
 // 入力チェックは Zod の profileSchema（src/shared/validations/profile.ts）と同じ。
 // 前後の空白を削ってから長さを確かめるので、空白だけのニックネームは「必須です」で弾く（JUK-64）。
@@ -30,7 +30,7 @@ type userStore struct {
 	db *sql.DB
 }
 
-// updateProfile はニックネームを書き換え、更新後の行を返す（Node と同じく UPDATE の後に SELECT し直す）。
+// updateProfile はニックネームを書き換え、更新後の行を返す（UPDATE の後に SELECT し直す）。
 func (st *userStore) updateProfile(ctx context.Context, userID string, in apischema.ProfileInput) (apischema.User, error) {
 	if err := account.SetNickname(ctx, st.db, userID, in.Nickname, dates.NowMillis()); err != nil {
 		return apischema.User{}, err
@@ -45,7 +45,7 @@ func (st *userStore) updateProfile(ctx context.Context, userID string, in apisch
 	).Scan(&u.ID, &u.Name, &u.Email, &u.Image, &u.Nickname, &u.CreatedAt, &u.UpdatedAt,
 		&u.EmailVerified, &u.FirstStudyLogAt, &u.AnalyticsSignUpTrackedAt)
 	if err != nil {
-		// 行が無い（sql.ErrNoRows）も 500。Node も「見つかりません」を throw して 500 にしている。
+		// 行が無い（sql.ErrNoRows）も 500。ログイン中の本人の行なので、無いのはおかしい。
 		return apischema.User{}, err
 	}
 	u.CreatedAt = database.ISOFromDatetime(u.CreatedAt)

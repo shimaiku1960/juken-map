@@ -40,7 +40,7 @@ func todayTokyo() string {
 }
 
 // dbTestApp は本番と同じ registerRoutes で組んだルーター。セッションは Cookie「test」の値を利用者 ID として読む
-// （Better Auth の Cookie の署名と session 表は internal/feature/auth/auth_test.go が確かめるので、ここでは省く）。
+// （ログインの Cookie の署名と session 表は internal/feature/auth/auth_test.go が確かめるので、ここでは省く）。
 type dbTestApp struct {
 	rt *httpx.Router
 }

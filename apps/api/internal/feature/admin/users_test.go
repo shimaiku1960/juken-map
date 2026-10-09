@@ -196,7 +196,7 @@ func TestAdminUserActions(t *testing.T) {
 			rt, _ := newAdminUserTestRouter()
 			var rec *httptest.ResponseRecorder
 			if tt.wantStatus == 0 {
-				// Content-Type が text/html の本文は、Node（Fastify）と同じく 415
+				// Content-Type が text/html の本文は 415
 				req := httptest.NewRequest(tt.method, tt.path, strings.NewReader("x"))
 				req.Header.Set("Content-Type", "text/html")
 				req.AddCookie(&http.Cookie{Name: "test", Value: "admin"})
@@ -227,8 +227,8 @@ func TestAdminUserActions(t *testing.T) {
 	})
 }
 
-// TestAdminUserActionAuditLog は、停止・解除・削除が「誰が・誰に・何をしたか」を Node と同じ形で
-// 構造化ログに残すことを確かめる（セキュリティ基準 H4。Grafana の Loki で Node の記録と並べて追う）。
+// TestAdminUserActionAuditLog は、停止・解除・削除が「誰が・誰に・何をしたか」を以前と同じ形で
+// 構造化ログに残すことを確かめる（セキュリティ基準 H4。Grafana の Loki で過去の記録と並べて追う）。
 func TestAdminUserActionAuditLog(t *testing.T) {
 	var buf bytes.Buffer
 	prev := slog.Default()

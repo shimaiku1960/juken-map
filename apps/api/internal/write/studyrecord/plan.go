@@ -70,7 +70,7 @@ func findPlan(ctx context.Context, q database.QueryRower, id int64, userID, suff
 }
 
 // CreatePlans は1つの日付に予定をまとめて作り、作った件数を返す。参考書は他人の ID を混ぜられないよう、
-// 自分の分だけを許す。行は1本の INSERT で入れる（Node と同じ）。
+// 自分の分だけを許す。行は1本の INSERT で入れる。
 func CreatePlans(ctx context.Context, db *sql.DB, userID string, date time.Time, items []PlanItem, now time.Time) (int64, error) {
 	if err := checkTextbooksOwned(ctx, db, items, userID); err != nil {
 		return 0, err
@@ -181,7 +181,7 @@ func DeletePlan(ctx context.Context, db *sql.DB, userID string, id int64) error 
 }
 
 // CompletePlan は userID の人の予定を完了にし、同時に実績を1件作る。実績の作成・予定の完了・初回記録の印は
-// 必ず一緒に成立させる（片方だけだと「完了なのに実績が無い」などが残る）。Node と同じ1つのトランザクション。
+// 必ず一緒に成立させる（片方だけだと「完了なのに実績が無い」などが残る）ので、1つのトランザクションで行う。
 // 実績の日付・科目・参考書は予定のもの。範囲は参考書の逆算設定に合うかを確かめる。
 func CompletePlan(ctx context.Context, db *sql.DB, userID string, id int64, in Completion, now time.Time) (Completed, error) {
 	var done Completed

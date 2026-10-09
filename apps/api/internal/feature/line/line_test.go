@@ -329,7 +329,7 @@ func TestLineWebhookFailedEventCanBeRedelivered(t *testing.T) {
 	env.client.linkErr = errors.New("LINE API 500")
 	body := `{"events":[{"type":"follow","webhookEventId":"E1","replyToken":"r","source":{"userId":"U1"}}]}`
 
-	// イベントの失敗はログに残して 200（Node と同じ）。印は消えて、再送されたらやり直せる。
+	// イベントの失敗はログに残して 200。印は消えて、再送されたらやり直せる。
 	if rec := env.webhook(body); rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -478,7 +478,7 @@ func TestLineSettings(t *testing.T) {
 
 	// ログイン済みならプロフィールの通知設定へ
 	assertRedirect(t, env.do("GET", "/line/settings", "alice", "", nil), "https://juken-map.com/profile#notification-settings")
-	// 未ログインなら通知設定を戻り先にしてログインへ（Node の URLSearchParams と同じく / と # も符号にする）
+	// 未ログインなら通知設定を戻り先にしてログインへ（/ と # も符号にする）
 	assertRedirect(t, env.do("GET", "/line/settings", "", "", nil), "https://juken-map.com/login?callbackURL=%2Fprofile%23notification-settings")
 	// セッションを読めないときは 500（ログインへ送って入り直させない）
 	if rec := env.do("GET", "/line/settings", "db-down", "", nil); rec.Code != http.StatusInternalServerError {

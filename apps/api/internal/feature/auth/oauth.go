@@ -191,8 +191,7 @@ func (h *Handlers) oauthCallback(w http.ResponseWriter, r *http.Request, previou
 		http.Redirect(w, r, "/login?error=banned", http.StatusFound)
 		return
 	}
-	// 2段階認証を有効にしている人は、外部ログインのあとにもコードを求める（G3。Better Auth はメール＋パスワードの
-	// ログインにしか求めていなかった）。
+	// 2段階認証を有効にしている人は、外部ログインのあとにもコードを求める（G3）。
 	if u.MFAEnabled {
 		if err := h.startMFAChallenge(w, r, u.ID); err != nil {
 			fail("mfa_challenge", "oauth", err)

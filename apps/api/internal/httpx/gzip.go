@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-// GzipMinSize より小さい応答は圧縮しない（Node の @fastify/compress の既定の下限と同じ）。
+// GzipMinSize より小さい応答は、縮めても得が少ないので圧縮しない。
 const GzipMinSize = 1024
 
 // GzipBytes は本文を gzip にする。起動時に作り置く分は最高圧縮、リクエストのたびに作る HTML は既定の強さにする。

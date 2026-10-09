@@ -16,11 +16,11 @@ import (
 )
 
 // ミドルウェアは「http.Handler を受け取り、前後に処理を足した http.Handler を返す関数」。
-// Fastify のフック（onRequest・onResponse など）にあたるものを、包む順番で表す。
+// リクエストの前後に挟む処理を、包む順番で表す。
 // 組み立ては server.go の newServerHandler にある。リクエストごとの情報（RequestInfo）・ログ・計測・トレースは internal/telemetry にある。
 
-// newRequestID は UUID（v4）を作る。Node と同じく、本番は36文字、開発は先頭8文字にする
-// （開発は人が目で読むので短さを取る。observability/logger.ts の genReqId）。
+// newRequestID は UUID（v4）を作る。本番は36文字、開発は先頭8文字にする
+// （開発は人が目で読むので短さを取る）。
 func newRequestID(short bool) string {
 	var b [16]byte
 	rand.Read(b[:])         // crypto/rand の Read は失敗しない（失敗したらプロセスが止まる）
@@ -63,8 +63,6 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 }
 
 // observe は一番外側で、reqId を振り、返し終えたらアクセスログ1行とメトリクスとトレースを残す。
-// Node の genReqId・requestContext・RequestLogController・registerMetrics と、
-// instrumentation.ts の HTTP の計測をまとめたもの。
 func observe(m *telemetry.Metrics, tracer trace.Tracer, shortIDs bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -78,7 +76,7 @@ func observe(m *telemetry.Metrics, tracer trace.Tracer, shortIDs bool, next http
 		ctx, span := telemetry.StartRequestSpan(r.Context(), tracer, r.Method)
 		r = r.WithContext(telemetry.WithRequestInfo(ctx, info))
 		// 調査のときに画面の Network タブの値でログを引けるよう、応答ヘッダーに載せる
-		// （Node の error-handling.ts。この API はすべて /api/ なので常に付ける）。
+		// （この API はすべて /api/ なので常に付ける）。
 		w.Header().Set("X-Request-Id", info.ID)
 
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
@@ -97,8 +95,7 @@ func observe(m *telemetry.Metrics, tracer trace.Tracer, shortIDs bool, next http
 			logCtx = trace.ContextWithSpanContext(logCtx, trace.SpanContext{})
 		}
 
-		// Node の「request completed」と同じ形。URL はパスだけにして、? 以降は残さない
-		// （クエリにトークンが載る入口があるため。Node の redactPath）。
+		// URL はパスだけにして、? 以降は残さない（クエリにトークンが載る入口があるため）。
 		slog.LogAttrs(logCtx, slog.LevelInfo, "request completed",
 			slog.Group("req", slog.String("method", r.Method), slog.String("url", r.URL.Path)),
 			slog.Group("res", slog.Int("statusCode", rec.status)),
@@ -110,7 +107,7 @@ func observe(m *telemetry.Metrics, tracer trace.Tracer, shortIDs bool, next http
 // recoverPanic は、ハンドラの panic を 500 の応答に変える。
 //
 // net/http も panic でプロセスを落とさないが、その接続を切るだけで応答を返さず、
-// ログも reqId の無い素のテキストになる。Node の setErrorHandler と同じく、
+// ログも reqId の無い素のテキストになる。ここで受けて、
 // 固定文言の 500 を返して、原因はログにだけ残す。
 func recoverPanic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -133,10 +130,9 @@ func recoverPanic(next http.Handler) http.Handler {
 	})
 }
 
-// securityHeaders は、Node（security-headers.ts）が全応答に付けているヘッダーのうち、
-// JSON の API にも意味があるものを付ける。
+// securityHeaders は、API の応答にセキュリティのヘッダーを付ける。
 //
-// CSP だけは Node と変える。Node の CSP は画面（HTML）向けで、読み込んでよいスクリプトや
+// CSP は画面（HTML）とは変える。画面の CSP（internal/spa/seo.go）は読み込んでよいスクリプトや
 // 画像の一覧になっている。この API は JSON しか返さないので、何も読み込ませない
 // 'none' にする（OWASP の REST の推奨と同じ）。
 func securityHeaders(next http.Handler) http.Handler {
@@ -154,8 +150,7 @@ func securityHeaders(next http.Handler) http.Handler {
 // withDeadline は、1リクエストにかけてよい時間の上限を ctx に付ける。
 //
 // DB の照会も接続プールの空き待ちも、ハンドラが渡す ctx が取り消された時点で止まる。
-// 上限が無いと、DB が詰まったときに待ちが積み上がり、全員が遅くなる（Node の
-// timeout.ts が外部サービスについて書いている理由と同じ）。止まった照会はエラーとして
+// 上限が無いと、DB が詰まったときに待ちが積み上がり、全員が遅くなる。止まった照会はエラーとして
 // ハンドラへ戻り、500 になる。
 func withDeadline(d time.Duration, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

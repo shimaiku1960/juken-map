@@ -16,10 +16,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
 
-// 学習予定の書き込み（JUK-75）。Node の次の部分にあたる。
-//   - routes/study-plans.ts の POST・PATCH・DELETE と POST /api/study-plans/:id/complete
-//   - services/study-plan-service.ts の createStudyPlans・updateStudyPlan・deleteStudyPlan・completeOwnedStudyPlan
-//   - services/textbook-service.ts の countOwnedTextbooks
+// 学習予定の書き込み（JUK-75）。
 //
 // 書き込みと、その決まり（自分の参考書か・範囲・実績のある予定を未完了に戻さない・完了と実績を一緒に確定）は
 // 持ち主の internal/write/studyrecord にある（JUK-153）。ここは本文を確かめ、操作を呼び、結果を応答の形にする。
@@ -179,7 +176,7 @@ func (h *PlanWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *ht
 	httpx.WriteJSON(w, http.StatusCreated, apischema.CreatedCount{Count: count})
 }
 
-// Update は PATCH /api/study-plans/{id}。Node と同じく、入力チェックは自分の予定かを確かめるより先。
+// Update は PATCH /api/study-plans/{id}。入力チェックは自分の予定かを確かめるより先。
 func (h *PlanWriteHandlers) Update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {

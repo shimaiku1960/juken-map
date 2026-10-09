@@ -13,9 +13,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
 )
 
-// 参考書の書き込み（JUK-75）。Node の次の部分にあたる。
-//   - routes/textbooks.ts の POST /api/textbooks と PATCH /api/textbooks/:id
-//   - services/textbook-service.ts の createTextbook・createTextbookFromMaster・updateTextbookProgress・findOwnedTextbook
+// 参考書の書き込み（JUK-75）。POST /api/textbooks と PATCH /api/textbooks/{id}。
 //
 // 書き込みは持ち主の internal/write/textbook にある（JUK-154）。ここは本文を確かめ、操作を呼び、結果を応答の形にする。
 //
@@ -201,7 +199,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request, s *httpx.Sessi
 	}
 }
 
-// UpdateProgress は PATCH /api/textbooks/{id}。入力チェックは自分の参考書かを確かめるより先（Node と同じ）。
+// UpdateProgress は PATCH /api/textbooks/{id}。入力チェックは自分の参考書かを確かめるより先。
 func (h *Handlers) UpdateProgress(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {

@@ -21,14 +21,13 @@ import (
 )
 
 // rdsCA は RDS（ap-northeast-1）のルート証明書。RDS の証明書は OS の信頼リストに無い AWS 独自の
-// 認証局が発行するので、自分で持って確かめる。Node の mysql2 も同じ証明書を同梱している
-// （ssl: "Amazon RDS"）。取得元: https://truststore.pki.rds.amazonaws.com/ap-northeast-1/ap-northeast-1-bundle.pem
+// 認証局が発行するので、自分で持って確かめる。取得元: https://truststore.pki.rds.amazonaws.com/ap-northeast-1/ap-northeast-1-bundle.pem
 //
 //go:embed rds-ca-ap-northeast-1.pem
 var rdsCA []byte
 
 // Open は DATABASE_URL（mysql://user:pass@host:port/db）をドライバの設定に直し、
-// 接続プールを作る。Node 側の parseDatabaseUrl と createPool（seed・テスト用の db/connection.ts）にあたる。
+// 接続プールを作る。seed・テスト用の db/connection.ts も同じ形の URL を読む。
 func Open(databaseURL string) (*sql.DB, error) {
 	cfg, err := Config(databaseURL)
 	if err != nil {
@@ -41,7 +40,7 @@ func Open(databaseURL string) (*sql.DB, error) {
 	// SQL 1本ずつのトレース（下の tracedSpanOptions）。送り先はアプリ全体の設定（internal/telemetry/tracing.go の SetupTracing）を使い、
 	// その前やコマンドで動くときは何もしない。
 	db := otelsql.OpenDB(connector, tracedSpanOptions)
-	// Node 側の connectionLimit（既定 15）に揃える。比べるときに条件を同じにするため。
+	// 上限は Node の API のときの 15 を引き継いだ。変えるときは負荷試験（load-tests/）で測る。
 	db.SetMaxOpenConns(15)
 	db.SetMaxIdleConns(15)
 	// 使い回す接続を一定時間で張り直す。MySQL（wait_timeout）やネットワークの途中の機器が
@@ -89,22 +88,21 @@ func Config(databaseURL string) (*mysql.Config, error) {
 	cfg.Addr = u.Host
 	cfg.DBName = strings.TrimPrefix(u.Path, "/")
 	// DATETIME は time.Time にせず、"2026-09-27 00:00:00.000" の文字列のまま受け取る。
-	// 応答は ISO 文字列なので、Time を経由すると解析と整形の往復が無駄になる
-	// （Node 側も同じ理由で selectDateStrings を使っている。JUK-49）。
+	// 応答は ISO 文字列なので、Time を経由すると解析と整形の往復が無駄になる（JUK-49）。
 	cfg.ParseTime = false
 	// パラメータの値に time.Time を渡したとき、UTC として書き出す。DB の値は UTC で入っている。
 	cfg.Loc = time.UTC
 	// ? への値の埋め込みをドライバ側で行い、SQL を1往復で流す。
 	// 既定（false）ではサーバー側のプリペアドステートメントになり、準備・実行・後始末で
-	// 1クエリ3往復かかる。Node の mysql2 の query() もドライバ側で埋め込んでいるので、条件を揃える。
+	// 1クエリ3往復かかる。
 	cfg.InterpolateParams = true
 	// UPDATE の件数を「値が変わった行」ではなく「WHERE に当たった行」で数える。
-	// Node の mysql2 は既定でこの数え方（FOUND_ROWS）なので、同じ値で UPDATE しても 1 になる。
-	// 揃えないと、同じ日付をもう一度記録したときに Go だけが「見つからない（404）」を返す（JUK-80、internal/feature/sim）。
+	// こうすると、同じ値で UPDATE しても 1 になる。数えないと、同じ日付をもう一度記録したときに
+	// 「見つからない（404）」を返してしまう（JUK-80、internal/feature/sim）。
 	cfg.ClientFoundRows = true
 
 	// RDS へは TLS で繋ぎ、証明書とホスト名を確かめる（パスワードと利用者のデータが平文で流れない）。
-	// 手元と CI の MySQL は証明書を持たないので対象外。Node の createPool と同じ条件。
+	// 手元と CI の MySQL は証明書を持たないので対象外。
 	if strings.HasSuffix(u.Hostname(), ".rds.amazonaws.com") {
 		roots := x509.NewCertPool()
 		if !roots.AppendCertsFromPEM(rdsCA) {
@@ -116,7 +114,7 @@ func Config(databaseURL string) (*mysql.Config, error) {
 }
 
 // ISOFromDatetime は DATETIME(3) の文字列 "2026-09-27 00:00:00.000" を
-// Date#toISOString と同じ "2026-09-27T00:00:00.000Z" にする。Node 側の toIsoString と同じ。
+// ISO の "2026-09-27T00:00:00.000Z"（JavaScript の Date#toISOString と同じ形）にする。
 func ISOFromDatetime(value string) string {
 	return value[:10] + "T" + value[11:] + "Z"
 }

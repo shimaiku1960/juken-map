@@ -58,7 +58,7 @@ func TestRequestSpanUsesRouteTemplate(t *testing.T) {
 		t.Fatalf("スパンの数 = %d, want 1", len(spans))
 	}
 	s := spans[0]
-	// ダッシュボードの絞り込み（trace:rootName）と同じ、Node の Fastify の形の名前にする。
+	// ダッシュボードの絞り込み（trace:rootName）と同じ、以前の Fastify の形の名前にする。
 	if s.Name() != "DELETE /api/mine/:id" || s.SpanKind() != trace.SpanKindServer {
 		t.Errorf("名前 = %q, 種類 = %v", s.Name(), s.SpanKind())
 	}

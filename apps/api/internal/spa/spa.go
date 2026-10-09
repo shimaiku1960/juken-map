@@ -1,9 +1,9 @@
-// Package spa は、画面（apps/web のビルド成果物 dist/）の配信（JUK-111。Node の apps/api/src/spa.ts から移した）。
+// Package spa は、画面（apps/web のビルド成果物 dist/）の配信（JUK-111）。
 //
 // dist は起動時に全部メモリへ読み込み、リクエストのたびにファイルを開かない。2.5MB ほどなので収まり、
 // パスに ../ を混ぜてほかのファイルを読ませる余地も無くなる（引くのは読み込んだ表だけ）。
-// 圧縮できる種類は gzip 版も起動時に作っておく。Node は br（品質4）で圧縮していたが、Go の標準ライブラリに
-// br は無いので gzip の最高圧縮にした（大きさは br の品質4とほぼ同じ）。
+// 圧縮できる種類は gzip 版も起動時に作っておく。Go の標準ライブラリに br は無いので、
+// gzip の最高圧縮にする（大きさは br の品質4とほぼ同じ）。
 // 機能（internal/feature）ではなく、どのルートにも当たらない GET を受ける土台。SEO の meta 差し込みは seo.go。
 package spa
 
@@ -38,7 +38,7 @@ var compressibleTypes = map[string]bool{
 	".txt": true, ".xml": true, ".webmanifest": true, ".map": true, ".ico": true,
 }
 
-// assetTypes は Go の mime が知らない（OS の一覧に無いことがある）種類。Node の @fastify/static（send）と同じ値にする。
+// assetTypes は Go の mime が知らない（OS の一覧に無いことがある）種類。
 var assetTypes = map[string]string{
 	".webmanifest": "application/manifest+json",
 }
@@ -133,7 +133,7 @@ func Load(root string, scripts Scripts) (*Site, error) {
 			articles = append(articles, sitemapArticle{pathname: pathname, lastModified: m.ModifiedTime})
 		}
 	}
-	// Node は meta.json に書かれた順に並べていた。Go の map は順番を持たないので、パスで並べて毎回同じにする。
+	// Go の map は順番を持たないので、パスで並べて毎回同じにする。
 	sort.Slice(articles, func(i, j int) bool { return articles[i].pathname < articles[j].pathname })
 	site.sitemap = buildSitemap(articles)
 	return site, nil
@@ -153,7 +153,7 @@ func newStaticAsset(rel string, body []byte, modTime time.Time) *staticAsset {
 		etag:        contentETag(body),
 		modTime:     modTime,
 		contentType: contentType,
-		// Node の @fastify/static の既定（public, max-age=0）に合わせ、下の2つだけ変える。
+		// 既定は public, max-age=0（毎回確かめ直す）にして、下の2つだけ変える。
 		cacheControl: "public, max-age=0",
 	}
 	switch {
@@ -204,7 +204,7 @@ func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 		httpx.NotFound(w, r)
 		return
 	}
-	// メトリクスの route は Node と同じく、API 以外をまとめて "(web)" にする（ファイルごとに分けると種類が増えすぎる）。
+	// メトリクスの route は、API 以外をまとめて "(web)" にする（ファイルごとに分けると種類が増えすぎる）。
 	if info != nil {
 		info.Route = telemetry.WebRoute
 	}

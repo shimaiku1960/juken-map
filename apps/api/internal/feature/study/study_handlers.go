@@ -11,11 +11,11 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
-// 学習記録・予定の一覧の API（JUK-73）。Node の routes/study-logs.ts・study-plans.ts の GET にあたる。
+// 学習記録・予定の一覧の API（JUK-73）。
 // 書き込みは study_log_writes.go・study_plan_writes.go（JUK-75）。
 
 // 期間を省いて呼ばれたときの既定。画面はどれも明示して呼ぶので、これは古いクライアントや
-// 手で叩いたときのためのもの。Node と同じ値。
+// 手で叩いたときのためのもの。
 const (
 	defaultLogDays        = 90  // 実績：今日を含めて遡る日数
 	defaultDailyDays      = 365 // 日別の合計：今日を含めて遡る日数

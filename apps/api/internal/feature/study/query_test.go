@@ -39,7 +39,7 @@ func TestStudyListQueryErrors(t *testing.T) {
 	rt.User("GET /api/study-logs/daily", h.ListDaily)
 	rt.User("GET /api/study-plans", h.ListPlans)
 
-	// 本文は Node（routes/validation-error.ts）が返すものと同じ「文言・コード・項目」
+	// 本文は入力チェックのほかの 400 と同じ「文言・コード・項目」
 	formatError := func(key string) string {
 		return `{"error":"日付は YYYY-MM-DD で指定してください","code":"invalid_format","field":"` + key + `"}`
 	}
@@ -58,7 +58,7 @@ func TestStudyListQueryErrors(t *testing.T) {
 		{"/api/study-logs?from=2026-09-28;to=x", 400, formatError("from")},
 		{"/api/study-logs/daily?to=bad", 400, formatError("to")},
 		{"/api/study-plans?to=2026-09-01&to=2026-09-02", 400, arrayError("to")},
-		// 形は正しいが暦に無い日付は、Node と同じく 200 の空の一覧
+		// 形は正しいが暦に無い日付は、200 の空の一覧
 		{"/api/study-logs?from=2026-13-45", 200, `[]`},
 		{"/api/study-logs/daily?from=2026-01-01&to=2026-00-10", 200, `[]`},
 		{"/api/study-plans?from=2026-01-32", 200, `[]`},

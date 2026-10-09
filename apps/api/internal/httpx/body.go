@@ -15,21 +15,20 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 )
 
-// 書き込みの本文の読み方（JUK-80・JUK-75）。Node の Fastify が本文を解析する部分（server.ts の
-// addContentTypeParser と csp-report.ts）と同じ結果にする。Node に実際に送った結果と、
-// Fastify 5.12 のソース（lib/content-type.js・content-type-parser.js・handle-request.js）で確かめた。
+// 書き込みの本文の読み方（JUK-80・JUK-75）。細かい規則は、API を Go へ移したときに応答を変えないよう
+// 前の実装（Fastify 5）の結果にそろえたもの。そろえる相手はもう無いので、画面と契約（openapi/openapi.yaml）が
+// 困らない範囲なら単純にしてよい。
 //
 //   - Content-Type が無く、本文も無い（Content-Length が無いか 0、かつ chunked でない）→ 本文なし
 //   - Content-Type が無いのに本文がある、または下の4つ以外 → 415（本文が空でも）
 //   - 上限を超えたら 413（ふだんは 1MiB、ルートごとに小さくできる）。Content-Length の申告だけで超えていても 413
 //   - JSON が空・壊れていても 400 にせず「本文なし」として扱い、判断をハンドラに任せる。
-//     認証を通っていない送り手が、JSON の中身で結果を知ることがないようにするため（server.ts のコメント）
+//     認証を通っていない送り手が、JSON の中身で結果を知ることがないようにするため
 //   - text/plain は文字列のまま
 //
-// 認証・トークンの確認はルーターが先に済ませるので、ここに来るのは通してよいリクエストだけ
-// （Node も onRequest の拒否が本文の解析より先に走る）。
+// 認証・トークンの確認はルーターが先に済ませるので、ここに来るのは通してよいリクエストだけ。
 
-// DefaultBodyLimit は Node の BODY_LIMIT（error-handling.ts）と同じ 1MiB。
+// DefaultBodyLimit は本文の上限（1MiB）。
 const DefaultBodyLimit = 1 << 20
 
 // bodyMediaTypes は受け付ける Content-Type と、その本文を JSON として読むか。
@@ -53,10 +52,10 @@ type requestBody struct {
 }
 
 // JSUndefined は「値が無い」を表す。JSON の null（nil）と区別するため、別の値にする。
-// Node で言えば request.body が undefined のとき、オブジェクトにキーが無いときにあたる。
+// JavaScript の undefined にあたる（本文が無いとき、オブジェクトにキーが無いとき）。
 type JSUndefined struct{}
 
-// Value は Node のハンドラが受け取る request.body と同じ値を返す。入力チェック（validate.go）に渡す。
+// Value は本文を読んだ値を返す。入力チェック（validate.go）に渡す。
 //   - 本文なし・JSON として読めない：JSUndefined{}
 //   - text/plain：string
 //   - JSON：nil（null）・bool・json.Number・string・[]any・map[string]any
@@ -106,21 +105,21 @@ func ReadBody(w http.ResponseWriter, r *http.Request, limit int64) (body request
 	return body, true
 }
 
-// isEmptyBody は Fastify の isEmptyBody と同じ。chunked なら中身が空でも「本文あり」。
+// isEmptyBody は本文が無いか。chunked なら中身が空でも「本文あり」。
 // r.ContentLength は、サーバーが Content-Length ヘッダーから入れる値（無ければ 0、chunked なら -1）。
 func isEmptyBody(r *http.Request) bool {
 	return len(r.TransferEncoding) == 0 && r.ContentLength == 0
 }
 
-// Fastify の typeNameReg・subtypeNameReg（lib/content-type.js）。
+// Content-Type の type・subtype として受け付ける文字。
 var (
 	mediaTypeNamePattern    = regexp.MustCompile("^[\\w!#$%&'*+.^`|~-]+$")
 	mediaSubtypeNamePattern = regexp.MustCompile("^[\\w!#$%&'*+.^`|~-]+\\s*$")
 )
 
-// mediaType は Content-Type から "type/subtype" を小文字で取り出す。Fastify の ContentType と同じく、
+// mediaType は Content-Type から "type/subtype" を小文字で取り出す。
 // 形が不正なら "" を返す（呼び出し側で 415 になる）。; より後ろ（charset など）は見ない。
-// mime.ParseMediaType は ; の後ろが壊れているとエラーにするが、Fastify は受け付けるので使わない。
+// mime.ParseMediaType は ; の後ろが壊れているとエラーにするが、ここでは受け付けたいので使わない。
 func mediaType(header string) string {
 	value, _, _ := strings.Cut(header, ";")
 	typ, subtype, ok := strings.Cut(strings.ToLower(value), "/")
@@ -134,12 +133,11 @@ func mediaType(header string) string {
 	return typ + "/" + subtype
 }
 
-// readBodyText は本文を UTF-8 の文字列として読む。Fastify の rawBody（parseAs: "string"）と同じ判定で、
+// readBodyText は本文を UTF-8 の文字列として読む。
 // 断るときは status（413 か 400）と code を返す。読み取りそのものの失敗は err で返す。
 //
-// Fastify は本文を UTF-8 として読み、読めないバイトを U+FFFD（3バイト）に置き換えてから長さを数える。
-// そのため、不正なバイトを含むと数えた長さが Content-Length と合わず 400 になる。ここでも置き換えた後の
-// 長さで同じ判定をする。
+// 読めないバイトを U+FFFD（3バイト）に置き換えてから長さを数える。そのため、不正なバイトを含むと
+// 数えた長さが Content-Length と合わず 400 になる。
 func readBodyText(r *http.Request, limit int64) (text string, status int, code apischema.ServerErrorCode, err error) {
 	// chunked のときは -1（長さの申告が無い）。
 	declared := r.ContentLength
@@ -167,7 +165,7 @@ func readBodyText(r *http.Request, limit int64) (text string, status int, code a
 	return text, 0, "", nil
 }
 
-// decodeUTF8Like は、Node の TextDecoder（WHATWG の UTF-8 デコーダ）と同じ規則で不正なバイトを U+FFFD にする。
+// decodeUTF8Like は、WHATWG の UTF-8 デコーダ（ブラウザの TextDecoder）と同じ規則で不正なバイトを U+FFFD にする。
 // 正しい UTF-8 ならそのまま返す。
 //
 // Go の string([]rune(…)) や strings.ToValidUTF8 とは置き換える単位が違う。WHATWG は
@@ -259,7 +257,7 @@ func jsNumber(n json.Number) float64 {
 	return f
 }
 
-// rejectBody は本文を読まずに断る。Node の setErrorHandler と同じく、4xx は warn でログに残す。
+// rejectBody は本文を読まずに断る。ほかの 4xx と同じく warn でログに残す。
 func rejectBody(w http.ResponseWriter, r *http.Request, status int, code apischema.ServerErrorCode) {
 	slog.WarnContext(r.Context(), "request rejected", "statusCode", status, "code", code)
 	WriteErrorBody(w, r, status, code)

@@ -9,7 +9,7 @@ import (
 )
 
 func TestExploreTypesMatchOpenAPI(t *testing.T) {
-	// 大学の一覧は、JSON のキーの順番を Node と同じにして ETag をそろえるため、生成した型
+	// 大学の一覧は、Go へ移したときに JSON のキーの順番（と ETag）を以前と同じにするため、生成した型
 	// （ExploreUniversity。キーはアルファベット順になる）を使わず手書きの型で返している。
 	// 手書きの型が契約（openapi/openapi.yaml）とずれていないかを、同じ中身を JSON にして比べる。
 	hand, err := json.Marshal(exploreUniversityDTO{

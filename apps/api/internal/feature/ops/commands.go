@@ -56,7 +56,7 @@ type usageError string
 
 func (e usageError) Error() string { return string(e) }
 
-// userNotFoundError は、いないメールアドレスを渡されたときの文言（Node の CLI と同じ）。
+// userNotFoundError は、いないメールアドレスを渡されたときの文言。
 func userNotFoundError(email string) error {
 	return fmt.Errorf("%s のユーザーが見つかりません", email)
 }

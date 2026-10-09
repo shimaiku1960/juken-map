@@ -182,7 +182,7 @@ func linkedToOtherUser(ctx context.Context, tx *sql.Tx, lineUserID, userID strin
 //
 // INSERT ... ON DUPLICATE KEY UPDATE は使わない。このテーブルは userId と lineUserId の2つが UNIQUE で、
 // ON DUPLICATE KEY はどちらの重複でも発動する。lineUserId が別ユーザーの行とぶつかると、エラーにならず、
-// その他人の行を更新してしまう。userId で UPDATE し、1行も変わらなければ INSERT する（Node と同じ）。
+// その他人の行を更新してしまう。userId で UPDATE し、1行も変わらなければ INSERT する。
 // INSERT 側で lineUserId がぶつかれば ER_DUP_ENTRY になり、トランザクションごと取り消される。
 func linkConnection(ctx context.Context, tx *sql.Tx, userID, lineUserID string, now time.Time) error {
 	res, err := tx.ExecContext(ctx,

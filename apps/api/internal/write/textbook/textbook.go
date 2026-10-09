@@ -67,7 +67,7 @@ func Create(ctx context.Context, db *sql.DB, userID string, in New, now time.Tim
 	return insert(ctx, db, userID, row{name: in.Name, rangeUnit: in.RangeUnit, subject: in.Subject}, now)
 }
 
-// CreateFromMaster は参考書マスターから参考書を登録する（Node の createTextbookFromMaster）。名前はマスターのもの、
+// CreateFromMaster は参考書マスターから参考書を登録する。名前はマスターのもの、
 // 総量と単位はマスターの既定（isDefault）の候補で、既定が無ければ先頭（id が最小）の候補を使う。
 func CreateFromMaster(ctx context.Context, db *sql.DB, userID string, masterID int64, now time.Time) (Textbook, error) {
 	r, err := fromMaster(ctx, db, masterID)
@@ -154,8 +154,8 @@ func fromMaster(ctx context.Context, db *sql.DB, masterID int64) (row, error) {
 	return *chosen, nil
 }
 
-// UpdateProgress は userID の人の参考書の逆算設定のうち、送られた項目だけを書き換え、書き換えた後の行を返す
-// （Node の updateTextbookProgress）。更新日時は何も送られていなくても書き換える。
+// UpdateProgress は userID の人の参考書の逆算設定のうち、送られた項目だけを書き換え、書き換えた後の行を返す。
+// 更新日時は何も送られていなくても書き換える。
 func UpdateProgress(ctx context.Context, db *sql.DB, userID string, id int64, p Progress, now time.Time) (Textbook, error) {
 	var updated Textbook
 	err := database.InTx(ctx, db, func(tx *sql.Tx) error {

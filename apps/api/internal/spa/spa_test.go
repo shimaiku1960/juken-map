@@ -368,8 +368,8 @@ func TestInjectMetaFaro(t *testing.T) {
 	}
 }
 
-func TestInjectMetaMatchesNode(t *testing.T) {
-	// Node の injectMeta（apps/api/src/seo.ts）が返していた形をそのまま固定する。差し込む順番・字下げも同じ。
+func TestInjectMetaShape(t *testing.T) {
+	// 以前の Node の injectMeta（apps/api/src/seo.ts）が返していた形をそのまま固定する。差し込む順番・字下げも同じ。
 	// GA4 の config だけは、トークンが載る画面で最初の page_view を送らないよう変えた（JUK-124）。
 	got := Scripts{GAMeasurementID: "G-1"}.injectMeta(
 		"<html><head><title>x</title></head><body></body></html>", defaultMeta("/terms"))

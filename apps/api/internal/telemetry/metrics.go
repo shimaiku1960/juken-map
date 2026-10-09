@@ -10,15 +10,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Prometheus に読ませる数字。名前・ラベル・区切り（buckets）は Node（observability/metrics.ts）と
-// 同じにして、Grafana の同じパネルで Node と Go を並べて読めるようにする。
-// どちらのサーバーかは、読みに来る側（Alloy）が付けるラベルで分ける。
+// Prometheus に読ませる数字。名前・ラベル・区切り（buckets）は Node の API のときから変えていない。
+// Grafana のパネルとアラート（terraform/grafana/）がこの名前で読み、過去の数字と続けて見られるようにするため。
 type Metrics struct {
 	registry *prometheus.Registry
 	Requests *prometheus.CounterVec
 	duration *prometheus.HistogramVec
 	// emailSends はアプリが送ろうとした認証のメールの数（06 H1。internal/feature/auth/email.go）。送信量の急増と、上限で止めたことを
-	// アラートで知らせる（terraform/grafana/alerting.tf）。Node から移したので名前とラベルは同じ。
+	// アラートで知らせる（terraform/grafana/alerting.tf）。
 	EmailSends *prometheus.CounterVec
 	// resendQuotaUsed は Resend の送信枠のうち使った数（06 E1）。送らないあいだは古い値が残るので、
 	// いつ読んだか（resendQuotaObservedAt）も出し、アラートは新しい値だけを見る。
@@ -31,7 +30,7 @@ func NewMetrics(emailKinds []string) *Metrics {
 	// 既定の置き場（prometheus.DefaultRegisterer）はプロセス全体で1つなので、テストで
 	// 何度も作ると「もう登録済み」で失敗する。自分の置き場を持つ。
 	registry := prometheus.NewRegistry()
-	// CPU（process_cpu_seconds_total）やメモリ（process_resident_memory_bytes）は Node と同じ名前。
+	// CPU（process_cpu_seconds_total）やメモリ（process_resident_memory_bytes）は process_ で始まる。
 	// go_ で始まるものは Go のランタイム（goroutine の数、GC など）。
 	registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	registry.MustRegister(collectors.NewGoCollector())
@@ -81,7 +80,7 @@ func (m *Metrics) Observe(method, route string, status int, elapsed time.Duratio
 }
 
 // handler は /metrics の応答。アプリとは別のポート（METRICS_PORT）で出す。
-// 同じポートに置くと、nginx 越しに誰でも内部の数字を読めてしまう（Node と同じ理由）。
+// 同じポートに置くと、nginx 越しに誰でも内部の数字を読めてしまう。
 func (m *Metrics) Handler() http.Handler {
 	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})
 }

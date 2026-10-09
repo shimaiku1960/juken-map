@@ -142,7 +142,7 @@ func readTextbookMasterInput(body any) (textbookMasterInput, *httpx.ObjectInput)
 	return v, in
 }
 
-// readOptionalText は Node の optionalText(max)：z.string().trim().max(max).nullable().optional() で、
+// readOptionalText は任意の文字列：z.string().trim().max(max).nullable().optional() で、
 // 空（キーが無い・null・削ったら空）なら null。
 func readOptionalText(in *httpx.ObjectInput, key string, max int) *string {
 	o := in.OptionalString(key, httpx.StringRule{TrimFirst: true, Max: max, MaxMessage: fmt.Sprintf("%d文字以内で入力してください", max)}, true)
@@ -155,7 +155,7 @@ func readOptionalText(in *httpx.ObjectInput, key string, max int) *string {
 // isbnPattern は ISBN-13（数字13桁）か ISBN-10（数字9桁＋数字か X）。
 var isbnPattern = regexp.MustCompile(`^(\d{13}|\d{9}[\dX])$`)
 
-// normalizeISBN は Node と同じく、ハイフンと空白（JavaScript の \s）を取り除いて大文字にする。
+// normalizeISBN は、ハイフンと空白（JavaScript の \s と同じ範囲）を取り除いて大文字にする。
 // 既存の ISBN は数字だけで入っている。大文字にするのは ISBN-10 の最後の x のため
 // （JavaScript の toUpperCase と Go の ToUpper は一部の文字で結果が違うが、どちらも isbnPattern に合わない）。
 func normalizeISBN(s string) string {

@@ -9,7 +9,7 @@
 // ここでは管理者のセッションで叩き、SQL が正しい行を読み書きするか（絞り込み・件数・CASCADE・一意の重なり・
 // 使われている行の拒否）だけを見る。
 //
-// juken_map_test は Node のテストと共有なので、ほかのテストの行があっても結果が変わらないように、
+// juken_map_test はほかのテスト（db/ の Node のテスト・ほかの worktree）と共有なので、ほかのテストの行があっても結果が変わらないように、
 // このテストで作る行はすべて名前やメールに印（prefix）を付け、印で絞って確かめる。
 package app
 
@@ -36,7 +36,7 @@ import (
 )
 
 // dbAdminApp は本番と同じ registerRoutes で組んだルーター。Cookie「test」の値を、2段階認証を通した管理者の
-// 利用者 ID として読む（Better Auth の Cookie と session 表の読み方は internal/feature/auth/auth_test.go が確かめる）。
+// 利用者 ID として読む（ログインの Cookie と session 表の読み方は internal/feature/auth/auth_test.go が確かめる）。
 type dbAdminApp struct {
 	t  *testing.T
 	rt *httpx.Router

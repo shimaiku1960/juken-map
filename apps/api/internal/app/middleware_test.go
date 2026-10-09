@@ -182,7 +182,7 @@ func TestNotFoundBody(t *testing.T) {
 
 	res := serve(h, "GET", "/api/nothing", "")
 	body := httpxtest.DecodeJSON(t, res.Body.String())
-	// Node の spa.ts と同じ形。reqId は応答ヘッダーと同じ値。
+	// reqId は応答ヘッダーと同じ値。
 	if body["code"] != string(httpx.CodeNotFound) || body["error"] != httpx.FallbackClientMessage || body["reqId"] != res.Header().Get("X-Request-Id") {
 		t.Errorf("本文 = %v", body)
 	}

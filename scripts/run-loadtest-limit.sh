@@ -111,8 +111,8 @@ for rate in $RATES; do
   before="$(mysql_status)"
 
   # 実行中の飽和を見る。Threads_running は「いま実際に走っているクエリ数」で、
-  # ここが張り付いたらDBが詰まっている合図。APIのCPUも一緒に取る。Node は1スレッドなので、
-  # 100%（1コア分）に張り付いたらDBではなくアプリ側が頭打ちということになる。
+  # ここが張り付いたらDBが詰まっている合図。APIのCPUも一緒に取る。Go は複数のコアを使うので、
+  # コア数×100% に近づいたらDBではなくアプリ側が頭打ちということになる。
   samples="$(mktemp)"
   ( while true; do
       db_query "SELECT variable_value FROM performance_schema.global_status WHERE variable_name='Threads_running';" >> "$samples"

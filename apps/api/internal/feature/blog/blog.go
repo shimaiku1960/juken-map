@@ -15,11 +15,11 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
-// ブログの記事の中継（GET /api/blog・/api/blog/{id}。JUK-111 で Node の routes/blog.ts から移した）。
+// ブログの記事の中継（GET /api/blog・/api/blog/{id}。JUK-111）。
 // microCMS の API キーをサーバー側で使うため、SPA から直接は叩けない。ここで中継し、キーはサーバーに閉じたままにする。
 // 認証は不要（公開コンテンツ）。記事のページの HTML はビルドで作り置くので（JUK-110）、ここは画面からだけ使われる。
 
-// microcmsTimeout は microCMS を待つ上限。画面が記事を取るときに長く待たせないよう短めにする（Node と同じ3秒）。
+// microcmsTimeout は microCMS を待つ上限。画面が記事を取るときに長く待たせないよう短めにする（3秒）。
 const microcmsTimeout = 3 * time.Second
 
 // maxBlogBody は microCMS の応答として読む大きさの上限。記事の一覧は本文込みで10件なので、数MB あれば足りる。
@@ -127,7 +127,7 @@ func upstreamFailed(w http.ResponseWriter, r *http.Request, err error) {
 	httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "Bad Gateway"})
 }
 
-// writeRawJSON は microCMS の応答を中身を変えずに返す（Node は SDK が読んだ値を JSON に戻していたので、中身は同じ）。
+// writeRawJSON は microCMS の応答を中身を変えずに返す。
 // 一覧は本文込みで大きいので、受け付けるなら gzip にする。
 func writeRawJSON(w http.ResponseWriter, r *http.Request, body []byte) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

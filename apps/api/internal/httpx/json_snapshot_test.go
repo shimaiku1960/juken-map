@@ -9,7 +9,6 @@ import (
 )
 
 func TestMatchesETag(t *testing.T) {
-	// Node の routes/universities.test.ts と同じ場面
 	const etag = `"abc"`
 	tests := map[string]bool{
 		`"abc"`:            true,
@@ -25,7 +24,7 @@ func TestMatchesETag(t *testing.T) {
 }
 
 func TestAcceptsGzip(t *testing.T) {
-	// Node の pickEncoding のテストから br を除いたもの。Go は br を持たないので、br だけのときは圧縮しない。
+	// br は持たないので、br だけのときは圧縮しない。
 	tests := map[string]bool{
 		"gzip, deflate, br, zstd": true,
 		"gzip;q=1.0, br;q=0.5":    true,
@@ -34,7 +33,7 @@ func TestAcceptsGzip(t *testing.T) {
 		"*":                       true,
 		"gzip;q=0":                false,
 		"gzip;q=0.000":            false,
-		"gzip;q=":                 false, // Node の Number("") は 0
+		"gzip;q=":                 false, // 空の q は 0 とみなす
 		"br":                      false,
 		"deflate":                 false,
 		"identity":                false,
@@ -48,7 +47,7 @@ func TestAcceptsGzip(t *testing.T) {
 }
 
 func TestMarshalLikeJS(t *testing.T) {
-	// JSON.stringify と同じバイト列にする（ETag を Node と揃えるため）
+	// JSON.stringify と同じバイト列にする
 	type university struct {
 		ID         int      `json:"id"`
 		Name       string   `json:"name"`

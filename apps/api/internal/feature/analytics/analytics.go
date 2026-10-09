@@ -1,5 +1,4 @@
 // Package analytics は、本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80）。
-// Node の routes/analytics.ts と、services/user-service.ts の markSignUpTracked・findSignUpMethod にあたる。
 // 二重に数えない判定はサーバーが持ち、画面（apps/web の lib/analytics.ts）は true のときだけ GA4 に送る。
 package analytics
 
@@ -55,7 +54,7 @@ func New(db *sql.DB) *Handlers {
 
 // Registration は POST /api/analytics/registration。2回目以降は shouldTrack: false で黙って終わる。
 func (h *Handlers) Registration(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
-	// 本文は使わないが、Node と同じく形と大きさは確かめる（受け付けない形なら 415）。
+	// 本文は使わないが、ほかの POST と同じく形と大きさは確かめる（受け付けない形なら 415）。
 	if _, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit); !ok {
 		return
 	}

@@ -42,7 +42,7 @@ type Patch struct {
 }
 
 // Create は志望校を登録し、その ID を返す。status が nil なら "decided"。同じ学部がもうあれば ErrDuplicate。
-// 無い学部は外部キーで弾かれ、Node と同じくそのままエラー（500）になる。
+// 無い学部は外部キーで弾かれ、そのままエラー（500）になる。
 func Create(ctx context.Context, db *sql.DB, userID string, facultyID int64, status *string, now time.Time) (int64, error) {
 	s := "decided"
 	if status != nil {
@@ -60,8 +60,8 @@ func Create(ctx context.Context, db *sql.DB, userID string, facultyID int64, sta
 	return res.LastInsertId()
 }
 
-// ReplaceFaculty は志望校の学部を差し替え、差し替えた後の行を返す（Node の updateGoal）。facultyID が nil なら何も変えない。
-// 同じ学部の志望校が既にあると一意制約、無い学部だと外部キーで弾かれ、Node と同じくそのままエラー（500）になる。
+// ReplaceFaculty は志望校の学部を差し替え、差し替えた後の行を返す。facultyID が nil なら何も変えない。
+// 同じ学部の志望校が既にあると一意制約、無い学部だと外部キーで弾かれ、そのままエラー（500）になる。
 func ReplaceFaculty(ctx context.Context, db *sql.DB, userID string, id int64, facultyID *int64) (Goal, error) {
 	var updated Goal
 	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
@@ -81,7 +81,7 @@ func ReplaceFaculty(ctx context.Context, db *sql.DB, userID string, id int64, fa
 	return updated, err
 }
 
-// ApplyPatch は第一志望・メモ・ステータスのうち、送られてきたものだけを書き換える（Node の applyGoalPatch）。
+// ApplyPatch は第一志望・メモ・ステータスのうち、送られてきたものだけを書き換える。
 //
 // 第一志望は1ユーザー1校までなので、第一志望にするときは「全部外す→1件立てる」を同じトランザクションで行う。
 // 分けて実行すると、途中で失敗したときに第一志望が0校の状態が残る。
@@ -133,7 +133,7 @@ func Delete(ctx context.Context, db *sql.DB, userID string, id int64) error {
 	return nil
 }
 
-// find は userID の人の志望校を1件読む（Node の findOwnedGoal）。無いか他人のものなら ErrNotFound。
+// find は userID の人の志望校を1件読む。無いか他人のものなら ErrNotFound。
 // suffix には、変える前に行を押さえる " FOR UPDATE" を渡せる。
 func find(ctx context.Context, q database.QueryRower, id int64, userID, suffix string) (Goal, error) {
 	var g Goal

@@ -12,8 +12,8 @@ type Field[T comparable] struct {
 // Of は値が送られたことを表す。
 func Of[T comparable](v T) Field[T] { return Field[T]{Present: true, Value: &v} }
 
-// Differs は Node の `data.x !== current`（current は DB の値で、null か値）。
-// キーが無い（undefined）ときは、どんな値とも違う（undefined !== null も true）。
+// Differs は送られた値が current（DB の値で、null か値）と違うか。
+// キーが無いときも true を返す（呼び出し側は、確かめ直す側に倒す）。
 func (f Field[T]) Differs(current *T) bool {
 	switch {
 	case !f.Present:

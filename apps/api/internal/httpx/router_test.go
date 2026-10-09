@@ -39,7 +39,7 @@ func TestRouterAccess(t *testing.T) {
 		{"anonymous-write: セッションを見ないので、停止中でも通る", "POST", "/api/report", "banned", 204, ""},
 		{"anonymous-write: 読み取りは無い", "GET", "/api/report", "", 404, ""},
 
-		// Fastify はメソッド違いも 404 にする。ServeMux の既定の 405 にならないこと。
+		// メソッド違いも 404 にする（以前の Fastify と同じ）。ServeMux の既定の 405 にならないこと。
 		{"メソッド違いは 404", "PUT", "/api/mine", "alice", 404, ""},
 		{"存在しないパスは 404", "GET", "/api/nothing", "", 404, ""},
 	}

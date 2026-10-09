@@ -19,7 +19,7 @@ import (
 func strp(s string) *string { return &s }
 
 func TestTokyoDateRange(t *testing.T) {
-	// UTC の日付ではなく日本時間の一日を返す（Node の dailyNotification.test.ts と同じ）
+	// UTC の日付ではなく日本時間の一日を返す
 	day := tokyoDateRange(time.Date(2026, 8, 30, 16, 0, 0, 0, time.UTC))
 	if day.date != "2026-08-31" ||
 		!day.start.Equal(time.Date(2026, 8, 30, 15, 0, 0, 0, time.UTC)) ||

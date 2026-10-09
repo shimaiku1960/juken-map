@@ -77,7 +77,7 @@
 ```mermaid
 flowchart LR
     User[利用者] --> Nginx[Nginx / HTTPS]
-    Nginx --> App[Fastify + SPA\nDocker on EC2]
+    Nginx --> App[Go（API・ログイン・SPA）\nDocker on EC2]
     App --> RDS[(Amazon RDS\nMySQL 8.4)]
     App --> Auth[Google / GitHub OAuth]
     App --> Resend[Resend]
@@ -100,14 +100,14 @@ flowchart LR
 | カテゴリ | 技術 |
 |---|---|
 | フロントエンド | React 19 / Vite（SPA） |
-| バックエンド | Fastify 5（Node.js 24） |
-| 言語 | TypeScript |
+| バックエンド | Go（標準の net/http・database/sql） |
+| 言語 | TypeScript（画面・開発用の DB の道具）／ Go（API） |
 | UI | shadcn/ui / Tailwind CSS v4 / Motion |
 | フォーム・検証 | React Hook Form / Zod |
 | サーバー状態 | TanStack Query |
 | カレンダー | FullCalendar / Schedule-X |
-| DB | MySQL 8.4（mysql2 で SQL を直接書く。ORM は使わない） |
-| 認証 | Go で自作（Argon2id・中身の無いセッション・TOTP・PKCE。`apps/api/auth_*.go`）。以前は Better Auth |
+| DB | MySQL 8.4（Go は database/sql、開発用の seed は mysql2 で SQL を直接書く。ORM は使わない） |
+| 認証 | Go で自作（Argon2id・中身の無いセッション・TOTP・PKCE。`apps/api/internal/feature/auth/`）。以前は Better Auth |
 | メール | Resend |
 | CMS | microCMS |
 | テスト | Vitest / Playwright |
@@ -129,7 +129,7 @@ flowchart LR
 - Node.js 24
 - pnpm 12.3.4（`package.json`で固定）
 - Go（`apps/api/go.mod`の版。業務APIはGoが返すため、開発とE2Eでも起動する）
-- Docker Desktopなど、Docker Composeを実行できる環境（MySQLと、Node・Goへ振り分けるnginxを動かす）
+- Docker Desktopなど、Docker Composeを実行できる環境（MySQLと、Goへ振り分けるnginxを動かす）
 
 OAuthログイン、メール送信、ブログまで確認する場合は、Google・GitHub OAuth、Resend、microCMSの資格情報も必要です。
 
@@ -180,7 +180,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
    pnpm run db:seed
    ```
 
-8. 開発サーバーを起動します。MySQLの起動とマイグレーション確認後、Node・Go・nginx・画面が並列で起動します。
+8. 開発サーバーを起動します。MySQLの起動とマイグレーション確認後、Go・nginx・画面が並列で起動します。
 
    ```bash
    pnpm dev
@@ -201,7 +201,7 @@ OAuthログイン、メール送信、ブログまで確認する場合は、Goo
 pnpm dev
 ```
 
-`Ctrl+C`でNode・Go・nginx・画面をまとめて停止できます。MySQLコンテナはバックグラウンドで継続するため、停止する場合は`pnpm run db:stop`を実行します。
+`Ctrl+C`でGo・nginx・画面をまとめて停止できます。MySQLコンテナはバックグラウンドで継続するため、停止する場合は`pnpm run db:stop`を実行します。
 
 [注意] `.env`を変更したら、APIプロセスを再起動してください。`--env-file`は起動時に一度しか
 読まれないため、`tsx watch`ではソース変更でしか再読み込みされません。
@@ -481,7 +481,7 @@ terraform/               # AWSインフラ定義（grafana/ は Grafana Cloud �
 
 ## 主要なデータモデル
 
-- **User / AuthSession / AuthPassword / AuthIdentity / AuthToken / AuthTotp** — ログインのデータ（Go の `auth_*.go` が読み書きする）
+- **User / AuthSession / AuthPassword / AuthIdentity / AuthToken / AuthTotp** — ログインのデータ（Go の `internal/feature/auth/` が読み書きする）
 - **FinalGoal** — 志望校、第一志望、候補・受験校の状態
 - **StudyPlan** — 日ごとの学習予定、科目、参考書、学習範囲
 - **StudyLog** — 学習時間、到達範囲、メモ

@@ -968,7 +968,7 @@ export interface components {
         Error: {
             error: string;
         };
-        /** @description 入力チェックで弾いたときのエラー（Node の routes/validation-error.ts、Go の internal/httpx/response.go） */
+        /** @description 入力チェックで弾いたときのエラー（Go の internal/httpx/response.go） */
         ValidationError: {
             /** @description 画面にそのまま出す文言 */
             error: string;
@@ -1348,7 +1348,7 @@ export interface components {
             lineMorningEnabled: boolean;
             lineEveningEnabled: boolean;
         };
-        /** @description 大学を探す画面の1件。画面が使うのは大学の列と学部ごとのタグ名だけ。 Go はこの形を手書きの型で返す（JSON のキーの順番を Node と同じにして ETag をそろえるため） */
+        /** @description 大学を探す画面の1件。画面が使うのは大学の列と学部ごとのタグ名だけ。 Go はこの形を手書きの型で返す（Go へ移したときに JSON のキーの順番と ETag を以前と同じにするため） */
         ExploreUniversity: {
             /** Format: int64 */
             id: number;
@@ -1540,7 +1540,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description 利用者の ID（Better Auth の user.id） */
+        /** @description 利用者の ID（user 表の id） */
         AdminUserID: string;
         /** @description マスターの行の ID。数字だけの正の整数（15桁まで）。形が違えば 400（ID と違い、ValidationError の形で code は invalid_format） */
         AdminMasterID: string;
@@ -1553,7 +1553,7 @@ export interface components {
     };
     requestBodies: never;
     headers: {
-        /** @description JSON の SHA-1 を base64url にしたもの（Node と Go で同じ値） */
+        /** @description JSON の SHA-1 を base64url にしたもの */
         ETag: string;
         /** @description private, no-cache */
         CacheControl: string;
@@ -2959,7 +2959,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description 利用者の ID（Better Auth の user.id） */
+                /** @description 利用者の ID（user 表の id） */
                 id: components["parameters"]["AdminUserID"];
             };
             cookie?: never;
@@ -2988,7 +2988,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description 利用者の ID（Better Auth の user.id） */
+                /** @description 利用者の ID（user 表の id） */
                 id: components["parameters"]["AdminUserID"];
             };
             cookie?: never;
@@ -3016,7 +3016,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description 利用者の ID（Better Auth の user.id） */
+                /** @description 利用者の ID（user 表の id） */
                 id: components["parameters"]["AdminUserID"];
             };
             cookie?: never;

@@ -8,21 +8,19 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
-// defaultMaxInFlight は同時に処理するリクエストの上限。Node の DEFAULT_MAX_IN_FLIGHT と同じ値から始める。
-// Node で決めた経緯（上限が無いと限界を超えた途端に全員が秒単位で遅くなる）は apps/api/src/overload.ts。
-// Go の方が1件あたりの CPU が軽いので、本番に出すときに負荷試験で測り直す。
+// defaultMaxInFlight は同時に処理するリクエストの上限。上限が無いと、限界を超えた途端に
+// 全員が秒単位で遅くなる。値は負荷試験で測って決める（load-tests/）。
 const defaultMaxInFlight = 160
 
 // limitInFlight は、同時に処理中の数が上限に達していたら、待たせずに 503 で断る。
 //
 // 数え方は「容量 max のチャネル」。入るときに1つ書き込み、出るときに1つ読み出す。
 // 満杯なら select の default に落ちるので、待たずに断れる（Go でよく使うセマフォの形）。
-// Node は1スレッドなので整数を足し引きするだけで済んだが、Go は複数のリクエストが
-// 本当に同時に走るため、ただの int だと数え間違える。チャネルなら同時に触っても安全。
+// Go は複数のリクエストが本当に同時に走るため、ただの int だと数え間違える。チャネルなら同時に触っても安全。
 //
 // 死活監視とデプロイ後の確認が叩く /api/health は数えない。混んでいるだけで
 // 「落ちている」と判定されると、正常なサーバーまで戻されてしまう。
-// 画面と静的ファイル（/api/ の外、JUK-111）も Node と同じく数えない。メモリから返すだけで軽く、
+// 画面と静的ファイル（/api/ の外、JUK-111）も数えない。メモリから返すだけで軽く、
 // 画面を1回開くと JS などを何十本も同時に読むので、ここで断ると画面が壊れる。
 func limitInFlight(max int, next http.Handler) http.Handler {
 	slots := make(chan struct{}, max)

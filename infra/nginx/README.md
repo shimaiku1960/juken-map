@@ -1,9 +1,8 @@
 # nginx（リバースプロキシ）
 
 **この内容は 2026-09-09 に SSM 経由で本番 EC2（`i-0eeb166295363e11d`）から読み取った実物である。**
-設定はサーバー上に手で置かれており、これまでリポジトリ管理外だった。フロントエンド／
-バックエンド分離（`docs/split-migration-plan.md` の Step 3）でこの設定を書き換えるため、
-先に現状を記録する。
+設定はサーバー上に手で置かれており、それまでリポジトリ管理外だった。書き換える前に現状を記録した。
+その後、デプロイが置く振り分け（`juken-map-go-routes.conf`）と upstream を足した（下の「無停止デプロイ」「Go の振り分け」）。
 
 ## 構成
 
@@ -11,8 +10,8 @@
 ブラウザ
   ↓ https://juken-map.com（443）
 [ nginx 1.28.3（Ubuntu）]  ← EC2 ホスト上。Docker の外
-  ↓ http://localhost:3000
-[ Docker コンテナ juken-map（Fastify 5＝API＋ビルド済み SPA）]
+  ↓ http://127.0.0.1:8080 か 8081（デプロイのたびに入れ替わる）
+[ Docker コンテナ juken-map-go（Go＝API・ログイン・ビルド済み SPA）]
 ```
 
 **2026-09-21 更新**：Cloudflare のプロキシ（オレンジ雲）は経路から外れた。DNS は EC2 の
@@ -173,7 +172,7 @@ Domain を指定できず、www と apex でログインを共有できない（
 - 管理画面の API（`/api/admin/` で始まるパス、JUK-78：利用者の管理とマスター編集）は書き込みも含めて全部 Go が受ける
 - LINE 連携（`/api/line/` で始まるパス、JUK-79）は書き込みも含めて全部 Go が受ける。Webhook の署名は本文のバイト列で
   確かめるので、nginx では本文を書き換えない
-- Go の upstream は `conf.d/juken-map-go-upstream.conf`。Node と同じく、デプロイのたびに空いている方へ入れ替わる
+- Go の upstream は `conf.d/juken-map-go-upstream.conf`。デプロイのたびに空いている方へ入れ替わる
 - 初回のデプロイで、サイト設定の `location / {` の直前に `include /etc/nginx/juken-map/go-routes.conf;` を
   1行だけ差し込む（差し込む前の設定は `sites-available/default.bak-日時` に残る）。
   `location /` が1つでなければ、どこに入れるか決められないので何もせずに止まる
@@ -192,7 +191,8 @@ Domain を指定できず、www と apex でログインを共有できない（
 ### Node には戻せない
 
 Go へ移したパスは JUK-84 で Node から消し、JUK-109 で本番の Node のコンテナを外し、JUK-121 で Node の
-サーバーのコードも消した。Node のイメージ（`juken-map`）はマイグレーションと画面のビルド成果物の受け渡しにだけ使う。
+サーバーのコードも消した。ECR の `juken-map` は画面のビルド成果物を Go のイメージへ渡すためだけのイメージで、実行しない
+（マイグレーションも JUK-125 から Go の `/api migrate` で当てる）。
 Go に問題が出たときは、Go を直すか、原因のコミットを revert して出し直す。
 
 ## 手元（開発・E2E）でも同じ振り分けを通す（2026-10-01 追加、JUK-96）
@@ -213,23 +213,6 @@ JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送�
 - コンテナから手元の Go へは `host.docker.internal` で届く（Linux の CI では `--add-host` で作る）
 - 振り分けファイルを書き換えたら、開発中は `pnpm dev`（の dev:proxy）を起動し直す
 
-## Step 3 で必要になる変更
-
-現在は `location /` が全部 3000 番へ流している。分離後はパスで振り分ける。
-
-```
-                        ┌─ /api/*  → Fastify（:4000）
-ブラウザ → nginx ───────┤
-                        └─ /*      → 静的 SPA（apps/web の dist）
-```
-
-`/api` を先に書いて Fastify へ、`/` は SPA の静的ファイルを返す形になる。SPA はクライアント
-ルーティングなので、`try_files $uri /index.html;` で未知のパスも `index.html` に落とす必要がある
-（これが無いと `/dashboard` を直接開いたときに 404 になる）。
-
-**切り戻しはこのファイルを元に戻して `nginx -s reload` するだけ**で済む。Step 3 の切り替えが
-低リスクなのはこのため。
-
 ## 注意
 
 - **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（当時は Better Auth、今は Go の `internal/feature/auth/throttle.go`）は
@@ -249,4 +232,4 @@ JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送�
 - `www` → apex の寄せは nginx ではなく Certbot が入れた 301 で行われている。
   `cleanup-after-merges` にある「www→apex 一本化」の検討と関係する
 - 既定ファイル（`sites-available/default`）を直接編集しているため、nginx のパッケージ更新時に
-  衝突する可能性がある。Step 3 で触るときに、専用ファイルへ分ける価値がある
+  衝突する可能性がある。次にサイト設定に触るときに、専用ファイルへ分ける価値がある

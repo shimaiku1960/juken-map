@@ -10,7 +10,7 @@ import (
 
 func TestGoalJSONTags(t *testing.T) {
 	// 合成データの学部はどれもタグを持つので、「タグの無い学部」は応答一致テストで確かめられない。
-	// Node の形（一覧はタグが無くても "tags": []、第一志望はキーごと無い）をここで確かめる。
+	// 画面が前提にしている形（一覧はタグが無くても "tags": []、第一志望はキーごと無い）をここで確かめる。
 	for _, tt := range []struct {
 		name    string
 		goal    any

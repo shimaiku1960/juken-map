@@ -24,11 +24,10 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
-// 毎日の学習通知の送信（JUK-74）。Node の routes/cron.ts と services/sendDailyNotifications.ts にあたる。
+// 毎日の学習通知の送信（JUK-74）。
 // GitHub Actions（.github/workflows/daily-study-notifications.yml）が朝7時と夜21時に呼ぶ。
 //
-// Node は1人ずつ順番に送っていた。送信は外部 API（Resend・LINE）を待つ時間がほとんどなので、
-// Go では goroutine で同時に送る。ただし Resend の上限（チーム全体で毎秒10リクエスト。登録確認の
+// 送信は外部 API（Resend・LINE）を待つ時間がほとんどなので、goroutine で同時に送る。ただし Resend の上限（チーム全体で毎秒10リクエスト。登録確認の
 // メールやシミュレーションと分け合う）を超えないよう、メールは毎秒5通までに間隔を空ける。
 
 const (
@@ -39,7 +38,7 @@ const (
 	// notificationBudget は1回の実行にかけてよい時間。nginx は応答を60秒で打ち切るので、その手前で止める。
 	// 打ち切ったら 500 を返す。GitHub Actions の curl は 5xx を再試行するので、2回目は送り済みを飛ばして残りを送る。
 	notificationBudget = 50 * time.Second
-	// notificationFrom は送り主（Node と同じ）。
+	// notificationFrom は送り主。
 	notificationFrom = "受験マップ <noreply@juken-map.com>"
 )
 
@@ -99,7 +98,7 @@ type delivery struct {
 }
 
 // send はその時間帯の通知を全員へ送り、件数をまとめて返す。
-// 印を入れる SQL が失敗したとき（重複以外）は、残りを止めてエラーを返す（Node も例外で 500 になる）。
+// 印を入れる SQL が失敗したとき（重複以外）は、残りを止めてエラーを返す（500 になる）。
 func (n *dailyNotifier) send(ctx context.Context, slot apischema.NotificationSlot, now time.Time) (apischema.NotificationSummary, error) {
 	day := tokyoDateRange(now)
 	summary := apischema.NotificationSummary{Date: day.date, Slot: slot}
@@ -233,7 +232,7 @@ var slotColumns = map[apischema.NotificationSlot][2]string{
 	apischema.NotificationSlotEvening: {"eveningEnabled", "lineEveningEnabled"},
 }
 
-// findRecipients は Node と同じく SQL を3本に分ける。ユーザーから見て予定と実績はどちらも1対多なので、
+// findRecipients は SQL を3本に分ける。ユーザーから見て予定と実績はどちらも1対多なので、
 // 1本の JOIN にすると（予定の数 × 実績の数）の行に膨らみ、学習時間が重複して数えられる。
 func (st *sqlNotificationStore) findRecipients(ctx context.Context, slot apischema.NotificationSlot, start, end time.Time) ([]recipient, error) {
 	cols, ok := slotColumns[slot]
@@ -347,7 +346,7 @@ func (st *sqlNotificationStore) unmarkDelivery(ctx context.Context, id int64) er
 // HTTPMessenger は Resend と LINE の API を直接呼ぶ（どちらも SDK は使わない）。
 type HTTPMessenger struct {
 	Client     *http.Client
-	ResendBase string // 既定は https://api.resend.com。手元の比較では偽のサーバーへ向ける（RESEND_BASE_URL、Node の SDK と同じ名前）
+	ResendBase string // 既定は https://api.resend.com。手元の比較では偽のサーバーへ向ける（RESEND_BASE_URL）
 	ResendKey  string
 	LineBase   string // 既定は https://api.line.me/v2/bot
 	LineToken  string

@@ -265,7 +265,7 @@ func TestAdminMasterValidation(t *testing.T) {
 	}
 }
 
-// TestAdminMasterInputValues は、通った入力を Node と同じ値にして DB へ渡すこと（削る・整える・null にする）。
+// TestAdminMasterInputValues は、通った入力を整えて DB へ渡すこと（削る・整える・null にする）。
 func TestAdminMasterInputValues(t *testing.T) {
 	t.Run("大学：名前の前後の空白を削る。削った後で100文字なら通る", func(t *testing.T) {
 		store := &fakeAdminMasterStore{}
@@ -340,7 +340,7 @@ func TestAdminMasterInputValues(t *testing.T) {
 	})
 }
 
-// TestAdminMasterFailures は、DB 側で断った結果を Node と同じ status・文言で返すこと。
+// TestAdminMasterFailures は、DB 側で断った結果を決まった status・文言で返すこと。
 func TestAdminMasterFailures(t *testing.T) {
 	tests := []struct {
 		name, method, path, body string
@@ -380,7 +380,7 @@ func TestAdminMasterFailures(t *testing.T) {
 		}
 	})
 
-	t.Run("削除に受け付けない本文は 415（Node の Fastify と同じく、ハンドラより先）", func(t *testing.T) {
+	t.Run("削除に受け付けない本文は 415（ハンドラより先）", func(t *testing.T) {
 		req := httptest.NewRequest("DELETE", "/api/admin/universities/7", strings.NewReader("x"))
 		req.Header.Set("Content-Type", "text/html")
 		req.AddCookie(&http.Cookie{Name: "test", Value: "admin"})
@@ -393,7 +393,7 @@ func TestAdminMasterFailures(t *testing.T) {
 	})
 }
 
-// TestAdminMasterChangeLog は、変更が「誰が・何を・前→後」を Node と同じ形で構造化ログに残すことを確かめる。
+// TestAdminMasterChangeLog は、変更が「誰が・何を・前→後」を以前と同じ形で構造化ログに残すことを確かめる。
 func TestAdminMasterChangeLog(t *testing.T) {
 	var buf bytes.Buffer
 	prev := slog.Default()

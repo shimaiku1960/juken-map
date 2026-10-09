@@ -5,7 +5,7 @@
 // responseError() の重複定義）。吸収はこのファイルの中だけでやる。
 //
 // API のエラーの本文は {error: 文言} で、入力チェックの 400 はさらに code（種類）と
-// field（項目）を持つ（JUK-76。Node の routes/validation-error.ts、Go も同じ形）。
+// field（項目）を持つ（JUK-76。Go の apps/api/internal/httpx が返す形）。
 // 画面に出すのは error の文言。以前は 400 で Zod の issue の配列を返していた。
 
 // サーバーが返したエラー。status を持たせているのは、呼び出し側が 409 などを

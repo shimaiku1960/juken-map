@@ -11,7 +11,7 @@ import (
 )
 
 // 毎日の通知の文面と、「日本時間の今日」の範囲（JUK-74）。
-// Node の domain/dailyNotification.ts と同じ文面・同じ規則。DB も外部サービスも使わない。
+// DB も外部サービスも使わない。
 
 type planSummary struct {
 	Done         bool
@@ -28,8 +28,8 @@ type dailyMessage struct {
 
 // tokyoDay は日本時間の「今日」。date は YYYY-MM-DD、start と end はその日の 0時（日本時間）と翌日の 0時。
 // 予定・実績の date は「その日の 00:00 UTC」で入っているので、[start, end) で今日の分だけを拾える。
-// start は配信記録（NotificationDelivery.date）にも入れる。Node と同じ値なので、どちらが送っても
-// 同じ日・同じ時間帯の2回目を UNIQUE 制約で弾ける。
+// start は配信記録（NotificationDelivery.date）にも入れる。同じ日・同じ時間帯の2回目は、
+// この値の UNIQUE 制約で弾ける。
 type tokyoDay struct {
 	date       string
 	start, end time.Time
@@ -41,7 +41,7 @@ func tokyoDateRange(now time.Time) tokyoDay {
 	return tokyoDay{date: start.In(dates.Tokyo).Format(time.DateOnly), start: start, end: start.Add(24 * time.Hour)}
 }
 
-// escapeHTML は Node の escapeHtml と同じ5文字を置き換える（html.EscapeString は ' を &#39; にするので使わない）。
+// escapeHTML は & < > " ' の5文字を置き換える（html.EscapeString は ' を &#39; にするので使わない）。
 var htmlEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#039;")
 
 func escapeHTML(s string) string {

@@ -12,9 +12,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
 )
 
-// 志望校の書き込み（JUK-75）。Node の次の部分にあたる。
-//   - routes/goals.ts の POST /api/goals と PUT・PATCH・DELETE /api/goals/:id
-//   - services/goal-service.ts の createGoal・updateGoal・applyGoalPatch・deleteGoal・findOwnedGoal
+// 志望校の書き込み（JUK-75）。POST /api/goals と PUT・PATCH・DELETE /api/goals/{id}。
 //
 // 書き込みは持ち主の internal/write/goal にある（JUK-154）。ここは本文を確かめ、操作を呼び、結果を応答の形にする。
 //
@@ -79,7 +77,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request, s *httpx.Sessi
 }
 
 // Replace は PUT /api/goals/{id}。本文は updateGoalSchema（goalSchema の全項目を任意にしたもの）で、
-// status も確かめるが書くのは facultyId だけ（Node と同じ）。入力チェックは自分の志望校かを確かめるより先。
+// status も確かめるが書くのは facultyId だけ。入力チェックは自分の志望校かを確かめるより先。
 func (h *Handlers) Replace(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {

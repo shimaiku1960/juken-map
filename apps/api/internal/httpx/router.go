@@ -13,14 +13,13 @@ import (
 )
 
 // 全ルートに「誰が呼んでよいか（入口の種類）」を持たせ、認証・管理者・デモの拒否を
-// ルーターがまとめて行う。Node の access-control.ts（JUK-66）と同じ考え方。
+// ルーターがまとめて行う（JUK-66）。
 //
-// Node は config.access の付け忘れを起動時に見つけて落としていた。Go では登録の関数
-// そのものを入口の種類ごとに分けたので、種類を選ばずに登録する書き方がそもそも無い。
+// 登録の関数そのものを入口の種類ごとに分けたので、種類を選ばずに登録する書き方がそもそも無い。
 // さらに、user・admin のハンドラはセッションを引数で受け取るので、「ログイン必須の
 // ルートなのにセッションが無い」という取り違えはコンパイルの時点で起きない。
 
-// Access は入口の種類。値は Node の ACCESS_ENTRY と同じ名前にする。
+// Access は入口の種類。
 type Access string
 
 const (
@@ -37,10 +36,10 @@ const (
 	AccessAuth Access = "auth"
 )
 
-// デモアカウント（面接官向け・閲覧専用）。Node の src/shared/demo.ts と同じ値。
+// デモアカウント（面接官向け・閲覧専用）。画面の src/shared/demo.ts と同じ値。
 const DemoEmail = "demo@juken-map.com"
 
-// 管理者だが2段階認証を通していないときの 403 の印。Node の src/shared/admin.ts と同じ値。
+// 管理者だが2段階認証を通していないときの 403 の印。画面の src/shared/admin.ts と同じ値。
 const TwoFactorRequired = "TWO_FACTOR_REQUIRED"
 
 // Session はログイン中の利用者。internal/feature/auth/session.go が Cookie のトークンで DB（AuthSession）から読む。
@@ -56,7 +55,7 @@ type Session struct {
 	TwoFactorVerified bool
 }
 
-// SessionHandler はログイン済みのルートのハンドラ。Node の currentSession(request) にあたる値を引数で受け取る。
+// SessionHandler はログイン済みのルートのハンドラ。ログイン中の利用者を引数で受け取る。
 type SessionHandler func(w http.ResponseWriter, r *http.Request, s *Session)
 
 // OAuthHandler は OAuth の入口のハンドラ。s は未ログインなら nil（ハンドラが戻り先つきでログインへ送る）。
@@ -70,8 +69,7 @@ type AuthHandler func(w http.ResponseWriter, r *http.Request, s *Session)
 // 関数で受け取るのは、テストで DB の代わりに決まったセッションを返せるようにするため。
 type SessionLoader func(r *http.Request) (*Session, error)
 
-// RouteEntry は登録済みのルート1本。一覧は、ルートと入口の種類を突き合わせるテストに使う
-// （Node の JUK-67 と同じことを Go でもできるように持っておく）。
+// RouteEntry は登録済みのルート1本。一覧は、ルートと入口の種類を突き合わせるテストに使う（JUK-67）。
 type RouteEntry struct {
 	Pattern string
 	Access  Access
@@ -93,8 +91,7 @@ func NewRouter(load SessionLoader) *Router {
 	// Sec-Fetch-Site（無ければ Origin と Host の比較）で、別のサイトから送られた POST・PUT・PATCH・DELETE を断る。
 	// 本番の nginx は Host をそのまま渡すので、https://juken-map.com の画面からの書き込みは同じサイトとして通る。
 	// どちらのヘッダーも無いリクエスト（curl・応答一致テスト）はブラウザではないので通す。
-	//
-	// Node の自前 API はオリジンを確かめず、SameSite=Lax の Cookie だけで守っている。Go ではこれを足して一段強くする。
+	// SameSite=Lax の Cookie に加えて、オリジンでも断る。
 	rt := &Router{
 		mux:         http.NewServeMux(),
 		loadSession: load,
@@ -102,10 +99,9 @@ func NewRouter(load SessionLoader) *Router {
 		rateLimiter: newUserRateLimiter(time.Now),
 	}
 	// どのルートにも当たらないものは 404。ServeMux の既定はテキストの「404 page not found」で、
-	// JSON を読むつもりの画面が壊れるので、Node と同じ形のエラーにする。
+	// JSON を読むつもりの画面が壊れるので、ほかのエラーと同じ JSON の形にする。
 	// メソッド違い（POST /api/dashboard など）もここに来る。ServeMux は当たるルートが1本も
-	// 無いときだけ 405 を返すので、全メソッドに当たるこの "/" があると 405 にはならず、
-	// Node（Fastify）と同じ 404 になる。
+	// 無いときだけ 405 を返すので、全メソッドに当たるこの "/" があると 405 にはならず 404 になる。
 	rt.mux.HandleFunc("/", NotFound)
 	return rt
 }
@@ -177,7 +173,7 @@ func (rt *Router) Admin(pattern string, h SessionHandler) {
 			WriteError(w, http.StatusForbidden, "Forbidden")
 			return
 		}
-		// Node の requireAdmin と同じく、2段階認証を通したセッションだけを通す。
+		// 2段階認証を通したセッションだけを通す。
 		if !s.TwoFactorVerified {
 			WriteJSON(w, http.StatusForbidden, map[string]string{
 				"error": "管理画面を開くには、2段階認証を通してログインしてください。",
@@ -195,7 +191,7 @@ func (rt *Router) Admin(pattern string, h SessionHandler) {
 // Job は GitHub Actions などが共有トークンで呼ぶルートを登録する（cron と sim はトークンが別）。
 // `Authorization: Bearer <secret>` が合わなければ 401 で、ハンドラまで来ない。
 // secret が空なら何が送られても 401（設定し忘れで誰でも呼べる状態にしない）。
-// Node はトークンをハンドラの中で確かめていたが、Go では登録の時点で必ず付くようにした。
+// 確かめはハンドラの中ではなく登録の時点で付くので、書き忘れが起きない。
 func (rt *Router) Job(pattern, secret string, h http.HandlerFunc) {
 	rt.handle(pattern, AccessJob, func(w http.ResponseWriter, r *http.Request) {
 		if !hasBearerToken(r, secret) {
@@ -215,7 +211,7 @@ func (rt *Router) Webhook(pattern string, h http.HandlerFunc) {
 
 // OAuth は外部との連携の往復（LINE Login）のルートを登録する。ブラウザが画面遷移で開くので、
 // 未ログインでも 401 にはせず、s を nil にしてハンドラへ渡す（ハンドラがログインへ 302 で送る）。
-// ログイン済みなら、停止中とデモは 403（連携は書き込みなので、GET でもデモは断る。Node と同じ）。
+// ログイン済みなら、停止中とデモは 403（連携は書き込みなので、GET でもデモは断る）。
 func (rt *Router) OAuth(pattern string, h OAuthHandler) {
 	rt.handle(pattern, AccessOAuth, func(w http.ResponseWriter, r *http.Request) {
 		s, err := rt.loadSession(r)
@@ -224,8 +220,8 @@ func (rt *Router) OAuth(pattern string, h OAuthHandler) {
 			return
 		}
 		if s != nil {
-			// Node の oauth の入口は停止中を見ていない（停止のときに session を消すので、普通は来ない）。
-			// user・admin の入口と揃えて、残っていたセッションでも連携させない。
+			// 停止のときに session を消すので普通は来ないが、user・admin の入口と揃えて、
+			// 残っていたセッションでも連携させない。
 			if s.Banned {
 				WriteError(w, http.StatusForbidden, "このアカウントは利用を停止されています。")
 				return
@@ -256,7 +252,7 @@ func (rt *Router) Auth(pattern string, h AuthHandler) {
 	})
 }
 
-// hasBearerToken は Node の bearer-token.ts と同じ比べ方。文字列を == で比べると、先頭から
+// hasBearerToken は共有トークンを比べる。文字列を == で比べると、先頭から
 // 何文字一致したかで返るまでの時間が変わり、外から1文字ずつ当てられる余地が残る。両方を SHA-256 に
 // そろえてから一定時間で比べる（ハッシュにするのは、長さの違いで先に返して秘密値の長さを漏らさないため）。
 func hasBearerToken(r *http.Request, secret string) bool {
@@ -277,7 +273,7 @@ func (rt *Router) sameOrigin(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// requireSession は Node の requireSession（context.ts）と同じ判定・同じ文言。
+// requireSession はログインしているか・停止中でないかを確かめ、だめなら 401・403 を返す。
 func (rt *Router) requireSession(w http.ResponseWriter, r *http.Request) (*Session, bool) {
 	s, err := rt.loadSession(r)
 	if err != nil {
@@ -322,8 +318,8 @@ func isWrite(r *http.Request) bool {
 
 var PathParam = regexp.MustCompile(`\{([^}.]+)(?:\.\.\.)?\}`)
 
-// routeLabel は Go の書き方（/api/study-logs/{id}）を Fastify の書き方（/api/study-logs/:id）に直す。
-// メトリクスの route ラベルを Node と揃え、Grafana で同じルートとして並べられるようにする。
+// routeLabel は Go の書き方（/api/study-logs/{id}）を /api/study-logs/:id の形に直す。
+// メトリクスの route ラベルはこの形で記録してきたので、Grafana で過去の値と同じルートとして並べられるようにする。
 func routeLabel(path string) string {
 	return PathParam.ReplaceAllString(path, ":$1")
 }

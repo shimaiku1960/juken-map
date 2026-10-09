@@ -145,7 +145,7 @@ jobs:
       # 管理画面（利用者の管理・マスター編集）の SQL も流す（JUK-106）。ログインの流れ（登録・確認・期限・取り消し・
       # 再設定・2段階認証・外部ログイン、TestAuthDB）も流す（JUK-115）。マイグレーションの適用（TestMigrateDB）は、
       # 空の DB に migrate の権限で db/migrations を全部当てられることも確かめる（JUK-125）。
-      # DB は Node のテストと同じ juken_map_test（本番と同じマイグレーションと、DML だけの権限）。
+      # DB は db/ のテストと同じ juken_map_test（本番と同じマイグレーションと、DML だけの権限）。
       # MySQL がこのジョブにしか無いので、go のジョブではなくここで動かす。
       # DB テストは名前に DB を入れる（-run DB で拾う）。持ち主のパッケージ（internal/write/...）の DB テストも
       # 同じ決まりで拾うので、パッケージを足してもここは変えない（JUK-158）。
@@ -213,7 +213,7 @@ jobs:
         run: docker build --build-context migrations=../../db/migrations -t juken-map-go:ci .
 
   # E2E（Playwright）。使い捨ての MySQL 8.4 を立て、マイグレーション→seed→
-  # SPA のビルド→Fastify 起動で本番相当の構成を立ち上げ、実ブラウザで主要導線を検証する。
+  # SPA のビルド→Go と nginx の起動で本番相当の構成を立ち上げ、実ブラウザで主要導線を検証する。
   e2e:
     runs-on: ubuntu-latest
     services:

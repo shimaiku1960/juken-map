@@ -13,7 +13,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 )
 
-// 期間と上限は Node 側（apps/api/src/services/dashboard-service.ts ほか）と同じ値にする。
+// 期間と上限。
 const (
 	recentDays   = 7   // 実績の明細を使う直近の日数（今日を含む）
 	upcomingDays = 7   // 「今週の予定」の幅（今日を含む）
@@ -35,7 +35,7 @@ func (h *DashboardHandler) Serve(w http.ResponseWriter, r *http.Request, s *http
 	httpx.WriteJSON(w, http.StatusOK, dashboard)
 }
 
-// get はダッシュボードの初回表示ぶんをまとめて返す。Node 側の getDashboard にあたる。
+// get はダッシュボードの初回表示ぶんをまとめて返す。
 // now を引数で受け取るのは、テストで「今日」を固定できるようにするため。
 func (h *DashboardHandler) get(ctx context.Context, userID string, now time.Time) (*apischema.Dashboard, error) {
 	today := dates.OnTokyo(now)
@@ -47,7 +47,7 @@ func (h *DashboardHandler) get(ctx context.Context, userID string, now time.Time
 	planFrom, planTo := start, dates.Later(end, dates.AddDays(today, upcomingDays-1))
 	dailyFrom := dates.AddDays(today, -(streakDays - 1))
 
-	// 3本の SQL を同時に投げる（Node 側の Promise.all にあたる）。
+	// 3本の SQL を同時に投げる。
 	// errgroup は、どれか1本が失敗したら ctx を取り消して残りを止め、最初のエラーを返す。
 	var (
 		logs  []apischema.StudyLog
