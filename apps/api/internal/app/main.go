@@ -87,6 +87,7 @@ func run() error {
 		return err
 	}
 	m := auth.NewMetrics()
+	m.ObserveDB(db)
 	webOrigin := envOr("WEB_ORIGIN", site.URL)
 	authHandlers := auth.New(db, auth.Config{
 		WebOrigin:       webOrigin,

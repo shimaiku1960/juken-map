@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 	"time"
@@ -69,6 +70,13 @@ func NewMetrics(emailKinds []string) *Metrics {
 	}
 	registry.MustRegister(m.Requests, m.duration, m.EmailSends, m.ResendQuotaUsed, m.ResendQuotaObservedAt)
 	return m
+}
+
+// ObserveDB は接続プール（database/sql）の数字を go_sql_ で始まる名前で出す（JUK-172）。
+// 使用中・待ちの回数と時間が分かり、SetMaxOpenConns の上限で詰まったことにアラートで気づける（terraform/grafana/alerting.tf）。
+// db_name ラベルは "juken_map" に固定する。
+func (m *Metrics) ObserveDB(db *sql.DB) {
+	m.registry.MustRegister(collectors.NewDBStatsCollector(db, "juken_map"))
 }
 
 // observe は1件ぶんを数える。route は実際の URL ではなくルートの型（/api/study-logs/:id）を渡す。

@@ -8,6 +8,7 @@ Terraform で管理する。変えたいときは `.tf` を直し、PR で差分
 | フォルダ `juken-map`（uid `ffh5ls`） | `alerting.tf` |
 | 通知先 `juken-map-email` | `alerting.tf` |
 | ルールグループ `api-production`（1分ごと）：5xx率、Go の停止、Resend の送信枠 | `alerting.tf` |
+| ルールグループ `api-performance`（1分ごと）：p95 の遅延、DB の接続待ち（定常状態は `docs/slo.md`） | `alerting.tf` |
 | 画面で作ってあったものの取り込み | `imports.tf` |
 
 - 本番 AWS（`../`）とは **state を分けてある**。コマンドは必ず `terraform -chdir=terraform/grafana` で動かす
