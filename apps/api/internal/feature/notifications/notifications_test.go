@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -173,6 +174,70 @@ func testNotifier(store notificationStore, m Messenger) *dailyNotifier {
 }
 
 var testNow = time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC) // 日本時間 8/30 21:00
+
+func TestDeliveriesFor(t *testing.T) {
+	email, line := strp("u@example.com"), strp("U1")
+	tests := []struct {
+		name string
+		slot apischema.NotificationSlot
+		user recipient
+		want []deliveryChannel
+	}{
+		{"朝は朝の設定を見る", apischema.NotificationSlotMorning,
+			recipient{Email: email, LineUserID: line, Morning: true, LineMorn: true},
+			[]deliveryChannel{channelEmail, channelLine}},
+		{"夜は夜の設定を見る", apischema.NotificationSlotEvening,
+			recipient{Email: email, LineUserID: line, Morning: true, LineMorn: true, LineEven: true},
+			[]deliveryChannel{channelLine}},
+		{"LINE 通知だけオンでも、未連携なら送らない", apischema.NotificationSlotMorning,
+			recipient{Email: email, LineMorn: true},
+			nil},
+		{"メールアドレスが無ければメールは送らない", apischema.NotificationSlotMorning,
+			recipient{Morning: true, LineUserID: line, LineMorn: true},
+			[]deliveryChannel{channelLine}},
+		{"どれもオフなら送らない", apischema.NotificationSlotEvening,
+			recipient{Email: email, LineUserID: line},
+			nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []deliveryChannel
+			for _, job := range deliveriesFor([]recipient{tt.user}, tt.slot) {
+				got = append(got, job.channel)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("channels = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("メールと LINE には同じ文面を送る", func(t *testing.T) {
+		u := recipient{Email: email, LineUserID: line, Morning: true, LineMorn: true, Nickname: strp("たろう")}
+		jobs := deliveriesFor([]recipient{u}, apischema.NotificationSlotMorning)
+		if len(jobs) != 2 || jobs[0].message != jobs[1].message || !strings.Contains(jobs[0].message.Text, "たろう") {
+			t.Errorf("jobs = %+v", jobs)
+		}
+	})
+}
+
+func TestDisplayName(t *testing.T) {
+	tests := []struct {
+		name string
+		user recipient
+		want string
+	}{
+		{"ニックネームを先に使う", recipient{Nickname: strp("たろう"), Name: strp("山田太郎")}, "たろう"},
+		{"ニックネームが無ければ名前", recipient{Name: strp("山田太郎")}, "山田太郎"},
+		{"どちらも無ければ「ユーザー」", recipient{}, "ユーザー"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := displayName(tt.user); got != tt.want {
+				t.Errorf("displayName = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestDailyNotifierSend(t *testing.T) {
 	t.Run("その時間帯がオンの経路だけに送り、LINE は未連携なら送らない", func(t *testing.T) {

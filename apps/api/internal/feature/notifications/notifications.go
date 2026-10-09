@@ -107,30 +107,10 @@ func (n *dailyNotifier) send(ctx context.Context, slot apischema.NotificationSlo
 		return summary, err
 	}
 
-	var jobs []delivery
-	for _, u := range users {
-		nickname := "ユーザー"
-		if u.Nickname != nil {
-			nickname = *u.Nickname
-		} else if u.Name != nil {
-			nickname = *u.Name
-		}
-		message := buildDailyNotification(slot, nickname, u.Plans, u.LogMinutes)
-		emailOn, lineOn := u.Morning, u.LineMorn
-		if slot == apischema.NotificationSlotEvening {
-			emailOn, lineOn = u.Evening, u.LineEven
-		}
-		if emailOn && u.Email != nil {
-			jobs = append(jobs, delivery{u, channelEmail, message})
-		}
-		// LINE 通知だけオンでも、未連携なら送らない
-		if lineOn && u.LineUserID != nil {
-			jobs = append(jobs, delivery{u, channelLine, message})
-		}
-	}
+	jobs := deliveriesFor(users, slot)
 	summary.Eligible = int64(len(jobs))
 
-	var sent, skipped, failed atomic.Int64
+	var counts deliveryCounts
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(n.workers)
 	for _, job := range jobs {
@@ -138,38 +118,79 @@ func (n *dailyNotifier) send(ctx context.Context, slot apischema.NotificationSlo
 		if gctx.Err() != nil {
 			break
 		}
-		g.Go(func() error {
-			id, duplicate, err := n.store.markDelivery(gctx, job.user.ID, day.start, slot, job.channel)
-			if err != nil {
-				return fmt.Errorf("mark delivery: %w", err)
-			}
-			if duplicate {
-				skipped.Add(1)
-				return nil
-			}
-			if err := n.deliver(gctx, job); err != nil {
-				failed.Add(1)
-				// 送れなかったので印を消す。止められた後でも消せるよう、取り消されない context で行う。
-				undoCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpx.ExternalTimeout)
-				defer cancel()
-				if uerr := n.store.unmarkDelivery(undoCtx, id); uerr != nil {
-					return fmt.Errorf("unmark delivery: %w", uerr)
-				}
-				slog.ErrorContext(ctx, "[daily-notification] Delivery failed.",
-					"err", err.Error(), "slot", slot, "channel", job.channel, "userId", job.user.ID)
-				return nil
-			}
-			sent.Add(1)
-			return nil
-		})
+		g.Go(func() error { return n.deliverOnce(gctx, day.start, slot, job, &counts) })
 	}
 	err = g.Wait()
-	summary.Sent, summary.Skipped, summary.Failed = sent.Load(), skipped.Load(), failed.Load()
+	summary.Sent, summary.Skipped, summary.Failed = counts.sent.Load(), counts.skipped.Load(), counts.failed.Load()
 	if err == nil && ctx.Err() != nil {
 		// 時間切れで、始めなかった分がある
 		err = ctx.Err()
 	}
 	return summary, err
+}
+
+// deliveriesFor は、その時間帯にオンの経路ごとに1件ずつ、送る分を並べる。
+// メールアドレスの無い人にはメールを、LINE 未連携の人には LINE を送らない（LINE 通知だけオンでも）。
+func deliveriesFor(users []recipient, slot apischema.NotificationSlot) []delivery {
+	var jobs []delivery
+	for _, u := range users {
+		message := buildDailyNotification(slot, displayName(u), u.Plans, u.LogMinutes)
+		emailOn, lineOn := u.Morning, u.LineMorn
+		if slot == apischema.NotificationSlotEvening {
+			emailOn, lineOn = u.Evening, u.LineEven
+		}
+		if emailOn && u.Email != nil {
+			jobs = append(jobs, delivery{u, channelEmail, message})
+		}
+		if lineOn && u.LineUserID != nil {
+			jobs = append(jobs, delivery{u, channelLine, message})
+		}
+	}
+	return jobs
+}
+
+// displayName は通知の呼びかけに使う名前。ニックネーム、名前、「ユーザー」の順に使う。
+func displayName(u recipient) string {
+	if u.Nickname != nil {
+		return *u.Nickname
+	}
+	if u.Name != nil {
+		return *u.Name
+	}
+	return "ユーザー"
+}
+
+// deliveryCounts は send の結果の件数。複数の goroutine から数える。
+type deliveryCounts struct {
+	sent, skipped, failed atomic.Int64
+}
+
+// deliverOnce は1件を、送った印を入れてから送り、結果を counts に数える。
+// 送れなかったときは印を消して nil を返す（次の実行で再び送る）。エラーを返すのは印を読み書きできないときだけで、
+// そのときは send が残りを止める。
+func (n *dailyNotifier) deliverOnce(ctx context.Context, date time.Time, slot apischema.NotificationSlot, job delivery, counts *deliveryCounts) error {
+	id, duplicate, err := n.store.markDelivery(ctx, job.user.ID, date, slot, job.channel)
+	if err != nil {
+		return fmt.Errorf("mark delivery: %w", err)
+	}
+	if duplicate {
+		counts.skipped.Add(1)
+		return nil
+	}
+	if err := n.deliver(ctx, job); err != nil {
+		counts.failed.Add(1)
+		// 止められた後でも印を消せるよう、取り消されない context で行う。
+		undoCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpx.ExternalTimeout)
+		defer cancel()
+		if uerr := n.store.unmarkDelivery(undoCtx, id); uerr != nil {
+			return fmt.Errorf("unmark delivery: %w", uerr)
+		}
+		slog.ErrorContext(ctx, "[daily-notification] Delivery failed.",
+			"err", err.Error(), "slot", slot, "channel", job.channel, "userId", job.user.ID)
+		return nil
+	}
+	counts.sent.Add(1)
+	return nil
 }
 
 func (n *dailyNotifier) deliver(ctx context.Context, job delivery) error {
