@@ -455,7 +455,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 障害注入の実験の記録（新しい順に20件。CHAOS_ENABLED=on のときだけある） */
+        /** 障害注入の実験の記録（新しい順に20件）と、障害を起こせるルート。CHAOS_ENABLED=on のときだけある */
         get: operations["listChaosExperiments"];
         put?: never;
         /** 障害注入の実験を今から始める（JUK-173）。同時に実行できるのは1つだけ */
@@ -807,7 +807,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 障害注入（JUK-173）が有効か、対象にできるルート、実験の記録（新しい順に20件） */
+        /**
+         * 障害注入（JUK-173）が有効かと、終わった実験の記録（新しい順に20件）
+         * @description 実行中の実験は返さない。予告なしの障害で原因を調べる練習をするので、管理画面が答えにならないようにする（JUK-178）。
+         */
         get: operations["getAdminChaos"];
         put?: never;
         post?: never;
@@ -817,7 +820,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/chaos/experiments/{id}/stop": {
+    "/api/admin/chaos/stop": {
         parameters: {
             query?: never;
             header?: never;
@@ -826,8 +829,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 実行中の障害注入の実験を止める */
-        post: operations["stopAdminChaosExperiment"];
+        /**
+         * 実行中の障害注入の実験を全部止める（練習をやめたいときの緊急停止）
+         * @description 実行中の実験があったかどうかは返さない。押して確かめることで答えが分からないようにする（JUK-178）。
+         */
+        post: operations["stopAdminChaos"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1511,6 +1517,8 @@ export interface components {
         };
         ChaosExperimentList: {
             experiments: components["schemas"]["ChaosExperiment"][];
+            /** @description 障害を起こせるルート（管理画面・ログイン・障害注入の入口は含まない） */
+            routes: string[];
         };
         ChaosStopResult: {
             /** Format: int64 */
@@ -1519,8 +1527,7 @@ export interface components {
         AdminChaosState: {
             /** @description CHAOS_ENABLED=on で起動しているか。false なら実験の行があっても障害は起きない */
             enabled: boolean;
-            /** @description 障害を起こせるルート（管理画面・ログイン・障害注入の入口は含まない） */
-            routes: string[];
+            /** @description 終わった実験（status は stopped か ended） */
             experiments: components["schemas"]["ChaosExperiment"][];
         };
         /**
@@ -2843,7 +2850,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 新しい順 */
+            /** @description 実験は新しい順 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3679,39 +3686,24 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
-    stopAdminChaosExperiment: {
+    stopAdminChaos: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
-                id: components["parameters"]["ID"];
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description 止めた */
-            200: {
+            /** @description 実行中の実験があれば止めた */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ChaosExperiment"];
-                };
+                content?: never;
             };
-            400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["AdminForbidden"];
-            /** @description 実行中の実験が見つからない（もう終わった・止めた） */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             500: components["responses"]["InternalError"];
         };
     };

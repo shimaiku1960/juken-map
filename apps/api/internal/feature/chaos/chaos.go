@@ -84,7 +84,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		httpx.InternalError(w, r, fmt.Errorf("chaos list: %w", err))
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, apischema.ChaosExperimentList{Experiments: list})
+	httpx.WriteJSON(w, http.StatusOK, apischema.ChaosExperimentList{Experiments: list, Routes: h.routeList()})
 }
 
 // StopAll は POST /api/chaos/experiments/stop。
@@ -98,46 +98,27 @@ func (h *Handlers) StopAll(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, apischema.ChaosStopResult{Stopped: n})
 }
 
-// AdminState は GET /api/admin/chaos。
+// AdminState は GET /api/admin/chaos。実行中の実験は返さない。予告なしの障害で原因を調べる練習をするので、
+// 管理画面が答えにならないようにする（JUK-178）。
 func (h *Handlers) AdminState(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
-	list, err := h.recent(r.Context())
+	now := h.now()
+	records, err := fault.Finished(r.Context(), h.db, now, recentLimit)
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("admin chaos state: %w", err))
 		return
 	}
-	routes := h.routes()
-	if routes == nil {
-		routes = []string{}
-	}
-	httpx.WriteJSON(w, http.StatusOK, apischema.AdminChaosState{
-		Enabled:     h.injector != nil,
-		Routes:      routes,
-		Experiments: list,
-	})
+	httpx.WriteJSON(w, http.StatusOK, apischema.AdminChaosState{Enabled: h.injector != nil, Experiments: toSchemas(records, now)})
 }
 
-// AdminStop は POST /api/admin/chaos/experiments/{id}/stop。
+// AdminStop は POST /api/admin/chaos/stop。練習をやめたいときの緊急停止。実行中の実験があったかどうかは返さない
+// （押して確かめることで答えが分からないようにする）。
 func (h *Handlers) AdminStop(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
-	id, ok := httpx.PathID(w, r, "id")
-	if !ok {
-		return
-	}
-	err := writechaos.Stop(r.Context(), h.db, id, "admin:"+s.UserID, h.now())
-	if errors.Is(err, writechaos.ErrNotRunning) {
-		httpx.WriteError(w, http.StatusNotFound, err.Error())
-		return
-	}
-	if err != nil {
+	if _, err := writechaos.StopAll(r.Context(), h.db, "admin:"+s.UserID, h.now()); err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("admin chaos stop: %w", err))
 		return
 	}
 	h.refresh(r.Context())
-	record, err := h.find(r.Context(), id)
-	if err != nil {
-		httpx.InternalError(w, r, fmt.Errorf("admin chaos stop: %w", err))
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, record)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // refresh は、このプロセスの Injector にすぐ読み直させる。失敗しても次の定期の読み込みで追いつくので、応答は変えない。
@@ -150,12 +131,14 @@ func (h *Handlers) recent(ctx context.Context) ([]apischema.ChaosExperiment, err
 	if err != nil {
 		return nil, err
 	}
-	now := h.now()
-	list := make([]apischema.ChaosExperiment, len(records))
-	for i, rec := range records {
-		list[i] = toSchema(rec, now)
+	return toSchemas(records, h.now()), nil
+}
+
+func (h *Handlers) routeList() []string {
+	if routes := h.routes(); routes != nil {
+		return routes
 	}
-	return list, nil
+	return []string{}
 }
 
 func (h *Handlers) find(ctx context.Context, id int64) (apischema.ChaosExperiment, error) {
@@ -169,6 +152,14 @@ func (h *Handlers) find(ctx context.Context, id int64) (apischema.ChaosExperimen
 		}
 	}
 	return apischema.ChaosExperiment{}, fmt.Errorf("experiment %d not found", id)
+}
+
+func toSchemas(records []fault.Record, now time.Time) []apischema.ChaosExperiment {
+	list := make([]apischema.ChaosExperiment, len(records))
+	for i, rec := range records {
+		list[i] = toSchema(rec, now)
+	}
+	return list
 }
 
 func toSchema(rec fault.Record, now time.Time) apischema.ChaosExperiment {

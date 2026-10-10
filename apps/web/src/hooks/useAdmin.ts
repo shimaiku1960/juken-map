@@ -1,8 +1,16 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/web/lib/api-client";
-import type { AdminOverview, AdminUserList, UserKind } from "@/shared/dto/admin";
+import type { AdminChaosState, AdminOverview, AdminUserList, UserKind } from "@/shared/dto/admin";
 
-export type { AdminOverview, AdminUser, AdminUserList, UserKind } from "@/shared/dto/admin";
+export type {
+  AdminChaosState,
+  AdminOverview,
+  AdminUser,
+  AdminUserList,
+  ChaosExperiment,
+  ChaosKind,
+  UserKind,
+} from "@/shared/dto/admin";
 
 // 管理者ページ（/admin）の読み取り。権限が無ければ API が 403 を返し、
 // 画面は ApiError.status で「権限がありません」に切り替える。
@@ -66,5 +74,26 @@ export function useDeleteUser() {
         fallbackMessage: "削除できませんでした",
       }),
     onSuccess: invalidate,
+  });
+}
+
+export const adminChaosKey = ["admin", "chaos"] as const;
+
+// 終わった実験だけが届く。実行中の実験は API が返さない（調べる練習で答えにならないように）。
+export function useAdminChaos() {
+  return useQuery({
+    queryKey: adminChaosKey,
+    queryFn: () => api.get<AdminChaosState>("/api/admin/chaos"),
+    retry: noRetryOnForbidden,
+  });
+}
+
+// 緊急停止。実行中の実験があったかどうかは返らない。
+export function useStopChaos() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.post<void>("/api/admin/chaos/stop", undefined, { fallbackMessage: "止められませんでした" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminChaosKey }),
   });
 }

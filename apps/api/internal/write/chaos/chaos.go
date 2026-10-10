@@ -11,13 +11,9 @@ import (
 	"time"
 )
 
-// 操作が断る理由。Error() は利用者に見せる文言。
-var (
-	// ErrRunning は、ほかの実験がまだ実行中であること。気づくまでの時間を1つずつ測れるよう、同時には1つだけにする。
-	ErrRunning = errors.New("ほかの実験が実行中です")
-	// ErrNotRunning は、止める実験が見つからないか、もう終わっていること。
-	ErrNotRunning = errors.New("実行中の実験が見つかりません")
-)
+// ErrRunning は、ほかの実験がまだ実行中であること。気づくまでの時間を1つずつ測れるよう、同時には1つだけにする。
+// Error() は利用者に見せる文言。
+var ErrRunning = errors.New("ほかの実験が実行中です")
 
 // Experiment は新しく始める実験。
 type Experiment struct {
@@ -53,25 +49,7 @@ func Start(ctx context.Context, db *sql.DB, e Experiment, now time.Time) (int64,
 	return res.LastInsertId()
 }
 
-// Stop は実行中の実験 id を止める。by は止めた人（admin:<userId> か job）。
-func Stop(ctx context.Context, db *sql.DB, id int64, by string, now time.Time) error {
-	res, err := db.ExecContext(ctx,
-		"UPDATE `ChaosExperiment` SET stoppedAt = ?, stoppedBy = ? WHERE id = ? AND stoppedAt IS NULL AND endsAt > ?",
-		now, by, id, now)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotRunning
-	}
-	return nil
-}
-
-// StopAll は実行中の実験を全部止めて、止めた数を返す。
+// StopAll は実行中の実験を全部止めて、止めた数を返す。by は止めた人（admin:<userId> か job）。
 func StopAll(ctx context.Context, db *sql.DB, by string, now time.Time) (int64, error) {
 	res, err := db.ExecContext(ctx,
 		"UPDATE `ChaosExperiment` SET stoppedAt = ?, stoppedBy = ? WHERE stoppedAt IS NULL AND endsAt > ?",

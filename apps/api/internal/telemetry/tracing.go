@@ -149,9 +149,6 @@ func EndRequestSpan(span trace.Span, method, route string, status int, info *Req
 	if info.Sim {
 		span.SetAttributes(attribute.Bool("sim", true))
 	}
-	if faults := info.Faults(); len(faults) > 0 {
-		span.SetAttributes(attribute.StringSlice("chaos", faults))
-	}
 	// OpenTelemetry の決まりで、サーバーの 4xx は呼び出し側の誤りなのでエラーにしない。
 	if status >= 500 {
 		span.SetStatus(codes.Error, http.StatusText(status))

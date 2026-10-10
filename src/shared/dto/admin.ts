@@ -35,3 +35,9 @@ export type AdminFaculty = Schemas["AdminFaculty"];
 export type AdminUniversityDetail = Schemas["AdminUniversityDetail"];
 export type AdminFacultySnapshot = Schemas["AdminFacultySnapshot"];
 export type AdminTextbookMaster = Schemas["AdminTextbookMaster"];
+
+// ---- 障害注入（/admin の「障害注入」、JUK-178） ----
+
+export type ChaosKind = Schemas["ChaosKind"];
+export type ChaosExperiment = Schemas["ChaosExperiment"];
+export type AdminChaosState = Schemas["AdminChaosState"];

@@ -127,7 +127,7 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 		rt.Job("POST /api/chaos/experiments/stop", jobs.chaosSecret, chaosRoutes.StopAll)
 	}
 	rt.Admin("GET /api/admin/chaos", chaosRoutes.AdminState)
-	rt.Admin("POST /api/admin/chaos/experiments/{id}/stop", chaosRoutes.AdminStop)
+	rt.Admin("POST /api/admin/chaos/stop", chaosRoutes.AdminStop)
 }
 
 // jobConfig はジョブ（cron・sim）の入口が使う設定。秘密の値と外部サービスへの送り方。

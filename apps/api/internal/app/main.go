@@ -76,7 +76,7 @@ func run() error {
 	// 障害注入（JUK-173）。CHAOS_ENABLED=on のときだけ作る。nil なら DB・外部 API・ルーターのどれにも差し込まない。
 	var injector *fault.Injector
 	if os.Getenv("CHAOS_ENABLED") == "on" {
-		injector = fault.New(m)
+		injector = fault.New()
 	}
 	db, err := database.Open(os.Getenv("DATABASE_URL"), injector.WrapConnector)
 	if err != nil {

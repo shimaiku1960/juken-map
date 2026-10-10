@@ -9,14 +9,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
 
@@ -29,7 +27,7 @@ func TestChaosDB(t *testing.T) {
 		fx.Exec("DELETE FROM `ChaosExperiment` WHERE stoppedBy = 'admin:chaos-db-test' OR route = 'GET /api/health'")
 	})
 
-	injector := fault.New(auth.NewMetrics())
+	injector := fault.New()
 	app := newDBAdminAppWith(t, db, jobConfig{chaos: injector, chaosSecret: secret})
 	app.rt.Faults = injector
 	// 本番では middleware.go が付けるリクエストの情報を、ここで付ける（障害注入の対象かどうかはここに入る）。
@@ -73,24 +71,40 @@ func TestChaosDB(t *testing.T) {
 		t.Fatalf("障害が起きていない: %d", code)
 	}
 
-	var state apischema.AdminChaosState
-	app.expect(app.send(http.MethodGet, "/api/admin/chaos", "", "chaos-db-test"), http.StatusOK, &state)
-	if !state.Enabled || len(state.Experiments) == 0 || state.Experiments[0].ID != started.ID {
-		t.Fatalf("state = %+v", state)
+	// 管理画面には、実行中の実験を出さない（調べる練習で答えにならないように）。
+	adminState := func() apischema.AdminChaosState {
+		var state apischema.AdminChaosState
+		app.expect(app.send(http.MethodGet, "/api/admin/chaos", "", "chaos-db-test"), http.StatusOK, &state)
+		return state
 	}
-	if !slices.Contains(state.Routes, "GET /api/health") || slices.Contains(state.Routes, "GET /api/admin/chaos") || slices.Contains(state.Routes, "POST /api/chaos/experiments") {
-		t.Errorf("routes = %v", state.Routes)
+	findStarted := func(state apischema.AdminChaosState) *apischema.ChaosExperiment {
+		for i, e := range state.Experiments {
+			if e.ID == started.ID {
+				return &state.Experiments[i]
+			}
+		}
+		return nil
+	}
+	if state := adminState(); !state.Enabled || findStarted(state) != nil {
+		t.Fatalf("実行中の実験が管理画面に出ている: %+v", state)
 	}
 
-	stop := "/api/admin/chaos/experiments/" + strconv.FormatInt(started.ID, 10) + "/stop"
-	var stopped apischema.ChaosExperiment
-	app.expect(app.send(http.MethodPost, stop, "", "chaos-db-test"), http.StatusOK, &stopped)
-	if stopped.Status != apischema.ChaosStatusStopped || stopped.StoppedBy == nil || *stopped.StoppedBy != "admin:chaos-db-test" {
-		t.Fatalf("stopped = %+v", stopped)
+	// 障害を起こせるルートは機械の入口だけが返す。止める道（管理画面・障害注入の入口）は含まない。
+	var list apischema.ChaosExperimentList
+	app.expect(job(http.MethodGet, "/api/chaos/experiments", "", secret), http.StatusOK, &list)
+	if !slices.Contains(list.Routes, "GET /api/health") || slices.Contains(list.Routes, "GET /api/admin/chaos") || slices.Contains(list.Routes, "POST /api/chaos/experiments") {
+		t.Errorf("routes = %v", list.Routes)
 	}
-	app.expect(app.send(http.MethodPost, stop, "", "chaos-db-test"), http.StatusNotFound, nil)
+
+	// 緊急停止は、実行中の実験があってもなくても 204 で、止めたかどうかを返さない。
+	app.expect(app.send(http.MethodPost, "/api/admin/chaos/stop", "", "chaos-db-test"), http.StatusNoContent, nil)
 	if code := health(); code != http.StatusOK {
 		t.Fatalf("止めても戻らない: %d", code)
+	}
+	app.expect(app.send(http.MethodPost, "/api/admin/chaos/stop", "", "chaos-db-test"), http.StatusNoContent, nil)
+	stopped := findStarted(adminState())
+	if stopped == nil || stopped.Status != apischema.ChaosStatusStopped || stopped.StoppedBy == nil || *stopped.StoppedBy != "admin:chaos-db-test" {
+		t.Fatalf("止めた実験が記録に無い: %+v", stopped)
 	}
 
 	// 機械の入口からも、まとめて止められる。
