@@ -11,8 +11,10 @@
 package dbtest
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -28,7 +30,8 @@ import (
 const DefaultURL = "mysql://juken_app_test:juken_app_test@127.0.0.1:3306/juken_map_test"
 
 // Open はテスト用の DB に繋ぎ、テストの終わりに閉じる。名前が _test で終わらない DB には繋がない。
-func Open(t *testing.T) *sql.DB {
+// wraps は database.Open にそのまま渡す（障害注入の確かめに使う）。
+func Open(t *testing.T, wraps ...func(driver.Connector) driver.Connector) *sql.DB {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
@@ -42,7 +45,7 @@ func Open(t *testing.T) *sql.DB {
 	if !strings.HasSuffix(cfg.DBName, "_test") {
 		t.Fatalf("テスト用 DB の名前は _test で終わる必要があります（%s）", cfg.DBName)
 	}
-	db, err := database.Open(url)
+	db, err := database.Open(url, wraps...)
 	if err != nil {
 		t.Fatalf("テスト用の MySQL に繋げません。`pnpm db:start` と `pnpm --filter @juken-map/db test-db:prepare` を先に動かしてください: %v", err)
 	}
@@ -63,6 +66,29 @@ func (fx Fixture) Exec(query string, args ...any) sql.Result {
 		fx.T.Fatalf("%s: %v", query, err)
 	}
 	return res
+}
+
+// ChaosLock は ChaosExperiment を使うテストが持つロック。実行中の実験は表全体で1つまでなので、同時に流すと 409 で落ちる。
+const ChaosLock = "juken_map_test.chaos"
+
+// Lock は名前付きのロック（GET_LOCK）をテストの終わりまで持つ。表全体に1つしか許さない状態（実行中の障害注入の
+// 実験など）を、ほかのパッケージ・ほかの worktree の同じテストと取り合わないよう、順番に流す。
+func (fx Fixture) Lock(name string) {
+	fx.T.Helper()
+	// GET_LOCK は接続ごとのロックなので、プールから1本取り出して最後まで持つ。
+	conn, err := fx.DB.Conn(context.Background())
+	if err != nil {
+		fx.T.Fatal(err)
+	}
+	var acquired sql.NullInt64
+	if err := conn.QueryRowContext(context.Background(), "SELECT GET_LOCK(?, 60)", name).Scan(&acquired); err != nil || acquired.Int64 != 1 {
+		conn.Close()
+		fx.T.Fatalf("GET_LOCK(%s) が取れない: %v", name, err)
+	}
+	fx.T.Cleanup(func() {
+		_, _ = conn.ExecContext(context.Background(), "DO RELEASE_LOCK(?)", name)
+		conn.Close()
+	})
 }
 
 func (fx Fixture) Insert(query string, args ...any) int64 {

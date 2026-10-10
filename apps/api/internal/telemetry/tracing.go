@@ -149,6 +149,9 @@ func EndRequestSpan(span trace.Span, method, route string, status int, info *Req
 	if info.Sim {
 		span.SetAttributes(attribute.Bool("sim", true))
 	}
+	if faults := info.Faults(); len(faults) > 0 {
+		span.SetAttributes(attribute.StringSlice("chaos", faults))
+	}
 	// OpenTelemetry の決まりで、サーバーの 4xx は呼び出し側の誤りなのでエラーにしない。
 	if status >= 500 {
 		span.SetStatus(codes.Error, http.StatusText(status))
@@ -158,9 +161,13 @@ func EndRequestSpan(span trace.Span, method, route string, status int, info *Req
 
 // NewOutboundClient は外部 API（Resend・LINE・microCMS・GitHub）を呼ぶクライアント。
 // 呼び出し1回ごとにスパンを作る。tracer は呼び出し元（ctx）のスパンの子にするために使う。
-func NewOutboundClient(tp trace.TracerProvider) *http.Client {
+// base は実際に送る部分で、nil なら http.DefaultTransport。障害注入（internal/fault）はここに挟み、失敗もスパンに残す。
+func NewOutboundClient(tp trace.TracerProvider, base http.RoundTripper) *http.Client {
+	if base == nil {
+		base = http.DefaultTransport
+	}
 	return &http.Client{Transport: &tracedTransport{
-		base:   http.DefaultTransport,
+		base:   base,
 		tracer: tp.Tracer(ServiceName),
 	}}
 }

@@ -448,6 +448,41 @@ export interface paths {
         patch: operations["updateSimulationUser"];
         trace?: never;
     };
+    "/api/chaos/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 障害注入の実験の記録（新しい順に20件。CHAOS_ENABLED=on のときだけある） */
+        get: operations["listChaosExperiments"];
+        put?: never;
+        /** 障害注入の実験を今から始める（JUK-173）。同時に実行できるのは1つだけ */
+        post: operations["startChaosExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chaos/experiments/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 実行中の障害注入の実験を全部止める */
+        post: operations["stopChaosExperiments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/line/connection": {
         parameters: {
             query?: never;
@@ -763,6 +798,40 @@ export interface paths {
         head?: never;
         /** 参考書マスターを書き換える（総量の候補は送ったものに置き換える）。利用者が登録済みの参考書は 総量を自分の行に写し取っているので変わらない（これから登録する人から効く） */
         patch: operations["updateTextbookMaster"];
+        trace?: never;
+    };
+    "/api/admin/chaos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 障害注入（JUK-173）が有効か、対象にできるルート、実験の記録（新しい順に20件） */
+        get: operations["getAdminChaos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/chaos/experiments/{id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 実行中の障害注入の実験を止める */
+        post: operations["stopAdminChaosExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -1392,6 +1461,67 @@ export interface components {
              * @enum {string}
              */
             method?: "email" | "google" | "github";
+        };
+        /**
+         * @description latency＝応答を遅らせる、http_error＝5xx を返す、db_error＝SQL を失敗させる、outbound_timeout＝外部 API をタイムアウトさせる
+         * @enum {string}
+         */
+        ChaosKind: "latency" | "http_error" | "db_error" | "outbound_timeout";
+        ChaosExperimentInput: {
+            kind: components["schemas"]["ChaosKind"];
+            /** @description "*"（/api/ のルートのうち /api/health を除く全部）か、対象にできるルート（「GET /api/study-logs/:id」の形） */
+            route: string;
+            /**
+             * Format: double
+             * @description 対象のリクエストのうち障害を起こす割合
+             */
+            rate: number;
+            /** @description latency・outbound_timeout だけ（必須）。待たせる時間 */
+            delayMs?: number;
+            /**
+             * @description http_error だけ（必須）。返すステータス
+             * @enum {integer}
+             */
+            statusCode?: 500 | 502 | 503 | 504;
+            /** @description 今から何秒続けるか。終わる時刻が来たら自動で止まる */
+            durationSeconds: number;
+        };
+        ChaosExperiment: {
+            /** Format: int64 */
+            id: number;
+            kind: components["schemas"]["ChaosKind"];
+            route: string;
+            /** Format: double */
+            rate: number;
+            /** @description latency・outbound_timeout 以外は 0 */
+            delayMs: number;
+            /** @description http_error 以外は 0 */
+            statusCode: number;
+            startsAt: components["schemas"]["IsoDateTime"];
+            endsAt: components["schemas"]["IsoDateTime"];
+            /** @description 途中で止めた時刻 */
+            stoppedAt: components["schemas"]["IsoDateTime"] | null;
+            /** @description 止めた人（admin:<userId> か job） */
+            stoppedBy: string | null;
+            /**
+             * @description running＝実行中、stopped＝途中で止めた、ended＝終わる時刻が来た
+             * @enum {string}
+             */
+            status: "running" | "stopped" | "ended";
+        };
+        ChaosExperimentList: {
+            experiments: components["schemas"]["ChaosExperiment"][];
+        };
+        ChaosStopResult: {
+            /** Format: int64 */
+            stopped: number;
+        };
+        AdminChaosState: {
+            /** @description CHAOS_ENABLED=on で起動しているか。false なら実験の行があっても障害は起きない */
+            enabled: boolean;
+            /** @description 障害を起こせるルート（管理画面・ログイン・障害注入の入口は含まない） */
+            routes: string[];
+            experiments: components["schemas"]["ChaosExperiment"][];
         };
         /**
          * @description 合成ユーザーの続き方の型
@@ -2704,6 +2834,88 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listChaosExperiments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 新しい順 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChaosExperimentList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    startChaosExperiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChaosExperimentInput"];
+            };
+        };
+        responses: {
+            /** @description 始めた。同じプロセスではすぐ、ほかのプロセスでも5秒以内に効く */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChaosExperiment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description ほかの実験が実行中 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    stopChaosExperiments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 止めた数（実行中が無ければ 0） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChaosStopResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     getLineConnection: {
         parameters: {
             query?: never;
@@ -3441,6 +3653,65 @@ export interface operations {
             409: components["responses"]["AdminMasterConflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAdminChaos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 無効（CHAOS_ENABLED が無い）でも記録は返す */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminChaosState"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    stopAdminChaosExperiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 止めた */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChaosExperiment"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["AdminForbidden"];
+            /** @description 実行中の実験が見つからない（もう終わった・止めた） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };

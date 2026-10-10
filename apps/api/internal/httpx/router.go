@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -81,6 +82,15 @@ type Router struct {
 	Routes      []RouteEntry
 	crossOrigin *http.CrossOriginProtection
 	rateLimiter *userRateLimiter
+	// Faults は障害注入（internal/fault、JUK-173）。nil なら何もしない。
+	Faults      FaultInjector
+	faultRoutes []string
+}
+
+// FaultInjector は、障害を起こしてよいルートのリクエストごとに呼ばれる。
+// 応答を書き終えた（ハンドラまで進めない）なら true を返す。
+type FaultInjector interface {
+	InjectHTTP(w http.ResponseWriter, r *http.Request) bool
 }
 
 // CrossOriginMessage は、別のサイトから送られた書き込みを断るときの文言。
@@ -302,14 +312,40 @@ func (rt *Router) handle(pattern string, a Access, h http.HandlerFunc) {
 		panic(fmt.Sprintf("ルート %q は「メソッド パス」の形で書いてください", pattern))
 	}
 	label := routeLabel(path)
+	faultable := faultableRoute(a, path)
 	rt.Routes = append(rt.Routes, RouteEntry{Pattern: pattern, Access: a})
+	if faultable {
+		rt.faultRoutes = append(rt.faultRoutes, method+" "+label)
+	}
 	rt.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		// 外側の observe がメトリクスの route ラベルに使う。
 		if info := telemetry.RequestInfoFrom(r.Context()); info != nil {
 			info.Route = label
+			if faultable {
+				// DB と外部 API の障害注入も、この印のあるリクエストにだけ起こす。
+				info.FaultRoute = method + " " + label
+			}
+		}
+		if faultable && rt.Faults != nil && rt.Faults.InjectHTTP(w, r) {
+			return
 		}
 		h(w, r)
 	})
+}
+
+// FaultRoutes は障害注入の対象にしてよいルート（「GET /api/study-logs/:id」の形）。登録した順。
+func (rt *Router) FaultRoutes() []string {
+	return slices.Clone(rt.faultRoutes)
+}
+
+// faultableRoute は、障害注入の対象にしてよいルートか。障害を止める道（管理画面・ログイン・
+// 障害注入そのものの入口）は、障害の最中でも使えるよう対象にしない。画面のファイル（/api/ の外）も対象にしない。
+func faultableRoute(a Access, path string) bool {
+	switch a {
+	case AccessAdmin, AccessAuth, AccessOAuth:
+		return false
+	}
+	return strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/api/chaos/")
 }
 
 func isWrite(r *http.Request) bool {

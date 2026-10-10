@@ -75,6 +75,8 @@ curl -b jar localhost:8080/api/dashboard
 | `WEB_ORIGIN` | `https://juken-map.com` | 画面のオリジン。メールのリンク、Google・GitHub・LINE Login の戻り先、終わったあとのリダイレクト先。手元は Vite の URL |
 | `SIMULATION_ENABLED` | なし | `on` のときだけシミュレーションの API（`/api/sim/*`）を登録する。それ以外は 404 |
 | `SIMULATION_SECRET` | なし | シミュレーションの API の共有トークン（cron とは別）。空なら必ず 401 |
+| `CHAOS_ENABLED` | なし | `on` のときだけ障害注入（`internal/fault`）を組み込み、実験を始める API（`/api/chaos/*`）を登録する。それ以外は何も差し込まず 404。消してデプロイすれば全部止まる |
+| `CHAOS_SECRET` | なし | 障害注入の API の共有トークン（cron・sim とは別）。空なら必ず 401 |
 | `MICROCMS_WEBHOOK_SECRET` | なし | microCMS の Webhook の署名を確かめる（JUK-112）。空なら Webhook は必ず 401 |
 | `GITHUB_DEPLOY_TOKEN` | なし | microCMS の Webhook で deploy.yml を動かす GitHub のトークン（fine-grained、このリポジトリの Actions: Read and write だけ）。空なら Webhook は 502 |
 | `GITHUB_API_BASE` | `https://api.github.com` | GitHub の API の根元。テスト用 |
@@ -310,6 +312,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | --- | --- |
 | `internal/feature/analytics/` | 本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80） |
 | `internal/feature/cspreport/` | ブラウザが送る CSP の違反の報告をログに残す（認証なしの口なので件数と大きさに上限） |
+| `internal/feature/chaos/` | 障害注入の実験の入口（JUK-173）。始める・一覧・まとめて止めるは機械の入口（`/api/chaos/*`、`CHAOS_ENABLED=on` と `CHAOS_SECRET`）、見る・1つ止めるは管理画面（`/api/admin/chaos`）。書き込みは `internal/write/chaos` |
 | `internal/feature/sim/` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る。書き込みは `internal/write/simulation` |
 
 ### コマンド（引数を付けて起動したとき）
@@ -330,6 +333,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/site/` | 本番の画面のオリジン（`site.URL`）。通知の本文・SEO・LINE の連携先が使う（JUK-156） |
 | `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify のころと同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）、受け付けるなら gzip で返す（`gzip.go`。画面・sitemap・ブログの中継）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
 | `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node のころと同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
+| `internal/fault/` | 障害注入（JUK-173）。実行中の実験を5秒ごとに `ChaosExperiment` から読み、対象のルートのリクエストにだけ遅延・5xx（ルーター）、DB の失敗（`database.Open` に渡す接続の包み）、外部 API のタイムアウト（外部 API のクライアントの土台）を起こす。管理画面・ログイン・障害注入の入口とリクエストの外の処理には起こさない。起こしたリクエストはログとスパンに `chaos`、数値は `chaos_faults_injected_total`・`chaos_experiment_active`。画面には出さない |
 | `internal/database/` | 接続プール、RDS への TLS（`rds-ca-ap-northeast-1.pem`）、トランザクション（`InTx`）、MySQL のエラー番号、DATETIME の文字列を ISO にする。書き込みの持ち主と読み取りの両方が使う（JUK-152） |
 | `internal/opt/` | 持ち主の操作に渡す「送られなかった」と null を区別する値（`opt.Field`）。入口の `httpx.Optional` を `.Field()` で変換する。持ち主ではないので `internal/write` の外に置く（JUK-160） |
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |
@@ -340,6 +344,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/write/textbookmaster/` | 参考書マスター（総量の候補を含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154） |
 | `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |
 | `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
+| `internal/write/chaos/` | 障害注入の実験（`ChaosExperiment`）への書き込みの持ち主。始める・止める。実行中の実験は表全体で1つまでを、1つの SQL で守る（JUK-173） |
 | `internal/write/authguard/` | ログインの守り（回数の制限・メールの送信の上限・外部ログインの state）への書き込みの持ち主。試行を先に数えてから判定し、メールは数えてから記録するまでを名前付きロックで1件ずつ通す（JUK-154） |
 | `internal/write/expired/` | 期限の切れた行の消し方（主キーで選んで主キーで消す）。消す表は持ち主（account・authguard・notification）が渡す。書き込みの SQL は `internal/write/` の下だけに置く決まり（JUK-157）のため、`internal/database` から移した |
 | `internal/write/sql_boundary_test.go` | 書き込みの SQL（INSERT・UPDATE・DELETE・REPLACE）が `internal/write/` の下（と `internal/migrate`・`internal/dbtest`）にしか無いことを確かめるテスト（JUK-157） |

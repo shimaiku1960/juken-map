@@ -28,14 +28,19 @@ var rdsCA []byte
 
 // Open は DATABASE_URL（mysql://user:pass@host:port/db）をドライバの設定に直し、
 // 接続プールを作る。seed・テスト用の db/connection.ts も同じ形の URL を読む。
-func Open(databaseURL string) (*sql.DB, error) {
+// wraps はドライバの接続を包む（障害注入の internal/fault）。SQL のトレースより内側に入るので、包んだ側の失敗もスパンに残る。
+func Open(databaseURL string, wraps ...func(driver.Connector) driver.Connector) (*sql.DB, error) {
 	cfg, err := Config(databaseURL)
 	if err != nil {
 		return nil, err
 	}
-	connector, err := mysql.NewConnector(cfg)
+	var connector driver.Connector
+	connector, err = mysql.NewConnector(cfg)
 	if err != nil {
 		return nil, err
+	}
+	for _, wrap := range wraps {
+		connector = wrap(connector)
 	}
 	// SQL 1本ずつのトレース（下の tracedSpanOptions）。送り先はアプリ全体の設定（internal/telemetry/tracing.go の SetupTracing）を使い、
 	// その前やコマンドで動くときは何もしない。

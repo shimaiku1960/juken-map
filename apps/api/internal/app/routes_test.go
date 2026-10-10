@@ -19,7 +19,7 @@ func TestRegisteredRoutesAreRateLimited(t *testing.T) {
 	// ログインの入口（auth）は internal/feature/auth/throttle.go が IP とアカウントで別に数えるので対象外。
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	auth.RegisterRoutes(rt, auth.New(nil, auth.Config{}))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, blog.WebhookConfig{})
+	registerRoutes(rt, nil, allJobs(), line.Config{}, blog.WebhookConfig{})
 	rt.UseUp(httpxtest.Sessions["alice"].UserID, httpxtest.Sessions["admin"].UserID)
 
 	checked := 0
@@ -67,7 +67,7 @@ func TestRegisteredRoutesAreRateLimited(t *testing.T) {
 // panic するので、断れていなければテストが落ちる。
 func TestAdminRoutesRejectNonAdmins(t *testing.T) {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, blog.WebhookConfig{})
+	registerRoutes(rt, nil, allJobs(), line.Config{}, blog.WebhookConfig{})
 
 	tests := []struct {
 		as         string

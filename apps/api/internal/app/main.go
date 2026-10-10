@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
@@ -71,11 +72,19 @@ func run() error {
 		}
 	}()
 
-	db, err := database.Open(os.Getenv("DATABASE_URL"))
+	m := auth.NewMetrics()
+	// 障害注入（JUK-173）。CHAOS_ENABLED=on のときだけ作る。nil なら DB・外部 API・ルーターのどれにも差し込まない。
+	var injector *fault.Injector
+	if os.Getenv("CHAOS_ENABLED") == "on" {
+		injector = fault.New(m)
+	}
+	db, err := database.Open(os.Getenv("DATABASE_URL"), injector.WrapConnector)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	// 外部 API のクライアントの土台。障害注入が無効なら http.DefaultTransport のまま。
+	outbound := injector.Transport(http.DefaultTransport)
 
 	hashConcurrency, err := envInt("AUTH_HASH_CONCURRENCY", auth.DefaultHashConcurrency)
 	if err != nil {
@@ -86,7 +95,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	m := auth.NewMetrics()
 	m.ObserveDB(db)
 	webOrigin := envOr("WEB_ORIGIN", site.URL)
 	authHandlers := auth.New(db, auth.Config{
@@ -96,7 +104,7 @@ func run() error {
 		Metrics:         m,
 		AdminTo:         os.Getenv("ADMIN_NOTIFICATION_EMAIL"),
 		Sender: &auth.ResendSender{
-			Client: telemetry.NewOutboundClient(tp),
+			Client: telemetry.NewOutboundClient(tp, outbound),
 			Base:   envOr("RESEND_BASE_URL", "https://api.resend.com"),
 			Key:    os.Getenv("RESEND_API_KEY"),
 		},
@@ -105,18 +113,23 @@ func run() error {
 			os.Getenv("AUTH_GITHUB_ID"), os.Getenv("AUTH_GITHUB_SECRET")),
 	})
 	rt := httpx.NewRouter(authHandlers.LoadSession)
+	if injector != nil {
+		rt.Faults = injector
+	}
 	auth.RegisterRoutes(rt, authHandlers)
 	blog.RegisterRoutes(rt, blog.Config{
 		ServiceDomain: os.Getenv("MICROCMS_SERVICE_DOMAIN"),
 		APIKey:        os.Getenv("MICROCMS_API_KEY"),
-		Client:        telemetry.NewOutboundClient(tp),
+		Client:        telemetry.NewOutboundClient(tp, outbound),
 	})
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
 		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
 		simulationSecret:        os.Getenv("SIMULATION_SECRET"),
+		chaos:                   injector,
+		chaosSecret:             os.Getenv("CHAOS_SECRET"),
 		messenger: &notifications.HTTPMessenger{
-			Client:     telemetry.NewOutboundClient(tp),
+			Client:     telemetry.NewOutboundClient(tp, outbound),
 			ResendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
 			ResendKey:  os.Getenv("RESEND_API_KEY"),
 			LineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
@@ -126,7 +139,7 @@ func run() error {
 		ChannelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
 		WebOrigin:     envOr("WEB_ORIGIN", site.URL),
 		Client: &line.HTTPClient{
-			HTTP:           telemetry.NewOutboundClient(tp),
+			HTTP:           telemetry.NewOutboundClient(tp, outbound),
 			BotBase:        envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
 			AccessToken:    os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
 			LoginBase:      envOr("LINE_LOGIN_API_BASE", "https://api.line.me"),
@@ -137,7 +150,7 @@ func run() error {
 	}, blog.WebhookConfig{
 		Secret: os.Getenv("MICROCMS_WEBHOOK_SECRET"),
 		Deployer: &blog.GitHubWorkflowDispatcher{
-			Client:   telemetry.NewOutboundClient(tp),
+			Client:   telemetry.NewOutboundClient(tp, outbound),
 			APIBase:  envOr("GITHUB_API_BASE", "https://api.github.com"),
 			Repo:     "shimaiku1960/juken-map",
 			Workflow: "deploy.yml",
@@ -189,6 +202,10 @@ func run() error {
 
 	// 期限の切れたログイン・LINE 連携の行を1時間ごとに消す（expired_cleanup.go）。
 	go runExpiredCleanup(ctx, db, time.Now)
+	// 実行中の実験を5秒ごとに DB から読み直す（internal/fault）。
+	if injector != nil {
+		go injector.Run(ctx, db)
+	}
 
 	// ListenAndServe は止まるまで戻らないので、別の goroutine で動かし、
 	// 「サーバーが落ちた」と「止めるよう言われた」のどちらか早いほうを待つ。

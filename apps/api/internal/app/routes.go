@@ -3,10 +3,12 @@ package app
 import (
 	"database/sql"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/admin"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/analytics"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/chaos"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/cspreport"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/goals"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
@@ -115,6 +117,17 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 		rt.Job("POST /api/sim/users", jobs.simulationSecret, simRoutes.MarkUser)
 		rt.Job("PATCH /api/sim/users/{seq}", jobs.simulationSecret, simRoutes.UpdateUser)
 	}
+
+	// 障害注入の実験（JUK-173）。始める入口は CHAOS_ENABLED=on のときだけ存在する。管理画面は常にあり、無効なら enabled=false を返す。
+	// 対象にできるルートは、全ルートを登録し終えたあとに読む（rt.FaultRoutes）。
+	chaosRoutes := chaos.New(db, jobs.chaos, rt.FaultRoutes)
+	if jobs.chaos != nil {
+		rt.Job("GET /api/chaos/experiments", jobs.chaosSecret, chaosRoutes.List)
+		rt.Job("POST /api/chaos/experiments", jobs.chaosSecret, chaosRoutes.Start)
+		rt.Job("POST /api/chaos/experiments/stop", jobs.chaosSecret, chaosRoutes.StopAll)
+	}
+	rt.Admin("GET /api/admin/chaos", chaosRoutes.AdminState)
+	rt.Admin("POST /api/admin/chaos/experiments/{id}/stop", chaosRoutes.AdminStop)
 }
 
 // jobConfig はジョブ（cron・sim）の入口が使う設定。秘密の値と外部サービスへの送り方。
@@ -123,5 +136,8 @@ type jobConfig struct {
 	dailyNotificationSecret string
 	simulationEnabled       bool
 	simulationSecret        string
-	messenger               notifications.Messenger
+	// chaos は CHAOS_ENABLED=on のときだけある。秘密は cron・sim と別。
+	chaos       *fault.Injector
+	chaosSecret string
+	messenger   notifications.Messenger
 }

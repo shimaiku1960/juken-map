@@ -212,10 +212,10 @@ apps/api/
   ├ feature/              画面・入口ごとの処理（ハンドラと読み取りの SQL）
   │ ├ auth/  study/  goals/  textbooks/   （study はダッシュボードも持つ。同じ読み取りを使うため）
   │ ├ admin/  line/  notifications/  ops/  blog/  universities/
-  │ └ sim/  analytics/  cspreport/
+  │ └ sim/  chaos/  analytics/  cspreport/
   ├ write/                書き込みの持ち主（操作とトランザクション）
   │ ├ account/  authguard/  studyrecord/  textbook/  goal/
-  │ ├ university/  textbookmaster/  notification/  simulation/   （一覧は下の「持ち主の一覧」）
+  │ ├ university/  textbookmaster/  notification/  simulation/  chaos/   （一覧は下の「持ち主の一覧」）
   │ └ expired/            持ち主ではなく、持ち主たちが使う期限切れの行の消し方（下の「決まり」の5）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
   │ └ httpxtest/          入口を使うテストの補助（偽のセッション・JSON の比べ方）
@@ -224,6 +224,7 @@ apps/api/
   ├ database/             DB 接続
   ├ opt/                  「送られなかった」と null を区別する値（入口が読み、持ち主の操作に渡す）
   ├ telemetry/            ログ・メトリクス・トレース
+  ├ fault/                障害注入（遅延・5xx・DB の失敗・外部 API のタイムアウト。CHAOS_ENABLED=on のときだけ）
   ├ apischema/            OpenAPI から生成した型
   ├ spa/                  画面と SEO の配信
   ├ migrate/              マイグレーションの適用
@@ -288,6 +289,7 @@ apps/api/
 | `textbookmaster` | `TextbookMaster`・`TextbookMasterMetric` | 参考書マスターの作成・変更（マスター＋測り方の付け替え）。大学と一緒に変える操作は無いので、`catalog` にはまとめない |
 | `notification` | `LineConnection`・`LineLinkNonce`・`LineOAuthAttempt`・`LineWebhookEvent`・`NotificationPreference`・`NotificationDelivery` | LINE の連携の解除（連携＋確認用の値＋通知の設定） |
 | `simulation` | `user.simSeq`・`simCohort`・`simLastActedOn`・`simDormantFrom` | 負荷のシミュレーション（`/admin/sim`）の利用者の印。ほかの持ち主の列と一緒に変える操作は無い |
+| `chaos` | `ChaosExperiment` | 障害注入の実験（JUK-173）。利用者のデータとは一緒に変えない |
 
 決めたこと：
 

@@ -43,6 +43,11 @@ type dbAdminApp struct {
 }
 
 func newDBAdminApp(t *testing.T, db *sql.DB) dbAdminApp {
+	return newDBAdminAppWith(t, db, jobConfig{})
+}
+
+// newDBAdminAppWith は、ジョブの入口（sim・chaos）の設定を指定して組む。
+func newDBAdminAppWith(t *testing.T, db *sql.DB, jobs jobConfig) dbAdminApp {
 	rt := httpx.NewRouter(func(r *http.Request) (*httpx.Session, error) {
 		c, err := r.Cookie("test")
 		if err != nil {
@@ -50,7 +55,7 @@ func newDBAdminApp(t *testing.T, db *sql.DB) dbAdminApp {
 		}
 		return &httpx.Session{UserID: c.Value, Email: c.Value + "@example.test", Role: "admin", TwoFactorVerified: true}, nil
 	})
-	registerRoutes(rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{})
+	registerRoutes(rt, db, jobs, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{})
 	return dbAdminApp{t: t, rt: rt}
 }
 

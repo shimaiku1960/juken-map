@@ -118,6 +118,38 @@ func TestAccessLogMarksSimulation(t *testing.T) {
 	}
 }
 
+// markLatency は障害注入の代わり。待たずに「遅延を起こした」印だけ付ける。
+type markLatency struct{}
+
+func (markLatency) InjectHTTP(_ http.ResponseWriter, r *http.Request) bool {
+	telemetry.RequestInfoFrom(r.Context()).MarkFault("latency")
+	return false
+}
+
+func TestAccessLogMarksFaults(t *testing.T) {
+	// 障害注入（internal/fault）を起こしたリクエストだけに chaos の印が付く。画面への応答には出さない。
+	buf := captureLogs(t)
+	h, rt := newTestServer(auth.NewMetrics(), 10)
+	rt.Faults = markLatency{}
+
+	res := serve(h, "GET", "/api/public", "")
+
+	line := findLog(logLines(t, buf), "request completed")
+	if chaos, _ := line["chaos"].([]any); len(chaos) != 1 || chaos[0] != "latency" {
+		t.Errorf("chaos = %v, want [latency]", line["chaos"])
+	}
+	if strings.Contains(res.Body.String(), "latency") || res.Header().Get("X-Chaos") != "" {
+		t.Errorf("応答に障害注入の印が出ている")
+	}
+
+	buf.Reset()
+	rt.Faults = nil
+	serve(h, "GET", "/api/public", "")
+	if line := findLog(logLines(t, buf), "request completed"); line["chaos"] != nil {
+		t.Errorf("障害を起こしていないのに chaos = %v", line["chaos"])
+	}
+}
+
 func TestRequestID(t *testing.T) {
 	uuid := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	if id := newRequestID(false); !uuid.MatchString(id) {

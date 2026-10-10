@@ -21,6 +21,75 @@ func (e AdminUserRole) Valid() bool {
 	}
 }
 
+// Defines values for ChaosExperimentStatus.
+const (
+	ChaosStatusEnded   ChaosExperimentStatus = "ended"
+	ChaosStatusRunning ChaosExperimentStatus = "running"
+	ChaosStatusStopped ChaosExperimentStatus = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the ChaosExperimentStatus enum.
+func (e ChaosExperimentStatus) Valid() bool {
+	switch e {
+	case ChaosStatusEnded:
+		return true
+	case ChaosStatusRunning:
+		return true
+	case ChaosStatusStopped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChaosExperimentInputStatusCode.
+const (
+	N500 ChaosExperimentInputStatusCode = 500
+	N502 ChaosExperimentInputStatusCode = 502
+	N503 ChaosExperimentInputStatusCode = 503
+	N504 ChaosExperimentInputStatusCode = 504
+)
+
+// Valid indicates whether the value is a known member of the ChaosExperimentInputStatusCode enum.
+func (e ChaosExperimentInputStatusCode) Valid() bool {
+	switch e {
+	case N500:
+		return true
+	case N502:
+		return true
+	case N503:
+		return true
+	case N504:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChaosKind.
+const (
+	ChaosKindDBError         ChaosKind = "db_error"
+	ChaosKindHTTPError       ChaosKind = "http_error"
+	ChaosKindLatency         ChaosKind = "latency"
+	ChaosKindOutboundTimeout ChaosKind = "outbound_timeout"
+)
+
+// Valid indicates whether the value is a known member of the ChaosKind enum.
+func (e ChaosKind) Valid() bool {
+	switch e {
+	case ChaosKindDBError:
+		return true
+	case ChaosKindHTTPError:
+		return true
+	case ChaosKindLatency:
+		return true
+	case ChaosKindOutboundTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CompleteStudyPlanInputRangeUnit.
 const (
 	CompleteStudyPlanInputRangeUnitChapter  CompleteStudyPlanInputRangeUnit = "chapter"
@@ -668,6 +737,16 @@ type AdminBanResult struct {
 	SessionsRemoved int `json:"sessionsRemoved"`
 }
 
+// AdminChaosState defines model for AdminChaosState.
+type AdminChaosState struct {
+	// Enabled CHAOS_ENABLED=on で起動しているか。false なら実験の行があっても障害は起きない
+	Enabled     bool              `json:"enabled"`
+	Experiments []ChaosExperiment `json:"experiments"`
+
+	// Routes 障害を起こせるルート（管理画面・ログイン・障害注入の入口は含まない）
+	Routes []string `json:"routes"`
+}
+
 // AdminDeleteResult defines model for AdminDeleteResult.
 type AdminDeleteResult struct {
 	Email *string `json:"email"`
@@ -811,6 +890,76 @@ type AdminUserList struct {
 type AdminUserRef struct {
 	Email *string `json:"email"`
 	ID    string  `json:"id"`
+}
+
+// ChaosExperiment defines model for ChaosExperiment.
+type ChaosExperiment struct {
+	// DelayMs latency・outbound_timeout 以外は 0
+	DelayMs int `json:"delayMs"`
+
+	// EndsAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
+	EndsAt IsoDateTime `json:"endsAt"`
+	ID     int64       `json:"id"`
+
+	// Kind latency＝応答を遅らせる、http_error＝5xx を返す、db_error＝SQL を失敗させる、outbound_timeout＝外部 API をタイムアウトさせる
+	Kind  ChaosKind `json:"kind"`
+	Rate  float64   `json:"rate"`
+	Route string    `json:"route"`
+
+	// StartsAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
+	StartsAt IsoDateTime `json:"startsAt"`
+
+	// Status running＝実行中、stopped＝途中で止めた、ended＝終わる時刻が来た
+	Status ChaosExperimentStatus `json:"status"`
+
+	// StatusCode http_error 以外は 0
+	StatusCode int `json:"statusCode"`
+
+	// StoppedAt 途中で止めた時刻
+	StoppedAt *IsoDateTime `json:"stoppedAt"`
+
+	// StoppedBy 止めた人（admin:<userId> か job）
+	StoppedBy *string `json:"stoppedBy"`
+}
+
+// ChaosExperimentStatus running＝実行中、stopped＝途中で止めた、ended＝終わる時刻が来た
+type ChaosExperimentStatus string
+
+// ChaosExperimentInput defines model for ChaosExperimentInput.
+type ChaosExperimentInput struct {
+	// DelayMs latency・outbound_timeout だけ（必須）。待たせる時間
+	DelayMs *int `json:"delayMs,omitempty"`
+
+	// DurationSeconds 今から何秒続けるか。終わる時刻が来たら自動で止まる
+	DurationSeconds int `json:"durationSeconds"`
+
+	// Kind latency＝応答を遅らせる、http_error＝5xx を返す、db_error＝SQL を失敗させる、outbound_timeout＝外部 API をタイムアウトさせる
+	Kind ChaosKind `json:"kind"`
+
+	// Rate 対象のリクエストのうち障害を起こす割合
+	Rate float64 `json:"rate"`
+
+	// Route "*"（/api/ のルートのうち /api/health を除く全部）か、対象にできるルート（「GET /api/study-logs/:id」の形）
+	Route string `json:"route"`
+
+	// StatusCode http_error だけ（必須）。返すステータス
+	StatusCode *ChaosExperimentInputStatusCode `json:"statusCode,omitempty"`
+}
+
+// ChaosExperimentInputStatusCode http_error だけ（必須）。返すステータス
+type ChaosExperimentInputStatusCode int
+
+// ChaosExperimentList defines model for ChaosExperimentList.
+type ChaosExperimentList struct {
+	Experiments []ChaosExperiment `json:"experiments"`
+}
+
+// ChaosKind latency＝応答を遅らせる、http_error＝5xx を返す、db_error＝SQL を失敗させる、outbound_timeout＝外部 API をタイムアウトさせる
+type ChaosKind string
+
+// ChaosStopResult defines model for ChaosStopResult.
+type ChaosStopResult struct {
+	Stopped int64 `json:"stopped"`
 }
 
 // CompleteStudyPlanInput 予定の完了（Zod の completeStudyPlanSchema）。範囲の3つの規則は StudyLogInput と同じ
@@ -1731,6 +1880,9 @@ type UpdateUniversityJSONRequestBody = UniversityInput
 
 // DeleteUserJSONRequestBody defines body for DeleteUser for application/json ContentType.
 type DeleteUserJSONRequestBody DeleteUserJSONBody
+
+// StartChaosExperimentJSONRequestBody defines body for StartChaosExperiment for application/json ContentType.
+type StartChaosExperimentJSONRequestBody = ChaosExperimentInput
 
 // SendDailyStudyNotificationsJSONRequestBody defines body for SendDailyStudyNotifications for application/json ContentType.
 type SendDailyStudyNotificationsJSONRequestBody SendDailyStudyNotificationsJSONBody

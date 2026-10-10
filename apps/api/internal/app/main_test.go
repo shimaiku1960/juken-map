@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
@@ -96,13 +97,18 @@ func TestRegisteredRoutes(t *testing.T) {
 		{Pattern: "GET /api/sim/state", Access: httpx.AccessJob},
 		{Pattern: "POST /api/sim/users", Access: httpx.AccessJob},
 		{Pattern: "PATCH /api/sim/users/{seq}", Access: httpx.AccessJob},
+		{Pattern: "GET /api/chaos/experiments", Access: httpx.AccessJob},
+		{Pattern: "POST /api/chaos/experiments", Access: httpx.AccessJob},
+		{Pattern: "POST /api/chaos/experiments/stop", Access: httpx.AccessJob},
+		{Pattern: "GET /api/admin/chaos", Access: httpx.AccessAdmin},
+		{Pattern: "POST /api/admin/chaos/experiments/{id}/stop", Access: httpx.AccessAdmin},
 	}
 
 	// ハンドラは呼ばないので、DB は nil のままでよい。
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	auth.RegisterRoutes(rt, auth.New(nil, auth.Config{}))
 	blog.RegisterRoutes(rt, blog.Config{})
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, blog.WebhookConfig{})
+	registerRoutes(rt, nil, allJobs(), line.Config{}, blog.WebhookConfig{})
 
 	if len(rt.Routes) != len(want) {
 		t.Fatalf("routes = %v\nwant %v", rt.Routes, want)
@@ -126,7 +132,7 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	auth.RegisterRoutes(rt, auth.New(nil, auth.Config{}))
 	blog.RegisterRoutes(rt, blog.Config{})
-	registerRoutes(rt, nil, jobConfig{simulationEnabled: true}, line.Config{}, blog.WebhookConfig{})
+	registerRoutes(rt, nil, allJobs(), line.Config{}, blog.WebhookConfig{})
 
 	checked := 0
 	for _, route := range rt.Routes {
@@ -179,4 +185,9 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	if checked < 20 {
 		t.Fatalf("確かめた書き込みのルートが %d 本しかない", checked)
 	}
+}
+
+// allJobs は、設定で切り替わるジョブの入口（sim・chaos）を全部登録するときの設定。
+func allJobs() jobConfig {
+	return jobConfig{simulationEnabled: true, chaos: fault.New(auth.NewMetrics())}
 }
