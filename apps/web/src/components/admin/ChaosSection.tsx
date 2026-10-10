@@ -41,7 +41,9 @@ const errorMessage = (error: unknown) =>
 const detail = (e: ChaosExperiment) =>
   e.kind === "http_error" ? `${e.statusCode} を返す` : e.delayMs > 0 ? `${e.delayMs.toLocaleString()}ms` : "—";
 
-const stoppedByLabel = (stoppedBy: string) => (stoppedBy === "job" ? "スケジューラー" : "管理画面");
+// stoppedBy は admin:<userId>・job（機械の入口）・deploy（デプロイの前後、JUK-176）。
+const stoppedByLabel = (stoppedBy: string) =>
+  stoppedBy === "deploy" ? "デプロイ" : stoppedBy === "job" ? "機械の入口" : "管理画面";
 
 export default function ChaosSection() {
   const chaos = useAdminChaos();

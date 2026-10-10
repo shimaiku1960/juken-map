@@ -1,4 +1,4 @@
-// Package ops は運用のコマンド（incident・grant-admin）。サーバーとしては動かず、internal/app の cli.go が引数を見て呼ぶ。
+// Package ops は運用のコマンド（incident・grant-admin・chaos）。サーバーとしては動かず、internal/app の cli.go が引数を見て呼ぶ。
 // 変える操作は internal/write/account を呼び、OpsAuditLog に残す。
 package ops
 
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
+	writechaos "github.com/shimaiku1960/juken-map/apps/api/internal/write/chaos"
 )
 
 const incidentUsage = `使い方: incident <操作> [メールアドレス]
@@ -23,6 +24,9 @@ const incidentUsage = `使い方: incident <操作> [メールアドレス]
   revoke-all          全員のセッションを消す（全員がログインし直し）
   reset-2fa <メール>  2段階認証を設定前に戻し、セッションをすべて消す
   log                 運用コマンドで変えたことの記録を、新しい順に50件見る`
+
+// chaos stop はデプロイの前後に .github/scripts/deploy-ec2.sh が呼ぶ（JUK-176）。デプロイ中に障害を起こさないため。
+const chaosUsage = `使い方: chaos stop   実行中の障害注入の実験を止める（デプロイが呼ぶ）`
 
 const grantAdminUsage = "使い方: grant-admin <メールアドレス> [--revoke] / grant-admin --list"
 
@@ -42,8 +46,10 @@ func dispatchCommand(ctx context.Context, st incidentStore, args []string, stdou
 		err = runIncident(ctx, st, args[1:], stdout)
 	case "grant-admin":
 		err = runGrantAdmin(ctx, st, args[1:], stdout)
+	case "chaos":
+		err = runChaos(ctx, st, args[1:], stdout)
 	default:
-		err = usageError(fmt.Sprintf("知らないコマンドです: %s（incident・grant-admin・migrate）", args[0]))
+		err = usageError(fmt.Sprintf("知らないコマンドです: %s（incident・grant-admin・chaos・migrate）", args[0]))
 	}
 	if err == nil {
 		return 0
@@ -211,4 +217,17 @@ func orDash(s *string) string {
 		return "-"
 	}
 	return *s
+}
+
+// runChaos は実行中の実験を止める。デプロイのログは公開されるので、止めた数（実験があったか）は出さない（JUK-178）。
+func runChaos(ctx context.Context, st incidentStore, args []string, out io.Writer) error {
+	if len(args) != 1 || args[0] != "stop" {
+		return usageError(chaosUsage)
+	}
+	// DATETIME(3) に書くので、ミリ秒で切り捨てる（dates.NowMillis と同じ）。
+	if _, err := writechaos.StopAll(ctx, st.db, writechaos.StoppedByDeploy, st.now().UTC().Truncate(time.Millisecond)); err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "実行中の実験があれば止めました")
+	return nil
 }

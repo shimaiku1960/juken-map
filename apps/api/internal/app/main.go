@@ -20,6 +20,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/chaos"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/notifications"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
@@ -30,7 +31,7 @@ import (
 
 // Main は cmd/api の main から呼ばれる本体で、終了コードを返す。args は os.Args[1:]。
 func Main(args []string) int {
-	// 引数があれば、サーバーではなくコマンド（incident・grant-admin・migrate）として動く（cli.go）。
+	// 引数があれば、サーバーではなくコマンド（incident・grant-admin・chaos・migrate）として動く（cli.go）。
 	if len(args) > 0 {
 		return runCommand(args, os.Stdout, os.Stderr)
 	}
@@ -122,19 +123,20 @@ func run() error {
 		APIKey:        os.Getenv("MICROCMS_API_KEY"),
 		Client:        telemetry.NewOutboundClient(tp, outbound),
 	})
+	messenger := &notifications.HTTPMessenger{
+		Client:     telemetry.NewOutboundClient(tp, outbound),
+		ResendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
+		ResendKey:  os.Getenv("RESEND_API_KEY"),
+		LineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
+		LineToken:  os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
+	}
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
 		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
 		simulationSecret:        os.Getenv("SIMULATION_SECRET"),
 		chaos:                   injector,
 		chaosSecret:             os.Getenv("CHAOS_SECRET"),
-		messenger: &notifications.HTTPMessenger{
-			Client:     telemetry.NewOutboundClient(tp, outbound),
-			ResendBase: envOr("RESEND_BASE_URL", "https://api.resend.com"),
-			ResendKey:  os.Getenv("RESEND_API_KEY"),
-			LineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
-			LineToken:  os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
-		},
+		messenger:               messenger,
 	}, line.Config{
 		ChannelSecret: os.Getenv("LINE_CHANNEL_SECRET"),
 		WebOrigin:     envOr("WEB_ORIGIN", site.URL),
@@ -205,6 +207,16 @@ func run() error {
 	// 実行中の実験を5秒ごとに DB から読み直す（internal/fault）。
 	if injector != nil {
 		go injector.Run(ctx, db)
+	}
+	// 予告なしの実験を平日の昼に起こす（internal/feature/chaos の schedule.go、JUK-176）。CHAOS_ENABLED=on も要る。
+	if injector != nil && os.Getenv("CHAOS_SCHEDULE") == "on" {
+		var notify func(ctx context.Context, subject, body string) error
+		if to := os.Getenv("ADMIN_NOTIFICATION_EMAIL"); to != "" {
+			notify = func(ctx context.Context, subject, body string) error {
+				return messenger.SendAdminEmail(ctx, to, subject, body)
+			}
+		}
+		go chaos.NewScheduler(db, injector, rt.FaultRoutes, notify).Run(ctx)
 	}
 
 	// ListenAndServe は止まるまで戻らないので、別の goroutine で動かし、

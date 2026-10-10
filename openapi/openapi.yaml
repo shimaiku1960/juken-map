@@ -2534,7 +2534,7 @@ components:
           allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
           nullable: true
         stoppedBy:
-          description: 止めた人（admin:<userId> か job）
+          description: 止めた人（admin:<userId>・job・deploy）
           type: string
           nullable: true
         status:

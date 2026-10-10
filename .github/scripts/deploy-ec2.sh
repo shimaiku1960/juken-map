@@ -156,8 +156,9 @@ fi
 # 暗号化する鍵（AUTH_TOTP_KEYS。無ければ BETTER_AUTH_SECRET から導く）も渡す。
 # 画面の配信（JUK-111）も Go が受けるので、HTML に差し込む GA4 と Faro の設定、ブログの中継（/api/blog）に使う microCMS の
 # 2つも渡す。トレースの送り先（OTEL_EXPORTER_OTLP_ENDPOINT、JUK-126）も、上で付けたときだけ渡る。
-# 障害注入（JUK-173）のスイッチと共有トークンも渡す。.env から CHAOS_ENABLED を消してデプロイすれば、全部止まる。
-grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|OTEL_EXPORTER_OTLP_ENDPOINT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|LINE_CHANNEL_SECRET|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET|DAILY_NOTIFICATION_SECRET|SIMULATION_ENABLED|SIMULATION_SECRET|CHAOS_ENABLED|CHAOS_SECRET|AUTH_GOOGLE_ID|AUTH_GOOGLE_SECRET|AUTH_GITHUB_ID|AUTH_GITHUB_SECRET|ADMIN_NOTIFICATION_EMAIL|AUTH_TOTP_KEYS|GA_MEASUREMENT_ID|FARO_COLLECTOR_URL|MICROCMS_SERVICE_DOMAIN|MICROCMS_API_KEY)=' \
+# 障害注入（JUK-173）のスイッチと共有トークン、予告なしに起こすくじのスイッチ（CHAOS_SCHEDULE、JUK-176）も渡す。
+# .env から CHAOS_ENABLED を消してデプロイすれば、全部止まる。
+grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|OTEL_EXPORTER_OTLP_ENDPOINT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|LINE_CHANNEL_SECRET|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET|DAILY_NOTIFICATION_SECRET|SIMULATION_ENABLED|SIMULATION_SECRET|CHAOS_ENABLED|CHAOS_SCHEDULE|CHAOS_SECRET|AUTH_GOOGLE_ID|AUTH_GOOGLE_SECRET|AUTH_GITHUB_ID|AUTH_GITHUB_SECRET|ADMIN_NOTIFICATION_EMAIL|AUTH_TOTP_KEYS|GA_MEASUREMENT_ID|FARO_COLLECTOR_URL|MICROCMS_SERVICE_DOMAIN|MICROCMS_API_KEY)=' \
   "$RUNTIME_ENV_FILE" > "$GO_ENV_FILE" || true
 for key in DATABASE_URL BETTER_AUTH_SECRET; do
   grep -q "^$key=" "$GO_ENV_FILE" || { echo "Go に渡す $key が見つからない" >&2; exit 1; }
@@ -274,6 +275,15 @@ docker rm -f juken-map-next >/dev/null 2>&1 || true
 
 # マイグレーションを、新しいイメージの1回きりのコンテナ（/api migrate、JUK-125）で先に当てる。失敗したら set -e でここで
 # 止まり、新しいコンテナは起動しない（nginx は古いコンテナを向いたままなので、本番は無傷）。
+# 障害注入の実験（JUK-176）を、デプロイの前後に止める。デプロイ中に障害を起こさないため。切り替えまでの間に古い
+# コンテナのくじが当たることもあるので、切り替えた後にも止める（新しいコンテナは起動から15分はくじを引かない）。
+# 古いイメージにこのコマンドが無いとき（初回）や、コンテナが無いときは何もしない。止めた数はログに出さない。
+stop_chaos() {
+  docker inspect juken-map-go >/dev/null 2>&1 || return 0
+  docker exec juken-map-go /api chaos stop || echo "deploy: 障害注入の実験を止められなかった（続ける）" >&2
+}
+stop_chaos
+
 echo "deploy: マイグレーションを当てる"
 docker run --rm \
   --network "$NETWORK" \
@@ -361,6 +371,7 @@ if docker inspect juken-map >/dev/null 2>&1; then
   echo "deploy: Node のアプリのコンテナ（juken-map）を止めて消した"
 fi
 echo "deploy: Go $GO_NEW_PORT へ切り替え完了（旧コンテナを停止）"
+stop_chaos
 
 # アプリが健全になってから Alloy を入れ替える。ここで失敗してもアプリは動き続け、
 # デプロイだけが失敗になるので、監視が壊れたことに気づける。

@@ -15,6 +15,13 @@ import (
 // Error() は利用者に見せる文言。
 var ErrRunning = errors.New("ほかの実験が実行中です")
 
+// 止めた人（stoppedBy）。管理画面は StoppedByAdmin に利用者の id を付ける。
+const (
+	StoppedByAdmin  = "admin:"
+	StoppedByJob    = "job"    // 機械の入口（/api/chaos/）
+	StoppedByDeploy = "deploy" // デプロイの前後（`/api chaos stop`、.github/scripts/deploy-ec2.sh）
+)
+
 // Experiment は新しく始める実験。
 type Experiment struct {
 	Kind       string
@@ -49,7 +56,7 @@ func Start(ctx context.Context, db *sql.DB, e Experiment, now time.Time) (int64,
 	return res.LastInsertId()
 }
 
-// StopAll は実行中の実験を全部止めて、止めた数を返す。by は止めた人（admin:<userId> か job）。
+// StopAll は実行中の実験を全部止めて、止めた数を返す。by は止めた人（StoppedBy…）。
 func StopAll(ctx context.Context, db *sql.DB, by string, now time.Time) (int64, error) {
 	res, err := db.ExecContext(ctx,
 		"UPDATE `ChaosExperiment` SET stoppedAt = ?, stoppedBy = ? WHERE stoppedAt IS NULL AND endsAt > ?",

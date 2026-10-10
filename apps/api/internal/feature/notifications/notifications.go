@@ -382,6 +382,16 @@ func (m *HTTPMessenger) sendEmail(ctx context.Context, to string, msg dailyMessa
 	})
 }
 
+// SendAdminEmail は運営者へのお知らせ（障害注入の実験が終わったこと、JUK-176）を1通送る。本文は HTML。
+func (m *HTTPMessenger) SendAdminEmail(ctx context.Context, to, subject, body string) error {
+	if m.ResendKey == "" {
+		return errors.New("RESEND_API_KEY is not configured")
+	}
+	return m.post(ctx, m.ResendBase+"/emails", m.ResendKey, map[string]any{
+		"from": notificationFrom, "to": to, "subject": subject, "html": body,
+	})
+}
+
 func (m *HTTPMessenger) pushLine(ctx context.Context, lineUserID, text string) error {
 	if m.LineToken == "" {
 		return errors.New("LINE_CHANNEL_ACCESS_TOKEN is not configured")

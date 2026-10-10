@@ -19,6 +19,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
+	writechaos "github.com/shimaiku1960/juken-map/apps/api/internal/write/chaos"
 )
 
 type cliFixture struct {
@@ -417,4 +418,30 @@ func TestGrantAdminCommandDB(t *testing.T) {
 			t.Errorf("断ったのに記録が残った: %+v", records)
 		}
 	})
+}
+
+// chaos stop はデプロイの前後に呼ばれ、実行中の実験を止める（JUK-176）。止めた数は出さない。
+func TestChaosStopDB(t *testing.T) {
+	fx := newCLIFixture(t)
+	fx.Lock(dbtest.ChaosLock)
+	t.Cleanup(func() { fx.Exec("DELETE FROM `ChaosExperiment` WHERE startsAt >= '2100-01-01'") })
+	now := time.Date(2100, 1, 1, 3, 0, 0, 0, time.UTC).Add(time.Duration(time.Now().UnixNano() % int64(time.Hour))).Truncate(time.Millisecond)
+	fx.st.now = func() time.Time { return now.Add(time.Minute) }
+	id, err := writechaos.Start(context.Background(), fx.DB, writechaos.Experiment{Kind: "db_error", Route: "*", Rate: 0.1,
+		StartsAt: now, EndsAt: now.Add(10 * time.Minute)}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for range 2 {
+		if out := fx.mustRun("chaos", "stop"); out != "実行中の実験があれば止めました\n" {
+			t.Errorf("out = %q", out)
+		}
+	}
+	if got := fx.Rows("SELECT stoppedBy FROM `ChaosExperiment` WHERE id = ?", id); got[0] != `{"stoppedBy":"deploy"}` {
+		t.Errorf("row = %v", got)
+	}
+	if code, _, errOut := fx.run("chaos"); code != 1 || !strings.Contains(errOut, "使い方: chaos stop") {
+		t.Errorf("code = %d, stderr = %q", code, errOut)
+	}
 }
