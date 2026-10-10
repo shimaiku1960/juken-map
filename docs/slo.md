@@ -2,6 +2,7 @@
 
 本番の「正常」を数字で決めておく。カオスエンジニアリング（JUK-171）で障害を起こしたときは、この定常状態から外れたか、
 外れたことにアラートで気づけたかで結果を見る。アラートの中身は `terraform/grafana/alerting.tf`。
+起きたときの記録と振り返りの型は [outage-response.md](./outage-response.md)。
 
 ## SLI と SLO
 
