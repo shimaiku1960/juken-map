@@ -1492,14 +1492,23 @@ export interface components {
             /** @description 今から何秒続けるか。終わる時刻が来たら自動で止まる */
             durationSeconds: number;
         };
+        /**
+         * @description 記録された実験の種類。ChaosKind（アプリの層）に、予告なしのくじだけが起こすホストの層（host_*）を足したもの。 host_process_kill＝API のプロセスを落とす、host_cpu・host_memory＝CPU・メモリを圧迫する、host_disk＝ディスクを埋める、 host_db_delay・host_db_loss＝RDS までの通信を遅らせる・落とす
+         * @enum {string}
+         */
+        ChaosRecordKind: "latency" | "http_error" | "db_error" | "outbound_timeout" | "host_process_kill" | "host_cpu" | "host_memory" | "host_disk" | "host_db_delay" | "host_db_loss";
         ChaosExperiment: {
             /** Format: int64 */
             id: number;
-            kind: components["schemas"]["ChaosKind"];
+            kind: components["schemas"]["ChaosRecordKind"];
+            /** @description ホストの層（host_*）は空 */
             route: string;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description 障害を起こす割合。host_cpu・host_memory・host_disk は使う割合、host_db_loss は落とす割合、ほかのホストの層は 1
+             */
             rate: number;
-            /** @description latency・outbound_timeout 以外は 0 */
+            /** @description latency・outbound_timeout・host_db_delay 以外は 0 */
             delayMs: number;
             /** @description http_error 以外は 0 */
             statusCode: number;
@@ -1507,7 +1516,7 @@ export interface components {
             endsAt: components["schemas"]["IsoDateTime"];
             /** @description 途中で止めた時刻 */
             stoppedAt: components["schemas"]["IsoDateTime"] | null;
-            /** @description 止めた人（admin:<userId>・job・deploy） */
+            /** @description 止めた人（admin:<userId>・job・deploy）。failed はホストで起こせず、すぐ止めたもの */
             stoppedBy: string | null;
             /**
              * @description running＝実行中、stopped＝途中で止めた、ended＝終わる時刻が来た

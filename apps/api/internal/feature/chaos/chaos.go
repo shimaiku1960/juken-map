@@ -165,7 +165,7 @@ func toSchemas(records []fault.Record, now time.Time) []apischema.ChaosExperimen
 func toSchema(rec fault.Record, now time.Time) apischema.ChaosExperiment {
 	e := apischema.ChaosExperiment{
 		ID:         rec.ID,
-		Kind:       apischema.ChaosKind(rec.Kind),
+		Kind:       apischema.ChaosRecordKind(rec.Kind),
 		Route:      rec.Route,
 		Rate:       rec.Rate,
 		DelayMs:    rec.DelayMs,

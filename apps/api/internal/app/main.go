@@ -23,6 +23,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/chaos"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/line"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/notifications"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/hostfault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/spa"
@@ -216,7 +217,19 @@ func run() error {
 				return messenger.SendAdminEmail(ctx, to, subject, body)
 			}
 		}
-		go chaos.NewScheduler(db, injector, rt.FaultRoutes, notify).Run(ctx)
+		// ホストの層の障害（internal/hostfault、JUK-174）は CHAOS_HOST=on のときだけ。EC2 の外（ローカル）では作れない。
+		var host hostfault.Runner
+		if os.Getenv("CHAOS_HOST") == "on" {
+			ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			h, err := hostfault.NewSSM(ictx)
+			cancel()
+			if err != nil {
+				slog.Warn("[schedule] Host runner is not available.", "err", err.Error())
+			} else {
+				host = h
+			}
+		}
+		go chaos.NewScheduler(db, injector, rt.FaultRoutes, notify, host).Run(ctx)
 	}
 
 	// ListenAndServe は止まるまで戻らないので、別の goroutine で動かし、

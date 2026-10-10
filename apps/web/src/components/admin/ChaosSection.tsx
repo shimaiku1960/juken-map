@@ -11,17 +11,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/web/components/ui/dialog";
-import { useAdminChaos, useStopChaos, type ChaosExperiment, type ChaosKind } from "@/web/hooks/useAdmin";
+import { useAdminChaos, useStopChaos, type ChaosExperiment, type ChaosRecordKind } from "@/web/hooks/useAdmin";
 
 // 管理者ページの「障害注入」（JUK-178）。予告なしの障害で原因を調べる練習をするので、ここは答え合わせの場所。
 // 実行中の実験は API が返さないので出さない。止めるボタンは練習をやめたいときの緊急停止で、正解の直し方ではない
 // （練習では本番と同じく CHAOS_ENABLED を消して再起動する。docs/incident-response.md）。
 
-const KIND_LABELS: Record<ChaosKind, string> = {
+// host_* は予告なしのくじだけが EC2 の上で起こすホストの層の障害（JUK-174）。
+const KIND_LABELS: Record<ChaosRecordKind, string> = {
   latency: "遅延",
   http_error: "5xx",
   db_error: "DB の失敗",
   outbound_timeout: "外部 API のタイムアウト",
+  host_process_kill: "API のプロセスの kill",
+  host_cpu: "CPU の圧迫",
+  host_memory: "メモリの圧迫",
+  host_disk: "ディスクを埋める",
+  host_db_delay: "RDS までの通信の遅延",
+  host_db_loss: "RDS までの通信の喪失",
 };
 
 const dateTimeFormat = new Intl.DateTimeFormat("ja-JP", {
@@ -41,9 +48,13 @@ const errorMessage = (error: unknown) =>
 const detail = (e: ChaosExperiment) =>
   e.kind === "http_error" ? `${e.statusCode} を返す` : e.delayMs > 0 ? `${e.delayMs.toLocaleString()}ms` : "—";
 
-// stoppedBy は admin:<userId>・job（機械の入口）・deploy（デプロイの前後、JUK-176）。
+// stoppedBy は admin:<userId>・job（機械の入口）・deploy（デプロイの前後、JUK-176）・failed（ホストで起こせなかった、JUK-174）。
 const stoppedByLabel = (stoppedBy: string) =>
-  stoppedBy === "deploy" ? "デプロイ" : stoppedBy === "job" ? "機械の入口" : "管理画面";
+  stoppedBy === "failed"
+    ? "ホストで起こせず停止"
+    : `${stoppedBy === "deploy" ? "デプロイ" : stoppedBy === "job" ? "機械の入口" : "管理画面"}が停止`;
+
+const routeLabel = (route: string) => (route === "*" ? "すべて" : route === "" ? "ホスト" : route);
 
 export default function ChaosSection() {
   const chaos = useAdminChaos();
@@ -110,12 +121,12 @@ export default function ChaosSection() {
                       {formatDateTime(e.stoppedAt ?? e.endsAt)}
                       {e.stoppedBy ? (
                         <span className="ml-1 text-xs text-muted-foreground">
-                          （{stoppedByLabel(e.stoppedBy)}が停止）
+                          （{stoppedByLabel(e.stoppedBy)}）
                         </span>
                       ) : null}
                     </td>
                     <td className="whitespace-nowrap px-4 py-2">{KIND_LABELS[e.kind]}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{e.route === "*" ? "すべて" : e.route}</td>
+                    <td className="px-4 py-2 font-mono text-xs">{routeLabel(e.route)}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{Math.round(e.rate * 100)}%</td>
                     <td className="whitespace-nowrap px-4 py-2 tabular-nums">{detail(e)}</td>
                   </tr>

@@ -156,9 +156,10 @@ fi
 # 暗号化する鍵（AUTH_TOTP_KEYS。無ければ BETTER_AUTH_SECRET から導く）も渡す。
 # 画面の配信（JUK-111）も Go が受けるので、HTML に差し込む GA4 と Faro の設定、ブログの中継（/api/blog）に使う microCMS の
 # 2つも渡す。トレースの送り先（OTEL_EXPORTER_OTLP_ENDPOINT、JUK-126）も、上で付けたときだけ渡る。
-# 障害注入（JUK-173）のスイッチと共有トークン、予告なしに起こすくじのスイッチ（CHAOS_SCHEDULE、JUK-176）も渡す。
+# 障害注入（JUK-173）のスイッチと共有トークン、予告なしに起こすくじのスイッチ（CHAOS_SCHEDULE、JUK-176）と、
+# くじにホストの層の障害を含めるスイッチ（CHAOS_HOST、JUK-174）も渡す。
 # .env から CHAOS_ENABLED を消してデプロイすれば、全部止まる。
-grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|OTEL_EXPORTER_OTLP_ENDPOINT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|LINE_CHANNEL_SECRET|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET|DAILY_NOTIFICATION_SECRET|SIMULATION_ENABLED|SIMULATION_SECRET|CHAOS_ENABLED|CHAOS_SCHEDULE|CHAOS_SECRET|AUTH_GOOGLE_ID|AUTH_GOOGLE_SECRET|AUTH_GITHUB_ID|AUTH_GITHUB_SECRET|ADMIN_NOTIFICATION_EMAIL|AUTH_TOTP_KEYS|GA_MEASUREMENT_ID|FARO_COLLECTOR_URL|MICROCMS_SERVICE_DOMAIN|MICROCMS_API_KEY)=' \
+grep -E '^(DATABASE_URL|BETTER_AUTH_SECRET|METRICS_PORT|OTEL_EXPORTER_OTLP_ENDPOINT|RESEND_API_KEY|LINE_CHANNEL_ACCESS_TOKEN|LINE_CHANNEL_SECRET|LINE_LOGIN_CHANNEL_ID|LINE_LOGIN_CHANNEL_SECRET|DAILY_NOTIFICATION_SECRET|SIMULATION_ENABLED|SIMULATION_SECRET|CHAOS_ENABLED|CHAOS_SCHEDULE|CHAOS_HOST|CHAOS_SECRET|AUTH_GOOGLE_ID|AUTH_GOOGLE_SECRET|AUTH_GITHUB_ID|AUTH_GITHUB_SECRET|ADMIN_NOTIFICATION_EMAIL|AUTH_TOTP_KEYS|GA_MEASUREMENT_ID|FARO_COLLECTOR_URL|MICROCMS_SERVICE_DOMAIN|MICROCMS_API_KEY)=' \
   "$RUNTIME_ENV_FILE" > "$GO_ENV_FILE" || true
 for key in DATABASE_URL BETTER_AUTH_SECRET; do
   grep -q "^$key=" "$GO_ENV_FILE" || { echo "Go に渡す $key が見つからない" >&2; exit 1; }
@@ -278,7 +279,11 @@ docker rm -f juken-map-next >/dev/null 2>&1 || true
 # 障害注入の実験（JUK-176）を、デプロイの前後に止める。デプロイ中に障害を起こさないため。切り替えまでの間に古い
 # コンテナのくじが当たることもあるので、切り替えた後にも止める（新しいコンテナは起動から15分はくじを引かない）。
 # 古いイメージにこのコマンドが無いとき（初回）や、コンテナが無いときは何もしない。止めた数はログに出さない。
+# ホストの層の障害（JUK-174、terraform/chaos/host-fault.sh）も、同じスクリプトの revert と同じ2つで戻す。
+# 記録を止めるより先に戻すので、くじのプロセスが改めて戻そうとしても何も起きない。
 stop_chaos() {
+  systemctl stop 'juken-map-chaos-*.timer' 'juken-map-chaos-*.service' >/dev/null 2>&1 || true
+  rm -f /var/tmp/juken-map-chaos-fill
   docker inspect juken-map-go >/dev/null 2>&1 || return 0
   docker exec juken-map-go /api chaos stop || echo "deploy: 障害注入の実験を止められなかった（続ける）" >&2
 }
