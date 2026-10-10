@@ -90,6 +90,48 @@ func (e ChaosKind) Valid() bool {
 	}
 }
 
+// Defines values for ChaosRecordKind.
+const (
+	ChaosRecordKindDBError         ChaosRecordKind = "db_error"
+	ChaosRecordKindHTTPError       ChaosRecordKind = "http_error"
+	ChaosRecordKindHostCPU         ChaosRecordKind = "host_cpu"
+	ChaosRecordKindHostDBDelay     ChaosRecordKind = "host_db_delay"
+	ChaosRecordKindHostDBLoss      ChaosRecordKind = "host_db_loss"
+	ChaosRecordKindHostDisk        ChaosRecordKind = "host_disk"
+	ChaosRecordKindHostMemory      ChaosRecordKind = "host_memory"
+	ChaosRecordKindHostProcessKill ChaosRecordKind = "host_process_kill"
+	ChaosRecordKindLatency         ChaosRecordKind = "latency"
+	ChaosRecordKindOutboundTimeout ChaosRecordKind = "outbound_timeout"
+)
+
+// Valid indicates whether the value is a known member of the ChaosRecordKind enum.
+func (e ChaosRecordKind) Valid() bool {
+	switch e {
+	case ChaosRecordKindDBError:
+		return true
+	case ChaosRecordKindHTTPError:
+		return true
+	case ChaosRecordKindHostCPU:
+		return true
+	case ChaosRecordKindHostDBDelay:
+		return true
+	case ChaosRecordKindHostDBLoss:
+		return true
+	case ChaosRecordKindHostDisk:
+		return true
+	case ChaosRecordKindHostMemory:
+		return true
+	case ChaosRecordKindHostProcessKill:
+		return true
+	case ChaosRecordKindLatency:
+		return true
+	case ChaosRecordKindOutboundTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CompleteStudyPlanInputRangeUnit.
 const (
 	CompleteStudyPlanInputRangeUnitChapter  CompleteStudyPlanInputRangeUnit = "chapter"
@@ -893,17 +935,21 @@ type AdminUserRef struct {
 
 // ChaosExperiment defines model for ChaosExperiment.
 type ChaosExperiment struct {
-	// DelayMs latency・outbound_timeout 以外は 0
+	// DelayMs latency・outbound_timeout・host_db_delay 以外は 0
 	DelayMs int `json:"delayMs"`
 
 	// EndsAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
 	EndsAt IsoDateTime `json:"endsAt"`
 	ID     int64       `json:"id"`
 
-	// Kind latency＝応答を遅らせる、http_error＝5xx を返す、db_error＝SQL を失敗させる、outbound_timeout＝外部 API をタイムアウトさせる
-	Kind  ChaosKind `json:"kind"`
-	Rate  float64   `json:"rate"`
-	Route string    `json:"route"`
+	// Kind 記録された実験の種類。ChaosKind（アプリの層）に、予告なしのくじだけが起こすホストの層（host_*）を足したもの。 host_process_kill＝API のプロセスを落とす、host_cpu・host_memory＝CPU・メモリを圧迫する、host_disk＝ディスクを埋める、 host_db_delay・host_db_loss＝RDS までの通信を遅らせる・落とす
+	Kind ChaosRecordKind `json:"kind"`
+
+	// Rate 障害を起こす割合。host_cpu・host_memory・host_disk は使う割合、host_db_loss は落とす割合、ほかのホストの層は 1
+	Rate float64 `json:"rate"`
+
+	// Route ホストの層（host_*）は空
+	Route string `json:"route"`
 
 	// StartsAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
 	StartsAt IsoDateTime `json:"startsAt"`
@@ -917,7 +963,7 @@ type ChaosExperiment struct {
 	// StoppedAt 途中で止めた時刻
 	StoppedAt *IsoDateTime `json:"stoppedAt"`
 
-	// StoppedBy 止めた人（admin:<userId>・job・deploy）
+	// StoppedBy 止めた人（admin:<userId>・job・deploy）。failed はホストで起こせず、すぐ止めたもの
 	StoppedBy *string `json:"stoppedBy"`
 }
 
@@ -958,6 +1004,9 @@ type ChaosExperimentList struct {
 
 // ChaosKind latency＝応答を遅らせる、http_error＝5xx を返す、db_error＝SQL を失敗させる、outbound_timeout＝外部 API をタイムアウトさせる
 type ChaosKind string
+
+// ChaosRecordKind 記録された実験の種類。ChaosKind（アプリの層）に、予告なしのくじだけが起こすホストの層（host_*）を足したもの。 host_process_kill＝API のプロセスを落とす、host_cpu・host_memory＝CPU・メモリを圧迫する、host_disk＝ディスクを埋める、 host_db_delay・host_db_loss＝RDS までの通信を遅らせる・落とす
+type ChaosRecordKind string
 
 // ChaosStopResult defines model for ChaosStopResult.
 type ChaosStopResult struct {

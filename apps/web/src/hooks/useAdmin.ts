@@ -8,7 +8,7 @@ export type {
   AdminUser,
   AdminUserList,
   ChaosExperiment,
-  ChaosKind,
+  ChaosRecordKind,
   UserKind,
 } from "@/shared/dto/admin";
 

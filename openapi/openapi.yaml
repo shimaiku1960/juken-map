@@ -2513,16 +2513,32 @@ components:
           minimum: 60
           maximum: 3600
 
+    ChaosRecordKind:
+      description: >-
+        記録された実験の種類。ChaosKind（アプリの層）に、予告なしのくじだけが起こすホストの層（host_*）を足したもの。
+        host_process_kill＝API のプロセスを落とす、host_cpu・host_memory＝CPU・メモリを圧迫する、host_disk＝ディスクを埋める、
+        host_db_delay・host_db_loss＝RDS までの通信を遅らせる・落とす
+      type: string
+      enum: [latency, http_error, db_error, outbound_timeout, host_process_kill, host_cpu, host_memory, host_disk, host_db_delay, host_db_loss]
+      x-enum-varnames: [ChaosRecordKindLatency, ChaosRecordKindHTTPError, ChaosRecordKindDBError, ChaosRecordKindOutboundTimeout,
+        ChaosRecordKindHostProcessKill, ChaosRecordKindHostCPU, ChaosRecordKindHostMemory, ChaosRecordKindHostDisk,
+        ChaosRecordKindHostDBDelay, ChaosRecordKindHostDBLoss]
+
     ChaosExperiment:
       type: object
       required: [id, kind, route, rate, delayMs, statusCode, startsAt, endsAt, stoppedAt, stoppedBy, status]
       properties:
         id: { type: integer, format: int64 }
-        kind: { $ref: "#/components/schemas/ChaosKind" }
-        route: { type: string }
-        rate: { type: number, format: double }
+        kind: { $ref: "#/components/schemas/ChaosRecordKind" }
+        route:
+          description: ホストの層（host_*）は空
+          type: string
+        rate:
+          description: 障害を起こす割合。host_cpu・host_memory・host_disk は使う割合、host_db_loss は落とす割合、ほかのホストの層は 1
+          type: number
+          format: double
         delayMs:
-          description: latency・outbound_timeout 以外は 0
+          description: latency・outbound_timeout・host_db_delay 以外は 0
           type: integer
         statusCode:
           description: http_error 以外は 0
@@ -2534,7 +2550,7 @@ components:
           allOf: [{ $ref: "#/components/schemas/IsoDateTime" }]
           nullable: true
         stoppedBy:
-          description: 止めた人（admin:<userId>・job・deploy）
+          description: 止めた人（admin:<userId>・job・deploy）。failed はホストで起こせず、すぐ止めたもの
           type: string
           nullable: true
         status:

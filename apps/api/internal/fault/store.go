@@ -77,6 +77,7 @@ type Record struct {
 	Experiment
 	StoppedAt *time.Time
 	StoppedBy string
+	StartedBy string // 始めた入口（job・schedule）
 }
 
 // Running は now の時点で実行中の実験。
@@ -98,6 +99,13 @@ func Recent(ctx context.Context, db *sql.DB, limit int) ([]Record, error) {
 	return query(ctx, db, "ORDER BY id DESC LIMIT ?", limit)
 }
 
+// Unreported は、予告なしのくじ（startedBy=schedule）で始め、now の時点で終わっているのに、まだ運営者へ
+// 知らせていない実験（古い順）。
+func Unreported(ctx context.Context, db *sql.DB, now time.Time) ([]Record, error) {
+	return query(ctx, db,
+		"WHERE startedBy = 'schedule' AND notifiedAt IS NULL AND (stoppedAt IS NOT NULL OR endsAt <= ?) ORDER BY id", now)
+}
+
 // Finished は now の時点で終わっている（止めた・終わる時刻が来た）実験を、新しい順に limit 件。
 func Finished(ctx context.Context, db *sql.DB, now time.Time, limit int) ([]Record, error) {
 	return query(ctx, db, "WHERE stoppedAt IS NOT NULL OR endsAt <= ? ORDER BY id DESC LIMIT ?", now, limit)
@@ -106,7 +114,7 @@ func Finished(ctx context.Context, db *sql.DB, now time.Time, limit int) ([]Reco
 func query(ctx context.Context, db *sql.DB, where string, args ...any) ([]Record, error) {
 	// #nosec G202 -- where はこのファイルに書いた固定の文だけ。値は args で ? として渡す
 	rows, err := db.QueryContext(ctx,
-		"SELECT id, kind, route, rate, delayMs, statusCode, startsAt, endsAt, stoppedAt, stoppedBy FROM `ChaosExperiment` "+where,
+		"SELECT id, kind, route, rate, delayMs, statusCode, startsAt, endsAt, stoppedAt, stoppedBy, startedBy FROM `ChaosExperiment` "+where,
 		args...)
 	if err != nil {
 		return nil, err
@@ -118,7 +126,7 @@ func query(ctx context.Context, db *sql.DB, where string, args ...any) ([]Record
 		var kind, startsAt, endsAt string
 		var stoppedAt, stoppedBy sql.NullString
 		if err := rows.Scan(&r.ID, &kind, &r.Route, &r.Rate, &r.DelayMs, &r.StatusCode,
-			&startsAt, &endsAt, &stoppedAt, &stoppedBy); err != nil {
+			&startsAt, &endsAt, &stoppedAt, &stoppedBy, &r.StartedBy); err != nil {
 			return nil, err
 		}
 		r.Kind = Kind(kind)

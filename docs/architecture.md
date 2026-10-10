@@ -225,6 +225,7 @@ apps/api/
   ├ opt/                  「送られなかった」と null を区別する値（入口が読み、持ち主の操作に渡す）
   ├ telemetry/            ログ・メトリクス・トレース
   ├ fault/                障害注入（遅延・5xx・DB の失敗・外部 API のタイムアウト。CHAOS_ENABLED=on のときだけ）
+  ├ hostfault/            ホストの層の障害注入（SSM Run Command で EC2 に起こす。CHAOS_HOST=on のときだけ）
   ├ apischema/            OpenAPI から生成した型
   ├ spa/                  画面と SEO の配信
   ├ migrate/              マイグレーションの適用

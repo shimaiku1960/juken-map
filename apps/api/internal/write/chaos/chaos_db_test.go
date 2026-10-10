@@ -26,7 +26,7 @@ func TestChaosDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := fx.Rows("SELECT kind, route, rate, stoppedAt FROM `ChaosExperiment` WHERE id = ?", id); got[0] != `{"kind":"db_error","rate":"0.25","route":"*","stoppedAt":null}` {
+	if got := fx.Rows("SELECT kind, route, rate, stoppedAt, startedBy, notifiedAt FROM `ChaosExperiment` WHERE id = ?", id); got[0] != `{"kind":"db_error","notifiedAt":null,"rate":"0.25","route":"*","startedBy":"job","stoppedAt":null}` {
 		t.Fatalf("row = %v", got)
 	}
 
@@ -72,6 +72,28 @@ func TestChaosDB(t *testing.T) {
 		}
 		if got := fx.Rows("SELECT stoppedBy FROM `ChaosExperiment` WHERE id = ?", third); got[0] != `{"stoppedBy":"job"}` {
 			t.Errorf("stoppedBy = %v", got)
+		}
+	})
+
+	t.Run("1つだけ止められ、知らせたことは一度だけ入る", func(t *testing.T) {
+		start := now.Add(30 * time.Minute)
+		e := experiment(start)
+		e.StartedBy = StartedBySchedule
+		id, err := Start(ctx, fx.DB, e, start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		at := start.Add(time.Minute)
+		if err := Stop(ctx, fx.DB, id, StoppedByFailed, at); err != nil {
+			t.Fatal(err)
+		}
+		if got := fx.Rows("SELECT startedBy, stoppedBy FROM `ChaosExperiment` WHERE id = ?", id); got[0] != `{"startedBy":"schedule","stoppedBy":"failed"}` {
+			t.Errorf("row = %v", got)
+		}
+		for i, want := range []bool{true, false} {
+			if ok, err := ClaimNotify(ctx, fx.DB, id, at); err != nil || ok != want {
+				t.Errorf("%d回目: ok = %v, err = %v", i+1, ok, err)
+			}
 		}
 	})
 }
