@@ -1507,7 +1507,7 @@ export interface components {
             endsAt: components["schemas"]["IsoDateTime"];
             /** @description 途中で止めた時刻 */
             stoppedAt: components["schemas"]["IsoDateTime"] | null;
-            /** @description 止めた人（admin:<userId> か job） */
+            /** @description 止めた人（admin:<userId>・job・deploy） */
             stoppedBy: string | null;
             /**
              * @description running＝実行中、stopped＝途中で止めた、ended＝終わる時刻が来た

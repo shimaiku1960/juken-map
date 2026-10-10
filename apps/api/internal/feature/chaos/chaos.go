@@ -89,7 +89,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 
 // StopAll は POST /api/chaos/experiments/stop。
 func (h *Handlers) StopAll(w http.ResponseWriter, r *http.Request) {
-	n, err := writechaos.StopAll(r.Context(), h.db, "job", h.now())
+	n, err := writechaos.StopAll(r.Context(), h.db, writechaos.StoppedByJob, h.now())
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("chaos stop all: %w", err))
 		return
@@ -113,7 +113,7 @@ func (h *Handlers) AdminState(w http.ResponseWriter, r *http.Request, _ *httpx.S
 // AdminStop は POST /api/admin/chaos/stop。練習をやめたいときの緊急停止。実行中の実験があったかどうかは返さない
 // （押して確かめることで答えが分からないようにする）。
 func (h *Handlers) AdminStop(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
-	if _, err := writechaos.StopAll(r.Context(), h.db, "admin:"+s.UserID, h.now()); err != nil {
+	if _, err := writechaos.StopAll(r.Context(), h.db, writechaos.StoppedByAdmin+s.UserID, h.now()); err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("admin chaos stop: %w", err))
 		return
 	}

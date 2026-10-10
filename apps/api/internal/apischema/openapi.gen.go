@@ -917,7 +917,7 @@ type ChaosExperiment struct {
 	// StoppedAt 途中で止めた時刻
 	StoppedAt *IsoDateTime `json:"stoppedAt"`
 
-	// StoppedBy 止めた人（admin:<userId> か job）
+	// StoppedBy 止めた人（admin:<userId>・job・deploy）
 	StoppedBy *string `json:"stoppedBy"`
 }
 

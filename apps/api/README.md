@@ -76,6 +76,7 @@ curl -b jar localhost:8080/api/dashboard
 | `SIMULATION_ENABLED` | なし | `on` のときだけシミュレーションの API（`/api/sim/*`）を登録する。それ以外は 404 |
 | `SIMULATION_SECRET` | なし | シミュレーションの API の共有トークン（cron とは別）。空なら必ず 401 |
 | `CHAOS_ENABLED` | なし | `on` のときだけ障害注入（`internal/fault`）を組み込み、実験を始める API（`/api/chaos/*`）を登録する。それ以外は何も差し込まず 404。消してデプロイすれば全部止まる |
+| `CHAOS_SCHEDULE` | なし | `CHAOS_ENABLED=on` に加えて `on` のときだけ、平日 10〜22 時に週2〜3回、予告なしで実験を始める（`internal/feature/chaos` の `schedule.go`、JUK-176）。終わったら `ADMIN_NOTIFICATION_EMAIL` へ知らせる |
 | `CHAOS_SECRET` | なし | 障害注入の API の共有トークン（cron・sim とは別）。空なら必ず 401 |
 | `MICROCMS_WEBHOOK_SECRET` | なし | microCMS の Webhook の署名を確かめる（JUK-112）。空なら Webhook は必ず 401 |
 | `GITHUB_DEPLOY_TOKEN` | なし | microCMS の Webhook で deploy.yml を動かす GitHub のトークン（fine-grained、このリポジトリの Actions: Read and write だけ）。空なら Webhook は 502 |
@@ -312,7 +313,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | --- | --- |
 | `internal/feature/analytics/` | 本登録の完了を GA4 の sign_up として1回だけ数えるための問い合わせ（JUK-80） |
 | `internal/feature/cspreport/` | ブラウザが送る CSP の違反の報告をログに残す（認証なしの口なので件数と大きさに上限） |
-| `internal/feature/chaos/` | 障害注入の実験の入口（JUK-173）。始める・一覧・まとめて止めるは機械の入口（`/api/chaos/*`、`CHAOS_ENABLED=on` と `CHAOS_SECRET`）、管理画面（`/api/admin/chaos`）は終わった実験の記録と緊急停止だけで、実行中の実験は返さず、止めたかどうかも返さない（JUK-178）。書き込みは `internal/write/chaos` |
+| `internal/feature/chaos/` | 障害注入の実験の入口（JUK-173）。始める・一覧・まとめて止めるは機械の入口（`/api/chaos/*`、`CHAOS_ENABLED=on` と `CHAOS_SECRET`）、管理画面（`/api/admin/chaos`）は終わった実験の記録と緊急停止だけで、実行中の実験は返さず、止めたかどうかも返さない（JUK-178）。予告なしに起こすくじ（`schedule.go`、`CHAOS_SCHEDULE=on`、JUK-176）もここ。書き込みは `internal/write/chaos` |
 | `internal/feature/sim/` | シミュレーション（`sim/`）専用の API。`SIMULATION_ENABLED=on` と `SIMULATION_SECRET` が要り、シミュレーション用のアドレスだけに触る。書き込みは `internal/write/simulation` |
 
 ### コマンド（引数を付けて起動したとき）
@@ -320,7 +321,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `internal/app/cli.go` | 引数を付けて起動したときの振り分け：`migrate` は `internal/migrate`、`incident`（乗っ取りのときの操作）・`grant-admin`（管理者の付け外し）は `internal/feature/ops` へ渡す。本番は `docker exec juken-map-go /api ...`、手元は `pnpm incident`・`pnpm admin:grant`（JUK-122） |
-| `internal/feature/ops/` | `incident`・`grant-admin` の引数の読み取り（`commands.go`）と、使う読み取り（`incident.go`）と、`internal/write/account` の操作（セッションの取り消し・停止・2段階認証の解除・役割の付け外し。変えたことは `OpsAuditLog` に残り、`incident log` で見る。JUK-138）の呼び出し。手順は `docs/incident-response.md` |
+| `internal/feature/ops/` | `incident`・`grant-admin`・`chaos stop`（デプロイの前後に実験を止める、JUK-176）の引数の読み取り（`commands.go`）と、使う読み取り（`incident.go`）と、`internal/write/account` の操作（セッションの取り消し・停止・2段階認証の解除・役割の付け外し。変えたことは `OpsAuditLog` に残り、`incident log` で見る。JUK-138）の呼び出し。手順は `docs/incident-response.md` |
 | `internal/migrate/` | `migrate`（まだ当てていないマイグレーションを名前順に流す。JUK-125）。本番はデプロイが起動前に流し、手元は `pnpm db:migrate` |
 | `cmd/devtool/`・`internal/devtool/` | 開発でしか使わない道具（JUK-143）。`hash-password`・`email-token`・`sessions` で、seed・E2E・負荷試験の利用者のパスワードのハッシュ、メールのリンクのトークン、ログイン済みのセッションを、`internal/feature/auth` の `devtool.go` の関数（ログインと同じ作り方）で作る。手元は `scripts/go-devtool.sh`。Dockerfile は `cmd/api` だけを作るので、本番のイメージには入らない |
 
