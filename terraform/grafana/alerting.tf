@@ -425,3 +425,111 @@ resource "grafana_rule_group" "security_signals" {
     }
   }
 }
+
+# 遅さと飽和（JUK-172）。5xx・停止だけでは、遅いが落ちてはいない障害（DB の遅延、外部 API の待ち、接続プールの詰まり）に
+# 気づけない。カオスエンジニアリング（JUK-171）で起こす障害を拾うための症状のアラート。定常状態は docs/slo.md。
+#
+# 遅延のしきい値は品質基準 05 B2 の「主要動線の p95 が目標の2倍」（参照 API の目標 300ms → 600ms）。
+# 本番の p95 は直近7日で 17ms。死活監視（Synthetic Monitoring、東京とオレゴンから1分ごと）が /api/health を
+# 叩くので、通信の少ない時間帯でも10分に20件は来る。
+# パスワードのハッシュを計算する sign-in・sign-up と、外部の認可を待つ OAuth の callback は、もともと遅いので外す。
+#
+# 接続プールの待ちは、SetMaxOpenConns（15）を使い切って空きを待った時間の合計（go_sql_ は ObserveDB が出す）。
+# 平常時は 0。1秒あたり 50ms 以上待つ状態が5分続いたら、DB が遅いか、接続を返さないコードがある。
+# どちらも、リクエストや go_sql_ の数字が無い時間は異常ではないので鳴らさない（止まったことは停止と途絶で見る）。
+locals {
+  performance_rules = {
+    latency_p95 = {
+      name        = "受験マップ API：p95 が 600ms を超過"
+      summary     = "直近10分の API の p95 が 600ms を超えた状態が5分続いています"
+      description = "応答が遅くなっています。route 別の p95（http_request_duration_seconds）と、遅いリクエストのトレース（Tempo）を開いて、DB・外部 API・アプリのどこで待っているかを確かめてください。"
+      expr        = "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{env=\"production\",runtime=\"go\",route!~\"/api/auth/(sign-in|sign-up|callback/.*)\"}[10m])))"
+      threshold   = 0.6
+    }
+    db_pool_wait = {
+      name        = "受験マップ API：DB の接続待ちが続いている"
+      summary     = "DB の接続プールの空きを待つ時間が、1秒あたり 50ms を超えた状態が5分続いています"
+      description = "接続プール（上限15）を使い切っています。go_sql_in_use_connections と、RDS の CPU・接続数を見て、DB が遅いのか、接続を返さないコードがあるのかを切り分けてください。"
+      expr        = "sum(rate(go_sql_wait_duration_seconds_total{db_name=\"juken_map\"}[5m]))"
+      threshold   = 0.05
+    }
+  }
+}
+
+resource "grafana_rule_group" "api_performance" {
+  name             = "api-performance"
+  folder_uid       = grafana_folder.juken_map.uid
+  interval_seconds = 60
+
+  dynamic "rule" {
+    for_each = local.performance_rules
+
+    content {
+      name      = rule.value.name
+      condition = "C"
+      for       = "5m"
+
+      no_data_state  = "OK"
+      exec_err_state = "Error"
+
+      annotations = {
+        summary     = rule.value.summary
+        description = rule.value.description
+      }
+
+      notification_settings {
+        contact_point = grafana_contact_point.email.name
+      }
+
+      data {
+        ref_id         = "A"
+        datasource_uid = "grafanacloud-prom"
+        # model の queryType から Grafana が付ける。書かないと plan に毎回消す差分が出る
+        query_type = "instant"
+
+        relative_time_range {
+          from = 600
+          to   = 0
+        }
+
+        model = jsonencode({
+          editorMode    = "code"
+          expr          = rule.value.expr
+          instant       = true
+          queryType     = "instant"
+          intervalMs    = 1000
+          maxDataPoints = 43200
+          range         = false
+          refId         = "A"
+        })
+      }
+
+      data {
+        ref_id         = "C"
+        datasource_uid = "__expr__"
+        query_type     = "expression"
+
+        relative_time_range {
+          from = 0
+          to   = 0
+        }
+
+        model = jsonencode({
+          conditions = [{
+            evaluator = { params = [rule.value.threshold], type = "gt" }
+            operator  = { type = "and" }
+            query     = { params = ["C"] }
+            reducer   = { params = [], type = "last" }
+            type      = "query"
+          }]
+          datasource    = { type = "__expr__", uid = "__expr__" }
+          expression    = "A"
+          intervalMs    = 1000
+          maxDataPoints = 43200
+          refId         = "C"
+          type          = "threshold"
+        })
+      }
+    }
+  }
+}
