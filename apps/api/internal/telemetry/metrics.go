@@ -79,11 +79,6 @@ func (m *Metrics) ObserveDB(db *sql.DB) {
 	m.registry.MustRegister(collectors.NewDBStatsCollector(db, "juken_map"))
 }
 
-// Register はほかのパッケージの数値（障害注入の chaos_ など）を /metrics に足す。
-func (m *Metrics) Register(cs ...prometheus.Collector) {
-	m.registry.MustRegister(cs...)
-}
-
 // observe は1件ぶんを数える。route は実際の URL ではなくルートの型（/api/study-logs/:id）を渡す。
 // ID ごとに別の時系列になると、Prometheus が重くなるため。
 func (m *Metrics) Observe(method, route string, status int, elapsed time.Duration) {

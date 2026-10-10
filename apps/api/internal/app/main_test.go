@@ -101,7 +101,7 @@ func TestRegisteredRoutes(t *testing.T) {
 		{Pattern: "POST /api/chaos/experiments", Access: httpx.AccessJob},
 		{Pattern: "POST /api/chaos/experiments/stop", Access: httpx.AccessJob},
 		{Pattern: "GET /api/admin/chaos", Access: httpx.AccessAdmin},
-		{Pattern: "POST /api/admin/chaos/experiments/{id}/stop", Access: httpx.AccessAdmin},
+		{Pattern: "POST /api/admin/chaos/stop", Access: httpx.AccessAdmin},
 	}
 
 	// ハンドラは呼ばないので、DB は nil のままでよい。
@@ -189,5 +189,5 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 
 // allJobs は、設定で切り替わるジョブの入口（sim・chaos）を全部登録するときの設定。
 func allJobs() jobConfig {
-	return jobConfig{simulationEnabled: true, chaos: fault.New(auth.NewMetrics())}
+	return jobConfig{simulationEnabled: true, chaos: fault.New()}
 }

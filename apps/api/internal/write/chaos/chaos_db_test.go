@@ -37,29 +37,26 @@ func TestChaosDB(t *testing.T) {
 		}
 	})
 
-	t.Run("止めると、止めた時刻と人を残し、二度目は見つからない", func(t *testing.T) {
+	t.Run("止めると、止めた時刻と人を残す。二度目は何も止めない", func(t *testing.T) {
 		at := now.Add(2 * time.Minute)
-		if err := Stop(ctx, fx.DB, id, "admin:u1", at); err != nil {
-			t.Fatal(err)
+		if n, err := StopAll(ctx, fx.DB, "admin:u1", at); err != nil || n != 1 {
+			t.Fatalf("n = %d, err = %v", n, err)
 		}
 		if got := fx.Rows("SELECT stoppedBy FROM `ChaosExperiment` WHERE id = ?", id); got[0] != `{"stoppedBy":"admin:u1"}` {
 			t.Errorf("stoppedBy = %v", got)
 		}
-		if err := Stop(ctx, fx.DB, id, "admin:u1", at); !errors.Is(err, ErrNotRunning) {
-			t.Errorf("err = %v, want ErrNotRunning", err)
+		if n, err := StopAll(ctx, fx.DB, "admin:u1", at); err != nil || n != 0 {
+			t.Errorf("n = %d, err = %v", n, err)
 		}
 	})
 
-	t.Run("終わる時刻を過ぎたら、止めなくても次を始められ、まとめて止められる", func(t *testing.T) {
+	t.Run("終わる時刻を過ぎたら、止めなくても次を始められ、終わった実験は止めない", func(t *testing.T) {
 		start := now.Add(5 * time.Minute)
 		second, err := Start(ctx, fx.DB, experiment(start), start)
 		if err != nil {
 			t.Fatal(err)
 		}
 		afterEnd := start.Add(10 * time.Minute)
-		if err := Stop(ctx, fx.DB, second, "job", afterEnd); !errors.Is(err, ErrNotRunning) {
-			t.Fatalf("終わった実験を止めた: %v", err)
-		}
 		third, err := Start(ctx, fx.DB, experiment(afterEnd), afterEnd)
 		if err != nil {
 			t.Fatal(err)
@@ -69,6 +66,9 @@ func TestChaosDB(t *testing.T) {
 
 		if err != nil || n != 1 {
 			t.Fatalf("n = %d, err = %v", n, err)
+		}
+		if got := fx.Rows("SELECT stoppedBy FROM `ChaosExperiment` WHERE id = ?", second); got[0] != `{"stoppedBy":null}` {
+			t.Errorf("終わった実験を止めた: %v", got)
 		}
 		if got := fx.Rows("SELECT stoppedBy FROM `ChaosExperiment` WHERE id = ?", third); got[0] != `{"stoppedBy":"job"}` {
 			t.Errorf("stoppedBy = %v", got)

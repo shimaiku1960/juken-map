@@ -96,16 +96,11 @@ func observe(m *telemetry.Metrics, tracer trace.Tracer, shortIDs bool, next http
 		}
 
 		// URL はパスだけにして、? 以降は残さない（クエリにトークンが載る入口があるため）。
-		attrs := []slog.Attr{
+		slog.LogAttrs(logCtx, slog.LevelInfo, "request completed",
 			slog.Group("req", slog.String("method", r.Method), slog.String("url", r.URL.Path)),
 			slog.Group("res", slog.Int("statusCode", rec.status)),
 			slog.Float64("responseTime", math.Round(float64(elapsed.Microseconds())/100)/10),
-		}
-		// 障害注入（internal/fault）を起こしたリクエストに印を付ける。気づくまでの時間（MTTD）を後で測るため。
-		if faults := info.Faults(); len(faults) > 0 {
-			attrs = append(attrs, slog.Any("chaos", faults))
-		}
-		slog.LogAttrs(logCtx, slog.LevelInfo, "request completed", attrs...)
+		)
 	})
 }
 

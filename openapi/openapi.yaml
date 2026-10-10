@@ -818,12 +818,12 @@ paths:
   /api/chaos/experiments:
     get:
       operationId: listChaosExperiments
-      summary: 障害注入の実験の記録（新しい順に20件。CHAOS_ENABLED=on のときだけある）
+      summary: 障害注入の実験の記録（新しい順に20件）と、障害を起こせるルート。CHAOS_ENABLED=on のときだけある
       security:
         - chaosBearer: []
       responses:
         "200":
-          description: 新しい順
+          description: 実験は新しい順
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ChaosExperimentList" }
@@ -1404,7 +1404,9 @@ paths:
   /api/admin/chaos:
     get:
       operationId: getAdminChaos
-      summary: 障害注入（JUK-173）が有効か、対象にできるルート、実験の記録（新しい順に20件）
+      summary: 障害注入（JUK-173）が有効かと、終わった実験の記録（新しい順に20件）
+      description: |
+        実行中の実験は返さない。予告なしの障害で原因を調べる練習をするので、管理画面が答えにならないようにする（JUK-178）。
       responses:
         "200":
           description: 無効（CHAOS_ENABLED が無い）でも記録は返す
@@ -1415,26 +1417,17 @@ paths:
         "403": { $ref: "#/components/responses/AdminForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  /api/admin/chaos/experiments/{id}/stop:
+  /api/admin/chaos/stop:
     post:
-      operationId: stopAdminChaosExperiment
-      summary: 実行中の障害注入の実験を止める
-      parameters:
-        - $ref: "#/components/parameters/ID"
+      operationId: stopAdminChaos
+      summary: 実行中の障害注入の実験を全部止める（練習をやめたいときの緊急停止）
+      description: |
+        実行中の実験があったかどうかは返さない。押して確かめることで答えが分からないようにする（JUK-178）。
       responses:
-        "200":
-          description: 止めた
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ChaosExperiment" }
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "204":
+          description: 実行中の実験があれば止めた
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/AdminForbidden" }
-        "404":
-          description: 実行中の実験が見つからない（もう終わった・止めた）
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
 
 components:
@@ -2552,11 +2545,15 @@ components:
 
     ChaosExperimentList:
       type: object
-      required: [experiments]
+      required: [experiments, routes]
       properties:
         experiments:
           type: array
           items: { $ref: "#/components/schemas/ChaosExperiment" }
+        routes:
+          description: 障害を起こせるルート（管理画面・ログイン・障害注入の入口は含まない）
+          type: array
+          items: { type: string }
 
     ChaosStopResult:
       type: object
@@ -2566,16 +2563,13 @@ components:
 
     AdminChaosState:
       type: object
-      required: [enabled, routes, experiments]
+      required: [enabled, experiments]
       properties:
         enabled:
           description: CHAOS_ENABLED=on で起動しているか。false なら実験の行があっても障害は起きない
           type: boolean
-        routes:
-          description: 障害を起こせるルート（管理画面・ログイン・障害注入の入口は含まない）
-          type: array
-          items: { type: string }
         experiments:
+          description: 終わった実験（status は stopped か ended）
           type: array
           items: { $ref: "#/components/schemas/ChaosExperiment" }
 

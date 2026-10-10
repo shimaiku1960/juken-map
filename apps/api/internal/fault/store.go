@@ -98,6 +98,11 @@ func Recent(ctx context.Context, db *sql.DB, limit int) ([]Record, error) {
 	return query(ctx, db, "ORDER BY id DESC LIMIT ?", limit)
 }
 
+// Finished は now の時点で終わっている（止めた・終わる時刻が来た）実験を、新しい順に limit 件。
+func Finished(ctx context.Context, db *sql.DB, now time.Time, limit int) ([]Record, error) {
+	return query(ctx, db, "WHERE stoppedAt IS NOT NULL OR endsAt <= ? ORDER BY id DESC LIMIT ?", now, limit)
+}
+
 func query(ctx context.Context, db *sql.DB, where string, args ...any) ([]Record, error) {
 	// #nosec G202 -- where はこのファイルに書いた固定の文だけ。値は args で ? として渡す
 	rows, err := db.QueryContext(ctx,

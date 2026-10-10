@@ -6,12 +6,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
@@ -21,7 +18,7 @@ var t0 = time.Date(2026, 10, 12, 3, 0, 0, 0, time.UTC)
 // newInjector は、時刻・くじ・待ち時間を固定した Injector に experiments を載せる。待った時間は slept に足す。
 func newInjector(t *testing.T, roll float64, experiments ...Experiment) (*Injector, *time.Duration) {
 	t.Helper()
-	in := New(telemetry.NewMetrics(nil))
+	in := New()
 	in.now = func() time.Time { return t0 }
 	in.roll = func() float64 { return roll }
 	var slept time.Duration
@@ -63,21 +60,15 @@ func TestPick(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in, _ := newInjector(t, tt.roll, tt.e)
-			ctx, info := context.Background(), (*telemetry.RequestInfo)(nil)
+			ctx := context.Background()
 			if tt.reach {
-				ctx, info = requestCtx(tt.ctx)
+				ctx, _ = requestCtx(tt.ctx)
 			}
 
 			_, got := in.pick(ctx, KindDBError)
 
 			if got != tt.want {
 				t.Fatalf("pick = %v, want %v", got, tt.want)
-			}
-			if info != nil && got != slices.Equal(info.Faults(), []string{"db_error"}) {
-				t.Errorf("faults = %v", info.Faults())
-			}
-			if n := testutil.ToFloat64(in.injected.WithLabelValues("db_error")); n != map[bool]float64{true: 1}[got] {
-				t.Errorf("chaos_faults_injected_total = %v", n)
 			}
 		})
 	}
@@ -90,9 +81,6 @@ func TestPick(t *testing.T) {
 
 		if _, got := in.pick(ctx, KindDBError); got {
 			t.Fatal("終わった実験で障害を起こした")
-		}
-		if in.running(KindDBError) {
-			t.Error("終わった実験が実行中のまま")
 		}
 	})
 
@@ -170,7 +158,7 @@ func TestTransport(t *testing.T) {
 	t.Run("当たれば相手に送らず、待ってからタイムアウトの誤りを返す", func(t *testing.T) {
 		called = false
 		in, slept := newInjector(t, 0, running(KindOutboundTimeout, route))
-		ctx, info := requestCtx(route)
+		ctx, _ := requestCtx(route)
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.microcms.io/api/v1/blogs", nil)
 
 		res, err := in.Transport(base).RoundTrip(req)
@@ -181,9 +169,6 @@ func TestTransport(t *testing.T) {
 		}
 		if called || *slept != 2*time.Second {
 			t.Errorf("called = %v, slept = %v", called, *slept)
-		}
-		if !slices.Equal(info.Faults(), []string{"outbound_timeout"}) {
-			t.Errorf("faults = %v", info.Faults())
 		}
 	})
 
@@ -243,24 +228,19 @@ func TestSpecValidate(t *testing.T) {
 	}
 }
 
-func TestMetrics(t *testing.T) {
-	// /metrics に、種類ごとの実行中の印と起こした数が、障害を起こす前から 0 で出る（アラートの increase() が数えられるように）。
+func TestHidesFaults(t *testing.T) {
+	// 調べる練習で答えにならないよう、/metrics にも誤りの文言にも障害注入の印を出さない（JUK-178）。
 	m := telemetry.NewMetrics(nil)
-	in := New(m)
+	in := New()
 	in.now = func() time.Time { return t0 }
 	in.active.Store(&[]Experiment{running(KindLatency, AllRoutes)})
 	rec := httptest.NewRecorder()
 
 	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 
-	body := rec.Body.String()
-	for _, want := range []string{
-		`chaos_experiment_active{kind="latency"} 1`,
-		`chaos_experiment_active{kind="db_error"} 0`,
-		`chaos_faults_injected_total{kind="outbound_timeout"} 0`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("/metrics に %s が無い", want)
+	for _, out := range []string{rec.Body.String(), ErrInjected.Error(), outboundTimeout{}.Error()} {
+		if strings.Contains(out, "chaos") || strings.Contains(out, "障害注入") {
+			t.Errorf("障害注入の印が出ている: %.200s", out)
 		}
 	}
 }

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
+import ChaosSection from "@/web/components/admin/ChaosSection";
 import PageShell from "@/web/components/layout/PageShell";
 import PageHeader from "@/web/components/layout/PageHeader";
 import SectionHeader from "@/web/components/layout/SectionHeader";
@@ -104,6 +105,11 @@ export default function AdminPage() {
       <section className="mt-10">
         <SectionHeader title="ユーザー" />
         <UserListSection />
+      </section>
+
+      <section className="mt-10">
+        <SectionHeader title="障害注入" />
+        <ChaosSection />
       </section>
     </PageShell>
   );

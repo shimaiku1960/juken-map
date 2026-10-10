@@ -740,11 +740,10 @@ type AdminBanResult struct {
 // AdminChaosState defines model for AdminChaosState.
 type AdminChaosState struct {
 	// Enabled CHAOS_ENABLED=on で起動しているか。false なら実験の行があっても障害は起きない
-	Enabled     bool              `json:"enabled"`
-	Experiments []ChaosExperiment `json:"experiments"`
+	Enabled bool `json:"enabled"`
 
-	// Routes 障害を起こせるルート（管理画面・ログイン・障害注入の入口は含まない）
-	Routes []string `json:"routes"`
+	// Experiments 終わった実験（status は stopped か ended）
+	Experiments []ChaosExperiment `json:"experiments"`
 }
 
 // AdminDeleteResult defines model for AdminDeleteResult.
@@ -952,6 +951,9 @@ type ChaosExperimentInputStatusCode int
 // ChaosExperimentList defines model for ChaosExperimentList.
 type ChaosExperimentList struct {
 	Experiments []ChaosExperiment `json:"experiments"`
+
+	// Routes 障害を起こせるルート（管理画面・ログイン・障害注入の入口は含まない）
+	Routes []string `json:"routes"`
 }
 
 // ChaosKind latency＝応答を遅らせる、http_error＝5xx を返す、db_error＝SQL を失敗させる、outbound_timeout＝外部 API をタイムアウトさせる

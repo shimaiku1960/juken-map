@@ -5,7 +5,6 @@ package fault
 import (
 	"context"
 	"errors"
-	"slices"
 	"testing"
 	"time"
 
@@ -17,7 +16,7 @@ import (
 func TestWrapConnectorDB(t *testing.T) {
 	in, _ := newInjector(t, 0, running(KindDBError, AllRoutes))
 	db := dbtest.Open(t, in.WrapConnector)
-	reqCtx, info := requestCtx("GET /api/study-logs")
+	reqCtx, _ := requestCtx("GET /api/study-logs")
 
 	t.Run("対象のリクエストの照会・書き込み・トランザクションは失敗する", func(t *testing.T) {
 		var n int
@@ -29,9 +28,6 @@ func TestWrapConnectorDB(t *testing.T) {
 		}
 		if _, err := db.BeginTx(reqCtx, nil); !errors.Is(err, ErrInjected) {
 			t.Errorf("begin: err = %v", err)
-		}
-		if !slices.Equal(info.Faults(), []string{"db_error"}) {
-			t.Errorf("faults = %v", info.Faults())
 		}
 	})
 

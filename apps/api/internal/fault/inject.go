@@ -141,7 +141,8 @@ func (t *faultTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 type outboundTimeout struct{}
 
 func (outboundTimeout) Error() string {
-	return "chaos: 障害注入による外部 API のタイムアウト"
+	// 本物の応答待ちのタイムアウト（http.Transport.ResponseHeaderTimeout）と同じ文言にする（JUK-178）。
+	return "net/http: timeout awaiting response headers"
 }
 func (outboundTimeout) Timeout() bool   { return true }
 func (outboundTimeout) Temporary() bool { return true }

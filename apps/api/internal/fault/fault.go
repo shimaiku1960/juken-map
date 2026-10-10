@@ -10,6 +10,9 @@
 //     管理画面・ログイン・障害注入の入口と、リクエストの外の処理（このパッケージの読み込みを含む）には起こさない
 //   - 終わる時刻はメモリの上でも確かめる。DB が読めなくなっても、時刻が来れば止まる
 //   - CHAOS_ENABLED を消せば Injector を作らず（nil）、何も起こさない。nil の Injector のメソッドは何もしない
+//
+// 練習のための決まり（JUK-178）: 予告なしの障害で原因を調べる練習をするので、起こしたことはログ・スパン・数値の
+// どこにも出さず、誤りの文言も本物と同じにする。何をいつ起こしたかは ChaosExperiment の行が答え合わせになる。
 package fault
 
 import (
@@ -18,12 +21,9 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
@@ -45,8 +45,9 @@ var Kinds = []Kind{KindLatency, KindHTTPError, KindDBError, KindOutboundTimeout}
 // /api/health は外からの死活監視とデプロイ後の確認が叩くので、名指ししたときだけ対象にする。
 const AllRoutes = "*"
 
-// ErrInjected は、障害注入で失敗させた DB の操作の誤り。
-var ErrInjected = errors.New("chaos: 障害注入による失敗")
+// ErrInjected は、障害注入で失敗させた DB の操作の誤り。調べる練習で答えにならないよう、接続が切れたときの
+// go-sql-driver/mysql の誤り（mysql.ErrInvalidConn）と同じ文言にする（JUK-178）。
+var ErrInjected = errors.New("invalid connection")
 
 // pollInterval は実行中の実験を DB から読み直す間隔。管理画面で止めてから効くまで、最大でこの時間かかる
 // （同じプロセスで始めた・止めたものは、その場で読み直す）。
@@ -86,51 +87,23 @@ type Injector struct {
 	roll  func() float64 // [0, 1) の乱数
 	sleep func(ctx context.Context, d time.Duration) error
 
-	active   atomic.Pointer[[]Experiment]
-	injected *prometheus.CounterVec
+	active atomic.Pointer[[]Experiment]
 }
 
-// New は Injector を作り、数値（chaos_）を m に足す。
-func New(m *telemetry.Metrics) *Injector {
+// New は Injector を作る。障害を起こしたかどうかは数値にもログにも出さない。調べる練習で答えにならないようにするため
+// （JUK-178）。何をいつ起こしたかは ChaosExperiment の行が答え合わせになる。
+func New() *Injector {
 	in := &Injector{
 		now: time.Now,
 		// #nosec G404 -- 障害を起こすかどうかのくじ引き。予測されても困らない
 		roll:  rand.Float64,
 		sleep: sleepContext,
-		injected: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "chaos_faults_injected_total",
-			Help: "障害注入で起こした障害の数（kind：latency・http_error・db_error・outbound_timeout）",
-		}, []string{"kind"}),
 	}
 	in.active.Store(&[]Experiment{})
-	collectors := []prometheus.Collector{in.injected}
-	for _, kind := range Kinds {
-		// 値の無い系列にいきなり 1 が現れると increase() が数えられないので、0 で作っておく（metrics.go と同じ理由）。
-		in.injected.WithLabelValues(string(kind))
-		// 実行中かどうかは /metrics を読んだ時点で決める。DB が読めなくても、終わる時刻が来れば 0 になる。
-		collectors = append(collectors, prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-			Name:        "chaos_experiment_active",
-			Help:        "実行中の実験があれば 1。障害を始めた時刻（MTTD の起点）をここから読む",
-			ConstLabels: prometheus.Labels{"kind": string(kind)},
-		}, func() float64 {
-			if in.running(kind) {
-				return 1
-			}
-			return 0
-		}))
-	}
-	m.Register(collectors...)
 	return in
 }
 
-func (in *Injector) running(kind Kind) bool {
-	now := in.now()
-	return slices.ContainsFunc(*in.active.Load(), func(e Experiment) bool {
-		return e.Kind == kind && e.runningAt(now)
-	})
-}
-
-// pick は ctx のリクエストに kind の障害を起こすなら、その実験を返す。起こすと決めたら、リクエストと数値に印を付ける。
+// pick は ctx のリクエストに kind の障害を起こすなら、その実験を返す。
 func (in *Injector) pick(ctx context.Context, kind Kind) (Experiment, bool) {
 	if in == nil {
 		return Experiment{}, false
@@ -147,8 +120,6 @@ func (in *Injector) pick(ctx context.Context, kind Kind) (Experiment, bool) {
 		if in.roll() >= e.Rate {
 			return Experiment{}, false
 		}
-		info.MarkFault(string(kind))
-		in.injected.WithLabelValues(string(kind)).Inc()
 		return e, true
 	}
 	return Experiment{}, false
@@ -171,7 +142,7 @@ func (in *Injector) Run(ctx context.Context, db *sql.DB) {
 	}
 }
 
-// Refresh は実行中の実験を DB から読み直す。始まった・終わった実験はログに残す。
+// Refresh は実行中の実験を DB から読み直す。始まった・終わったことはログに残さない（答えになるため）。
 func (in *Injector) Refresh(ctx context.Context, db *sql.DB) error {
 	if in == nil {
 		return nil
@@ -180,18 +151,7 @@ func (in *Injector) Refresh(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	prev := *in.active.Swap(&list)
-	for _, e := range list {
-		if !slices.ContainsFunc(prev, func(p Experiment) bool { return p.ID == e.ID }) {
-			slog.Warn("[chaos] Experiment started.", "id", e.ID, "kind", string(e.Kind), "route", e.Route,
-				"rate", e.Rate, "endsAt", e.EndsAt.UTC().Format(time.RFC3339))
-		}
-	}
-	for _, p := range prev {
-		if !slices.ContainsFunc(list, func(e Experiment) bool { return e.ID == p.ID }) {
-			slog.Warn("[chaos] Experiment ended.", "id", p.ID, "kind", string(p.Kind))
-		}
-	}
+	in.active.Store(&list)
 	return nil
 }
 

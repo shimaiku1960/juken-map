@@ -115,6 +115,9 @@ test("管理者は2段階認証を設定してから管理画面に入り、次�
   await page.getByLabel("認証アプリの6桁のコード").fill(totp(secret));
   await page.getByRole("button", { name: "確認して有効にする" }).click();
   await expect(page.getByRole("heading", { name: "利用状況" })).toBeVisible();
+  // 障害注入（JUK-178）は終わった実験の記録だけ。E2E の API は CHAOS_ENABLED を付けずに起動する。
+  await expect(page.getByRole("heading", { name: "障害注入" })).toBeVisible();
+  await expect(page.getByText("CHAOS_ENABLED=on で起動していないので、障害は起きません。")).toBeVisible();
 
   // ログインし直すと、パスワードのあとにコードを求められる。予備コードでも入れる。
   await page.context().clearCookies();
