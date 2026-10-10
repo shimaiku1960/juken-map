@@ -137,7 +137,7 @@ func TestOutboundClientSpan(t *testing.T) {
 	}))
 	defer srv.Close()
 	tp, sr := recordSpans()
-	client := telemetry.NewOutboundClient(tp)
+	client := telemetry.NewOutboundClient(tp, nil)
 
 	// リクエストの外（親のスパンが無い）では、スパンを作らない。
 	get(t, client, context.Background(), srv.URL)

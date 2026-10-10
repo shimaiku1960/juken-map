@@ -349,6 +349,7 @@ Grafana Cloudを含め、外部のサービスへ何を送っているかは[doc
 | `RESEND_API_KEY` | メール確認・パスワード再設定・各種メール通知 |
 | `ADMIN_NOTIFICATION_EMAIL` | 新規ユーザー登録の通知先メールアドレス |
 | `DAILY_NOTIFICATION_SECRET` | 朝・夜の学習通知APIを保護する秘密値。本番では EC2 の systemd timer（[infra/systemd/](infra/systemd/)）が朝7時・夜21時に呼ぶ。GitHub Actionsにも同じ値を置き、手動の送り直しに使う |
+| `CHAOS_ENABLED` / `CHAOS_SECRET` | `on`のときだけ障害注入（遅延・5xx・DB の失敗・外部 API のタイムアウト）を有効にし、始める API（`/api/chaos/*`）をその秘密値で保護する（任意。詳細は[apps/api/README.md](apps/api/README.md)） |
 | `SIMULATION_ENABLED` / `SIMULATION_SECRET` | `on`のときだけシミュレーション用API（`/api/sim/*`）を有効にし、その秘密値で保護する（任意。詳細は[sim/README.md](sim/README.md)） |
 | `RESEND_READ_API_KEY` | シミュレーターだけが使う、送ったメールを読めるResendのキー（任意。アプリ本体には設定しない） |
 | `LINE_CHANNEL_SECRET` | LINE Messaging APIのWebhook署名検証 |

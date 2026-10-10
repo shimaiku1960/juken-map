@@ -225,6 +225,7 @@ ALTER USER 'juken_app'@'%' IDENTIFIED BY '<新しい値>';
 | --- | --- | --- |
 | `DAILY_NOTIFICATION_SECRET` | `POST /api/cron/daily-study-notifications`（朝・夜の学習通知） | 本番サーバーの `.env` と GitHub Secrets（手動の送り直し用）。定期の送信は EC2 の systemd timer が呼ぶ（JUK-85）。タイマーが読む `/etc/juken-map/daily-notification.env` は、デプロイが `.env` から書く |
 | `SIMULATION_SECRET` | `/api/sim/*`（シミュレーション） | 本番サーバーの `.env` と GitHub Secrets |
+| `CHAOS_SECRET` | `/api/chaos/*`（障害注入の実験を始める・止める、JUK-173） | 本番サーバーの `.env` と GitHub Secrets |
 
 用途ごとに別の値にする。同じ値を使い回すと、片方が漏れたときに両方を差し替えることになる。
 
