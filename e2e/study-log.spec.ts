@@ -183,3 +183,46 @@ test("参考書の付いた実績を編集できる", async ({ page }) => {
     page.getByRole("listitem").filter({ hasText: "理科" }).filter({ hasText: "8分" }).first()
   ).toBeVisible();
 });
+
+// 一文を AI で読み取って記録のフォームを埋める（JUK-180）。CI には Anthropic の鍵が無いので、
+// 読み取りの API は結果を決めて返す。確かめたいのは、結果がフォームの各欄へ入り、
+// 利用者が確かめてから記録できること。
+test("一文を読み取ってフォームを埋め、そのまま記録できる", async ({ page }) => {
+  await login(page, E2E_EMAIL, E2E_PASSWORD);
+
+  const textbooks: { id: number; name: string }[] = await (await page.request.get("/api/textbooks")).json();
+  const textbook = textbooks.find((t) => t.name === "E2E英語教材");
+  expect(textbook).toBeDefined();
+
+  let sentText: unknown;
+  await page.route("**/api/study-logs/parse", async (route) => {
+    sentText = route.request().postDataJSON();
+    await route.fulfill({
+      json: { date: null, minutes: 11, subject: "english", textbookId: textbook!.id },
+    });
+  });
+
+  await page.getByRole("button", { name: "学習を始める" }).click();
+  await page.getByRole("button", { name: "あとから記録" }).click();
+  const dialog = page.getByRole("dialog", { name: "学習を記録" });
+
+  const sentence = dialog.getByLabel("一文で入力（AI）");
+  await sentence.fill("英語 E2E英語教材 11分");
+  // Enter で読み取る。フォームの送信（記録）へ流れてはいけない
+  await sentence.press("Enter");
+
+  await expect(dialog.getByRole("status")).toHaveText(
+    "読み取った内容を入れました。確かめてから記録してください。"
+  );
+  expect(sentText).toEqual({ text: "英語 E2E英語教材 11分" });
+  await expect(dialog.getByPlaceholder("分", { exact: true })).toHaveValue("11");
+  await expect(dialog.getByLabel("科目")).toHaveValue("english");
+  await expect(dialog.getByLabel("教材")).toHaveValue(String(textbook!.id));
+
+  await dialog.getByRole("button", { name: "記録する" }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole("link", { name: "記録・予定" }).click();
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "英語" }).filter({ hasText: "11分" }).first()
+  ).toBeVisible();
+});
