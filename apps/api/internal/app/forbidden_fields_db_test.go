@@ -66,6 +66,10 @@ func forbiddenWrites(facultyID int64) map[string]forbiddenArrange {
 		"POST /api/study-logs": func(dbFixture, string, map[string]any) (string, map[string]any) {
 			return "/api/study-logs", map[string]any{"date": todayTokyo(), "minutes": 30}
 		},
+		// 一文を読むだけで書き込まない（JUK-180）。禁止項目を混ぜても、何も変わらないことを確かめる。
+		"POST /api/study-logs/parse": func(dbFixture, string, map[string]any) (string, map[string]any) {
+			return "/api/study-logs/parse", map[string]any{"text": "数学30分"}
+		},
 		"PATCH /api/study-logs/{id}": func(fx dbFixture, caller string, _ map[string]any) (string, map[string]any) {
 			return path("/api/study-logs/%d", fx.StudyLog(caller)), map[string]any{"date": todayTokyo(), "minutes": 45}
 		},

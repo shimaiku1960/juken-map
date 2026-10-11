@@ -12,6 +12,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/aiparse"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/blog"
@@ -53,8 +55,16 @@ func newDBTestApp(db *sql.DB) dbTestApp {
 		}
 		return &httpx.Session{UserID: c.Value, Email: c.Value + "@example.test", Role: "user"}, nil
 	})
-	registerRoutes(rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{})
+	registerRoutes(rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{}, dbTestParser{})
 	return dbTestApp{rt: rt}
+}
+
+// dbTestParser は AI クイック記録（JUK-180）の Claude の代わり。DB のテストでは本物の API を呼ばない。
+// 鍵の無い nil にすると入口が 503 を返し、A4 の表（2xx で通ることを求める）で確かめられないので、何も読み取れなかった結果を返す。
+type dbTestParser struct{}
+
+func (dbTestParser) Parse(context.Context, aiparse.Input) (aiparse.Result, error) {
+	return aiparse.Result{}, nil
 }
 
 // userRoutes は入口が user のルート（"METHOD /path"）。skip に入れたメソッドは除く。

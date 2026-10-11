@@ -88,6 +88,7 @@ curl -b jar localhost:8080/api/dashboard
 | `GA_MEASUREMENT_ID` | なし | GA4 の測定 ID。画面の HTML に計測のタグを差し込み、CSP でそのインラインスクリプトだけをハッシュで許す |
 | `FARO_COLLECTOR_URL` | なし | 画面のエラーの送り先（Grafana Faro）。HTML の meta で画面へ渡し、CSP の connect-src にオリジンを足す |
 | `MICROCMS_SERVICE_DOMAIN`・`MICROCMS_API_KEY` | なし | ブログの中継（`/api/blog`）。どちらか空なら 502 |
+| `ANTHROPIC_API_KEY` | なし | AI クイック記録（`POST /api/study-logs/parse`、JUK-180）で一文を読む Claude の鍵。空なら 503 |
 
 ## 本番
 

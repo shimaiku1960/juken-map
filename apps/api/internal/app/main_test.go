@@ -44,6 +44,7 @@ func TestRegisteredRoutes(t *testing.T) {
 		{Pattern: "GET /api/study-logs/daily", Access: httpx.AccessUser},
 		{Pattern: "GET /api/study-plans", Access: httpx.AccessUser},
 		{Pattern: "POST /api/study-logs", Access: httpx.AccessUser},
+		{Pattern: "POST /api/study-logs/parse", Access: httpx.AccessUser},
 		{Pattern: "PATCH /api/study-logs/{id}", Access: httpx.AccessUser},
 		{Pattern: "DELETE /api/study-logs/{id}", Access: httpx.AccessUser},
 		{Pattern: "POST /api/study-plans", Access: httpx.AccessUser},
@@ -108,7 +109,7 @@ func TestRegisteredRoutes(t *testing.T) {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(nil))
 	auth.RegisterRoutes(rt, auth.New(nil, auth.Config{}))
 	blog.RegisterRoutes(rt, blog.Config{})
-	registerRoutes(rt, nil, allJobs(), line.Config{}, blog.WebhookConfig{})
+	registerRoutes(rt, nil, allJobs(), line.Config{}, blog.WebhookConfig{}, nil)
 
 	if len(rt.Routes) != len(want) {
 		t.Fatalf("routes = %v\nwant %v", rt.Routes, want)
@@ -132,7 +133,7 @@ func TestRegisteredWritesRejectCrossSite(t *testing.T) {
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
 	auth.RegisterRoutes(rt, auth.New(nil, auth.Config{}))
 	blog.RegisterRoutes(rt, blog.Config{})
-	registerRoutes(rt, nil, allJobs(), line.Config{}, blog.WebhookConfig{})
+	registerRoutes(rt, nil, allJobs(), line.Config{}, blog.WebhookConfig{}, nil)
 
 	checked := 0
 	for _, route := range rt.Routes {

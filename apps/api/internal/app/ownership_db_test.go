@@ -92,6 +92,8 @@ func ownershipTable(facultyID int64) map[string]ownershipClass {
 		// 実績
 		"GET /api/study-logs":       none("自分の実績の一覧"),
 		"GET /api/study-logs/daily": none("自分の日ごとの学習時間"),
+		// 参考書は ID で受け取らず、セッションの人の参考書だけをモデルに見せる。返す ID もその中に絞る（JUK-180）。
+		"POST /api/study-logs/parse": none("一文を読むだけ。参考書は自分のものだけを使う"),
 		"POST /api/study-logs": owned(map[string]ownershipArrange{
 			"他人の参考書": func(fx dbFixture, caller, holder string) ownershipAttempt {
 				textbookID := fx.Textbook(holder)

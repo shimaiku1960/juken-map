@@ -55,7 +55,7 @@ func newDBAdminAppWith(t *testing.T, db *sql.DB, jobs jobConfig) dbAdminApp {
 		}
 		return &httpx.Session{UserID: c.Value, Email: c.Value + "@example.test", Role: "admin", TwoFactorVerified: true}, nil
 	})
-	registerRoutes(rt, db, jobs, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{})
+	registerRoutes(rt, db, jobs, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{}, nil)
 	return dbAdminApp{t: t, rt: rt}
 }
 

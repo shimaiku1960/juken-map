@@ -402,6 +402,36 @@ func (e StudyLogInputSubject) Valid() bool {
 	}
 }
 
+// Defines values for StudyLogParseResultSubject.
+const (
+	StudyLogParseResultSubjectEnglish  StudyLogParseResultSubject = "english"
+	StudyLogParseResultSubjectJapanese StudyLogParseResultSubject = "japanese"
+	StudyLogParseResultSubjectMath     StudyLogParseResultSubject = "math"
+	StudyLogParseResultSubjectOther    StudyLogParseResultSubject = "other"
+	StudyLogParseResultSubjectScience  StudyLogParseResultSubject = "science"
+	StudyLogParseResultSubjectSocial   StudyLogParseResultSubject = "social"
+)
+
+// Valid indicates whether the value is a known member of the StudyLogParseResultSubject enum.
+func (e StudyLogParseResultSubject) Valid() bool {
+	switch e {
+	case StudyLogParseResultSubjectEnglish:
+		return true
+	case StudyLogParseResultSubjectJapanese:
+		return true
+	case StudyLogParseResultSubjectMath:
+		return true
+	case StudyLogParseResultSubjectOther:
+		return true
+	case StudyLogParseResultSubjectScience:
+		return true
+	case StudyLogParseResultSubjectSocial:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StudyPlanItemInputRangeUnit.
 const (
 	StudyPlanItemInputRangeUnitChapter  StudyPlanItemInputRangeUnit = "chapter"
@@ -1421,6 +1451,23 @@ type StudyLogInputRangeUnit string
 // StudyLogInputSubject defines model for StudyLogInput.Subject.
 type StudyLogInputSubject string
 
+// StudyLogParseInput AI に読ませる一文。前後の空白を削ってから、1〜200文字（コードポイント）
+type StudyLogParseInput struct {
+	Text string `json:"text"`
+}
+
+// StudyLogParseResult 一文から読み取った実績の項目。分からなかった項目は null（推測で埋めない）
+type StudyLogParseResult struct {
+	// Date 書かれていたときだけ（「昨日」など）。暦にある今日（日本時間）以前の日付
+	Date       *string                     `json:"date"`
+	Minutes    *int64                      `json:"minutes"`
+	Subject    *StudyLogParseResultSubject `json:"subject"`
+	TextbookID *int64                      `json:"textbookId"`
+}
+
+// StudyLogParseResultSubject defines model for StudyLogParseResult.Subject.
+type StudyLogParseResultSubject string
+
 // StudyLogRow 実績の行（書き込みの応答。一覧の StudyLog と違い、参考書は入れ子にせず userId・日時を持つ）
 type StudyLogRow struct {
 	// CreatedAt Date を JSON にしたときの ISO 文字列（例 "2026-09-24T00:00:00.000Z"）
@@ -1970,6 +2017,9 @@ type UpdateSimulationUserJSONRequestBody = SimulationUserUpdate
 
 // CreateStudyLogJSONRequestBody defines body for CreateStudyLog for application/json ContentType.
 type CreateStudyLogJSONRequestBody = StudyLogInput
+
+// ParseStudyLogJSONRequestBody defines body for ParseStudyLog for application/json ContentType.
+type ParseStudyLogJSONRequestBody = StudyLogParseInput
 
 // UpdateStudyLogJSONRequestBody defines body for UpdateStudyLog for application/json ContentType.
 type UpdateStudyLogJSONRequestBody = StudyLogInput

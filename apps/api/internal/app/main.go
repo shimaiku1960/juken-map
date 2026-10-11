@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/aiparse"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
@@ -131,6 +132,11 @@ func run() error {
 		LineBase:   envOr("LINE_API_BASE", "https://api.line.me/v2/bot"),
 		LineToken:  os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"),
 	}
+	// AI クイック記録（JUK-180）。鍵が無ければ nil のままにし、入口は 503 を返す。
+	var quickLog aiparse.Parser
+	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+		quickLog = aiparse.NewClaude(key, telemetry.NewOutboundClient(tp, outbound))
+	}
 	registerRoutes(rt, db, jobConfig{
 		dailyNotificationSecret: os.Getenv("DAILY_NOTIFICATION_SECRET"),
 		simulationEnabled:       os.Getenv("SIMULATION_ENABLED") == "on",
@@ -160,7 +166,7 @@ func run() error {
 			Ref:      "main",
 			Token:    os.Getenv("GITHUB_DEPLOY_TOKEN"),
 		},
-	})
+	}, quickLog)
 
 	// 画面（apps/web のビルド成果物）を配る（JUK-111）。WEB_DIST_DIR が無ければ配らない（開発は Vite が配る）。
 	// GA4 と Faro の設定は画面のバンドルに焼き込まず、ここで HTML に差し込む。
