@@ -9,8 +9,16 @@ import { trackEvent } from "@/web/lib/analytics";
 
 // studyLogs（勉強の「実績」＝サーバー状態）の型・取得・queryKey をここに集約する。
 // 型は src/shared/dto/study.ts が正（re-export）。理由は useStudyPlans.ts のコメント参照。
-export type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
-import type { DailyStudyMinutes, StudyLog } from "@/shared/dto/study";
+export type {
+  DailyStudyMinutes,
+  StudyLog,
+  StudyLogParseResult,
+} from "@/shared/dto/study";
+import type {
+  DailyStudyMinutes,
+  StudyLog,
+  StudyLogParseResult,
+} from "@/shared/dto/study";
 import { api } from "@/web/lib/api-client";
 
 // 実績の記録には入口が3つある（手入力・タイマー・予定の完了）が、GA4 へは
@@ -119,6 +127,19 @@ export function useCreateStudyLog() {
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
       queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
+  });
+}
+
+// 「昨日 数学 青チャート 1時間」のような一文を、AI で記録の項目に分けるフック（JUK-180）。
+// 読み取るだけで保存はしないので、キャッシュは何も無効化しない。
+export function useParseStudyLog() {
+  return useMutation({
+    mutationFn: (text: string) =>
+      api.post<StudyLogParseResult>(
+        "/api/study-logs/parse",
+        { text },
+        { fallbackMessage: "読み取りに失敗しました" }
+      ),
   });
 }
 

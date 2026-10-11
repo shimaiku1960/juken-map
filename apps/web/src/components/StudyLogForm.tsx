@@ -8,6 +8,7 @@ import {
 } from "@/shared/validations/studyLog";
 import {
   type StudyLog,
+  type StudyLogParseResult,
   useCreateStudyLog,
   useUpdateStudyLog,
 } from "@/web/hooks/useStudyLogs";
@@ -20,6 +21,8 @@ import { todayYmdTokyo, ymdLocal } from "@/shared/date";
 import { RANGE_UNIT_VALUES } from "@/shared/validations/studyPlan";
 import type { UpdateTextbookProgressInput } from "@/shared/validations/textbook";
 import { subjectLabel } from "@/shared/subjects";
+import QuickLogSentence from "@/web/components/QuickLogSentence";
+import { quickLogValues } from "@/web/lib/quickLog";
 import {
   SubjectSelect,
   TextbookSelect,
@@ -128,6 +131,40 @@ export default function StudyLogForm({
     });
   };
 
+  // 教材を選び直したら、学習範囲を教材に合わせる。外したら範囲も消し、
+  // 選んだら教材の追跡単位を入れる。選択欄と AI の読み取りの両方から使う。
+  const applyTextbookRange = (textbookId: number | null) => {
+    if (textbookId == null) {
+      form.setValue("rangeStart", null, { shouldValidate: true });
+      form.setValue("rangeEnd", null, { shouldValidate: true });
+      form.setValue("rangeUnit", null, { shouldValidate: true });
+      return;
+    }
+    const textbook = textbooks.find((candidate) => candidate.id === textbookId);
+    if (textbook?.rangeUnit != null) {
+      form.setValue("rangeUnit", textbook.rangeUnit, { shouldValidate: true });
+    }
+  };
+
+  // 一文を AI で読み取った結果をフォームへ入れる（JUK-180）。保存は利用者が確かめてから行う。
+  const applyParsed = (result: StudyLogParseResult) => {
+    const values = quickLogValues(result, { dateFixed: initialDate != null });
+    const options = { shouldValidate: true, shouldDirty: true };
+    if (values.date !== undefined) form.setValue("date", values.date, options);
+    if (values.minutes !== undefined) {
+      form.setValue("minutes", values.minutes, options);
+    }
+    if (values.subject !== undefined) {
+      form.setValue("subject", values.subject, options);
+    }
+    if (values.textbookId !== undefined) {
+      form.setValue("textbookId", values.textbookId, options);
+      applyTextbookRange(values.textbookId);
+      // 教材の欄は「教材・メモを追加」の中にあるので、入ったことが見えるよう開く
+      setDetailsOpen(true);
+    }
+  };
+
   const onSubmit = (data: CreateStudyLogInput) => {
     const mutationOptions = {
       onSuccess: () => {
@@ -168,6 +205,9 @@ export default function StudyLogForm({
               : "space-y-3"
           }
         >
+          {variant === "quick" && initialLog == null && (
+            <QuickLogSentence onParsed={applyParsed} />
+          )}
           {/* 毎日使う学習時間を主役にし、補助項目は後から選べる順番にする。 */}
           <div className="flex flex-wrap items-end gap-3">
             {variant === "full" && (
@@ -396,26 +436,7 @@ export default function StudyLogForm({
                             value={field.value}
                             onChange={(textbookId) => {
                               field.onChange(textbookId);
-                              if (textbookId == null) {
-                                form.setValue("rangeStart", null, {
-                                  shouldValidate: true,
-                                });
-                                form.setValue("rangeEnd", null, {
-                                  shouldValidate: true,
-                                });
-                                form.setValue("rangeUnit", null, {
-                                  shouldValidate: true,
-                                });
-                                return;
-                              }
-                              const textbook = textbooks.find(
-                                (candidate) => candidate.id === textbookId
-                              );
-                              if (textbook?.rangeUnit != null) {
-                                form.setValue("rangeUnit", textbook.rangeUnit, {
-                                  shouldValidate: true,
-                                });
-                              }
+                              applyTextbookRange(textbookId);
                             }}
                           />
                         )}

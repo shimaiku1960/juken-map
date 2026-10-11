@@ -39,3 +39,6 @@ export type Dashboard = Schemas["Dashboard"];
 export type DailyStudyMinutes = Schemas["DailyStudyMinutes"];
 
 export type StudyLog = Schemas["StudyLog"];
+
+// 一文を AI で読み取った結果（JUK-180）。読み取れなかった項目は null。
+export type StudyLogParseResult = Schemas["StudyLogParseResult"];
