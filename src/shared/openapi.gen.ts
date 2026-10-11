@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/study-logs/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 一文（「青チャート40分」など）を AI で読み、実績の項目（日付・科目・時間・参考書）に分ける（JUK-180）。 記録はしない。画面はこの結果をフォームに入れ、利用者が確かめてから POST /api/study-logs で記録する */
+        post: operations["parseStudyLog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/study-logs/{id}": {
         parameters: {
             query?: never;
@@ -1158,6 +1175,21 @@ export interface components {
             /** @description 500文字（コードポイント）まで。前後の空白は削る。null は不可 */
             memo?: string;
         };
+        /** @description AI に読ませる一文。前後の空白を削ってから、1〜200文字（コードポイント） */
+        StudyLogParseInput: {
+            text: string;
+        };
+        /** @description 一文から読み取った実績の項目。分からなかった項目は null（推測で埋めない） */
+        StudyLogParseResult: {
+            /** @description 書かれていたときだけ（「昨日」など）。暦にある今日（日本時間）以前の日付 */
+            date: string | null;
+            /** @enum {string|null} */
+            subject: "english" | "math" | "japanese" | "science" | "social" | "other" | null;
+            /** Format: int64 */
+            minutes: number | null;
+            /** Format: int64 */
+            textbookId: number | null;
+        };
         /** @description 実績の行（書き込みの応答。一覧の StudyLog と違い、参考書は入れ子にせず userId・日時を持つ） */
         StudyLogRow: {
             /** Format: int64 */
@@ -1821,6 +1853,63 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    parseStudyLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudyLogParseInput"];
+            };
+        };
+        responses: {
+            /** @description 読み取れた項目。読み取れなかった項目・自分の参考書に無い ID・範囲の外の時間・未来の日付は null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyLogParseResult"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            /** @description 今日の AI の回数の上限（1人あたり・全体）を超えた。日本時間の0時に戻る */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+            /** @description AI の呼び出しに失敗した（原因はログにだけ残す） */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI の鍵が設定されていない（この環境では使えない） */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     deleteStudyLog: {

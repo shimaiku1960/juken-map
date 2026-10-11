@@ -53,7 +53,7 @@ func newDBTestApp(db *sql.DB) dbTestApp {
 		}
 		return &httpx.Session{UserID: c.Value, Email: c.Value + "@example.test", Role: "user"}, nil
 	})
-	registerRoutes(rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{})
+	registerRoutes(rt, db, jobConfig{}, line.Config{WebOrigin: "https://juken-map.com"}, blog.WebhookConfig{}, nil)
 	return dbTestApp{rt: rt}
 }
 

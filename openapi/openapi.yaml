@@ -105,6 +105,45 @@ paths:
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/study-logs/parse:
+    post:
+      operationId: parseStudyLog
+      summary: >-
+        一文（「青チャート40分」など）を AI で読み、実績の項目（日付・科目・時間・参考書）に分ける（JUK-180）。
+        記録はしない。画面はこの結果をフォームに入れ、利用者が確かめてから POST /api/study-logs で記録する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudyLogParseInput" }
+      responses:
+        "200":
+          description: 読み取れた項目。読み取れなかった項目・自分の参考書に無い ID・範囲の外の時間・未来の日付は null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudyLogParseResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429":
+          description: 今日の AI の回数の上限（1人あたり・全体）を超えた。日本時間の0時に戻る
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "502":
+          description: AI の呼び出しに失敗した（原因はログにだけ残す）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: AI の鍵が設定されていない（この環境では使えない）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/study-logs/{id}:
     parameters:
       - $ref: "#/components/parameters/ID"
@@ -2035,6 +2074,30 @@ components:
           description: 500文字（コードポイント）まで。前後の空白は削る。null は不可
           type: string
           maxLength: 500
+
+    StudyLogParseInput:
+      description: AI に読ませる一文。前後の空白を削ってから、1〜200文字（コードポイント）
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 200 }
+
+    StudyLogParseResult:
+      description: 一文から読み取った実績の項目。分からなかった項目は null（推測で埋めない）
+      type: object
+      required: [date, subject, minutes, textbookId]
+      properties:
+        date:
+          description: 書かれていたときだけ（「昨日」など）。暦にある今日（日本時間）以前の日付
+          type: string
+          nullable: true
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        subject:
+          type: string
+          nullable: true
+          enum: [english, math, japanese, science, social, other]
+        minutes: { type: integer, format: int64, minimum: 1, maximum: 1440, nullable: true }
+        textbookId: { type: integer, format: int64, minimum: 1, nullable: true }
 
     StudyLogRow:
       description: 実績の行（書き込みの応答。一覧の StudyLog と違い、参考書は入れ子にせず userId・日時を持つ）

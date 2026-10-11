@@ -3,6 +3,7 @@ package app
 import (
 	"database/sql"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/aiparse"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/admin"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/analytics"
@@ -23,7 +24,9 @@ import (
 // registerRoutes は Go が受け持つルートを登録する。本番で Go へ届くのは、このうち
 // infra/nginx/juken-map-go-routes.conf に書いたパスだけ。
 // 一覧は main_test.go の TestRegisteredRoutes が入口の種類と一緒に確かめている。
-func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.Config, microcms blog.WebhookConfig) {
+//
+// quickLog は AI クイック記録（JUK-180）で一文を読む Claude。鍵が無い環境では nil（503 を返す）。
+func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.Config, microcms blog.WebhookConfig, quickLog aiparse.Parser) {
 	studyRoutes := study.New(db)
 
 	rt.Public("GET /api/health", healthHandler(db))
@@ -33,6 +36,7 @@ func registerRoutes(rt *httpx.Router, db *sql.DB, jobs jobConfig, lineCfg line.C
 	rt.User("GET /api/study-plans", studyRoutes.Reads.ListPlans)
 
 	rt.User("POST /api/study-logs", studyRoutes.Logs.Create)
+	rt.User("POST /api/study-logs/parse", study.NewParseHandler(db, quickLog).Serve)
 	rt.User("PATCH /api/study-logs/{id}", studyRoutes.Logs.Update)
 	rt.User("DELETE /api/study-logs/{id}", studyRoutes.Logs.Delete)
 
