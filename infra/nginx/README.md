@@ -247,6 +247,18 @@ ACM（Amazon のルートにつながる RSA の証明書）へ替える。ACM �
 戻すときは、控えた2つのファイルを戻して reload し、`certbot reconfigure --cert-name juken-map.com --nginx` で
 nginx プラグインに戻す。
 
+### DNS の切り替えと、そのあと（2026-10-14）
+
+- apex と www は Cloudflare で CloudFront を指す CNAME にした（`terraform/dns.tf`。apex は CNAME flattening）
+- セキュリティグループの 443 を CloudFront の IP（`com.amazonaws.global.cloudfront.origin-facing`）だけに絞り、
+  80 を閉じた（`terraform/sg.tf`）。EC2 に直接つなぐ利用者はいなくなる
+- `conf.d/juken-map-cloudfront-realip.conf` を置き、CloudFront が渡す `X-Forwarded-For` の末尾を利用者の IP として
+  `$remote_addr` にした（下の「注意」も参照）。これが無いと、ログインの回数制限が CloudFront の拠点の IP ごとに数えられる
+
+**CloudFront をやめて EC2 へ直接戻すとき**は、順番に注意する。先にセキュリティグループの 80・443 を
+`0.0.0.0/0` に戻し、`conf.d/juken-map-cloudfront-realip.conf` を消して reload し、最後に DNS の apex と www を
+`A`（EC2 の IP）に戻す。realip を残したまま直接受けると、利用者が書いた `X-Forwarded-For` をそのまま信じてしまう。
+
 ## 注意
 
 - **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（当時は Better Auth、今は Go の `internal/feature/auth/throttle.go`）は
@@ -258,6 +270,8 @@ nginx プラグインに戻す。
   `$remote_addr` が利用者ではなく Cloudflare のサーバーの IP になるため、Cloudflare の IP 範囲から
   来た接続に限って `CF-Connecting-IP` を利用者の IP として扱っていた。いまは Cloudflare が経路に
   いないので `$remote_addr` がそのまま利用者の IP である。
+  **2026-10-14 に CloudFront を前に置いたので、`conf.d/juken-map-cloudfront-realip.conf` で入れ直した。**
+  信じるのは「443 に来た接続は CloudFront だけ」というセキュリティグループの絞り込みである
   **中継を信頼する設定は、その中継が経路から外れたら一緒に外す。** 残しておくと、nginx が見る
   接続元と実際の接続元が食い違いうる（ログインの回数制限はこの値で数えている）。
   将来ふたたび Cloudflare や ALB を前に置くときは、そのときの経路に合わせて入れ直す
