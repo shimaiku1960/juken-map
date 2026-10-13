@@ -213,6 +213,52 @@ JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送�
 - コンテナから手元の Go へは `host.docker.internal` で届く（Linux の CI では `--add-host` で作る）
 - 振り分けファイルを書き換えたら、開発中は `pnpm dev`（の dev:proxy）を起動し直す
 
+## CloudFront を前に置く（2026-10-13〜、JUK-185）
+
+会社の Wi-Fi から接続できなかったことをきっかけに、利用者に見せる証明書を Let's Encrypt から
+ACM（Amazon のルートにつながる RSA の証明書）へ替える。ACM は EC2 に置けないので、CloudFront を前に置く。
+理由と CloudFront の設定は `terraform/cloudfront.tf`、DNS は `terraform/dns.tf`。
+
+```
+ブラウザ → CloudFront（ACM）→ HTTPS → origin.juken-map.com（この nginx、Let's Encrypt のまま）→ Go
+```
+
+- CloudFront は Host を含む利用者のヘッダーをそのまま渡す。nginx の server の選び分け
+  （apex と www）は今までどおり。CloudFront はオリジンの証明書を Host（juken-map.com）で検証するので、
+  オリジンの証明書は今の Let's Encrypt（apex と www）のままでよい
+- **証明書の更新を webroot に替える。** 切り替えたあと、Let's Encrypt の確認は CloudFront を通り、
+  HTTPS でオリジンの 443 に届く。certbot の nginx プラグインは 80 の server でしか答えないので、
+  `snippets/juken-map-acme-challenge.conf` を 443 の2つの server（サイト設定と
+  `conf.d/juken-map-www-redirect.conf`）から include し、`/var/www/letsencrypt` のファイルを返す。
+  www の 443 は server の直下の `return` を `location /` に移した（直下のままだと確認より先に転送される）
+
+### 本番での手順（DNS を切り替える前。SSM で入る）
+
+1. 戻せるように控える：`/etc/nginx/backup-juk185/` に `sites-available/default` と
+   `conf.d/juken-map-www-redirect.conf` を写す
+2. `/var/www/letsencrypt` を作り、`snippets/juken-map-acme-challenge.conf` を `/etc/nginx/snippets/` へ置く
+3. サイト設定の 443 の server（`ssl_dhparam` の行の次）に
+   `include /etc/nginx/snippets/juken-map-acme-challenge.conf;` を足し、`conf.d/juken-map-www-redirect.conf` を置き直す
+4. `nginx -t` → `systemctl reload nginx`。`/var/www/letsencrypt/.well-known/acme-challenge/` に試しのファイルを置き、
+   `http://juken-map.com/…` と `http://www.juken-map.com/…` がそのファイルを返すことを `curl -L` で確かめてから消す
+5. `certbot reconfigure --cert-name juken-map.com --webroot -w /var/www/letsencrypt`
+   （確認を一度流してから、更新の設定を webroot に書き換える）→ `certbot renew --dry-run`
+
+戻すときは、控えた2つのファイルを戻して reload し、`certbot reconfigure --cert-name juken-map.com --nginx` で
+nginx プラグインに戻す。
+
+### DNS の切り替えと、そのあと（2026-10-14）
+
+- apex と www は Cloudflare で CloudFront を指す CNAME にした（`terraform/dns.tf`。apex は CNAME flattening）
+- セキュリティグループの 443 を CloudFront の IP（`com.amazonaws.global.cloudfront.origin-facing`）だけに絞り、
+  80 を閉じた（`terraform/sg.tf`）。EC2 に直接つなぐ利用者はいなくなる
+- `conf.d/juken-map-cloudfront-realip.conf` を置き、CloudFront が渡す `X-Forwarded-For` の末尾を利用者の IP として
+  `$remote_addr` にした（下の「注意」も参照）。これが無いと、ログインの回数制限が CloudFront の拠点の IP ごとに数えられる
+
+**CloudFront をやめて EC2 へ直接戻すとき**は、順番に注意する。先にセキュリティグループの 80・443 を
+`0.0.0.0/0` に戻し、`conf.d/juken-map-cloudfront-realip.conf` を消して reload し、最後に DNS の apex と www を
+`A`（EC2 の IP）に戻す。realip を残したまま直接受けると、利用者が書いた `X-Forwarded-For` をそのまま信じてしまう。
+
 ## 注意
 
 - **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（当時は Better Auth、今は Go の `internal/feature/auth/throttle.go`）は
@@ -224,6 +270,8 @@ JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送�
   `$remote_addr` が利用者ではなく Cloudflare のサーバーの IP になるため、Cloudflare の IP 範囲から
   来た接続に限って `CF-Connecting-IP` を利用者の IP として扱っていた。いまは Cloudflare が経路に
   いないので `$remote_addr` がそのまま利用者の IP である。
+  **2026-10-14 に CloudFront を前に置いたので、`conf.d/juken-map-cloudfront-realip.conf` で入れ直した。**
+  信じるのは「443 に来た接続は CloudFront だけ」というセキュリティグループの絞り込みである
   **中継を信頼する設定は、その中継が経路から外れたら一緒に外す。** 残しておくと、nginx が見る
   接続元と実際の接続元が食い違いうる（ログインの回数制限はこの値で数えている）。
   将来ふたたび Cloudflare や ALB を前に置くときは、そのときの経路に合わせて入れ直す
