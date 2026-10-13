@@ -102,6 +102,10 @@ resource "aws_cloudfront_distribution" "site" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
     cache_policy_id        = data.aws_cloudfront_cache_policy.optimized.id
+    # ⚠️ ここにも Host を渡す。渡さないと CloudFront は origin.juken-map.com の名前でオリジンの
+    # 証明書（juken-map.com と www）を検証し、一致せずに 502 になる（2026-10-13 に実際に起きた）。
+    # キャッシュのキーは cache_policy が決めるので、ヘッダーを渡してもキャッシュは分かれない。
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer.id
   }
 
   restrictions {
