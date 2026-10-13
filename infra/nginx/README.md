@@ -213,6 +213,40 @@ JUK-111 から go-routes.conf の最後の受け皿が残りを全部 Go へ送�
 - コンテナから手元の Go へは `host.docker.internal` で届く（Linux の CI では `--add-host` で作る）
 - 振り分けファイルを書き換えたら、開発中は `pnpm dev`（の dev:proxy）を起動し直す
 
+## CloudFront を前に置く（2026-10-13〜、JUK-185）
+
+会社の Wi-Fi から接続できなかったことをきっかけに、利用者に見せる証明書を Let's Encrypt から
+ACM（Amazon のルートにつながる RSA の証明書）へ替える。ACM は EC2 に置けないので、CloudFront を前に置く。
+理由と CloudFront の設定は `terraform/cloudfront.tf`、DNS は `terraform/dns.tf`。
+
+```
+ブラウザ → CloudFront（ACM）→ HTTPS → origin.juken-map.com（この nginx、Let's Encrypt のまま）→ Go
+```
+
+- CloudFront は Host を含む利用者のヘッダーをそのまま渡す。nginx の server の選び分け
+  （apex と www）は今までどおり。CloudFront はオリジンの証明書を Host（juken-map.com）で検証するので、
+  オリジンの証明書は今の Let's Encrypt（apex と www）のままでよい
+- **証明書の更新を webroot に替える。** 切り替えたあと、Let's Encrypt の確認は CloudFront を通り、
+  HTTPS でオリジンの 443 に届く。certbot の nginx プラグインは 80 の server でしか答えないので、
+  `snippets/juken-map-acme-challenge.conf` を 443 の2つの server（サイト設定と
+  `conf.d/juken-map-www-redirect.conf`）から include し、`/var/www/letsencrypt` のファイルを返す。
+  www の 443 は server の直下の `return` を `location /` に移した（直下のままだと確認より先に転送される）
+
+### 本番での手順（DNS を切り替える前。SSM で入る）
+
+1. 戻せるように控える：`/etc/nginx/backup-juk185/` に `sites-available/default` と
+   `conf.d/juken-map-www-redirect.conf` を写す
+2. `/var/www/letsencrypt` を作り、`snippets/juken-map-acme-challenge.conf` を `/etc/nginx/snippets/` へ置く
+3. サイト設定の 443 の server（`ssl_dhparam` の行の次）に
+   `include /etc/nginx/snippets/juken-map-acme-challenge.conf;` を足し、`conf.d/juken-map-www-redirect.conf` を置き直す
+4. `nginx -t` → `systemctl reload nginx`。`/var/www/letsencrypt/.well-known/acme-challenge/` に試しのファイルを置き、
+   `http://juken-map.com/…` と `http://www.juken-map.com/…` がそのファイルを返すことを `curl -L` で確かめてから消す
+5. `certbot reconfigure --cert-name juken-map.com --webroot -w /var/www/letsencrypt`
+   （確認を一度流してから、更新の設定を webroot に書き換える）→ `certbot renew --dry-run`
+
+戻すときは、控えた2つのファイルを戻して reload し、`certbot reconfigure --cert-name juken-map.com --nginx` で
+nginx プラグインに戻す。
+
 ## 注意
 
 - **`X-Forwarded-For` は 2026-09-18 に追加した。** アプリ（当時は Better Auth、今は Go の `internal/feature/auth/throttle.go`）は
