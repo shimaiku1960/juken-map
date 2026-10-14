@@ -4,7 +4,7 @@
 目標は次の2つ（JUK-182、2026-10-12 作成）。
 
 - LPIC-1（101・102）レベルの知識
-- 北米の DevOps / SRE の面接で、自分の構成を英語で説明し、「なぜそうしたか」に答えられること
+- 面接で自分の構成を説明し、「なぜそうしたか」に答えられること
 
 全16回（8週間・週2回・1回30〜60分）。進捗は [infra-basics-progress.md](./infra-basics-progress.md) に追記する。
 バックエンドの学習計画（[README.md](./README.md)）とは別系統。
@@ -60,7 +60,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
 5. **確認クイズ** 2〜3問（答えはすぐ言わない）
 6. **記録**：[infra-basics-progress.md](./infra-basics-progress.md) に「やったこと・理解したこと・つまずいた点・次回やること」
 
-用語は日本語と英語を併記する（例：権限 / permission）。各回の「面接の問い」は英語で答える練習をする。
+用語は日本語と英語を併記する（例：権限 / permission）。各回の「面接の問い」に答える練習をする。
 
 ### 実行する場所（環境）
 
@@ -126,7 +126,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
 | 7 | S13 | nginx の 443 → 127.0.0.1:8080/8081 と ss | ネットワーク |
 | 7 | S14 | VPC・サブネット・CIDR・セキュリティグループ・EC2 → RDS | ネットワーク |
 | 8 | S15 | Bash②：ヘルスチェックのスクリプトを自分で書く | Bash |
-| 8 | S16 | Bash③：デプロイの切り替え処理を読み解く ＋ 構成を英語で説明する | Bash・総まとめ |
+| 8 | S16 | Bash③：デプロイの切り替え処理を読み解く ＋ 構成を説明する | Bash・総まとめ |
 
 ---
 
@@ -165,7 +165,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - SSM で入ると「22番を開けなくてよい」以外に何が良いか（認証・記録の観点）
   - `~/.ssh` と秘密鍵のパーミッションはなぜあの値なのか
 - **LPIC-1**：102.6（仮想マシンのゲストとしての Linux）、110.3（SSH の鍵）
-- **面接の問い**：*Walk me through your production architecture.* / *How do you get a shell on your server, and why not SSH?*
+- **面接の問い**：本番の構成を説明してください ／ サーバーにはどうやって入りますか。なぜ SSH を使わないのですか
 
 #### S2. ユーザー・グループ・パーミッション〔60分〕
 
@@ -197,7 +197,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - 通知の共有トークンのファイルが 600・root なのに、`DynamicUser` の一時ユーザーで動くサービスがその値を使えるのはなぜか
   - `umask 022` と `077` で、新しく作ったファイルの権限はどう変わるか
 - **LPIC-1**：104.5（パーミッションと持ち主）、107.1（ユーザーとグループ）、110.1（sudo）、103.8（vi）
-- **面接の問い**：*How do you store secrets on the host, and who can read them?*
+- **面接の問い**：サーバーの上でシークレットをどう保管し、誰が読めますか
 
 ### 第2週
 
@@ -226,7 +226,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - distroless でシェルが無いことは、攻撃者にとって何が困るか。運用者にとって何が困るか（`docs/incident-response.md` の `/api incident` の呼び方を見る）
   - `systemd-analyze security` の点数を上げるとしたら、次に何を足すか
 - **LPIC-1**：104.5（SUID・SGID・sticky）、110.1（SUID のファイルを探す）、110.2（ホストのセキュリティ）
-- **面接の問い**：*Why do you run your containers as non-root, and what else limits the blast radius?*
+- **面接の問い**：なぜコンテナを root 以外で動かすのですか。ほかに被害の範囲を狭めているものは何ですか
 
 #### S4. プロセスとしてのコンテナ〔60分〕
 
@@ -254,7 +254,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - `/proc/$PID/ns` の番号がホストと違うもの・同じものは、それぞれ何を意味するか
   - 128MB を超えたら何が起きるか。そのとき `--restart always` は何をするか
 - **LPIC-1**：103.5（プロセスの作成・監視・終了）、103.6（優先度。`nice`・`renice` は 🧪 箱で試す）、102.6
-- **面接の問い**：*What actually is a container from the kernel's point of view?*
+- **面接の問い**：カーネルから見ると、コンテナの正体は何ですか
 
 ### 第3週
 
@@ -282,7 +282,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - `nginx reload` の直後に古いコンテナを止めると、まだ 502 が出うるのはなぜか（README の落とし穴）
   - `docker stop` の既定の猶予（10秒）と Go の `Shutdown` の上限が同じだと何が困るか
 - **LPIC-1**：103.5（シグナル・`kill`・`jobs`）、103.6（`nice`・`renice`）
-- **面接の問い**：*How do you deploy without downtime on a single host?* / *Blue-green vs rolling — which one is yours?*
+- **面接の問い**：1台のサーバーで、どうやって止めずにデプロイしていますか ／ ブルーグリーンとローリングのどちらですか
 
 #### S6. systemd の基本と nginx〔60分〕
 
@@ -314,7 +314,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - `nginx -t` を挟まずに reload すると、設定が壊れていたら何が起きるか
   - EC2 が再起動したとき、nginx と Docker のコンテナはそれぞれ何によって起き上がるか
 - **LPIC-1**：101.3（target・起動と停止）、101.2（起動の流れ）、102.4（Debian のパッケージ）、104.6（シンボリックリンク）
-- **面接の問い**：*What's the difference between reload and restart, and why does it matter for availability?*
+- **面接の問い**：reload と restart の違いは何ですか。なぜ可用性に関係するのですか
 
 ### 第4週
 
@@ -348,7 +348,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - `@.service` の `%i` と、`$$`・`%%` のエスケープはそれぞれ誰（systemd・sh）のための書き方か
   - cron と比べて timer が勝る点を3つ（ログ・依存関係・権限の絞り方）
 - **LPIC-1**：107.2（cron・at・systemd timer）、108.1（システム時刻）、107.3（タイムゾーン）
-- **面接の問い**：*Cron vs systemd timers — when would you choose each?*
+- **面接の問い**：cron と systemd timer は、それぞれどんなときに選びますか
 
 #### S8. ログ①：journald・nginx のログ・logrotate・ディスク〔45分〕
 
@@ -373,7 +373,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - `notifempty` のままだと、ほぼ空のエラーログがなぜ1か月以上残ったか
   - ディスク 30GB が埋まるとしたら、どこからか。コンテナのログ（json-file）は上限があるか
 - **LPIC-1**：108.2（システムのログ・logrotate）、104.7（FHS・`/var/log` と `/var/lib`）、104.1・104.3（`lsblk`・`findmnt` の読み方）
-- **面接の問い**：*Where do your logs go, and how long do you keep them? Why?*
+- **面接の問い**：ログはどこへ行き、どれくらい残していますか。なぜその期間ですか
 
 ### 第5週
 
@@ -402,7 +402,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - `/api/health` が件数の大半を占めると、SLO の遅延の見え方にどう効くか（`docs/slo.md` の「分かっている穴」）
   - 応答時間はこの形式に入っていない。集計したいならどうするか（`log_format` に `$request_time`、または Go のメトリクス）
 - **LPIC-1**：103.2（フィルタ）、103.4（パイプとリダイレクト）、103.7（正規表現）、103.1
-- **面接の問い**：*Production is throwing 5xx. What's the first command you run on the box?*
+- **面接の問い**：本番で 5xx が出ています。サーバーで最初に打つコマンドは何ですか
 
 #### S10. ログ②：docker logs と JSON ログを jq で読む〔45分〕
 
@@ -426,7 +426,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - 1つの `reqId` から、Grafana のトレースへどう辿れるか
   - ログドライバを変えずに Alloy が Docker のソケットから拾う形にした利点と弱点
 - **LPIC-1**：103.2・103.4（フィルタとパイプ）、108.2（ログ）
-- **面接の問い**：*Why structured logs? How do you correlate a log line with a trace?*
+- **面接の問い**：なぜ構造化ログにするのですか。ログの1行とトレースをどう結び付けますか
 
 ### 第6週
 
@@ -464,7 +464,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - `juken-map.com` は IP がいくつ返るか。`dig` を数回打つと変わるか。`origin.juken-map.com` と比べて何が違うか
   - apex（`juken-map.com`）には本来 CNAME を置けない。`dns.tf` ではどう扱っているか（Cloudflare の CNAME flattening）
 - **LPIC-1**：109.4（クライアント側の DNS・`/etc/resolv.conf`・`/etc/hosts`・`nsswitch.conf`）、109.1
-- **面接の問い**：*What happens when you type juken-map.com into a browser?*（DNS の部分を詳しく）
+- **面接の問い**：ブラウザに juken-map.com と打つと何が起きますか（DNS の部分を詳しく）
 
 #### S12. TCP と TLS：curl -v・openssl s_client・tcpdump〔60分〕
 
@@ -506,7 +506,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - 会社の Wi-Fi からつながらなかったのを、証明書を ACM に替えて直した（JUK-185）。証明書の「チェーン」の何が違ったと考えられるか
   - TLS を nginx で終端し、Go までは平文にしているのはなぜか。それで良い条件は何か
 - **LPIC-1**：109.1（TCP・ポート）、109.3（ネットワークのトラブルシュート）。TLS・`openssl s_client` 自体は LPIC-1 の範囲外（面接向け）
-- **面接の問い**：*Walk me through a TLS handshake. Where is TLS terminated in your setup — and why twice?*
+- **面接の問い**：TLS のハンドシェイクを説明してください。この構成では TLS をどこで終端していますか。なぜ2か所なのですか
 
 ### 第7週
 
@@ -543,7 +543,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - 443 につないでいる相手の IP は、利用者か CloudFront か。realip の設定が無いと、アクセスログの IP はどうなるか
   - realip で「X-Forwarded-For の末尾」だけを信じる（`real_ip_recursive off`）のはなぜか。SG を広げたら、なぜ realip も外す必要があるか
 - **LPIC-1**：109.3（`ss`・`lsof` でポートを調べる）、110.1（開いているポートの確認）
-- **面接の問い**：*A request hits port 443. Trace it to your application process.*
+- **面接の問い**：443番ポートに届いたリクエストが、アプリのプロセスに着くまでをたどってください
 
 #### S14. VPC・サブネット・CIDR・セキュリティグループ・EC2 → RDS〔60分〕
 
@@ -583,7 +583,7 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - Mac から 3306 に届かない理由は、名前解決・経路・SG・`publicly_accessible` のどれか。いくつ重なっているか
   - 本番は Single-AZ・EC2 1台（`docs/slo.md` の「分かっている穴」）。可用性を上げるなら、ネットワークの何から変えるか
 - **LPIC-1**：109.1（IPv4・CIDR・プライベートアドレス）、109.2（`ip addr`・`ip route`）、109.3（`nc`・経路の確認）。VPC・SG・Terraform は範囲外（AWS・面接向け）
-- **面接の問い**：*How does your app server reach the database, and what stops anyone else from reaching it — or from bypassing your CDN?*
+- **面接の問い**：アプリのサーバーはどうやって DB に届きますか。ほかの人が DB に届いたり、CDN を飛ばしてサーバーに来たりするのを何が止めていますか
 
 ### 第8週
 
@@ -615,9 +615,9 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   - 自分のスクリプトを本番の EC2 の中から回すのと、外から回すのでは、見つけられる障害がどう違うか
   - 本番に対しては何秒ごとまでなら回してよいか（`/api/health` のリクエスト数と SLO の集計への影響）
 - **LPIC-1**：105.2（簡単なスクリプト）、105.1（シェルの環境・`PATH`・`alias`）、107.2（cron で回す）
-- **面接の問い**：*How do you know your service is up? What's the difference between a liveness and a readiness check?*
+- **面接の問い**：サービスが動いていることを、どうやって知りますか。liveness と readiness の確認の違いは何ですか
 
-#### S16. Bash③：デプロイの切り替え処理を読み解く ＋ 構成を英語で説明する〔60分〕
+#### S16. Bash③：デプロイの切り替え処理を読み解く ＋ 構成を説明する〔60分〕
 
 - **目的**：`deploy-ec2.sh` の主要な節を自分の言葉で説明し、16回の内容を「5分で話せる構成の説明」にまとめる
 - **教材**：`.github/workflows/deploy.yml`（base64 で運び、SSM Run Command で流し、結果をポーリング）、`.github/scripts/deploy-ec2.sh`
@@ -641,12 +641,12 @@ CloudFront（キャッシュは /assets/* だけ。Host を含む利用者のヘ
   3. 新しいポートでコンテナを起こす → `curl -w '%{http_code}'` のループで待つ → `nginx -t` → `reload` → 待つ → 古い方を止める
   4. 失敗したとき、どの時点なら「本番は無傷」と言えるか
   5. シークレットを一時ファイル（600）に置いて `--env-file` で渡し、引数に載せない理由（`ps` で見える）
-- **まとめの課題**：次の問いに英語で5分ずつ答え、`infra-basics-progress.md` に要点を書く
-  - *Walk me through your infrastructure end to end.*
-  - *Tell me about an incident you had and what you changed.*（2026-09-23 の pipefail、または 502 の件）
-  - *What would you change first if traffic grew 100x?*
+- **まとめの課題**：次の問いに5分ずつ答え、`infra-basics-progress.md` に要点を書く
+  - 本番の構成を端から端まで説明してください
+  - 起きた障害と、そのあと何を変えたかを話してください（2026-09-23 の pipefail、または 502 の件）
+  - アクセスが100倍になったら、最初に何を変えますか
 - **LPIC-1**：105.2（スクリプト・条件・ループ・関数）、103.4（リダイレクト・パイプの失敗）
-- **面接の問い**：*Explain your deployment pipeline. What happens if the new version is broken?*
+- **面接の問い**：デプロイの流れを説明してください。新しい版が壊れていたらどうなりますか
 
 ---
 
