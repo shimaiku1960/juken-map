@@ -33,9 +33,10 @@ data "aws_identitystore_user" "console" {
 
 # root で行っていた作業がそのままできるよう、まずは AdministratorAccess にする。
 # 1回のログインで8時間（作業1日分）使える。既定の1時間だと、作業の途中で何度も切れる。
+# description は Latin-1 の文字しか受け付けない（日本語だと作成が 400 で失敗する）。
 resource "aws_ssoadmin_permission_set" "admin" {
   name             = "AdministratorAccess"
-  description      = "日常のコンソール操作（JUK-189）"
+  description      = "Daily console access (JUK-189)"
   instance_arn     = local.sso_instance_arn
   session_duration = "PT8H"
 }
