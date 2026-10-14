@@ -77,3 +77,64 @@
 - **T**: I wanted to explain query performance with EXPLAIN output and measured numbers, not intuition.
 - **A**: I compared access types with and without an index: a full scan took 2445ms, while an index lookup took 1.14ms. For the list query, EXPLAIN showed `Using filesort`. Knowing that InnoDB secondary indexes include the primary key at the end, I aligned the sort direction, which removed the filesort and cut rows read from 1746 to 1000 (confirmed with `EXPLAIN ANALYZE`). The notification query used a full table scan, but it actually took only 45ms, and most of that time went to per-row join lookups and sorting, not the scan itself.
 - **R**: I decided not to change either query, since the gain (about 0.6ms) and the run frequency (twice a day) didn't justify it. I learned to separate "a plan that looks slow" from "a query that is actually slow."
+
+## 1-2 N+1（2026-10-12〜14）
+
+題材は「大学を探す」画面の一覧（`GET /api/universities`）。今の `listForExplore`（`universities.go:57`）は大学 → 学部 → タグを `LEFT JOIN` 1本で取る。これと、わざと N+1 で書いた版（大学の一覧を取ってから、大学ごとに学部、学部ごとにタグを取る）を同じ DB に流して比べた。道具は `apps/api/internal/feature/universities/nplus1_learn_test.go`（`//go:build learn` を付けたときだけ動き、CI では動かない）。
+
+### 学んだこと
+
+- **N+1 は「一覧を1本 ＋ 1件ごとに1本」で SQL が増える書き方。** 手元のデータ（大学 823・学部 66）では、JOIN の 1本に対して N+1 は 1＋823＋66＝**890本**になった。本数は `SHOW SESSION STATUS LIKE 'Questions'` の前後の差で数えた
+- **N+1 の時間は「SQL の本数 × 往復1回の時間」でほぼ決まる。** 1本あたり約0.19ms で、DB の中の処理ではなく、アプリと DB の間を行き来する時間が支配する。そのため、キャッシュが冷えていても温まっていても時間はほぼ変わらなかった
+- **往復が遠くなるほど差は開く。** 手元は同じマシンの Docker なので往復が近い。SQL 1本ごとに 0.5ms・1ms の遅れを足すと、N+1 は 890回ぶん遅くなるが、JOIN は1回ぶんしか遅くならない。本番は EC2 と RDS が別のマシンなので、手元で測った差より大きくなる
+- **JOIN も件数に比例して伸びる。** 予想（JOIN はゆるやかに伸びる）は外れた。全件を返す SQL なので、行が増えればそのぶん遅くなる。違うのは1件あたりの重さで、N+1 は約0.19ms（ほぼ往復1回）、JOIN は約0.003ms。JOIN の伸びを止めるのは LIMIT やページ分け（1-1 の「索引と LIMIT はセット」とつながる）
+- **JOIN にも代償がある。** 1対多を JOIN すると親の列が子の数だけ繰り返して並び、1対多が2つ並ぶと行が掛け算で増える。返ってきた平らな行を入れ子に詰め直すコードも要る。間を取る書き方として、大学・学部・タグをそれぞれ `WHERE … IN (…)` で1本ずつ取る（3本）方法がある
+- **ベンチマークは1回で判断しない。** 起動直後の1回目は JOIN が 18.7ms だったが、繰り返すと 2.6ms だった（キャッシュが冷えていた分）。`-benchtime=10x` のように回数が少ないとぶれるので、既定の時間で測り直した
+
+### 数字で見た結果
+
+| 実験 | 見たもの | JOIN（1本） | N+1（890本） | 差 |
+| -- | -- | -- | -- | -- |
+| 2 | 1回だけ（DB 起動直後） | 18.7ms | 178ms | — |
+| 3 | 繰り返し（`BenchmarkLearnNPlus1`） | 2.6ms | 173.6ms | 約67倍 |
+
+実験4：件数を増やす（`BenchmarkLearnNPlus1Scale`）。同じ MySQL に別のスキーマ `juken_map_learn` を作り、`juken_map` を写して大学を2・4・8倍にして測った。終わったら消し、開発用の `juken_map` には触れていない。
+
+| 倍率 | 大学 | JOIN | N+1 | 差 |
+| -- | -- | -- | -- | -- |
+| ×1 | 823 | 2.4ms | 158ms | 66倍 |
+| ×2 | 1,646 | 4.6ms | 312ms | 67倍 |
+| ×4 | 3,292 | 10.3ms | 649ms | 63倍 |
+| ×8 | 6,584 | 21.3ms | 1,256ms | 59倍 |
+
+実験5：往復の遅さを足す（`BenchmarkLearnNPlus1Latency`）。`database.Open` の `wraps`（障害注入に使っている差し込み口）で、SQL を送る直前に遅れを足した。×1 のデータ。
+
+| 足した遅れ | JOIN | N+1 | 差 |
+| -- | -- | -- | -- |
+| 0 | 2.1ms | 99ms | 48倍 |
+| 0.5ms | 2.8ms | 1,006ms | 357倍 |
+| 1ms | 3.6ms | 1,577ms | 444倍 |
+
+- 1本あたりに増えた時間は、足した遅れより 0.3〜0.5ms 多かった（`time.Sleep` 自体は 0.58ms・1.14ms と正確）。待つあいだに DB 側（Docker の VM）が休み、次の往復が遅くなるためと見ている（深追いしていない）
+
+### 変えたこと
+
+本番のコードは変えていない。今の一覧はもともと JOIN 1本で、さらに結果を JSON にしてメモリに10分持っている（`exploreCacheTTL`）。管理画面でマスターを編集したときだけ捨てる。
+
+実験の道具（`nplus1_learn_test.go`）は `learn` のビルドタグ付きでリポジトリに残す。接続先が localhost 以外なら止まる。
+
+### 面接で話す要点（STAR）
+
+**日本語**
+
+- **S（状況）**：受験生向けアプリの「大学を探す」画面で、大学 → 学部 → タグの入れ子の一覧を返す API がある。大学 823・学部 66 件で、アプリの中で一番重い API だった
+- **T（課題）**：「N+1 は遅い」を知識としてではなく、どれだけ・なぜ遅いのかを数字で説明できるようにしたかった
+- **A（行動）**：今の JOIN 1本の版と、わざと N+1 で書いた版（890本）を同じ DB に流し、SQL の本数・時間・結果が一致することを Go のベンチマークで比べた。件数を8倍まで増やした比較と、SQL 1本ごとに 0.5ms・1ms の遅れを足して本番の往復を真似た比較もした
+- **R（結果）**：手元では約67倍の差（2.6ms 対 174ms）だったが、往復に 1ms 足すと 444倍（3.6ms 対 1,577ms）に開いた。N+1 の時間は「本数 × 往復時間」で決まるので、DB が別のマシンにある本番ほど効くと分かった。一方で JOIN も全件を返す限り件数に比例して伸びるので、件数が増えたら LIMIT やページ分けが要ることも数字で確かめた
+
+**English**
+
+- **S**: My app for university applicants has an API that returns a nested list of universities, faculties, and tags (823 universities, 66 faculties). It was the heaviest endpoint in the app.
+- **T**: I wanted to explain how much and why N+1 queries are slow, with measured numbers rather than textbook knowledge.
+- **A**: I ran the current single-JOIN version and a deliberately N+1 version (890 queries) against the same database, and used Go benchmarks to compare query count, latency, and that both returned identical results. I also scaled the data up to 8x, and injected 0.5ms and 1ms of latency per query to simulate the network round trip in production.
+- **R**: Locally the gap was about 67x (2.6ms vs 174ms), but with 1ms added per round trip it grew to 444x (3.6ms vs 1,577ms). N+1 cost is roughly "number of queries × round-trip time," so it hurts more when the database is on a separate machine, as in production. I also confirmed that a JOIN still grows linearly when it returns every row, so pagination or a LIMIT is needed as the data grows.
