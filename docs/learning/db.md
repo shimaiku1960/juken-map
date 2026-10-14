@@ -64,19 +64,10 @@
 
 ### 面接で話す要点（STAR）
 
-**日本語**
-
 - **S（状況）**：学習記録アプリで、利用者ごとの記録の一覧と、毎日の通知の宛先を DB から取っている。記録の表は検証用に1080万行まで増やした
 - **T（課題）**：速さを「なんとなく速い」ではなく、EXPLAIN で読み方を説明し、数字で比べられるようにしたかった
 - **A（行動）**：索引の有無で `type` と読んだ行数を比べ、全件読みの 2445ms が索引で 1.14ms になることを確かめた。一覧の SQL では `Using filesort` が出たので、InnoDB の二次索引の末尾に主キーが付くことを踏まえて並べる向きをそろえ、filesort が消えて読む行が 1746 → 1000 に減ることを `EXPLAIN ANALYZE` で確かめた。通知の宛先の SQL は全件読みだったが、実際に測ると 45ms で、時間の大半は全件読みではなく JOIN の1行ずつの引き当てと並べ替えだった
 - **R（結果）**：どちらの SQL も「今は変えない」と判断した。改善幅（約0.6ms）や実行頻度（1日2回）に対して、変える理由が無いため。「遅そうに見える計画」と「実際に遅いか」を分けて判断できるようになった
-
-**English**
-
-- **S**: In my study-log app, the API reads each user's log list and the daily notification recipients from MySQL. I grew the log table to 10.8M rows for testing.
-- **T**: I wanted to explain query performance with EXPLAIN output and measured numbers, not intuition.
-- **A**: I compared access types with and without an index: a full scan took 2445ms, while an index lookup took 1.14ms. For the list query, EXPLAIN showed `Using filesort`. Knowing that InnoDB secondary indexes include the primary key at the end, I aligned the sort direction, which removed the filesort and cut rows read from 1746 to 1000 (confirmed with `EXPLAIN ANALYZE`). The notification query used a full table scan, but it actually took only 45ms, and most of that time went to per-row join lookups and sorting, not the scan itself.
-- **R**: I decided not to change either query, since the gain (about 0.6ms) and the run frequency (twice a day) didn't justify it. I learned to separate "a plan that looks slow" from "a query that is actually slow."
 
 ## 1-2 N+1（2026-10-12〜14）
 
@@ -125,16 +116,7 @@
 
 ### 面接で話す要点（STAR）
 
-**日本語**
-
 - **S（状況）**：受験生向けアプリの「大学を探す」画面で、大学 → 学部 → タグの入れ子の一覧を返す API がある。大学 823・学部 66 件で、アプリの中で一番重い API だった
 - **T（課題）**：「N+1 は遅い」を知識としてではなく、どれだけ・なぜ遅いのかを数字で説明できるようにしたかった
 - **A（行動）**：今の JOIN 1本の版と、わざと N+1 で書いた版（890本）を同じ DB に流し、SQL の本数・時間・結果が一致することを Go のベンチマークで比べた。件数を8倍まで増やした比較と、SQL 1本ごとに 0.5ms・1ms の遅れを足して本番の往復を真似た比較もした
 - **R（結果）**：手元では約67倍の差（2.6ms 対 174ms）だったが、往復に 1ms 足すと 444倍（3.6ms 対 1,577ms）に開いた。N+1 の時間は「本数 × 往復時間」で決まるので、DB が別のマシンにある本番ほど効くと分かった。一方で JOIN も全件を返す限り件数に比例して伸びるので、件数が増えたら LIMIT やページ分けが要ることも数字で確かめた
-
-**English**
-
-- **S**: My app for university applicants has an API that returns a nested list of universities, faculties, and tags (823 universities, 66 faculties). It was the heaviest endpoint in the app.
-- **T**: I wanted to explain how much and why N+1 queries are slow, with measured numbers rather than textbook knowledge.
-- **A**: I ran the current single-JOIN version and a deliberately N+1 version (890 queries) against the same database, and used Go benchmarks to compare query count, latency, and that both returned identical results. I also scaled the data up to 8x, and injected 0.5ms and 1ms of latency per query to simulate the network round trip in production.
-- **R**: Locally the gap was about 67x (2.6ms vs 174ms), but with 1ms added per round trip it grew to 444x (3.6ms vs 1,577ms). N+1 cost is roughly "number of queries × round-trip time," so it hurts more when the database is on a separate machine, as in production. I also confirmed that a JOIN still grows linearly when it returns every row, so pagination or a LIMIT is needed as the data grows.
