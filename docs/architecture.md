@@ -384,6 +384,8 @@ Go の `migrate` コマンド（`apps/api/internal/migrate/`、JUK-125）が当�
   `db/migrations/<YYYYMMDDHHMMSS>_<内容>/migration.sql` を足し、その列を読み書きする Go の SQL と struct
   （応答に出る列なら `openapi/openapi.yaml` も）を合わせて直す。当てたあとの migration.sql は書き換えない（変えても DB には
   反映されず、警告だけが出る）。直すときは新しいマイグレーションを足す。
+- 古いアプリが新しい表で動くように変更を分けること、`ALGORITHM=` とロックを待つ時間の上限を書くことなど、
+  1本を書くときの決まりは [migrations.md](./migrations.md) にある（JUK-144）。
 
 ORM を使わないので、次のことを自分で持つ。どれも Go の `apps/api/internal/database`、seed とテスト用の `db/connection.ts` とテストで押さえている。
 

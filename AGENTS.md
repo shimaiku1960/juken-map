@@ -9,6 +9,7 @@ App Router・Server Components・Server Actions・`next/*` の作法を持ち込
 
 DBは MySQL 8.4 で、ORM は使わず SQL を直接書く（Go は `database/sql`、Node の seed は `mysql2`）。
 ルートの一覧は `apps/api/internal/app/routes.go` の `registerRoutes`、入口の種類ごとの拒否は `apps/api/internal/httpx/router.go` にある。
+マイグレーション（`db/migrations/`）を書く・レビューするときは `docs/migrations.md` の決まりに従う（JUK-144）。
 
 ## 依存関係とlockfile
 
