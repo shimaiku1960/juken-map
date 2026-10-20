@@ -144,6 +144,7 @@ pnpm dev   # http://localhost:5173 を開き、「デモでログイン」を選
 | [開発ガイド](docs/development.md) | セットアップ、worktree、合成データ、手元のGrafana、環境変数、開発コマンド、テストとCI |
 | [運用ガイド](docs/operations.md) | デプロイ、本番で管理者を付ける、管理者の2段階認証、本番の可観測性 |
 | [アーキテクチャ](docs/architecture.md) | 構成の判断とその理由、依存の向き、テスト、マイグレーション |
+| [マイグレーションの書き方](docs/migrations.md) | 古いアプリを壊さない分け方、ALTER のロック、レビューの確かめ方 |
 | [SLO と定常状態](docs/slo.md) | 目標の指標と、測った定常状態 |
 | [起きたときの手順](docs/incident-response.md) | 乗っ取りなどが起きたときの操作 |
 | [止まった・遅いときの記録と振り返り](docs/outage-response.md) | 障害の記録の書き方（記録は [docs/outages/](docs/outages/)） |
