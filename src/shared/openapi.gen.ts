@@ -48,7 +48,10 @@ export interface paths {
         /** 自分の実績の一覧（新しい日付から。同じ日は記録した順） */
         get: operations["listStudyLogs"];
         put?: never;
-        /** 実績を1件記録する（初めての記録なら isFirstStudyLog が true） */
+        /**
+         * 実績を1件記録する（初めての記録なら isFirstStudyLog が true）
+         * @description Idempotency-Key を付けると、同じ利用者・同じキーの2回目以降は新しく記録せず、1回目と同じ 201 を返す （Idempotent-Replayed が true）。付けなければ、送るたびに1件記録する。
+         */
         post: operations["createStudyLog"];
         delete?: never;
         options?: never;
@@ -1728,6 +1731,8 @@ export interface components {
         To: string;
         /** @description 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」 */
         ID: string;
+        /** @description 記録する操作ごとに画面が作るキー（crypto.randomUUID()）。応答が届かずに送り直すときは同じキーを送る。 キーは利用者ごとに見る。形が違えば 400 */
+        IdempotencyKey: string;
     };
     requestBodies: never;
     headers: {
@@ -1735,6 +1740,8 @@ export interface components {
         ETag: string;
         /** @description private, no-cache */
         CacheControl: string;
+        /** @description 同じ Idempotency-Key の2回目以降で、新しく記録せず1回目の結果を返したときだけ付く（値は true） */
+        IdempotentReplayed: "true";
     };
     pathItems: never;
 }
@@ -1820,7 +1827,10 @@ export interface operations {
     createStudyLog: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 記録する操作ごとに画面が作るキー（crypto.randomUUID()）。応答が届かずに送り直すときは同じキーを送る。 キーは利用者ごとに見る。形が違えば 400 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1833,13 +1843,14 @@ export interface operations {
             /** @description 記録した実績 */
             201: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["CreatedStudyLog"];
                 };
             };
-            /** @description 入力チェックで弾いた（ValidationError の形）か、参考書が自分のものでない・範囲が参考書の設定と 合わない（Error の形） */
+            /** @description 入力チェックで弾いた（ValidationError の形）か、参考書が自分のものでない・範囲が参考書の設定と 合わない・Idempotency-Key の形が正しくない（Error の形） */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -1852,6 +1863,15 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
+            /** @description 同じ Idempotency-Key で、1回目と違う本文が送られた（1回目は記録済み） */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };

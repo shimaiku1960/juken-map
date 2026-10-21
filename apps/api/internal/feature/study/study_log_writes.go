@@ -1,10 +1,13 @@
 package study
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
@@ -99,9 +102,36 @@ func writeStudyRecordError(w http.ResponseWriter, r *http.Request, op string, er
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, studyrecord.ErrAlreadyCompleted), errors.Is(err, studyrecord.ErrPlanHasLog):
 		httpx.WriteError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, studyrecord.ErrIdempotencyKeyReused):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, err.Error())
 	default:
 		httpx.InternalError(w, r, fmt.Errorf("%s: %w", op, err))
 	}
+}
+
+// idempotencyKeyPattern は Idempotency-Key として受け付ける形（画面は crypto.randomUUID() の36文字を送る）。
+// 列（IdempotencyKey.idemKey）は ascii の64文字までなので、それに収まる英数字とハイフンだけにする。
+var idempotencyKeyPattern = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
+
+// readIdempotencyKey は Idempotency-Key ヘッダーを読む（学習 2-2、JUK-206）。無ければ "" で、
+// 今までどおり冪等キーなしで記録する。形が違えば 400 を返して false。
+func readIdempotencyKey(w http.ResponseWriter, r *http.Request) (string, bool) {
+	key := r.Header.Get("Idempotency-Key")
+	if key == "" {
+		return "", true
+	}
+	if !idempotencyKeyPattern.MatchString(key) {
+		httpx.WriteError(w, http.StatusBadRequest, "Idempotency-Key の形が正しくありません")
+		return "", false
+	}
+	return key, true
+}
+
+// sha256Hex は本文の SHA-256 を16進数で返す。同じキーで本文が1回目と同じかを、受け取った文字列のまま比べる
+// （画面は送り直しで同じ JSON.stringify の結果を送るので、項目の並びまで同じになる）。
+func sha256Hex(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
 }
 
 type LogWriteHandlers struct {
@@ -119,14 +149,29 @@ func (h *LogWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
+	key, ok := readIdempotencyKey(w, r)
+	if !ok {
+		return
+	}
 	in, input := readStudyLogInput(body.Value(), h.today())
 	if in.Reject(w) {
 		return
 	}
-	created, err := studyrecord.CreateLog(r.Context(), h.db, s.UserID, input.record(), dates.NowMillis())
+	var created studyrecord.CreatedLog
+	var replayed bool
+	var err error
+	if key == "" {
+		created, err = studyrecord.CreateLog(r.Context(), h.db, s.UserID, input.record(), dates.NowMillis())
+	} else {
+		idem := studyrecord.Idempotency{Key: key, RequestHash: sha256Hex(body.Raw)}
+		created, replayed, err = studyrecord.CreateLogOnce(r.Context(), h.db, s.UserID, idem, input.record(), dates.NowMillis())
+	}
 	if err != nil {
 		writeStudyRecordError(w, r, "study-logs create", err)
 		return
+	}
+	if replayed {
+		w.Header().Set("Idempotent-Replayed", "true")
 	}
 	httpx.WriteJSON(w, http.StatusCreated, apischema.CreatedStudyLog{
 		ID: created.ID, UserID: created.UserID, Date: created.Date, Subject: created.Subject, Minutes: created.Minutes,

@@ -1807,6 +1807,9 @@ type From = string
 // ID defines model for ID.
 type ID = string
 
+// IdempotencyKey defines model for IdempotencyKey.
+type IdempotencyKey = string
+
 // To defines model for To.
 type To = string
 
@@ -1917,6 +1920,12 @@ type ListStudyLogsParams struct {
 
 	// To 期間の終わり（その日を含む）
 	To *To `form:"to,omitempty" json:"to,omitempty"`
+}
+
+// CreateStudyLogParams defines parameters for CreateStudyLog.
+type CreateStudyLogParams struct {
+	// IdempotencyKey 記録する操作ごとに画面が作るキー（crypto.randomUUID()）。応答が届かずに送り直すときは同じキーを送る。 キーは利用者ごとに見る。形が違えば 400
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListDailyStudyMinutesParams defines parameters for ListDailyStudyMinutes.

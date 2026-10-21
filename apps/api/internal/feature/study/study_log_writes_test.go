@@ -131,3 +131,35 @@ func TestIsCalendarYMD(t *testing.T) {
 		}
 	}
 }
+
+func TestReadIdempotencyKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		want   string
+		ok     bool
+	}{
+		{"無ければ冪等キーなし", "", "", true},
+		{"UUID", "0b6e3c4a-3f0e-4d6a-9f5e-2a1b7c8d9e0f", "0b6e3c4a-3f0e-4d6a-9f5e-2a1b7c8d9e0f", true},
+		{"64文字まで", strings.Repeat("a", 64), strings.Repeat("a", 64), true},
+		{"65文字は断る", strings.Repeat("a", 65), "", false},
+		{"空白を含むと断る", "a b", "", false},
+		{"ascii 以外は断る", "キー", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/api/study-logs", nil)
+			if tt.header != "" {
+				req.Header.Set("Idempotency-Key", tt.header)
+			}
+			res := httptest.NewRecorder()
+			got, ok := readIdempotencyKey(res, req)
+			if got != tt.want || ok != tt.ok {
+				t.Fatalf("got (%q, %v), want (%q, %v)", got, ok, tt.want, tt.ok)
+			}
+			if !ok {
+				httpxtest.AssertJSONEqual(t, res.Body.String(), `{"error":"Idempotency-Key の形が正しくありません"}`)
+			}
+		})
+	}
+}

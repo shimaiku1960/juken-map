@@ -81,6 +81,11 @@ paths:
     post:
       operationId: createStudyLog
       summary: 実績を1件記録する（初めての記録なら isFirstStudyLog が true）
+      description: >-
+        Idempotency-Key を付けると、同じ利用者・同じキーの2回目以降は新しく記録せず、1回目と同じ 201 を返す
+        （Idempotent-Replayed が true）。付けなければ、送るたびに1件記録する。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -92,15 +97,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CreatedStudyLog" }
+          headers:
+            Idempotent-Replayed: { $ref: "#/components/headers/IdempotentReplayed" }
         "400":
           description: >-
             入力チェックで弾いた（ValidationError の形）か、参考書が自分のものでない・範囲が参考書の設定と
-            合わない（Error の形）
+            合わない・Idempotency-Key の形が正しくない（Error の形）
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: 同じ Idempotency-Key で、1回目と違う本文が送られた（1回目は記録済み）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/PayloadTooLarge" }
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -1522,6 +1534,14 @@ components:
       required: true
       description: 数字だけの正の整数（15桁まで）。形が違えば 400「ID が正しくありません」
       schema: { type: string, pattern: "^[1-9][0-9]{0,14}$" }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >-
+        記録する操作ごとに画面が作るキー（crypto.randomUUID()）。応答が届かずに送り直すときは同じキーを送る。
+        キーは利用者ごとに見る。形が違えば 400
+      schema: { type: string, pattern: "^[A-Za-z0-9-]{1,64}$" }
 
   headers:
     ETag:
@@ -1530,6 +1550,9 @@ components:
     CacheControl:
       description: private, no-cache
       schema: { type: string }
+    IdempotentReplayed:
+      description: 同じ Idempotency-Key の2回目以降で、新しく記録せず1回目の結果を返したときだけ付く（値は true）
+      schema: { type: string, enum: ["true"] }
 
   responses:
     AdminForbidden:
