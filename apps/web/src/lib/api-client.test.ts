@@ -80,6 +80,17 @@ describe("api の送信内容", () => {
 
     expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
   });
+
+  it("headers を渡すと Content-Type に足して送る", async () => {
+    const fetchMock = stubFetch(json({ id: 1 }, 201));
+
+    await api.post("/api/study-logs", { minutes: 30 }, { headers: { "Idempotency-Key": "key-1" } });
+
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({
+      "Content-Type": "application/json",
+      "Idempotency-Key": "key-1",
+    });
+  });
 });
 
 describe("成功応答の読み取り", () => {

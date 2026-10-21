@@ -20,6 +20,7 @@ import type {
   StudyLogParseResult,
 } from "@/shared/dto/study";
 import { api } from "@/web/lib/api-client";
+import { isAlreadySaved } from "@/web/lib/idempotencyKey";
 
 // 実績の記録には入口が3つある（手入力・タイマー・予定の完了）が、GA4 へは
 // 同じ形で送る。イベント名の出し分けを2か所に書かないよう、ここにまとめる。
@@ -116,16 +117,24 @@ export function useCreateStudyLog() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreateStudyLogInput) =>
+    // idempotencyKey は送り直しで同じ値にする（lib/idempotencyKey.ts、JUK-206）。
+    mutationFn: ({ data, idempotencyKey }: { data: CreateStudyLogInput; idempotencyKey: string }) =>
       api.post<StudyLog & { isFirstStudyLog: boolean }>(
         "/api/study-logs",
         data,
-        { fallbackMessage: "記録に失敗しました" }
+        { fallbackMessage: "記録に失敗しました", headers: { "Idempotency-Key": idempotencyKey } }
       ),
     onSuccess: (created) => {
       trackStudyLogCreated(created.isFirstStudyLog, "manual");
       queryClient.invalidateQueries({ queryKey: studyLogsKey });
       queryClient.invalidateQueries({ queryKey: dashboardKey });
+    },
+    onError: (error) => {
+      // 1回目で保存済みだった。画面の一覧にはまだ無いので読み直す。
+      if (isAlreadySaved(error)) {
+        queryClient.invalidateQueries({ queryKey: studyLogsKey });
+        queryClient.invalidateQueries({ queryKey: dashboardKey });
+      }
     },
   });
 }

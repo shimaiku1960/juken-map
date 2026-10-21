@@ -28,6 +28,8 @@ type RequestOptions = {
   // 画面ごとに「削除に失敗しました」などと出し分けたいので呼び出し側が渡す。
   fallbackMessage?: string;
   signal?: AbortSignal;
+  // 本文の Content-Type に足すヘッダー（Idempotency-Key など）。
+  headers?: Record<string, string>;
 };
 
 const DEFAULT_FALLBACK = "通信に失敗しました";
@@ -70,7 +72,7 @@ async function request<T>(
     ...(body === undefined
       ? {}
       : {
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...options.headers },
           body: JSON.stringify(body),
         }),
     ...(options.signal ? { signal: options.signal } : {}),

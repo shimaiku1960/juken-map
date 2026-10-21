@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import type { UpdateTextbookProgressInput } from "@/shared/validations/textbook"
 import { subjectLabel } from "@/shared/subjects";
 import QuickLogSentence from "@/web/components/QuickLogSentence";
 import { quickLogValues } from "@/web/lib/quickLog";
+import { createIdempotencyKeyHolder } from "@/web/lib/idempotencyKey";
 import {
   SubjectSelect,
   TextbookSelect,
@@ -72,6 +73,8 @@ export default function StudyLogForm({
   onSuccess?: () => void;
 }) {
   const createLog = useCreateStudyLog();
+  // 送り直しで同じキーを送るため、操作をまたいで持つ（JUK-206）。
+  const idempotencyKey = useRef(createIdempotencyKeyHolder());
   const updateLog = useUpdateStudyLog();
   const [detailsOpen, setDetailsOpen] = useState(initialLog != null);
   const { data: textbooks = [] } = useTextbooks();
@@ -183,7 +186,20 @@ export default function StudyLogForm({
     if (initialLog) {
       updateLog.mutate({ id: initialLog.id, data }, mutationOptions);
     } else {
-      createLog.mutate(data, mutationOptions);
+      const key = idempotencyKey.current;
+      createLog.mutate(
+        { data, idempotencyKey: key.current() },
+        {
+          onSuccess: () => {
+            key.settle();
+            mutationOptions.onSuccess();
+          },
+          onError: (error) => {
+            key.settle(error);
+            mutationOptions.onError(error);
+          },
+        }
+      );
     }
   };
   const isPending = createLog.isPending || updateLog.isPending;
