@@ -62,39 +62,111 @@ func findLog(ctx context.Context, q database.QueryRower, id int64, userID, suffi
 func CreateLog(ctx context.Context, db *sql.DB, userID string, in LogInput, now time.Time) (CreatedLog, error) {
 	var created CreatedLog
 	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
-		if in.TextbookID.Value != nil {
-			tb, err := findTextbookSettings(ctx, tx, *in.TextbookID.Value, userID)
-			if err != nil {
-				return err
-			}
-			if err := tb.checkRange(in.RangeEnd.Value, in.RangeUnit.Value); err != nil {
-				return err
-			}
-		}
-		first, err := markFirstStudyLog(ctx, tx, userID, now)
-		if err != nil {
-			return err
-		}
-		inserted, err := tx.ExecContext(ctx,
-			`INSERT INTO StudyLog
-			   (userId, date, minutes, subject, textbookId,
-			    rangeStart, rangeEnd, rangeUnit, memo, createdAt, updatedAt)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			userID, in.Date, in.Minutes, in.Subject.Value, in.TextbookID.Value,
-			in.RangeStart.Value, in.RangeEnd.Value, in.RangeUnit.Value, in.Memo.Value, now, now)
-		if err != nil {
-			return err
-		}
-		id, err := inserted.LastInsertId()
-		if err != nil {
-			return err
-		}
-		// INSERT は行を返さないので、応答に使う形を同じトランザクションで読み直す。
-		log, _, err := findLog(ctx, tx, id, userID, "")
-		created = CreatedLog{Log: log, IsFirstStudyLog: first}
+		var err error
+		created, err = createLogInTx(ctx, tx, userID, in, now)
 		return err
 	})
 	return created, err
+}
+
+// createLogInTx は CreateLog のトランザクションの中身（CreateLogOnce と共有する）。
+func createLogInTx(ctx context.Context, tx *sql.Tx, userID string, in LogInput, now time.Time) (CreatedLog, error) {
+	if in.TextbookID.Value != nil {
+		tb, err := findTextbookSettings(ctx, tx, *in.TextbookID.Value, userID)
+		if err != nil {
+			return CreatedLog{}, err
+		}
+		if err := tb.checkRange(in.RangeEnd.Value, in.RangeUnit.Value); err != nil {
+			return CreatedLog{}, err
+		}
+	}
+	first, err := markFirstStudyLog(ctx, tx, userID, now)
+	if err != nil {
+		return CreatedLog{}, err
+	}
+	inserted, err := tx.ExecContext(ctx,
+		`INSERT INTO StudyLog
+		   (userId, date, minutes, subject, textbookId,
+		    rangeStart, rangeEnd, rangeUnit, memo, createdAt, updatedAt)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, in.Date, in.Minutes, in.Subject.Value, in.TextbookID.Value,
+		in.RangeStart.Value, in.RangeEnd.Value, in.RangeUnit.Value, in.Memo.Value, now, now)
+	if err != nil {
+		return CreatedLog{}, err
+	}
+	id, err := inserted.LastInsertId()
+	if err != nil {
+		return CreatedLog{}, err
+	}
+	// INSERT は行を返さないので、応答に使う形を同じトランザクションで読み直す。
+	log, _, err := findLog(ctx, tx, id, userID, "")
+	return CreatedLog{Log: log, IsFirstStudyLog: first}, err
+}
+
+// Idempotency は、作成を1回にするための冪等キー（画面が操作ごとに作る）と、本文の SHA-256（16進数）。
+type Idempotency struct {
+	Key         string
+	RequestHash string
+}
+
+// errKeyTaken は、キーの行を入れようとして、同じキーの行がもう有ったこと（CreateLogOnce の中だけで使う）。
+var errKeyTaken = errors.New("studyrecord: 冪等キーは使用済み")
+
+// CreateLogOnce は CreateLog と同じく実績を1件記録する。ただし同じ利用者・同じキーの2回目以降は新しく作らず、
+// 1回目の結果を返す（replayed が true）。キーが同じで本文が違えば ErrIdempotencyKeyReused。
+//
+// キーの行は、記録と同じトランザクションの最初に入れる。同じキーの2本目は、この INSERT で1本目のコミットを
+// 待ち、コミットされたら重複（1062）になる。1本目が失敗して取り消されたら、2本目がそのまま記録する。
+func CreateLogOnce(ctx context.Context, db *sql.DB, userID string, idem Idempotency, in LogInput, now time.Time) (created CreatedLog, replayed bool, err error) {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx,
+			"INSERT INTO IdempotencyKey (userId, idemKey, requestHash, createdAt) VALUES (?, ?, ?, ?)",
+			userID, idem.Key, idem.RequestHash, now)
+		if database.IsMySQLError(err, database.DuplicateEntry) {
+			return errKeyTaken
+		}
+		if err != nil {
+			return err
+		}
+		created, err = createLogInTx(ctx, tx, userID, in, now)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx,
+			"UPDATE IdempotencyKey SET studyLogId = ?, isFirstStudyLog = ? WHERE userId = ? AND idemKey = ?",
+			created.ID, created.IsFirstStudyLog, userID, idem.Key)
+		return err
+	})
+	if errors.Is(err, errKeyTaken) {
+		// 1本目はコミット済み。このトランザクションは取り消したので、新しい読み取りでコミット後の行が見える。
+		created, err = replayLog(ctx, db, userID, idem)
+		return created, err == nil, err
+	}
+	return created, false, err
+}
+
+// replayLog は、使用済みのキーで1回目に作った実績を返す。本文が1回目と違えば ErrIdempotencyKeyReused。
+// 実績の中身は今の行を読むので、1回目のあとに変更されていれば変更後の値になる。
+func replayLog(ctx context.Context, db *sql.DB, userID string, idem Idempotency) (CreatedLog, error) {
+	var requestHash string
+	var studyLogID int64
+	var first bool
+	err := db.QueryRowContext(ctx,
+		"SELECT requestHash, studyLogId, isFirstStudyLog FROM IdempotencyKey WHERE userId = ? AND idemKey = ?",
+		userID, idem.Key,
+	).Scan(&requestHash, &studyLogID, &first)
+	if errors.Is(err, sql.ErrNoRows) {
+		// 重複になってから読むまでの間に、実績が消されてキーの行も消えた（ごくまれ）。
+		return CreatedLog{}, ErrNotFound
+	}
+	if err != nil {
+		return CreatedLog{}, err
+	}
+	if requestHash != idem.RequestHash {
+		return CreatedLog{}, ErrIdempotencyKeyReused
+	}
+	log, _, err := findLog(ctx, db, studyLogID, userID, "")
+	return CreatedLog{Log: log, IsFirstStudyLog: first}, err
 }
 
 // UpdateLog は userID の人の実績を書き換え、書き換えた後の行を返す。

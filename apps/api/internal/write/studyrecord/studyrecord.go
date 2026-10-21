@@ -28,6 +28,8 @@ var (
 	ErrAlreadyCompleted = errors.New("この予定の実績はすでに記録されています")
 	// ErrPlanHasLog は、実績を記録済みの予定を未完了に戻そうとしたこと（戻すと実績だけが宙に浮く）。
 	ErrPlanHasLog = errors.New("実績を記録済みの予定は未完了に戻せません")
+	// ErrIdempotencyKeyReused は、同じ冪等キーで1回目と違う本文が送られたこと（1回目は保存済み）。
+	ErrIdempotencyKeyReused = errors.New("この記録は既に保存されています。一覧を確かめてください")
 )
 
 // RangeError は、範囲が参考書の逆算設定に合わないこと。Error() は利用者に見せる文言。
