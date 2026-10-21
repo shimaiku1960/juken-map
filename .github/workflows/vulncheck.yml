@@ -1,0 +1,38 @@
+name: Vulncheck
+
+# main の Go の API に、既知の脆弱性が無いかを毎日調べる（JUK-204）。
+# PR の CI（ci.yml の go ジョブ）にも同じ検査があるが、PR が無い日は動かない。
+# Go 本体の脆弱性が公開されると、関係のない PR が突然落ちて初めて気づき、
+# その間も本番は古い Go のまま動いていた（JUK-168・JUK-203）。
+# 落ちたら、GitHub がこのファイルの schedule を最後に変えた人へ通知する。
+
+on:
+  schedule:
+    # 毎日 21:17（UTC）＝ 6:17（日本時間）。正時は GitHub 側の混雑で遅れやすいので少しずらす。
+    - cron: "17 21 * * *"
+  workflow_dispatch:
+
+# 読むだけ。GITHUB_TOKEN で書き込む処理は無い。
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # go.mod の版の Go を入れる。標準ライブラリの脆弱性も、この版に対して調べる。
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+
+      # ci.yml の Vulnerability check と同じ版にそろえる。
+      - name: Vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
