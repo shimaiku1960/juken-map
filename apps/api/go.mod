@@ -1,6 +1,6 @@
 module github.com/shimaiku1960/juken-map/apps/api
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/XSAM/otelsql v0.44.0
