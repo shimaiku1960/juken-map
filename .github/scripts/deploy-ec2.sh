@@ -366,7 +366,9 @@ sleep 5
 # 切り替わったので古い方を片付け、名前を juken-map-go に戻す。
 # Alloy はコンテナ名でメトリクス（juken-map-go:9464）とログを拾うので、
 # 名前を元に戻しておかないと監視が止まる。docker rename は Docker の DNS も追随する。
-docker stop juken-map-go >/dev/null 2>&1 || true
+# 猶予の30秒は、API が止めるときに応答のあとのメールを待つ20秒（apps/api/internal/app/main.go の shutdownTimeout）より
+# 長くする。既定の10秒だと、待っている途中で SIGKILL が来てメールが消える（JUK-214）。
+docker stop -t 30 juken-map-go >/dev/null 2>&1 || true
 docker rm juken-map-go >/dev/null 2>&1 || true
 docker rename juken-map-go-next juken-map-go
 # Node のアプリのコンテナ（juken-map）は JUK-111 から何も受けていないので止めて消す（JUK-109）。2回目からは何もしない。

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/aiparse"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/background"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/feature/auth"
@@ -30,6 +31,11 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/spa"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
+
+// shutdownTimeout は、止めるときにリクエストと応答のあとの仕事を待つ時間の合計。
+// 1通のメールにかかる時間（Resend への呼び出しは最大5秒、internal/httpx の ExternalTimeout）より長く、
+// デプロイの docker stop の猶予（.github/scripts/deploy-ec2.sh の -t 30）より短くする。猶予を過ぎると SIGKILL で消える。
+const shutdownTimeout = 20 * time.Second
 
 // Main は cmd/api の main から呼ばれる本体で、終了コードを返す。args は os.Args[1:]。
 func Main(args []string) int {
@@ -100,7 +106,10 @@ func run() error {
 	}
 	m.ObserveDB(db)
 	webOrigin := envOr("WEB_ORIGIN", site.URL)
+	// 応答のあとの仕事（ログインのメールなど）。止めるときに、終わるまで待つ（下の Shutdown のあと）。
+	var tasks background.Tasks
 	authHandlers := auth.New(db, auth.Config{
+		Async:           tasks.Go,
 		WebOrigin:       webOrigin,
 		TOTPKeys:        totpKeys,
 		HashConcurrency: hashConcurrency,
@@ -255,12 +264,17 @@ func run() error {
 	}
 
 	// 受け付け済みのリクエストは返し終えてから止める（新しい接続はもう受けない）。
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// そのあと、応答のあとの仕事を待つ。Shutdown は goroutine を待たないので、待たずに戻るとメールが途中で消える（JUK-214）。
+	// リクエストの最中にも仕事が積まれるので、この順番にする。2つで同じ期限を使う。
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	slog.Info("api shutting down")
 	var errs []error
 	for _, s := range servers {
 		errs = append(errs, s.Shutdown(shutdownCtx))
+	}
+	if left := tasks.Wait(shutdownCtx); left > 0 {
+		slog.Error("[shutdown] Background tasks abandoned.", "left", left)
 	}
 	return errors.Join(errs...)
 }
