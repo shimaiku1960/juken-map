@@ -333,6 +333,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | --- | --- |
 | `internal/app/http.go` | ヘルスチェック |
 | `internal/dates/` | 東京の「今日」、月初・月末、日付のずらし、`YYYY-MM-DD` の読み方（Node の `new Date` と同じ繰り越し）、DB に書く時刻（ミリ秒で切り捨て）と ISO 文字列。機能をまたいで使う（JUK-156） |
+| `internal/background/` | 応答を返したあとの仕事（ログインのメールなど）。`auth.Config.Async` に `Tasks.Go` を渡して数え、止めるときは `Shutdown` のあとに `Tasks.Wait` で終わるまで待つ（期限は `shutdownTimeout`、`internal/app/main.go`）。`http.Server.Shutdown` は goroutine を待たないため（JUK-214） |
 | `internal/site/` | 本番の画面のオリジン（`site.URL`）。通知の本文・SEO・LINE の連携先が使う（JUK-156） |
 | `internal/httpx/` | HTTP の入口の共通部品（JUK-155）。入口の種類ごとの拒否（`router.go`。未ログイン・停止中・管理者・デモ・別のサイトからの書き込み）、利用者単位の回数制限（`user_rate_limit.go`。読み取り・書き込みの2種類、メモリのトークンバケット。超えたら 429 と `Retry-After`、06 E2）、エラー応答の形・404・path の ID（`errors.go`）、JSON と 400 の書き出し（`response.go`）、リクエスト本文の読み方（`body.go`。Content-Type・上限・壊れた JSON・不正な UTF-8、415・413）、書き込みの入力チェック（`validate.go`。Zod の最初の issue と同じ 400）、接続元の IP（`client_ip.go`）、クエリ文字列の読み方（`query.go`。Fastify のころと同じ規則）、全員に同じ応答を JSON・gzip・ETag でメモリに持つキャッシュ（`json_snapshot.go`。大学一覧・参考書マスター、JUK-50）、外部サービスの呼び出しの上限（`external.go`）、受け付けるなら gzip で返す（`gzip.go`。画面・sitemap・ブログの中継）。セッションの読み方は関数で受け取り、`internal/write` には依存しない |
 | `internal/telemetry/` | 計測の土台（JUK-155）。pino と同じ形の JSON ログ（`logger.go`。reqId・trace_id を足し、`LOG_FILE` にも書く）、Prometheus のメトリクス（`metrics.go`。名前・ラベルは Node のころと同じ）、OpenTelemetry のトレース（`tracing.go`。リクエスト・SQL・外部 API の呼び出し。URL のパスとクエリは入れない、JUK-126）、監視に出す文字列のメールアドレスを伏せる（`redact.go`）、リクエストごとの情報（`request_info.go`。reqId・シミュレーションの印・ルート） |
