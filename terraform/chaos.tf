@@ -4,6 +4,7 @@
 # 引数はここで絞る。Kind・Action は決めた値だけ、Seconds は 60〜1800、DatabaseHost は本番の RDS だけ。
 # 強さ（Level）は種類ごとにスクリプトが確かめる。
 resource "aws_ssm_document" "chaos_host" {
+  count           = local.running # 休止中は作らない（paused.tf）
   name            = "juken-map-chaos-host"
   document_type   = "Command"
   document_format = "JSON"
@@ -33,8 +34,8 @@ resource "aws_ssm_document" "chaos_host" {
       }
       DatabaseHost = {
         type          = "String"
-        default       = aws_db_instance.db.address
-        allowedValues = [aws_db_instance.db.address]
+        default       = aws_db_instance.db[0].address
+        allowedValues = [aws_db_instance.db[0].address]
       }
     }
     mainSteps = [
@@ -53,8 +54,9 @@ resource "aws_ssm_document" "chaos_host" {
 # EC2 のロール（API のコンテナが IMDS から使う）に、上のドキュメントを自分のインスタンスへ送る権限だけを足す。
 # ほかのドキュメント（AWS-RunShellScript など）やほかのインスタンスへは送れない。
 resource "aws_iam_role_policy" "ec2_chaos_host" {
-  name = "juken-map-chaos-host"
-  role = aws_iam_role.ec2_ecr.id
+  count = local.running # 休止中は作らない（paused.tf）
+  name  = "juken-map-chaos-host"
+  role  = aws_iam_role.ec2_ecr.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -62,7 +64,7 @@ resource "aws_iam_role_policy" "ec2_chaos_host" {
       {
         Effect   = "Allow"
         Action   = "ssm:SendCommand"
-        Resource = [aws_ssm_document.chaos_host.arn, aws_instance.app.arn]
+        Resource = [aws_ssm_document.chaos_host[0].arn, aws_instance.app[0].arn]
       },
       {
         # コマンドの結果（始められたか）を待つ。コマンド ID 単位に絞れない。

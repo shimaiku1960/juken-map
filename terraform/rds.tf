@@ -1,4 +1,5 @@
 resource "aws_db_instance" "db" {
+  count                  = local.running # 休止中は作らない（paused.tf）
   identifier             = "juken-map-db"
   engine                 = "mysql"
   engine_version         = "8.4.9"

@@ -31,6 +31,7 @@ resource "grafana_rule_group" "api_production" {
   rule {
     name      = "受験マップ API：5xx率が1%超過"
     condition = "C"
+    is_paused = var.paused # 本番の休止中は鳴らさない（JUK-218）
     for       = "1m"
 
     # 閾値は品質基準 05 B2 の 1%（JUK-16、2026-09-29 に 5% から下げた）。本番のリクエストは5分に10件前後
@@ -103,6 +104,7 @@ resource "grafana_rule_group" "api_production" {
   rule {
     name      = "受験マップ API（Go）：停止"
     condition = "C"
+    is_paused = var.paused # 本番の休止中は鳴らさない（JUK-218）
 
     # デプロイでコンテナを入れ替える間の数十秒は up が落ちる。それでは鳴らさない。
     for = "3m"
@@ -178,6 +180,7 @@ resource "grafana_rule_group" "api_production" {
   rule {
     name      = "受験マップ：Resend の送信枠の残りが2割を切った"
     condition = "C"
+    is_paused = var.paused # 本番の休止中は鳴らさない（JUK-218）
     for       = "0s"
 
     # メールを送らない時間帯は値が無い。それは異常ではないので通知しない。
@@ -359,6 +362,7 @@ resource "grafana_rule_group" "security_signals" {
     content {
       name      = rule.value.name
       condition = "C"
+      is_paused = var.paused # 本番の休止中は鳴らさない（JUK-218）
       for       = rule.value.for
 
       no_data_state  = rule.value.no_data
@@ -467,6 +471,7 @@ resource "grafana_rule_group" "api_performance" {
     content {
       name      = rule.value.name
       condition = "C"
+      is_paused = var.paused # 本番の休止中は鳴らさない（JUK-218）
       for       = "5m"
 
       no_data_state  = "OK"

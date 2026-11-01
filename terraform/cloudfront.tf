@@ -70,7 +70,8 @@ resource "aws_cloudfront_distribution" "site" {
 
   origin {
     origin_id   = "ec2"
-    domain_name = cloudflare_dns_record.origin.name
+    # dns.tf の origin と同じ名前。休止中（paused.tf）はレコードが無く、502 を返す。
+    domain_name = "origin.juken-map.com"
 
     custom_origin_config {
       http_port              = 80

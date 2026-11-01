@@ -31,10 +31,11 @@ resource "cloudflare_dns_record" "acm_validation" {
 # CloudFront が転送する先（オリジン）。CloudFront にはドメイン名で渡す必要があるので、EC2 を
 # 直接指す名前を1つ置く。利用者が開く名前ではない。
 resource "cloudflare_dns_record" "origin" {
+  count   = local.running # 休止中は作らない（paused.tf）
   zone_id = data.cloudflare_zone.main.zone_id
   name    = "origin.juken-map.com"
   type    = "A"
-  content = aws_instance.app.public_ip
+  content = aws_instance.app[0].public_ip
   ttl     = 1
   proxied = false
   comment = "CloudFront のオリジン＝EC2（terraform/dns.tf、JUK-185）"
