@@ -9,3 +9,9 @@ variable "alert_email_addresses" {
   type        = string
   sensitive   = true
 }
+
+variable "paused" {
+  description = "本番を休止しているあいだ（JUK-218、terraform/paused.tf）、ルールを止めて通知を出さない"
+  type        = bool
+  default     = true
+}

@@ -59,8 +59,9 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
 
 # アプリ起動時に本番用シークレット1件だけを取得できる最小権限
 resource "aws_iam_role_policy" "ec2_runtime_secret_read" {
-  name = "juken-map-runtime-secret-read"
-  role = aws_iam_role.ec2_ecr.id
+  count = local.running # 休止中は作らない（paused.tf）
+  name  = "juken-map-runtime-secret-read"
+  role  = aws_iam_role.ec2_ecr.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -68,7 +69,7 @@ resource "aws_iam_role_policy" "ec2_runtime_secret_read" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = aws_secretsmanager_secret.app_runtime.arn
+        Resource = aws_secretsmanager_secret.app_runtime[0].arn
       }
     ]
   })

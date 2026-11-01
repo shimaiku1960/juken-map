@@ -1,4 +1,5 @@
 resource "aws_instance" "app" {
+  count                  = local.running # 休止中は作らない（paused.tf）
   ami                    = "ami-0126975fb247bf2e7"
   instance_type          = "t3.micro"
   key_name               = "juken-compass-key"

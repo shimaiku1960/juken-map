@@ -21,11 +21,12 @@ resource "aws_sns_topic_subscription" "ops_alerts_email" {
 
 # 普段の10倍を超える状態が15分続いたときだけ。負荷試験（load-testing）では鳴ることがある。
 resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
+  count               = local.running # 休止中は作らない（paused.tf）
   alarm_name          = "juken-map-rds-cpu-high"
   alarm_description   = "RDS の CPU 使用率が 80% を超えた状態が15分続いた（普段は 3〜6%）"
   namespace           = "AWS/RDS"
   metric_name         = "CPUUtilization"
-  dimensions          = { DBInstanceIdentifier = aws_db_instance.db.identifier }
+  dimensions          = { DBInstanceIdentifier = aws_db_instance.db[0].identifier }
   statistic           = "Average"
   period              = 300
   evaluation_periods  = 3
@@ -38,11 +39,12 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
 # ストレージの自動拡張（max_allocated_storage）があるので、満杯で止まる前に RDS が広げる。
 # それでも、拡張が始まる（空きが1割を切る）より手前で、データの増え方と料金の増え方に気づけるようにする。
 resource "aws_cloudwatch_metric_alarm" "rds_free_storage_low" {
+  count               = local.running # 休止中は作らない（paused.tf）
   alarm_name          = "juken-map-rds-free-storage-low"
   alarm_description   = "RDS の空き容量が 5 GiB を下回った（確保は 20 GiB）"
   namespace           = "AWS/RDS"
   metric_name         = "FreeStorageSpace"
-  dimensions          = { DBInstanceIdentifier = aws_db_instance.db.identifier }
+  dimensions          = { DBInstanceIdentifier = aws_db_instance.db[0].identifier }
   statistic           = "Minimum"
   period              = 300
   evaluation_periods  = 1
@@ -56,11 +58,12 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage_low" {
 # ステータスチェックの指標は詳細モニタリングなしでも1分ごとに届く。インスタンスを止めている間は
 # 指標が来ず「データ不足」になるだけで、鳴らない。
 resource "aws_cloudwatch_metric_alarm" "ec2_status_check_failed" {
+  count               = local.running # 休止中は作らない（paused.tf）
   alarm_name          = "juken-map-ec2-status-check-failed"
   alarm_description   = "EC2 のステータスチェック（システムかインスタンス）が2分続けて失敗した"
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed"
-  dimensions          = { InstanceId = aws_instance.app.id }
+  dimensions          = { InstanceId = aws_instance.app[0].id }
   statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 2

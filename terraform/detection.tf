@@ -25,12 +25,14 @@ locals {
 # ---- CloudTrail ----
 
 resource "aws_s3_bucket" "cloudtrail" {
+  count = local.running # 休止中は作らない（paused.tf）
   # バケット名は世界で一意なので、アカウント ID を入れる（コードには書かず、実行時に読む）。
   bucket = "juken-map-cloudtrail-${local.account_id}"
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
-  bucket                  = aws_s3_bucket.cloudtrail.id
+  count                   = local.running # 休止中は作らない（paused.tf）
+  bucket                  = aws_s3_bucket.cloudtrail[0].id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -38,14 +40,16 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_ownership_controls" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count  = local.running # 休止中は作らない（paused.tf）
+  bucket = aws_s3_bucket.cloudtrail[0].id
   rule {
     object_ownership = "BucketOwnerEnforced"
   }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count  = local.running # 休止中は作らない（paused.tf）
+  bucket = aws_s3_bucket.cloudtrail[0].id
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -55,7 +59,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 
 # H4：90日より長く。1年あれば、気づくのが遅れた漏えいでも後から追える。
 resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count  = local.running # 休止中は作らない（paused.tf）
+  bucket = aws_s3_bucket.cloudtrail[0].id
   rule {
     id     = "expire-after-retention"
     status = "Enabled"
@@ -67,7 +72,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count  = local.running # 休止中は作らない（paused.tf）
+  bucket = aws_s3_bucket.cloudtrail[0].id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -76,7 +82,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Effect    = "Allow"
         Principal = { Service = "cloudtrail.amazonaws.com" }
         Action    = "s3:GetBucketAcl"
-        Resource  = aws_s3_bucket.cloudtrail.arn
+        Resource  = aws_s3_bucket.cloudtrail[0].arn
         Condition = { StringEquals = { "aws:SourceArn" = local.trail_arn } }
       },
       {
@@ -84,7 +90,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Effect    = "Allow"
         Principal = { Service = "cloudtrail.amazonaws.com" }
         Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.cloudtrail.arn}/AWSLogs/${local.account_id}/*"
+        Resource  = "${aws_s3_bucket.cloudtrail[0].arn}/AWSLogs/${local.account_id}/*"
         Condition = { StringEquals = { "aws:SourceArn" = local.trail_arn } }
       },
       {
@@ -92,7 +98,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:*"
-        Resource  = [aws_s3_bucket.cloudtrail.arn, "${aws_s3_bucket.cloudtrail.arn}/*"]
+        Resource  = [aws_s3_bucket.cloudtrail[0].arn, "${aws_s3_bucket.cloudtrail[0].arn}/*"]
         Condition = { Bool = { "aws:SecureTransport" = "false" } }
       },
     ]
@@ -101,8 +107,9 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 }
 
 resource "aws_cloudtrail" "account" {
+  count          = local.running # 休止中は作らない（paused.tf）
   name           = local.trail_name
-  s3_bucket_name = aws_s3_bucket.cloudtrail.id
+  s3_bucket_name = aws_s3_bucket.cloudtrail[0].id
 
   # 使っていないリージョンでの操作（乗っ取ったキーでほかのリージョンにサーバーを立てる、など）も残す。
   is_multi_region_trail         = true
@@ -123,6 +130,7 @@ resource "aws_cloudtrail" "account" {
 # ---- GuardDuty ----
 
 resource "aws_guardduty_detector" "main" {
+  count  = local.running # 休止中は作らない（paused.tf）
   enable = true
 }
 
@@ -143,8 +151,8 @@ locals {
 }
 
 resource "aws_guardduty_detector_feature" "main" {
-  for_each    = local.guardduty_features
-  detector_id = aws_guardduty_detector.main.id
+  for_each    = var.paused ? {} : local.guardduty_features # 休止中は作らない（paused.tf）
+  detector_id = aws_guardduty_detector.main[0].id
   name        = each.key
   status      = each.value
 }
