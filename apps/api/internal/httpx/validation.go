@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
@@ -25,5 +26,16 @@ func Reject(w http.ResponseWriter, in *validation.ObjectInput) bool {
 		return false
 	}
 	WriteValidationIssue(w, in.Issue)
+	return true
+}
+
+// RejectIssue は err が入力の誤り（*validation.Issue。モデルの操作が入力の決まりで断ったもの）なら
+// 400 を送って true を返す。それ以外の err には何もしない。
+func RejectIssue(w http.ResponseWriter, err error) bool {
+	var v *validation.Issue
+	if !errors.As(err, &v) {
+		return false
+	}
+	WriteValidationIssue(w, v)
 	return true
 }

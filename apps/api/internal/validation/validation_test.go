@@ -32,3 +32,15 @@ func TestJSNumber(t *testing.T) {
 		}
 	}
 }
+
+func TestIsCalendarYMD(t *testing.T) {
+	for s, want := range map[string]bool{
+		"2026-09-30": true, "2024-02-29": true, "2000-02-29": true, "0000-02-29": true,
+		"2026-02-30": false, "2025-02-29": false, "1900-02-29": false, "2025-13-01": false,
+		"2025-00-10": false, "2025-04-31": false, "2025-01-00": false,
+	} {
+		if got := IsCalendarYMD(s); got != want {
+			t.Errorf("IsCalendarYMD(%s) = %v, want %v", s, got, want)
+		}
+	}
+}

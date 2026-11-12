@@ -135,16 +135,17 @@ Go の API は、1つの機能を1つのファイル（大きいものは数フ�
 1. **入口（`internal/httpx/router.go`）**：未ログイン・停止中・管理者でない・デモの書き込みを断る。ルートは
    `rt.user` や `rt.admin` のように種類を選んで登録し、種類を選ばずに登録する方法が無いので、書き忘れが起きない
 2. **ハンドラ**：本文と入力を確かめ（`readBody`・`readObject`）、自分の行かを確かめ、
-   ストアの結果をステータスコードへ翻訳する（見つからない → 404、重複 → 409 など）
+   ストアの結果をステータスコードへ翻訳する（見つからない → 404、重複 → 409 など）。学習記録は入力の確認もモデルが持ち、
+   ハンドラは翻訳だけをする（下の「モデル・コントローラー・ビュー」、JUK-219）
 3. **ストア**：SQL を流し、失敗は値（`internal/feature/admin` の `masterOutcome`）か目印のエラー
-   （`internal/write/studyrecord` の `ErrAlreadyCompleted`）で返す。ステータスコードは知らない。
+   （`internal/model/studyrecord` の `ErrAlreadyCompleted`）で返す。ステータスコードは知らない。
    一意制約違反の判定（`database.IsMySQLError(err, database.DuplicateEntry)`、`internal/database`）もストアの中で済ませる
 
 **この順番に意味がある。** 誰か分からない人に入力の良し悪しを教えないため、
 入口の拒否 → 入力の順で門番を並べている。入力の確認は「自分の行か」より先に行う。
 
 決まりを含む書き込み（予定の完了時の範囲チェック、「実績済みの予定は未完了に戻せない」、利用停止など）は、
-ハンドラではなく持ち主の操作（`internal/write/studyrecord`・`internal/write/account` など）に置く。
+ハンドラではなく持ち主の操作（`internal/model/studyrecord`・`internal/write/account` など）に置く。
 ハンドラに置くと、ほかの入口（運用のコマンドやタイマーのジョブ）から同じ書き込みをしたときに素通りできるため。
 詳しくは下の「バックエンドの構成」（JUK-148）。
 
@@ -186,7 +187,7 @@ API に集約すれば直す場所は1つになる。加えて全リクエスト
   決まりがそのまま入っているので、2か所にあると片方だけ直される。利用停止は、実際にずれていた。
 - **読み取りには隠せる情報が無い。** 生 SQL は画面ごとに取る列が違うので、1か所に集めると
   「SQL 1本 = メソッド1個」になり、名前を付け替えるだけの層になる。同じ列を何度も読むものは、
-  列の並びを定数（`internal/feature/goals` の `goalColumns`、`internal/feature/study` の `logColumns` など）にまとめてある。
+  列の並びを定数（`internal/feature/goals` の `goalColumns`、`internal/model/studyrecord` の `logColumns` など）にまとめてある。
 - **リポジトリ層の利点は、このプロジェクトには当てはまらない。** よく挙がる利点は
   「DB を差し替えられること」と「テストでモックしやすいこと」だが、MySQL から移る予定は無く、
   テストは本物のテスト用 MySQL で行っている。残る「データの扱いを1か所に集める」は、書き込みだけで足りる。
@@ -209,12 +210,14 @@ apps/api/
 ├ cmd/devtool/main.go     開発でしか使わない道具の入口（本番のイメージには入れない）
 └ internal/
   ├ app/                  起動・終了、依存の組み立て、ルートとアクセス条件の一覧
-  ├ feature/              画面・入口ごとの処理（ハンドラと読み取りの SQL）
+  ├ feature/              画面・入口ごとの処理（ハンドラと読み取りの SQL。model に移した機能はハンドラと画面の形だけ）
   │ ├ auth/  study/  goals/  textbooks/   （study はダッシュボードも持つ。同じ読み取りを使うため）
   │ ├ admin/  line/  notifications/  ops/  blog/  universities/
   │ └ sim/  chaos/  analytics/  cspreport/
-  ├ write/                書き込みの持ち主（操作とトランザクション）
-  │ ├ account/  authguard/  studyrecord/  textbook/  goal/
+  ├ model/                モデル：入力の決まり・読み取り・書き込みを持つ（下の「モデル・コントローラー・ビュー」）
+  │ └ studyrecord/        学習記録（実績・予定・初回記録の日時）
+  ├ write/                書き込みの持ち主（操作とトランザクション）。model へ順に移す
+  │ ├ account/  authguard/  textbook/  goal/
   │ ├ university/  textbookmaster/  notification/  simulation/  chaos/   （一覧は下の「持ち主の一覧」）
   │ └ expired/            持ち主ではなく、持ち主たちが使う期限切れの行の消し方（下の「決まり」の5）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
@@ -234,15 +237,17 @@ apps/api/
   └ dbtest/               DB テストの補助（テスト用 DB への接続・テスト用の利用者やデータ）
 ```
 
-`feature/` と `write/` の直下には、境界を確かめるテスト（下の「決まり」）のほかに Go のファイルを置かず、その下の `study` や `studyrecord` を
+`feature/`・`model/`・`write/` の直下には、境界を確かめるテスト（下の「決まり」）のほかに Go のファイルを置かず、その下の `study` や `studyrecord` を
 パッケージにする。ディレクトリを見ただけで、「どの入口の処理か」と「誰が変更に責任を持つか」が分かる。
 機能ごとのファイル数は処理の量に合わせてよく、全機能に同じファイル一式をそろえる必要はない。
 
 | 処理 | 置き場所 |
 |---|---|
-| 学習の一覧を、参考書名も含めて読む | `feature/study`（読み取りの SQL） |
-| JSON を読み、HTTP の応答を作る | `feature/study`（ハンドラ） |
-| 予定を完了できるか確かめ、実績を作り、初回記録日時を付ける | `write/studyrecord` |
+| JSON を読み、ログイン中の人を確かめ、状態コードを決める | `feature/study`（コントローラー） |
+| モデルの結果を画面に返す JSON の形（`apischema`）に直す | `feature/study`（ビュー） |
+| 送られた本文を確かめる（未来日は不可・範囲は開始と終了の両方など） | `model/studyrecord`（`input.go`） |
+| 学習の一覧を、参考書名も含めて読む | `model/studyrecord`（`read.go`） |
+| 予定を完了できるか確かめ、実績を作り、初回記録日時を付ける | `model/studyrecord` |
 | 管理画面から利用者を停止する | `feature/admin` → `write/account` |
 | 運用のコマンドから利用者を停止する | `feature/ops` → 同じ `write/account` |
 
@@ -251,9 +256,10 @@ apps/api/
 1. **feature 同士は呼び合わない。** 必要な読み取りは自分で書き、変更は write を呼ぶ。同じ読み取りを使う入口どうしは
    1つの feature にまとめる（ダッシュボードを `study` に含めたように）。確かめるテストは
    `apps/api/internal/feature/import_boundary_test.go`（JUK-159）。`_test.go` も含め、別の feature の import があれば落ちる。
-2. **write は HTTP を知らない。** `httpx` や `apischema`（画面に返す形）に依存せず、操作に必要な引数と
+2. **write と model は HTTP を知らない。** `httpx` や `apischema`（画面に返す形）に依存せず、操作に必要な引数と
    結果の型を自分で決める。作った行を画面へ返すときは、feature がその形へ直す。確かめるテストは
-   `apps/api/internal/write/import_boundary_test.go`（JUK-159）。`net/http`・`httpx`・`apischema`・`feature`・`app`・`spa` の import があれば落ちる。
+   `apps/api/internal/write/import_boundary_test.go`（JUK-159）と `apps/api/internal/model/import_boundary_test.go`（JUK-219）。
+   `net/http`・`httpx`・`apischema`・`feature`・`app`・`spa` の import があれば落ちる。
 3. **持ち主が外に出すのは「操作」。** `account.Suspend` が停止の印とセッションの削除をまとめて行い、
    `studyrecord.CompletePlan` が予定の完了・実績の作成・初回記録日時の更新をまとめて行う。
    呼ぶ側に、複数の関数を正しい順番で呼ぶ責任を残さない。
@@ -261,12 +267,12 @@ apps/api/
    そのまま信用せず、必要な条件は操作の中で保証する（`WHERE id = ? AND userId = ?`）。
    書き込むための読み取り（自分の行かの確認など）も、書き込みの一部として持ち主に置く。
 5. **単純な更新にも持ち主を決める。** 志望校の更新が単純なら、`write/goal` は小さな具体型と関数だけでよい。
-   例外を作らないのは、「INSERT・UPDATE・DELETE は `internal/write/` の下にしか無い」をテストで確かめられるように
+   例外を作らないのは、「INSERT・UPDATE・DELETE は `internal/write/`・`internal/model/` の下にしか無い」をテストで確かめられるように
    するためである。例外があると、テストが例外の一覧の管理になり、守られなくなる。
    アプリのデータではないものを書く `internal/migrate`（マイグレーションの記録）と `internal/dbtest`
    （テストデータの作成）の2つだけは、最初から対象の外にする。
    確かめるテストは `apps/api/internal/write/sql_boundary_test.go`（JUK-157）。`_test.go` を除く Go の文字列から
-   書き込みの SQL を探し、`internal/write/` と上の2つの外にあれば落ちる。期限切れの行の共通の消し方も、
+   書き込みの SQL を探し、`internal/write/`・`internal/model/` と上の2つの外にあれば落ちる。期限切れの行の共通の消し方も、
    この決まりのために `internal/write/expired` に置いている。
 6. **インターフェースや追加の層は先に作らない。** 使う側が必要になったら、使う側で定義する。
    今、一部のストア（管理画面のマスター・利用者、LINE、通知）を interface にしているのは、DB を使わない
@@ -274,6 +280,27 @@ apps/api/
 7. **持ち主をまたいで同時に確定させたい操作が出たら、境界を見直す。** 別々にコミットする関数を順番に呼んで
    済ませない。なお退会は、`DELETE FROM user` の1文で外部キーの `ON DELETE CASCADE` が全部消すので
    （`internal/feature/auth/delete_account.go`）、これに当たらない。
+
+#### モデル・コントローラー・ビュー（2026-11-12 決定、JUK-219。学習記録から）
+
+Rails の MVC に合わせ、「入力チェックはモデルでやる」をそのまま守れる形にした。最初は学習記録だけで、
+ほかの機能は順に移す（移すまでは今までどおり `feature` が読み取りと入力チェック、`write` が書き込みを持つ）。
+
+| 層 | 置き場所 | 持つもの | 持たないもの |
+|---|---|---|---|
+| コントローラー | `feature/study` の各ハンドラ | JSON とクエリの読み取り、ログイン中の人、モデルの誤りを 400・404・409 に直すこと | SQL・入力の決まり・業務ルール |
+| モデル | `model/studyrecord` | 入力の決まり（Rails の `validates`）、業務ルール、読み取り、書き込み | HTTP・画面に返す形 |
+| ビュー | `feature/study` の `*View` 関数と React の画面 | モデルの結果を `apischema` の形に直すこと、表示 | 決まり |
+
+- **モデルの操作は、送られた本文（JSON を読んだ値）をそのまま受け取り、中で確かめてから書く。**
+  確かめ済みの値の型（`logInput` など）は外に出さないので、入力チェックを通らずに書き込む道が無い。
+  誤りは `*validation.Issue`（`error` を満たす）で返し、コントローラーは `httpx.RejectIssue` で 400 にする。
+- **読み取りもモデルに置く。** 上の「読み取りは入口の近く」とは逆になるが、学習記録の読み取りはダッシュボードと
+  一覧の2つの入口だけが使い、どちらも同じ集約の形（実績＋参考書）を返すので、集約の持ち主にまとめた。
+- **画面の Zod は使いやすさのためだけに残す**（送る前に誤りを見せる）。正はモデルの決まりで、
+  文言とコードは Zod と同じにしてある（Node の Zod に同じ本文を通した結果をテストの期待値にしている）。
+- 確かめるテストは `apps/api/internal/feature/study/controller_test.go`。コントローラーに SQL の文字列か
+  `internal/validation` の import があれば落ちる。科目・単位の値が契約（`apischema` の enum）と同じかも、両方を知るここで確かめる。
 
 #### 持ち主の一覧（2026-10-06、JUK-150）
 
@@ -284,7 +311,7 @@ apps/api/
 |---|---|---|
 | `account` | `user`（下の列を除く）・`AuthSession`・`AuthPassword`・`AuthToken`・`AuthIdentity`・`AuthTotp`・`AuthBackupCode`・`AuthMfaChallenge`・`OpsAuditLog` | 利用停止（停止の印＋セッション削除）、パスワードの再設定（パスワード＋セッション・トークン・確認待ちの削除）、OAuth の連携（利用者＋連携＋パスワード・セッション・トークンの削除）、2段階認証の設定とリセット（TOTP＋予備コード＋確認待ち）、退会と管理者の削除（`DELETE FROM user` と外部キーの連鎖） |
 | `authguard` | `AuthOAuthState`・`AuthThrottle`・`EmailSend` | ログインの途中の一時的な状態と、回数の制限。`account` の表と一緒に変える操作は無い |
-| `studyrecord` | `StudyLog`・`StudyPlan`・`user.firstStudyLogAt` | 予定の完了（予定＋実績＋初回記録日時）、実績の記録（実績＋初回記録日時） |
+| `studyrecord`（`model/` に移した） | `StudyLog`・`StudyPlan`・`user.firstStudyLogAt` | 予定の完了（予定＋実績＋初回記録日時）、実績の記録（実績＋初回記録日時） |
 | `textbook` | `Textbook` | 学習記録と一緒に変える操作は無い（予定の完了は総量を読むだけ） |
 | `goal` | `FinalGoal` | 単独 |
 | `university` | `University`・`Faculty`・`_FacultyToTag` | 学部の作成・変更（学部＋タグの付け替え） |

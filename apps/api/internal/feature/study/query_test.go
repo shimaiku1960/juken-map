@@ -3,33 +3,11 @@ package study
 import (
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
-	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
 )
-
-func TestDateRangeWhere(t *testing.T) {
-	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	to := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
-
-	where, args := dateRange{from: from, to: &to}.where("l", "u1")
-	if where != "l.userId = ? AND l.date >= ? AND l.date < ?" {
-		t.Errorf("where = %q", where)
-	}
-	// to の当日を含めるため、上限は翌日の 00:00
-	want := []any{"u1", from, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)}
-	if !reflect.DeepEqual(args, want) {
-		t.Errorf("args = %v, want %v", args, want)
-	}
-
-	where, args = dateRange{from: from}.where("p", "u1")
-	if where != "p.userId = ? AND p.date >= ?" || len(args) != 2 {
-		t.Errorf("上限なし: where = %q, args = %v", where, args)
-	}
-}
 
 func TestStudyListQueryErrors(t *testing.T) {
 	// DB に届く前に返る場面だけを見る（store は nil のまま）。DB を使う場面は E2E（nginx を通して Go に届く、JUK-96）が通す。

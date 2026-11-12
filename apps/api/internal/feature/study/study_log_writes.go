@@ -5,93 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/studyrecord"
 )
 
-// 学習記録（実績）の書き込み（JUK-75）。
+// 学習記録（実績）の入口（JUK-75）。コントローラーにあたる。
 //
-// 書き込みと、その決まり（自分の参考書か・範囲が逆算設定に合うか・初回記録の印）は持ち主の
-// internal/write/studyrecord にある（JUK-153）。ここは本文を読んで確かめ、操作を呼び、結果を応答の形にする。
-//
-// 入力チェックの規則の正は Zod の createStudyLogSchema（src/shared/validations/studyLog.ts）。
-
-// studyLogInput は POST・PATCH の本文を読んだもの。任意の項目は「無い」と null を区別する
-// （PATCH の「範囲が変わったか」の判定は、キーが無いときも「変わった」とみなすため。opt.Field.Differs）。
-type studyLogInput struct {
-	date       string
-	minutes    int64
-	subject    validation.Optional[string]
-	textbookID validation.Optional[int64]
-	rangeStart validation.Optional[int64]
-	rangeEnd   validation.Optional[int64]
-	rangeUnit  validation.Optional[string]
-	memo       validation.Optional[string]
-}
-
-// minutesRule は実績の時間（分）。実績の記録と予定の完了で同じ。
-var minutesRule = validation.NumberRule{
-	TypeMessage:     "学習時間を入力してください",
-	Int:             true,
-	IntMessage:      "整数で入力してください",
-	Positive:        true,
-	PositiveMessage: "1分以上を入力してください",
-	Max:             1440,
-	MaxMessage:      "24時間（1440分）以内で入力してください",
-}
-
-// readStudyLogInput は createStudyLogSchema と同じ順に確かめる。today は日本時間の今日（YYYY-MM-DD）。
-func readStudyLogInput(body any, today string) (*validation.ObjectInput, studyLogInput) {
-	in := validation.ReadObject(body)
-	var v studyLogInput
-	v.date = in.String("date", validation.YMDDateRule("日付を選択してください",
-		// 文字列のまま比べる（形は validation.YMDDateRule で確かめてある）。
-		validation.StringCheck{OK: func(s string) bool { return s <= today }, Code: "future_date", Message: "未来日は実績として記録できません"}))
-	v.minutes = int64(in.Number("minutes", minutesRule))
-	v.subject = in.OptionalString("subject", validation.StringRule{Checks: []validation.StringCheck{subjectCheck}}, true)
-	v.textbookID = in.OptionalInt("textbookId", validation.PositiveIntRule, true)
-	v.rangeStart = in.OptionalInt("rangeStart", validation.PositiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", validation.PositiveIntRule, true)
-	v.rangeUnit = in.OptionalString("rangeUnit", validation.StringRule{Checks: []validation.StringCheck{rangeUnitCheck}}, true)
-	v.memo = in.OptionalString("memo", memoRule, false)
-
-	rangeRules(in, v.rangeStart, v.rangeEnd, v.rangeUnit)
-	return in, v
-}
-
-// record は持ち主に渡す形にする。
-func (v studyLogInput) record() studyrecord.LogInput {
-	return studyrecord.LogInput{
-		Date: dates.FromYMD(v.date), Minutes: v.minutes, Subject: v.subject.Field(), TextbookID: v.textbookID.Field(),
-		RangeStart: v.rangeStart.Field(), RangeEnd: v.rangeEnd.Field(), RangeUnit: v.rangeUnit.Field(), Memo: v.memo.Field(),
-	}
-}
-
-// rangeRules は superRefine の範囲の3つの規則（実績・予定・予定の完了で同じ）。Zod と同じ順に足す。
-func rangeRules(in *validation.ObjectInput, start, end validation.Optional[int64], unit validation.Optional[string]) {
-	hasStart, hasEnd := !start.IsNull(), !end.IsNull()
-	if hasStart != hasEnd {
-		field := "rangeStart"
-		if hasStart {
-			field = "rangeEnd"
-		}
-		in.AddIssue("range_incomplete", field, "範囲は開始と終了の両方を入力してください")
-	}
-	if hasStart && hasEnd && *start.Value > *end.Value {
-		in.AddIssue("range_end_before_start", "rangeEnd", "終了は開始以上にしてください")
-	}
-	if (hasStart || hasEnd) && unit.IsNull() {
-		in.AddIssue("range_unit_required", "rangeUnit", "単位を選択してください")
-	}
-}
+// 入力の決まり・書き込みの決まり・SQL はモデルの internal/model/studyrecord にある（JUK-153・JUK-219）。
+// ここは本文を読んで操作に渡し、結果か断った理由を HTTP の応答にするだけ。
 
 // writeStudyRecordError は学習記録の操作が断った理由を応答にする。想定外のエラーは op を付けて 500 にする。
 func writeStudyRecordError(w http.ResponseWriter, r *http.Request, op string, err error) {
+	if httpx.RejectIssue(w, err) {
+		return
+	}
 	var rangeErr *studyrecord.RangeError
 	switch {
 	case errors.Is(err, studyrecord.ErrNotFound):
@@ -106,12 +36,7 @@ func writeStudyRecordError(w http.ResponseWriter, r *http.Request, op string, er
 }
 
 type LogWriteHandlers struct {
-	db  *sql.DB
-	now func() time.Time
-}
-
-func (h *LogWriteHandlers) today() string {
-	return dates.YMD(dates.OnTokyo(h.now()))
+	db *sql.DB
 }
 
 // Create は POST /api/study-logs。
@@ -120,11 +45,7 @@ func (h *LogWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
-	in, input := readStudyLogInput(body.Value(), h.today())
-	if httpx.Reject(w, in) {
-		return
-	}
-	created, err := studyrecord.CreateLog(r.Context(), h.db, s.UserID, input.record(), dates.NowMillis())
+	created, err := studyrecord.CreateLog(r.Context(), h.db, s.UserID, body.Value(), dates.NowMillis())
 	if err != nil {
 		writeStudyRecordError(w, r, "study-logs create", err)
 		return
@@ -137,8 +58,8 @@ func (h *LogWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *htt
 	})
 }
 
-// Update は PATCH /api/study-logs/{id}。本文は先に読み（415・413 は ID の確かめより先）、
-// 自分の実績かを本文の確かめより先に見る（無ければ本文に関わらず 404）。
+// Update は PATCH /api/study-logs/{id}。本文は先に読む（415・413 は ID の確かめより先）。
+// 自分の実績か（404）を本文の確かめ（400）より先に見るのは、モデルの操作が受け持つ。
 func (h *LogWriteHandlers) Update(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
@@ -148,21 +69,7 @@ func (h *LogWriteHandlers) Update(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
-	var exists bool
-	if err := h.db.QueryRowContext(r.Context(),
-		"SELECT EXISTS (SELECT 1 FROM StudyLog WHERE id = ? AND userId = ?)", id, s.UserID).Scan(&exists); err != nil {
-		httpx.InternalError(w, r, fmt.Errorf("study-logs find: %w", err))
-		return
-	}
-	if !exists {
-		httpx.WriteError(w, http.StatusNotFound, "Not found")
-		return
-	}
-	in, input := readStudyLogInput(body.Value(), h.today())
-	if httpx.Reject(w, in) {
-		return
-	}
-	updated, err := studyrecord.UpdateLog(r.Context(), h.db, s.UserID, id, input.record(), dates.NowMillis())
+	updated, err := studyrecord.UpdateLog(r.Context(), h.db, s.UserID, id, body.Value(), dates.NowMillis())
 	if err != nil {
 		writeStudyRecordError(w, r, "study-logs update", err)
 		return

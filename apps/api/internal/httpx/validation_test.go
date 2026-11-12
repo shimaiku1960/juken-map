@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"errors"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 
@@ -26,5 +28,22 @@ func TestRejectPassesWithoutIssue(t *testing.T) {
 	in.Boolean("a")
 	if Reject(httptest.NewRecorder(), in) {
 		t.Fatal("issue が無いのに Reject が true を返した")
+	}
+}
+
+func TestRejectIssue(t *testing.T) {
+	res := httptest.NewRecorder()
+	// 包まれていても見つける。field が無ければ null。
+	err := fmt.Errorf("op: %w", &validation.Issue{Code: "custom", Message: "だめ"})
+	if !RejectIssue(res, err) {
+		t.Fatal("入力の誤りなのに RejectIssue が false を返した")
+	}
+	if res.Code != 400 {
+		t.Fatalf("status = %d, want 400", res.Code)
+	}
+	assertJSONEqual(t, res.Body.String(), `{"error":"だめ","code":"custom","field":null}`)
+
+	if RejectIssue(httptest.NewRecorder(), errors.New("db down")) {
+		t.Fatal("入力の誤りでないのに RejectIssue が true を返した")
 	}
 }

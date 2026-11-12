@@ -5,17 +5,18 @@ package studyrecord
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
-// 学習記録の操作を、本物の MySQL で確かめる。画面の形（入力チェックの 400・応答の形）は
-// internal/feature/study の study_*_writes のテストにある。
+// 学習記録の操作を、本物の MySQL で確かめる。入力の決まりは input_test.go、
+// 応答の形（400・404 の本文）は E2E にある。
 
 // textbookWithSettings は逆算設定（単位 page・総量 300）を持つ参考書を作る。
 func textbookWithSettings(fx dbtest.Fixture, userID string) int64 {
@@ -46,22 +47,25 @@ func count(t *testing.T, db *sql.DB, query string, args ...any) int {
 	return n
 }
 
-func ptr[T any](v T) *T { return &v }
+// obj は送られた本文（JSON を読んだ値）。数は入口と同じく json.Number にする。
+type obj = map[string]any
+
+func num(v int64) json.Number { return json.Number(strconv.FormatInt(v, 10)) }
 
 func TestStudyRecordDB(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	day := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	const dayYMD = "2026-09-01" // now より前（未来日は記録できない）
 
 	t.Run("初回記録の印は最初の1件でだけ付く", func(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
 		user := fx.User()
-		first, err := CreateLog(ctx, db, user, LogInput{Date: day, Minutes: 10}, now)
+		first, err := CreateLog(ctx, db, user, obj{"date": dayYMD, "minutes": num(10)}, now)
 		if err != nil || !first.IsFirstStudyLog {
 			t.Fatalf("1件目: %+v, %v", first, err)
 		}
-		second, err := CreateLog(ctx, db, user, LogInput{Date: day, Minutes: 20}, now.Add(time.Hour))
+		second, err := CreateLog(ctx, db, user, obj{"date": dayYMD, "minutes": num(20)}, now.Add(time.Hour))
 		if err != nil || second.IsFirstStudyLog {
 			t.Fatalf("2件目: %+v, %v", second, err)
 		}
@@ -73,16 +77,12 @@ func TestStudyRecordDB(t *testing.T) {
 	t.Run("他人の参考書や範囲の誤りでは、実績も初回の印も残らない", func(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
 		user, other := fx.User(), fx.User()
-		_, err := CreateLog(ctx, db, user, LogInput{Date: day, Minutes: 10,
-			TextbookID: opt.Field[int64]{Present: true, Value: ptr(fx.Textbook(other))}}, now)
+		_, err := CreateLog(ctx, db, user, obj{"date": dayYMD, "minutes": num(10), "textbookId": num(fx.Textbook(other))}, now)
 		if !errors.Is(err, ErrTextbookNotOwned) {
 			t.Errorf("他人の参考書: %v", err)
 		}
-		_, err = CreateLog(ctx, db, user, LogInput{Date: day, Minutes: 10,
-			TextbookID: opt.Field[int64]{Present: true, Value: ptr(textbookWithSettings(fx, user))},
-			RangeStart: opt.Field[int64]{Present: true, Value: ptr(int64(1))},
-			RangeEnd:   opt.Field[int64]{Present: true, Value: ptr(int64(301))},
-			RangeUnit:  opt.Field[string]{Present: true, Value: ptr("page")}}, now)
+		_, err = CreateLog(ctx, db, user, obj{"date": dayYMD, "minutes": num(10), "textbookId": num(textbookWithSettings(fx, user)),
+			"rangeStart": num(1), "rangeEnd": num(301), "rangeUnit": "page"}, now)
 		var rangeErr *RangeError
 		if !errors.As(err, &rangeErr) {
 			t.Errorf("総量を超える範囲: %v", err)
@@ -99,7 +99,7 @@ func TestStudyRecordDB(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
 		user := fx.User()
 		planID := fx.StudyPlan(user)
-		done, err := CompletePlan(ctx, db, user, planID, Completion{Minutes: 30}, now)
+		done, err := CompletePlan(ctx, db, user, planID, obj{"minutes": num(30)}, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,10 +109,10 @@ func TestStudyRecordDB(t *testing.T) {
 		if done.Log.Date != "2027-02-20T00:00:00.000Z" {
 			t.Errorf("実績の日付は予定の日付: %s", done.Log.Date)
 		}
-		if _, err := CompletePlan(ctx, db, user, planID, Completion{Minutes: 30}, now); !errors.Is(err, ErrAlreadyCompleted) {
+		if _, err := CompletePlan(ctx, db, user, planID, obj{"minutes": num(30)}, now); !errors.Is(err, ErrAlreadyCompleted) {
 			t.Errorf("2回目の完了: %v", err)
 		}
-		if _, err := UpdatePlan(ctx, db, user, planID, PlanPatch{Done: opt.Field[bool]{Present: true, Value: ptr(false)}}, now); !errors.Is(err, ErrPlanHasLog) {
+		if _, err := UpdatePlan(ctx, db, user, planID, obj{"done": false}, now); !errors.Is(err, ErrPlanHasLog) {
 			t.Errorf("実績のある予定を未完了に戻す: %v", err)
 		}
 	})
@@ -122,10 +122,7 @@ func TestStudyRecordDB(t *testing.T) {
 		user := fx.User()
 		planID := fx.StudyPlan(user)
 		fx.Exec("UPDATE StudyPlan SET textbookId = ? WHERE id = ?", textbookWithSettings(fx, user), planID)
-		_, err := CompletePlan(ctx, db, user, planID, Completion{Minutes: 30,
-			RangeStart: opt.Field[int64]{Present: true, Value: ptr(int64(1))},
-			RangeEnd:   opt.Field[int64]{Present: true, Value: ptr(int64(10))},
-			RangeUnit:  opt.Field[string]{Present: true, Value: ptr("question")}}, now)
+		_, err := CompletePlan(ctx, db, user, planID, obj{"minutes": num(30), "rangeStart": num(1), "rangeEnd": num(10), "rangeUnit": "question"}, now)
 		var rangeErr *RangeError
 		if !errors.As(err, &rangeErr) {
 			t.Fatalf("単位が違う範囲: %v", err)
@@ -144,13 +141,11 @@ func TestStudyRecordDB(t *testing.T) {
 	t.Run("予定から作った実績は、日付・科目・参考書を変えない", func(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
 		user := fx.User()
-		done, err := CompletePlan(ctx, db, user, fx.StudyPlan(user), Completion{Minutes: 30}, now)
+		done, err := CompletePlan(ctx, db, user, fx.StudyPlan(user), obj{"minutes": num(30)}, now)
 		if err != nil {
 			t.Fatal(err)
 		}
-		updated, err := UpdateLog(ctx, db, user, done.Log.ID, LogInput{Date: day, Minutes: 45,
-			Subject:    opt.Field[string]{Present: true, Value: ptr("english")},
-			TextbookID: opt.Field[int64]{Present: true, Value: ptr(fx.Textbook(user))}}, now)
+		updated, err := UpdateLog(ctx, db, user, done.Log.ID, obj{"date": dayYMD, "minutes": num(45), "subject": "english", "textbookId": num(fx.Textbook(user))}, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -165,13 +160,13 @@ func TestStudyRecordDB(t *testing.T) {
 		logID, planID := fx.StudyLog(other), fx.StudyPlan(other)
 		for name, err := range map[string]error{
 			"実績の変更": func() error {
-				_, err := UpdateLog(ctx, db, user, logID, LogInput{Date: day, Minutes: 1}, now)
+				_, err := UpdateLog(ctx, db, user, logID, obj{"date": dayYMD, "minutes": num(1)}, now)
 				return err
 			}(),
 			"実績の削除": DeleteLog(ctx, db, user, logID),
-			"予定の変更": func() error { _, err := UpdatePlan(ctx, db, user, planID, PlanPatch{}, now); return err }(),
+			"予定の変更": func() error { _, err := UpdatePlan(ctx, db, user, planID, obj{}, now); return err }(),
 			"予定の削除": DeletePlan(ctx, db, user, planID),
-			"予定の完了": func() error { _, err := CompletePlan(ctx, db, user, planID, Completion{Minutes: 1}, now); return err }(),
+			"予定の完了": func() error { _, err := CompletePlan(ctx, db, user, planID, obj{"minutes": num(1)}, now); return err }(),
 		} {
 			if !errors.Is(err, ErrNotFound) {
 				t.Errorf("%s: %v", name, err)
