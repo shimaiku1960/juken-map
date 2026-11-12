@@ -349,7 +349,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/model/textbookmaster/` | 参考書マスター（総量の候補を含む）のモデル。入力の決まり（Zod と同じ 400）、管理画面の一覧（q で絞る）、作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154・JUK-224） |
 | `internal/model/university/` | 大学・学部（学部のタグを含む）のモデル。入力の決まり（Zod と同じ 400）、管理画面の一覧（q と page）・詳細・タグ、作成・書き換え・削除、大学を探す画面の一覧と大学詳細の読み取り。志望校に使われている行は消さない（JUK-154・JUK-224） |
 | `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |
-| `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
+| `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`UserSimulation` と、移行中の `user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
 | `internal/write/chaos/` | 障害注入の実験（`ChaosExperiment`）への書き込みの持ち主。始める・まとめて止める。実行中の実験は表全体で1つまでを、1つの SQL で守る（JUK-173） |
 | `internal/write/authguard/` | ログインの守り（回数の制限・メールの送信の上限・外部ログインの state）への書き込みの持ち主。試行を先に数えてから判定し、メールは数えてから記録するまでを名前付きロックで1件ずつ通す（JUK-154） |
 | `internal/write/expired/` | 期限の切れた行の消し方（主キーで選んで主キーで消す）。消す表は持ち主（account・authguard・notification）が渡す。書き込みの SQL は `internal/write/` の下だけに置く決まり（JUK-157）のため、`internal/database` から移した |

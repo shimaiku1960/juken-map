@@ -5,6 +5,7 @@ package auth
 
 import (
 	"context"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -156,6 +157,8 @@ func fillEveryUserTable(t *testing.T, fx dbtest.Fixture, id, email string, facul
 	// 有効にしていない（enabledAt が NULL）ので、退会でコードは求められない。
 	fx.Exec("INSERT INTO AuthTotp (userId, secret, createdAt) VALUES (?, ?, ?)", id, "v0:"+dbtest.Hex(16), now)
 	fx.Exec("INSERT INTO AuthBackupCode (userId, codeHash) VALUES (?, ?)", id, h())
+	// 連番は一意なので、ほかのテストと重ならない大きさから乱数で取る。
+	fx.Exec("INSERT INTO UserSimulation (userId, seq, cohort) VALUES (?, ?, 'steady')", id, 800_000_000+rand.Int64N(100_000_000))
 
 	for _, ref := range userReferences(t, fx) {
 		if fx.Count("SELECT COUNT(*) FROM `"+ref.table+"` WHERE `"+ref.column+"` = ?", id) == 0 {
