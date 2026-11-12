@@ -11,6 +11,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
@@ -48,7 +49,7 @@ func (h *MasterHandlers) ListUniversities(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	issue.Write(w)
+	httpx.WriteValidationIssue(w, issue)
 }
 
 // UniversityDetail は GET /api/admin/universities/{id}。
@@ -76,7 +77,7 @@ func (h *MasterHandlers) CreateUniversity(w http.ResponseWriter, r *http.Request
 		return
 	}
 	input, in := readUniversityInput(body.Value())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	outcome, err := h.store.createUniversity(r.Context(), input)
@@ -103,7 +104,7 @@ func (h *MasterHandlers) UpdateUniversity(w http.ResponseWriter, r *http.Request
 		return
 	}
 	input, in := readUniversityInput(body.Value())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	outcome, err := h.store.updateUniversity(r.Context(), id, input)
@@ -152,11 +153,11 @@ func (in universityInput) record() university.UniversityInput {
 }
 
 // readUniversityInput は universityInputSchema。
-func readUniversityInput(body any) (universityInput, *httpx.ObjectInput) {
-	in := httpx.ReadObject(body)
+func readUniversityInput(body any) (universityInput, *validation.ObjectInput) {
+	in := validation.ReadObject(body)
 	v := universityInput{
 		name:       in.String("name", masterNameRule("大学名")),
-		prefecture: in.String("prefecture", httpx.StringRule{Checks: []httpx.StringCheck{httpx.OneOf(prefectures, "invalid_prefecture", "都道府県を選んでください")}}),
+		prefecture: in.String("prefecture", validation.StringRule{Checks: []validation.StringCheck{validation.OneOf(prefectures, "invalid_prefecture", "都道府県を選んでください")}}),
 		typ:        in.Enum("type", func(s string) bool { return apischema.UniversityInputType(s).Valid() }, "種別を選んでください"),
 	}
 	return v, in

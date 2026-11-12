@@ -7,6 +7,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 )
 
 // 期待値は、Node（Zod 4.5.4）に同じ本文を送って返ってきた 400（2026-09-30 に手元で確かめた）。
@@ -90,7 +91,7 @@ func TestReadStudyLogInput(t *testing.T) {
 			}
 			in, _ := readStudyLogInput(body, today)
 			res := httptest.NewRecorder()
-			rejected := in.Reject(res)
+			rejected := httpx.Reject(res, in)
 			if tt.want == "" {
 				if rejected {
 					t.Fatalf("弾かれた: %s", res.Body)
@@ -126,7 +127,7 @@ func TestIsCalendarYMD(t *testing.T) {
 		"2026-02-30": false, "2025-02-29": false, "1900-02-29": false, "2025-13-01": false,
 		"2025-00-10": false, "2025-04-31": false, "2025-01-00": false,
 	} {
-		if got := httpx.IsCalendarYMD(s); got != want {
+		if got := validation.IsCalendarYMD(s); got != want {
 			t.Errorf("isCalendarYMD(%s) = %v, want %v", s, got, want)
 		}
 	}

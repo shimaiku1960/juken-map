@@ -1,6 +1,7 @@
 package textbooks
 
 import (
+	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -67,7 +68,7 @@ func TestReadTextbookInput(t *testing.T) {
 					t.Fatalf("通ってしまった: %+v", input)
 				}
 				res := httptest.NewRecorder()
-				issue.Write(res)
+				httpx.WriteValidationIssue(res, issue)
 				httpxtest.AssertJSONEqual(t, res.Body.String(), tt.want)
 				return
 			}

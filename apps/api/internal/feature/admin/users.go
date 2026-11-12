@@ -22,6 +22,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -143,7 +144,7 @@ func (h *UserHandlers) Overview(w http.ResponseWriter, r *http.Request, _ *httpx
 func (h *UserHandlers) ListUsers(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	kind, q, page, issue := readAdminUsersQuery(httpx.ParseQuery(r.URL.RawQuery))
 	if issue != nil {
-		issue.Write(w)
+		httpx.WriteValidationIssue(w, issue)
 		return
 	}
 	list, err := h.store.listUsers(r.Context(), kind, q, page)
@@ -227,12 +228,12 @@ func (h *UserHandlers) DeleteUser(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
-	in := httpx.ReadObject(body.Value())
-	email := in.String("email", httpx.StringRule{
+	in := validation.ReadObject(body.Value())
+	email := in.String("email", validation.StringRule{
 		Min: 1, MinMessage: "Too small: expected string to have >=1 characters",
 		Max: adminUserIDMax, MaxMessage: "Too big: expected string to have <=191 characters",
 	})
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 
@@ -245,7 +246,7 @@ func (h *UserHandlers) DeleteUser(w http.ResponseWriter, r *http.Request, s *htt
 		httpx.WriteError(w, http.StatusConflict, protectedMessages[protectedNoEmail])
 		return
 	}
-	if !strings.EqualFold(*target.Email, httpx.JSTrim(email)) {
+	if !strings.EqualFold(*target.Email, validation.JSTrim(email)) {
 		httpx.WriteError(w, http.StatusBadRequest, "メールアドレスが一致しません")
 		return
 	}
@@ -294,10 +295,10 @@ func adminUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	id := r.PathValue("id")
 	switch {
 	case id == "":
-		(&httpx.ValidationIssue{Code: "too_small", Field: "id", Message: "Too small: expected string to have >=1 characters"}).Write(w)
+		httpx.WriteValidationIssue(w, &validation.Issue{Code: "too_small", Field: "id", Message: "Too small: expected string to have >=1 characters"})
 		return "", false
-	case httpx.CodePointLength(id) > adminUserIDMax:
-		(&httpx.ValidationIssue{Code: "too_big", Field: "id", Message: "Too big: expected string to have <=191 characters"}).Write(w)
+	case validation.CodePointLength(id) > adminUserIDMax:
+		httpx.WriteValidationIssue(w, &validation.Issue{Code: "too_big", Field: "id", Message: "Too big: expected string to have <=191 characters"})
 		return "", false
 	}
 	return id, true
@@ -305,11 +306,11 @@ func adminUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 // readAdminUsersQuery は一覧のクエリを読む。kind・q・page の順に確かめ、最初の1件で止める。
 // 同じキーが2つ以上あるときは、文字列ではない（配列）として断る。
-func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string, int, *httpx.ValidationIssue) {
+func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string, int, *validation.Issue) {
 	kind := apischema.UserKindReal // z.enum(USER_KINDS).default("real")
 	if values, ok := query["kind"]; ok {
 		if len(values) != 1 || !apischema.UserKind(values[0]).Valid() {
-			return "", "", 0, &httpx.ValidationIssue{Code: "invalid_value", Field: "kind",
+			return "", "", 0, &validation.Issue{Code: "invalid_value", Field: "kind",
 				Message: `Invalid option: expected one of "real"|"sim"|"seed"|"demo"`}
 		}
 		kind = apischema.UserKind(values[0])
@@ -318,10 +319,10 @@ func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string,
 	q := "" // z.string().max(191).optional()
 	if values, ok := query["q"]; ok {
 		if len(values) != 1 {
-			return "", "", 0, httpx.InvalidType("q", "string", []any{})
+			return "", "", 0, validation.InvalidType("q", "string", []any{})
 		}
-		if httpx.CodePointLength(values[0]) > 191 {
-			return "", "", 0, &httpx.ValidationIssue{Code: "too_big", Field: "q", Message: "Too big: expected string to have <=191 characters"}
+		if validation.CodePointLength(values[0]) > 191 {
+			return "", "", 0, &validation.Issue{Code: "too_big", Field: "q", Message: "Too big: expected string to have <=191 characters"}
 		}
 		q = values[0]
 	}
@@ -334,7 +335,7 @@ func readAdminUsersQuery(query map[string][]string) (apischema.UserKind, string,
 }
 
 // readPageQuery は z.coerce.number().int().positive().max(max).default(1) の page を読む。
-func readPageQuery(query map[string][]string, max float64) (int, *httpx.ValidationIssue) {
+func readPageQuery(query map[string][]string, max float64) (int, *validation.Issue) {
 	values, ok := query["page"]
 	if !ok {
 		return 1, nil
@@ -342,9 +343,9 @@ func readPageQuery(query map[string][]string, max float64) (int, *httpx.Validati
 	// z.coerce.number() は Number(値)。配列は "1,2" のように , でつないだ文字列として数に直る（["3"] は 3）。
 	f := jsNumberFromString(strings.Join(values, ","))
 	if math.IsNaN(f) {
-		return 0, &httpx.ValidationIssue{Code: "invalid_type", Field: "page", Message: "Invalid input: expected number, received NaN"}
+		return 0, &validation.Issue{Code: "invalid_type", Field: "page", Message: "Invalid input: expected number, received NaN"}
 	}
-	n, issue := httpx.CheckNumber("page", jsonNumberOf(f), httpx.NumberRule{Int: true, Positive: true, Max: max})
+	n, issue := validation.CheckNumber("page", jsonNumberOf(f), validation.NumberRule{Int: true, Positive: true, Max: max})
 	if issue != nil {
 		return 0, issue
 	}
@@ -357,7 +358,7 @@ func readPageQuery(query map[string][]string, max float64) (int, *httpx.Validati
 //   - 0x・0o・0b で始まる整数（符号は付けられない）
 //   - 10進の数（1e3・.5・5. も可）。Go の ParseFloat だけが読む書き方（1_0・inf・0x1p3）は NaN
 func jsNumberFromString(s string) float64 {
-	s = httpx.JSTrim(s)
+	s = validation.JSTrim(s)
 	switch s {
 	case "":
 		return 0
@@ -388,10 +389,10 @@ func jsNumberFromString(s string) float64 {
 
 var jsDecimalPattern = regexp.MustCompile(`^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$`)
 
-// jsonNumberOf は数を httpx.CheckNumber に渡せる形（JSON から読んだ数）にする。
+// jsonNumberOf は数を validation.CheckNumber に渡せる形（JSON から読んだ数）にする。
 func jsonNumberOf(f float64) any {
 	if math.IsInf(f, 0) {
-		// httpx.CheckNumber は JSON から読んだ ±Infinity を json.Number の "±Inf" で受け取る（jsNumber が ParseFloat で読む）。
+		// validation.CheckNumber は JSON から読んだ ±Infinity を json.Number の "±Inf" で受け取る（jsNumber が ParseFloat で読む）。
 		if f > 0 {
 			return json.Number("+Inf")
 		}
@@ -488,7 +489,7 @@ func (st *sqlAdminUserStore) listUsers(ctx context.Context, kind apischema.UserK
 	list := apischema.AdminUserList{Users: []apischema.AdminUser{}, Page: page, PageSize: adminUsersPageSize}
 	where := kindSQL + " = ?"
 	whereParams := append(append([]any{}, kindParams...), kind)
-	if q = httpx.JSTrim(q); q != "" {
+	if q = validation.JSTrim(q); q != "" {
 		where += " AND u.email LIKE ?"
 		whereParams = append(whereParams, "%"+escapeLike(q)+"%")
 	}

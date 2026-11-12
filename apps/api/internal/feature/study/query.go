@@ -6,6 +6,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 )
 
 // クエリ文字列の読み方と、不正なときの 400 の形。
@@ -31,8 +32,8 @@ func readDateRangeQuery(w http.ResponseWriter, r *http.Request) (dateRangeQuery,
 			// 同じキーが2回以上あるときは、文字列ではない（配列）として断る。
 			httpx.WriteValidationError(w, "invalid_type", f.key, "Invalid input: expected string, received array")
 			return dateRangeQuery{}, false
-		case !httpx.YMDPattern.MatchString(values[0]):
-			httpx.WriteValidationError(w, "invalid_format", f.key, httpx.YMDMessage)
+		case !validation.YMDPattern.MatchString(values[0]):
+			httpx.WriteValidationError(w, "invalid_format", f.key, validation.YMDMessage)
 			return dateRangeQuery{}, false
 		default:
 			*f.dst = &values[0]

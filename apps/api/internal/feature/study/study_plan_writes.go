@@ -13,6 +13,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
 
@@ -26,26 +27,26 @@ import (
 
 // 科目と範囲の単位の .refine()。値の一覧は契約（openapi/openapi.yaml）の enum から作った型が持つ。
 var (
-	subjectCheck   = httpx.StringCheck{OK: func(s string) bool { return apischema.StudyLogInputSubject(s).Valid() }, Code: "invalid_subject", Message: "科目の値が不正です"}
-	rangeUnitCheck = httpx.StringCheck{OK: func(s string) bool { return apischema.StudyLogInputRangeUnit(s).Valid() }, Code: "invalid_range_unit", Message: "単位の値が不正です"}
+	subjectCheck   = validation.StringCheck{OK: func(s string) bool { return apischema.StudyLogInputSubject(s).Valid() }, Code: "invalid_subject", Message: "科目の値が不正です"}
+	rangeUnitCheck = validation.StringCheck{OK: func(s string) bool { return apischema.StudyLogInputRangeUnit(s).Valid() }, Code: "invalid_range_unit", Message: "単位の値が不正です"}
 	// memoRule は実績のメモ・予定の内容：.max(500).trim()（null は不可）。
-	memoRule = httpx.StringRule{Max: 500, MaxMessage: "500文字以内で入力してください", Trim: true}
+	memoRule = validation.StringRule{Max: 500, MaxMessage: "500文字以内で入力してください", Trim: true}
 )
 
 // studyPlanItem は予定1件（studyPlanItemSchema）。
 type studyPlanItem struct {
-	textbookID, rangeStart, rangeEnd httpx.Optional[int64]
-	rangeUnit, content, subject      httpx.Optional[string]
+	textbookID, rangeStart, rangeEnd validation.Optional[int64]
+	rangeUnit, content, subject      validation.Optional[string]
 }
 
-func readStudyPlanItem(in *httpx.ObjectInput) studyPlanItem {
+func readStudyPlanItem(in *validation.ObjectInput) studyPlanItem {
 	var v studyPlanItem
-	v.textbookID = in.OptionalInt("textbookId", httpx.PositiveIntRule, true)
-	v.rangeStart = in.OptionalInt("rangeStart", httpx.PositiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", httpx.PositiveIntRule, true)
-	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
+	v.textbookID = in.OptionalInt("textbookId", validation.PositiveIntRule, true)
+	v.rangeStart = in.OptionalInt("rangeStart", validation.PositiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", validation.PositiveIntRule, true)
+	v.rangeUnit = in.OptionalString("rangeUnit", validation.StringRule{Checks: []validation.StringCheck{rangeUnitCheck}}, true)
 	v.content = in.OptionalString("content", memoRule, false)
-	v.subject = in.OptionalString("subject", httpx.StringRule{Checks: []httpx.StringCheck{subjectCheck}}, true)
+	v.subject = in.OptionalString("subject", validation.StringRule{Checks: []validation.StringCheck{subjectCheck}}, true)
 
 	rangeRules(in, v.rangeStart, v.rangeEnd, v.rangeUnit)
 	// (d) 中身ゼロ（参考書・範囲・メモが全部空）は不可。メモは trim した後の値で見る（Zod と同じ）。
@@ -57,16 +58,16 @@ func readStudyPlanItem(in *httpx.ObjectInput) studyPlanItem {
 
 // readStudyPlansInput は createStudyPlansSchema。要素は番号の順に読み、最初の issue で止まる
 // （Zod も要素ごとに、項目の確かめと superRefine を終えてから次の要素へ進む）。
-func readStudyPlansInput(body any) (*httpx.ObjectInput, string, []studyPlanItem) {
-	in := httpx.ReadObject(body)
-	date := in.String("date", httpx.YMDDateRule("日付を選択してください"))
+func readStudyPlansInput(body any) (*validation.ObjectInput, string, []studyPlanItem) {
+	in := validation.ReadObject(body)
+	date := in.String("date", validation.YMDDateRule("日付を選択してください"))
 	elements := in.Array("items", "内容を1つ以上入力してください")
 	var items []studyPlanItem
 	for i, element := range elements {
 		if in.Issue != nil {
 			break
 		}
-		item := httpx.ReadObjectAt(element, in.Field("items")+"."+strconv.Itoa(i))
+		item := validation.ReadObjectAt(element, in.Field("items")+"."+strconv.Itoa(i))
 		items = append(items, readStudyPlanItem(item))
 		in.Take(item)
 	}
@@ -75,22 +76,22 @@ func readStudyPlansInput(body any) (*httpx.ObjectInput, string, []studyPlanItem)
 
 // studyPlanUpdate は PATCH の本文（updateStudyPlanSchema）。送られた項目だけを書き換える。
 type studyPlanUpdate struct {
-	date                             httpx.Optional[string]
-	textbookID, rangeStart, rangeEnd httpx.Optional[int64]
-	rangeUnit, content, subject      httpx.Optional[string]
-	done                             httpx.Optional[bool]
+	date                             validation.Optional[string]
+	textbookID, rangeStart, rangeEnd validation.Optional[int64]
+	rangeUnit, content, subject      validation.Optional[string]
+	done                             validation.Optional[bool]
 }
 
-func readStudyPlanUpdate(body any) (*httpx.ObjectInput, studyPlanUpdate) {
-	in := httpx.ReadObject(body)
+func readStudyPlanUpdate(body any) (*validation.ObjectInput, studyPlanUpdate) {
+	in := validation.ReadObject(body)
 	var v studyPlanUpdate
-	v.date = in.OptionalString("date", httpx.YMDDateRule(""), false)
-	v.textbookID = in.OptionalInt("textbookId", httpx.PositiveIntRule, true)
-	v.rangeStart = in.OptionalInt("rangeStart", httpx.PositiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", httpx.PositiveIntRule, true)
-	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
+	v.date = in.OptionalString("date", validation.YMDDateRule(""), false)
+	v.textbookID = in.OptionalInt("textbookId", validation.PositiveIntRule, true)
+	v.rangeStart = in.OptionalInt("rangeStart", validation.PositiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", validation.PositiveIntRule, true)
+	v.rangeUnit = in.OptionalString("rangeUnit", validation.StringRule{Checks: []validation.StringCheck{rangeUnitCheck}}, true)
 	v.content = in.OptionalString("content", memoRule, false)
-	v.subject = in.OptionalString("subject", httpx.StringRule{Checks: []httpx.StringCheck{subjectCheck}}, true)
+	v.subject = in.OptionalString("subject", validation.StringRule{Checks: []validation.StringCheck{subjectCheck}}, true)
 	v.done = in.OptionalBool("done")
 	rangeRules(in, v.rangeStart, v.rangeEnd, v.rangeUnit)
 	return in, v
@@ -99,17 +100,17 @@ func readStudyPlanUpdate(body any) (*httpx.ObjectInput, studyPlanUpdate) {
 // completeInput は予定の完了の本文（completeStudyPlanSchema）。
 type completeInput struct {
 	minutes              int64
-	rangeStart, rangeEnd httpx.Optional[int64]
-	rangeUnit, memo      httpx.Optional[string]
+	rangeStart, rangeEnd validation.Optional[int64]
+	rangeUnit, memo      validation.Optional[string]
 }
 
-func readCompleteInput(body any) (*httpx.ObjectInput, completeInput) {
-	in := httpx.ReadObject(body)
+func readCompleteInput(body any) (*validation.ObjectInput, completeInput) {
+	in := validation.ReadObject(body)
 	var v completeInput
 	v.minutes = int64(in.Number("minutes", minutesRule))
-	v.rangeStart = in.OptionalInt("rangeStart", httpx.PositiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", httpx.PositiveIntRule, true)
-	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
+	v.rangeStart = in.OptionalInt("rangeStart", validation.PositiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", validation.PositiveIntRule, true)
+	v.rangeUnit = in.OptionalString("rangeUnit", validation.StringRule{Checks: []validation.StringCheck{rangeUnitCheck}}, true)
 	v.memo = in.OptionalString("memo", memoRule, false)
 	rangeRules(in, v.rangeStart, v.rangeEnd, v.rangeUnit)
 	return in, v
@@ -158,7 +159,7 @@ func (h *PlanWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *ht
 		return
 	}
 	in, date, items := readStudyPlansInput(body.Value())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	records := make([]studyrecord.PlanItem, len(items))
@@ -187,7 +188,7 @@ func (h *PlanWriteHandlers) Update(w http.ResponseWriter, r *http.Request, s *ht
 		return
 	}
 	in, input := readStudyPlanUpdate(body.Value())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	patch := studyrecord.PlanPatch{
@@ -235,7 +236,7 @@ func (h *PlanWriteHandlers) Complete(w http.ResponseWriter, r *http.Request, s *
 		return
 	}
 	in, input := readCompleteInput(body.Value())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	completed, err := studyrecord.CompletePlan(r.Context(), h.db, s.UserID, id, studyrecord.Completion{

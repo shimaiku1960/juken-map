@@ -1,17 +1,16 @@
-package httpx
+package validation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
-	"net/http"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
@@ -25,28 +24,38 @@ import (
 // 応答で返す理由は1件だけ。Zod はスキーマに書いた項目の順に、項目の中では書いたチェックの順に
 // issue を積むので、ここでも同じ順に確かめ、最初に見つかった1件（Zod の最初の issue にあたるもの）で止める。
 
-// ValidationIssue は弾いた理由の1件。field が "" なら本文そのもの（応答の field は null）。
-type ValidationIssue struct {
+// JSUndefined は「値が無い」を表す。JSON の null（nil）と区別するため、別の値にする。
+// JavaScript の undefined にあたる（本文が無いとき、オブジェクトにキーが無いとき）。
+type JSUndefined struct{}
+
+// JSNumber は json.Number を JSON.parse と同じ float64 にする。範囲外の数は ±Infinity、小さすぎる数は 0。
+// strconv.ParseFloat は範囲外で ErrRange を返すが、値は ±Inf・0 になっているのでそのまま使う。
+func JSNumber(n json.Number) float64 {
+	f, err := strconv.ParseFloat(string(n), 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
+		// Decoder が数として読んだものなので、ここには来ない。
+		return math.NaN()
+	}
+	return f
+}
+
+// Issue は弾いた理由の1件。field が "" なら本文そのもの（応答の field は null）。
+type Issue struct {
 	Code, Field, Message string
 }
 
-func (v *ValidationIssue) Write(w http.ResponseWriter) {
-	body := apischema.ValidationError{Error: v.Message, Code: v.Code}
-	if v.Field != "" {
-		body.Field = &v.Field
-	}
-	WriteJSON(w, http.StatusBadRequest, body)
-}
+// Error は利用者に見せる文言。モデルの操作が error として返し、入口が errors.As で 400 に直す。
+func (v *Issue) Error() string { return v.Message }
 
 // ObjectInput は本文のオブジェクトを項目ごとに読む。最初の issue を覚え、それより後の読み取りは
 // 何もせずゼロ値を返す。使い方：
 //
 //	in := ReadObject(body)
 //	p := NotificationPreferenceInput{EmailMorningEnabled: in.boolean("emailMorningEnabled"), …}
-//	if in.Reject(w) { return }
+//	if httpx.Reject(w, in) { return }
 type ObjectInput struct {
 	fields map[string]any
-	Issue  *ValidationIssue
+	Issue  *Issue
 	// path は入れ子のオブジェクトの場所（"items.0"）。issue の field はこれに項目名をつないだもの。
 	path string
 }
@@ -71,15 +80,6 @@ func (in *ObjectInput) Field(key string) string {
 		return key
 	}
 	return in.path + "." + key
-}
-
-// Reject は issue があれば 400 を送って true を返す。
-func (in *ObjectInput) Reject(w http.ResponseWriter) bool {
-	if in.Issue == nil {
-		return false
-	}
-	in.Issue.Write(w)
-	return true
 }
 
 func (in *ObjectInput) Value(key string) (any, bool) {
@@ -108,7 +108,7 @@ func (in *ObjectInput) Boolean(key string) bool {
 
 // OptionalBool は z.boolean().optional()。
 func (in *ObjectInput) OptionalBool(key string) Optional[bool] {
-	return readOptional(in, key, false, func(field string, v any) (bool, *ValidationIssue) {
+	return readOptional(in, key, false, func(field string, v any) (bool, *Issue) {
 		b, isBool := v.(bool)
 		if !isBool {
 			return false, InvalidType(field, "boolean", v)
@@ -129,7 +129,7 @@ func (in *ObjectInput) Array(key, minMessage string) []any {
 	case !isArray:
 		in.Issue = InvalidType(in.Field(key), "array", v)
 	case len(a) == 0 && minMessage != "":
-		in.Issue = &ValidationIssue{Code: "too_small", Field: in.Field(key), Message: minMessage}
+		in.Issue = &Issue{Code: "too_small", Field: in.Field(key), Message: minMessage}
 	}
 	return a
 }
@@ -176,7 +176,7 @@ func (in *ObjectInput) String(key string, rule StringRule) string {
 	return s
 }
 
-func CheckString(key string, v any, rule StringRule) (string, *ValidationIssue) {
+func CheckString(key string, v any, rule StringRule) (string, *Issue) {
 	s, isString := v.(string)
 	if !isString {
 		issue := InvalidType(key, "string", v)
@@ -191,13 +191,13 @@ func CheckString(key string, v any, rule StringRule) (string, *ValidationIssue) 
 	n := CodePointLength(s)
 	switch {
 	case rule.Min > 0 && n < rule.Min:
-		return "", &ValidationIssue{Code: "too_small", Field: key, Message: rule.MinMessage}
+		return "", &Issue{Code: "too_small", Field: key, Message: rule.MinMessage}
 	case rule.Max > 0 && n > rule.Max:
-		return "", &ValidationIssue{Code: "too_big", Field: key, Message: rule.MaxMessage}
+		return "", &Issue{Code: "too_big", Field: key, Message: rule.MaxMessage}
 	}
 	for _, c := range rule.Checks {
 		if !c.OK(s) {
-			return "", &ValidationIssue{Code: c.Code, Field: key, Message: c.Message}
+			return "", &Issue{Code: c.Code, Field: key, Message: c.Message}
 		}
 	}
 	if rule.Trim {
@@ -235,7 +235,7 @@ func (in *ObjectInput) Number(key string, rule NumberRule) float64 {
 	return f
 }
 
-func CheckNumber(key string, v any, rule NumberRule) (float64, *ValidationIssue) {
+func CheckNumber(key string, v any, rule NumberRule) (float64, *Issue) {
 	or := func(message, fallback string) string {
 		if message != "" {
 			return message
@@ -248,35 +248,35 @@ func CheckNumber(key string, v any, rule NumberRule) (float64, *ValidationIssue)
 		issue.Message = or(rule.TypeMessage, issue.Message)
 		return 0, issue
 	}
-	f := jsNumber(n)
+	f := JSNumber(n)
 	// JSON.parse は範囲外の数を ±Infinity にする。Zod はそれを数として受け付けない。
 	if math.IsInf(f, 0) {
 		received := "Infinity"
 		if f < 0 {
 			received = "-Infinity"
 		}
-		return 0, &ValidationIssue{Code: "invalid_type", Field: key,
+		return 0, &Issue{Code: "invalid_type", Field: key,
 			Message: or(rule.TypeMessage, "Invalid input: expected number, received "+received)}
 	}
 	if rule.Int {
 		switch {
 		case f != math.Trunc(f):
-			return 0, &ValidationIssue{Code: "invalid_type", Field: key,
+			return 0, &Issue{Code: "invalid_type", Field: key,
 				Message: or(rule.IntMessage, "Invalid input: expected int, received number")}
 		case f > MaxSafeInteger:
-			return 0, &ValidationIssue{Code: "too_big", Field: key,
+			return 0, &Issue{Code: "too_big", Field: key,
 				Message: or(rule.IntMessage, "Too big: expected int to be <=9007199254740991")}
 		case f < -MaxSafeInteger:
-			return 0, &ValidationIssue{Code: "too_small", Field: key,
+			return 0, &Issue{Code: "too_small", Field: key,
 				Message: or(rule.IntMessage, "Too small: expected int to be >=-9007199254740991")}
 		}
 	}
 	if rule.Positive && !(f > 0) {
-		return 0, &ValidationIssue{Code: "too_small", Field: key,
+		return 0, &Issue{Code: "too_small", Field: key,
 			Message: or(rule.PositiveMessage, "Too small: expected number to be >0")}
 	}
 	if rule.Max != 0 && f > rule.Max {
-		return 0, &ValidationIssue{Code: "too_big", Field: key,
+		return 0, &Issue{Code: "too_big", Field: key,
 			Message: or(rule.MaxMessage, fmt.Sprintf("Too big: expected number to be <=%v", rule.Max))}
 	}
 	return f, nil
@@ -305,7 +305,7 @@ func (o Optional[T]) Field() opt.Field[T] {
 
 // readOptional は .optional() の付いた項目を読む。nullable なら null も受け付ける（.nullable()）。
 // check は値があるときのチェック（CheckString・CheckNumber など）。
-func readOptional[T comparable](in *ObjectInput, key string, nullable bool, check func(key string, v any) (T, *ValidationIssue)) Optional[T] {
+func readOptional[T comparable](in *ObjectInput, key string, nullable bool, check func(key string, v any) (T, *Issue)) Optional[T] {
 	v, ok := in.Value(key)
 	if !ok {
 		return Optional[T]{}
@@ -326,7 +326,7 @@ func readOptional[T comparable](in *ObjectInput, key string, nullable bool, chec
 
 // OptionalString は z.string()….optional()（nullable なら .nullable().optional()）。
 func (in *ObjectInput) OptionalString(key string, rule StringRule, nullable bool) Optional[string] {
-	return readOptional(in, key, nullable, func(key string, v any) (string, *ValidationIssue) {
+	return readOptional(in, key, nullable, func(key string, v any) (string, *Issue) {
 		return CheckString(key, v, rule)
 	})
 }
@@ -334,7 +334,7 @@ func (in *ObjectInput) OptionalString(key string, rule StringRule, nullable bool
 // OptionalInt は z.number().int()….nullable().optional() のような整数の項目。
 func (in *ObjectInput) OptionalInt(key string, rule NumberRule, nullable bool) Optional[int64] {
 	rule.Int = true
-	return readOptional(in, key, nullable, func(key string, v any) (int64, *ValidationIssue) {
+	return readOptional(in, key, nullable, func(key string, v any) (int64, *Issue) {
 		f, issue := CheckNumber(key, v, rule)
 		return int64(f), issue
 	})
@@ -349,7 +349,7 @@ func (in *ObjectInput) Enum(key string, valid func(string) bool, message string)
 	}
 	s, isString := v.(string)
 	if !isString || !valid(s) {
-		in.Issue = &ValidationIssue{Code: "invalid_value", Field: in.Field(key), Message: message}
+		in.Issue = &Issue{Code: "invalid_value", Field: in.Field(key), Message: message}
 		return ""
 	}
 	return s
@@ -363,15 +363,15 @@ func OneOf(values []string, code, message string) StringCheck {
 // OptionalEnum は文言を指定しない z.enum(values).optional()（nullable なら .nullable().optional()）。
 // .nullable() の無い項目に null を送ると、型の issue ではなく invalid_value になる（Zod 4 の z.enum）。
 func (in *ObjectInput) OptionalEnum(key string, values []string, nullable bool) Optional[string] {
-	return readOptional(in, key, nullable, func(field string, v any) (string, *ValidationIssue) {
+	return readOptional(in, key, nullable, func(field string, v any) (string, *Issue) {
 		return CheckEnum(field, v, values)
 	})
 }
 
-func CheckEnum(field string, v any, values []string) (string, *ValidationIssue) {
+func CheckEnum(field string, v any, values []string) (string, *Issue) {
 	s, isString := v.(string)
 	if !isString || !slices.Contains(values, s) {
-		return "", &ValidationIssue{Code: "invalid_value", Field: field, Message: enumMessage(values)}
+		return "", &Issue{Code: "invalid_value", Field: field, Message: enumMessage(values)}
 	}
 	return s, nil
 }
@@ -397,13 +397,13 @@ var ISODateCheck = StringCheck{
 // すでに issue があれば何もしない（最初の1件だけを返すので）。
 func (in *ObjectInput) AddIssue(code, field, message string) {
 	if in.Issue == nil {
-		in.Issue = &ValidationIssue{Code: code, Field: in.Field(field), Message: message}
+		in.Issue = &Issue{Code: code, Field: in.Field(field), Message: message}
 	}
 }
 
 // InvalidType は Zod の invalid_type の issue。文言は Zod（en）の既定と同じ。
-func InvalidType(field, expected string, got any) *ValidationIssue {
-	return &ValidationIssue{
+func InvalidType(field, expected string, got any) *Issue {
+	return &Issue{
 		Code:    "invalid_type",
 		Field:   field,
 		Message: fmt.Sprintf("Invalid input: expected %s, received %s", expected, jsTypeName(got)),

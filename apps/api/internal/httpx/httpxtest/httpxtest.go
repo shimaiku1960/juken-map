@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 )
 
 // FakeSessions は DB の代わりに、Cookie の値で決まったセッションを返す。
@@ -69,10 +70,10 @@ func IssueJSON(message, code, field string) string {
 }
 
 // CheckIssue は入力チェックの結果を見る。want が空なら通ること、そうでなければ弾いた本文が want であること。
-func CheckIssue(t *testing.T, in *httpx.ObjectInput, want string) {
+func CheckIssue(t *testing.T, in *validation.ObjectInput, want string) {
 	t.Helper()
 	res := httptest.NewRecorder()
-	rejected := in.Reject(res)
+	rejected := httpx.Reject(res, in)
 	if want == "" {
 		if rejected {
 			t.Fatalf("弾かれた: %s", res.Body)

@@ -10,6 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
@@ -59,14 +60,14 @@ func (h *PreferenceHandlers) Save(w http.ResponseWriter, r *http.Request, s *htt
 	if !ok {
 		return
 	}
-	in := httpx.ReadObject(body.Value())
+	in := validation.ReadObject(body.Value())
 	input := apischema.NotificationPreference{
 		EmailMorningEnabled: in.Boolean("emailMorningEnabled"),
 		EmailEveningEnabled: in.Boolean("emailEveningEnabled"),
 		LineMorningEnabled:  in.Boolean("lineMorningEnabled"),
 		LineEveningEnabled:  in.Boolean("lineEveningEnabled"),
 	}
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 

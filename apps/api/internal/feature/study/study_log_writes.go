@@ -10,6 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 )
 
@@ -25,16 +26,16 @@ import (
 type studyLogInput struct {
 	date       string
 	minutes    int64
-	subject    httpx.Optional[string]
-	textbookID httpx.Optional[int64]
-	rangeStart httpx.Optional[int64]
-	rangeEnd   httpx.Optional[int64]
-	rangeUnit  httpx.Optional[string]
-	memo       httpx.Optional[string]
+	subject    validation.Optional[string]
+	textbookID validation.Optional[int64]
+	rangeStart validation.Optional[int64]
+	rangeEnd   validation.Optional[int64]
+	rangeUnit  validation.Optional[string]
+	memo       validation.Optional[string]
 }
 
 // minutesRule は実績の時間（分）。実績の記録と予定の完了で同じ。
-var minutesRule = httpx.NumberRule{
+var minutesRule = validation.NumberRule{
 	TypeMessage:     "学習時間を入力してください",
 	Int:             true,
 	IntMessage:      "整数で入力してください",
@@ -45,18 +46,18 @@ var minutesRule = httpx.NumberRule{
 }
 
 // readStudyLogInput は createStudyLogSchema と同じ順に確かめる。today は日本時間の今日（YYYY-MM-DD）。
-func readStudyLogInput(body any, today string) (*httpx.ObjectInput, studyLogInput) {
-	in := httpx.ReadObject(body)
+func readStudyLogInput(body any, today string) (*validation.ObjectInput, studyLogInput) {
+	in := validation.ReadObject(body)
 	var v studyLogInput
-	v.date = in.String("date", httpx.YMDDateRule("日付を選択してください",
-		// 文字列のまま比べる（形は httpx.YMDDateRule で確かめてある）。
-		httpx.StringCheck{OK: func(s string) bool { return s <= today }, Code: "future_date", Message: "未来日は実績として記録できません"}))
+	v.date = in.String("date", validation.YMDDateRule("日付を選択してください",
+		// 文字列のまま比べる（形は validation.YMDDateRule で確かめてある）。
+		validation.StringCheck{OK: func(s string) bool { return s <= today }, Code: "future_date", Message: "未来日は実績として記録できません"}))
 	v.minutes = int64(in.Number("minutes", minutesRule))
-	v.subject = in.OptionalString("subject", httpx.StringRule{Checks: []httpx.StringCheck{subjectCheck}}, true)
-	v.textbookID = in.OptionalInt("textbookId", httpx.PositiveIntRule, true)
-	v.rangeStart = in.OptionalInt("rangeStart", httpx.PositiveIntRule, true)
-	v.rangeEnd = in.OptionalInt("rangeEnd", httpx.PositiveIntRule, true)
-	v.rangeUnit = in.OptionalString("rangeUnit", httpx.StringRule{Checks: []httpx.StringCheck{rangeUnitCheck}}, true)
+	v.subject = in.OptionalString("subject", validation.StringRule{Checks: []validation.StringCheck{subjectCheck}}, true)
+	v.textbookID = in.OptionalInt("textbookId", validation.PositiveIntRule, true)
+	v.rangeStart = in.OptionalInt("rangeStart", validation.PositiveIntRule, true)
+	v.rangeEnd = in.OptionalInt("rangeEnd", validation.PositiveIntRule, true)
+	v.rangeUnit = in.OptionalString("rangeUnit", validation.StringRule{Checks: []validation.StringCheck{rangeUnitCheck}}, true)
 	v.memo = in.OptionalString("memo", memoRule, false)
 
 	rangeRules(in, v.rangeStart, v.rangeEnd, v.rangeUnit)
@@ -72,7 +73,7 @@ func (v studyLogInput) record() studyrecord.LogInput {
 }
 
 // rangeRules は superRefine の範囲の3つの規則（実績・予定・予定の完了で同じ）。Zod と同じ順に足す。
-func rangeRules(in *httpx.ObjectInput, start, end httpx.Optional[int64], unit httpx.Optional[string]) {
+func rangeRules(in *validation.ObjectInput, start, end validation.Optional[int64], unit validation.Optional[string]) {
 	hasStart, hasEnd := !start.IsNull(), !end.IsNull()
 	if hasStart != hasEnd {
 		field := "rangeStart"
@@ -120,7 +121,7 @@ func (h *LogWriteHandlers) Create(w http.ResponseWriter, r *http.Request, s *htt
 		return
 	}
 	in, input := readStudyLogInput(body.Value(), h.today())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	created, err := studyrecord.CreateLog(r.Context(), h.db, s.UserID, input.record(), dates.NowMillis())
@@ -158,7 +159,7 @@ func (h *LogWriteHandlers) Update(w http.ResponseWriter, r *http.Request, s *htt
 		return
 	}
 	in, input := readStudyLogInput(body.Value(), h.today())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	updated, err := studyrecord.UpdateLog(r.Context(), h.db, s.UserID, id, input.record(), dates.NowMillis())

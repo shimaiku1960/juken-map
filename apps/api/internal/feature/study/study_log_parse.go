@@ -13,6 +13,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 )
 
 // AIクイック記録（JUK-180）。一文を Claude に読ませ、実績の項目に分けて返す。記録はしない
@@ -44,7 +45,7 @@ const (
 	parseTotalLimitMessage  = "今日はAI入力が混み合っているため使えません。手で入力してください"
 )
 
-var parseTextRule = httpx.StringRule{
+var parseTextRule = validation.StringRule{
 	TrimFirst:  true,
 	Min:        1,
 	MinMessage: "記録したい内容を入力してください",
@@ -81,9 +82,9 @@ func (h *ParseHandler) Serve(w http.ResponseWriter, r *http.Request, s *httpx.Se
 		httpx.WriteError(w, http.StatusServiceUnavailable, parseUnavailableMessage)
 		return
 	}
-	in := httpx.ReadObject(body.Value())
+	in := validation.ReadObject(body.Value())
 	text := in.String("text", parseTextRule)
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 

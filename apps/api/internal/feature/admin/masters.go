@@ -11,6 +11,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbookmaster"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
@@ -163,7 +164,7 @@ func NewMasterHandlers(db *sql.DB, universitiesChanged, textbookMastersChanged f
 func masterID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := r.PathValue("id")
 	if !httpx.IDPattern.MatchString(raw) {
-		(&httpx.ValidationIssue{Code: "invalid_format", Field: "id", Message: "Invalid string: must match pattern /^[1-9][0-9]{0,14}$/"}).Write(w)
+		httpx.WriteValidationIssue(w, &validation.Issue{Code: "invalid_format", Field: "id", Message: "Invalid string: must match pattern /^[1-9][0-9]{0,14}$/"})
 		return 0, false
 	}
 	// 形は上で確かめたので、ここで失敗することはない。
@@ -173,25 +174,25 @@ func masterID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 
 // readMasterSearchQuery は一覧の q（z.string().trim().max(100).optional()）を読む。
 // 空の q は「絞らない」として扱うので、"" はそのまま返す。
-func readMasterSearchQuery(query map[string][]string) (string, *httpx.ValidationIssue) {
+func readMasterSearchQuery(query map[string][]string) (string, *validation.Issue) {
 	values, ok := query["q"]
 	if !ok {
 		return "", nil
 	}
 	// 同じキーが2つ以上あるときは、文字列ではない（配列）として断る。
 	if len(values) != 1 {
-		return "", httpx.InvalidType("q", "string", []any{})
+		return "", validation.InvalidType("q", "string", []any{})
 	}
-	q := httpx.JSTrim(values[0])
-	if httpx.CodePointLength(q) > adminMasterQueryMax {
-		return "", &httpx.ValidationIssue{Code: "too_big", Field: "q", Message: "Too big: expected string to have <=100 characters"}
+	q := validation.JSTrim(values[0])
+	if validation.CodePointLength(q) > adminMasterQueryMax {
+		return "", &validation.Issue{Code: "too_big", Field: "q", Message: "Too big: expected string to have <=100 characters"}
 	}
 	return q, nil
 }
 
 // masterNameRule は名前の規則：z.string().trim().min(1).max(100)。
-func masterNameRule(label string) httpx.StringRule {
-	return httpx.StringRule{
+func masterNameRule(label string) validation.StringRule {
+	return validation.StringRule{
 		TrimFirst: true,
 		Min:       1, MinMessage: label + "を入力してください",
 		Max: 100, MaxMessage: label + "は100文字以内で入力してください",
