@@ -1,7 +1,6 @@
-// Package goal は志望校（FinalGoal）への書き込みの持ち主。登録・学部の差し替え・第一志望やメモの変更・削除を
-// 操作として出す。持ち主の一覧と決まりは docs/architecture.md「バックエンドの構成」（JUK-148・JUK-150）。
-//
-// 入力の形の確かめ（Zod と同じ 400）は入口が行い、ここには確かめ済みの値が来る。
+// Package goal は志望校（FinalGoal）のモデル。入力の決まり・読み取り・書き込みを持ち、HTTP を知らない。
+// 線引きは docs/architecture.md「モデル・コントローラー・ビュー」（JUK-219・JUK-222）、
+// 持ち主の決まりは同じ文書の「持ち主の一覧」（JUK-148・JUK-150）。
 package goal
 
 import (
@@ -12,10 +11,9 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
-// 操作が断る理由。
+// 操作が断る理由。入力の誤りは別に *validation.Issue で返す。
 var (
 	// ErrNotFound は、志望校が無いか、他人のものであること。
 	ErrNotFound = errors.New("志望校が見つかりません")
@@ -24,7 +22,7 @@ var (
 )
 
 // Goal は志望校の行（学部は付けない）。日時は Date#toISOString と同じ形。
-// 項目の名前・型・並びを画面に返す形（apischema の GoalFields）とそろえ、入口が型の変換だけで返せるようにしている。
+// 項目の名前・型・並びを画面に返す形（apischema の GoalFields）とそろえ、ビューが型の変換だけで返せるようにしている。
 type Goal struct {
 	CreatedAt     string
 	FacultyID     int64
@@ -35,36 +33,44 @@ type Goal struct {
 	UserID        string
 }
 
-// Patch は第一志望・メモ・ステータスの変更。Present の項目だけを書き換える。
-type Patch struct {
-	IsFirstChoice opt.Field[bool]
-	Note, Status  opt.Field[string]
-}
-
-// Create は志望校を登録し、その ID を返す。status が nil なら "decided"。同じ学部がもうあれば ErrDuplicate。
+// Create は本文（goalSchema）を確かめて志望校を登録し、学部・大学つきで返す（画面が学部名・大学名を出すため）。
+// status を省くと "decided"。同じ学部がもうあれば ErrDuplicate。
 // 無い学部は外部キーで弾かれ、そのままエラー（500）になる。
-func Create(ctx context.Context, db *sql.DB, userID string, facultyID int64, status *string, now time.Time) (int64, error) {
-	s := "decided"
-	if status != nil {
-		s = *status
+func Create(ctx context.Context, db *sql.DB, userID string, body any, now time.Time) (WithFaculty, error) {
+	in, err := decodeCreate(body)
+	if err != nil {
+		return WithFaculty{}, err
+	}
+	status := "decided"
+	if in.status != nil {
+		status = *in.status
 	}
 	res, err := db.ExecContext(ctx,
 		"INSERT INTO FinalGoal (userId, facultyId, status, createdAt) VALUES (?, ?, ?, ?)",
-		userID, facultyID, s, now)
+		userID, in.facultyID, status, now)
 	if database.IsMySQLError(err, database.DuplicateEntry) {
-		return 0, ErrDuplicate
+		return WithFaculty{}, ErrDuplicate
 	}
 	if err != nil {
-		return 0, err
+		return WithFaculty{}, err
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return WithFaculty{}, err
+	}
+	return findWithFaculty(ctx, db, id)
 }
 
-// ReplaceFaculty は志望校の学部を差し替え、差し替えた後の行を返す。facultyID が nil なら何も変えない。
+// Replace は本文（updateGoalSchema）を確かめて志望校の学部を差し替え、差し替えた後の行を返す。
+// 入力チェックは自分の志望校かを確かめるより先。学部を省くと何も変えない。
 // 同じ学部の志望校が既にあると一意制約、無い学部だと外部キーで弾かれ、そのままエラー（500）になる。
-func ReplaceFaculty(ctx context.Context, db *sql.DB, userID string, id int64, facultyID *int64) (Goal, error) {
+func Replace(ctx context.Context, db *sql.DB, userID string, id int64, body any) (Goal, error) {
+	facultyID, err := decodeReplace(body)
+	if err != nil {
+		return Goal{}, err
+	}
 	var updated Goal
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		if _, err := find(ctx, tx, id, userID, " FOR UPDATE"); err != nil {
 			return err
 		}
@@ -81,11 +87,16 @@ func ReplaceFaculty(ctx context.Context, db *sql.DB, userID string, id int64, fa
 	return updated, err
 }
 
-// ApplyPatch は第一志望・メモ・ステータスのうち、送られてきたものだけを書き換える。
+// Update は本文（patchGoalSchema）を確かめ、第一志望・メモ・ステータスのうち送られてきたものだけを書き換える。
+// 入力チェックは自分の志望校かを確かめるより先。
 //
 // 第一志望は1ユーザー1校までなので、第一志望にするときは「全部外す→1件立てる」を同じトランザクションで行う。
 // 分けて実行すると、途中で失敗したときに第一志望が0校の状態が残る。
-func ApplyPatch(ctx context.Context, db *sql.DB, userID string, id int64, p Patch) error {
+func Update(ctx context.Context, db *sql.DB, userID string, id int64, body any) error {
+	p, err := decodePatch(body)
+	if err != nil {
+		return err
+	}
 	return database.InTx(ctx, db, func(tx *sql.Tx) error {
 		if _, err := find(ctx, tx, id, userID, " FOR UPDATE"); err != nil {
 			return err
@@ -98,13 +109,13 @@ func ApplyPatch(ctx context.Context, db *sql.DB, userID string, id int64, p Patc
 				args = append(args, value)
 			}
 		}
-		set("isFirstChoice", p.IsFirstChoice.Present, p.IsFirstChoice.Value)
-		set("note", p.Note.Present, p.Note.Value)
-		set("status", p.Status.Present, p.Status.Value)
+		set("isFirstChoice", p.isFirstChoice.Present, p.isFirstChoice.Value)
+		set("note", p.note.Present, p.note.Value)
+		set("status", p.status.Present, p.status.Value)
 		if len(sets) == 0 {
 			return nil
 		}
-		if v := p.IsFirstChoice.Value; v != nil && *v {
+		if v := p.isFirstChoice.Value; v != nil && *v {
 			if _, err := tx.ExecContext(ctx, "UPDATE FinalGoal SET isFirstChoice = FALSE WHERE userId = ?", userID); err != nil {
 				return err
 			}

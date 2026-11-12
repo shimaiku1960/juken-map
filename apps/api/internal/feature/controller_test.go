@@ -1,4 +1,4 @@
-package study
+package feature_test
 
 import (
 	"go/ast"
@@ -11,15 +11,30 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/goal"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/studyrecord"
 )
 
-// TestControllerHasNoSQLOrRules は、このパッケージ（コントローラー）が SQL も入力の決まりも持たないことを確かめる。
-// 読み書きと入力の決まりはモデル（internal/model/studyrecord）が持つ（docs/architecture.md、JUK-219）。
+// controllers は、モデルに移した機能のコントローラー（internal/feature の下のパッケージ）。
+// 機能をモデルに移したら、ここに足す（docs/architecture.md「モデル・コントローラー・ビュー」、JUK-219・JUK-221）。
+var controllers = []string{"goals", "study"}
+
+// TestControllerHasNoSQLOrRules は、コントローラーが SQL も入力の決まりも持たないことを確かめる。
+// 読み書きと入力の決まりはモデル（internal/model の下）が持つ。
 func TestControllerHasNoSQLOrRules(t *testing.T) {
-	paths, err := filepath.Glob("*.go")
+	for _, dir := range controllers {
+		t.Run(dir, func(t *testing.T) { checkController(t, dir) })
+	}
+}
+
+func checkController(t *testing.T, dir string) {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("%s に Go のファイルが無い。controllers の名前を見直す", dir)
 	}
 	for _, path := range paths {
 		if strings.HasSuffix(path, "_test.go") {
@@ -40,8 +55,9 @@ func TestControllerHasNoSQLOrRules(t *testing.T) {
 				return true
 			}
 			s, _ := strconv.Unquote(lit.Value)
-			head, _, _ := strings.Cut(strings.TrimSpace(strings.ToUpper(s)), " ")
-			if slices.Contains([]string{"SELECT", "INSERT", "UPDATE", "DELETE", "WITH"}, head) {
+			// 「delete」のような操作の名前の1語は SQL とみなさない（キーワードのあとに続きがあるものだけ）。
+			words := strings.Fields(strings.ToUpper(s))
+			if len(words) >= 2 && slices.Contains([]string{"SELECT", "INSERT", "UPDATE", "DELETE", "WITH"}, words[0]) {
 				t.Errorf("%s に SQL がある（%.40q）。読み書きはモデルに書く", path, s)
 			}
 			return true
@@ -49,8 +65,8 @@ func TestControllerHasNoSQLOrRules(t *testing.T) {
 	}
 }
 
-// TestEnumsMatchContract は、モデルの科目・単位の値が契約（apischema の enum）と同じであることを確かめる。
-// モデルは apischema を知らないので、両方を知るコントローラー側で比べる。
+// TestEnumsMatchContract は、モデルの選べる値（科目・単位・志望校のステータスなど）が契約（apischema の enum）と
+// 同じであることを確かめる。モデルは apischema を知らないので、両方を知るここで比べる。
 func TestEnumsMatchContract(t *testing.T) {
 	consts := contractEnums(t)
 	for typ, want := range map[string][]string{
@@ -61,6 +77,9 @@ func TestEnumsMatchContract(t *testing.T) {
 		"StudyLogInputRangeUnit":        studyrecord.RangeUnits,
 		"StudyPlanItemInputRangeUnit":   studyrecord.RangeUnits,
 		"StudyPlanUpdateInputRangeUnit": studyrecord.RangeUnits,
+		"GoalInputStatus":               goal.Statuses,
+		"GoalUpdateInputStatus":         goal.Statuses,
+		"GoalPatchInputStatus":          goal.Statuses,
 	} {
 		got := slices.Sorted(slices.Values(consts[typ]))
 		if !slices.Equal(got, slices.Sorted(slices.Values(want))) {
@@ -72,7 +91,7 @@ func TestEnumsMatchContract(t *testing.T) {
 // contractEnums は apischema の生成コードから、型ごとの enum の値を集める。
 func contractEnums(t *testing.T) map[string][]string {
 	t.Helper()
-	dir := filepath.Join("..", "..", "apischema")
+	dir := filepath.Join("..", "apischema")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)

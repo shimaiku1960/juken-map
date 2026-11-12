@@ -51,14 +51,6 @@ var (
 	}
 )
 
-// issue は入力の誤りを error にする（誤りが無ければ nil。型付きの nil を error に入れない）。
-func issue(in *validation.ObjectInput) error {
-	if in.Issue == nil {
-		return nil
-	}
-	return in.Issue
-}
-
 // tokyoToday は now の日本時間の日付（YYYY-MM-DD）。
 func tokyoToday(now time.Time) string { return dates.YMD(dates.OnTokyo(now)) }
 
@@ -107,7 +99,7 @@ func decodeLogInput(attrs any, today string) (logInput, error) {
 	rangeUnit := in.OptionalString("rangeUnit", rangeUnitRule, true)
 	memo := in.OptionalString("memo", memoRule, false)
 	rangeRules(in, rangeStart, rangeEnd, rangeUnit)
-	if err := issue(in); err != nil {
+	if err := in.Err(); err != nil {
 		return logInput{}, err
 	}
 	return logInput{
@@ -155,7 +147,7 @@ func decodePlans(attrs any) (time.Time, []planItem, error) {
 		items = append(items, decodePlanItem(item))
 		in.Take(item)
 	}
-	if err := issue(in); err != nil {
+	if err := in.Err(); err != nil {
 		return time.Time{}, nil, err
 	}
 	return dates.FromYMD(date), items, nil
@@ -180,7 +172,7 @@ func decodePlanPatch(attrs any) (planPatch, error) {
 	subject := in.OptionalString("subject", subjectRule, true)
 	done := in.OptionalBool("done")
 	rangeRules(in, rangeStart, rangeEnd, rangeUnit)
-	if err := issue(in); err != nil {
+	if err := in.Err(); err != nil {
 		return planPatch{}, err
 	}
 	patch := planPatch{
@@ -213,7 +205,7 @@ func decodeCompletion(attrs any) (completion, error) {
 	rangeUnit := in.OptionalString("rangeUnit", rangeUnitRule, true)
 	memo := in.OptionalString("memo", memoRule, false)
 	rangeRules(in, rangeStart, rangeEnd, rangeUnit)
-	if err := issue(in); err != nil {
+	if err := in.Err(); err != nil {
 		return completion{}, err
 	}
 	return completion{
