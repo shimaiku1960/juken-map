@@ -187,7 +187,7 @@ API に集約すれば直す場所は1つになる。加えて全リクエスト
   決まりがそのまま入っているので、2か所にあると片方だけ直される。利用停止は、実際にずれていた。
 - **読み取りには隠せる情報が無い。** 生 SQL は画面ごとに取る列が違うので、1か所に集めると
   「SQL 1本 = メソッド1個」になり、名前を付け替えるだけの層になる。同じ列を何度も読むものは、
-  列の並びを定数（`internal/feature/goals` の `goalColumns`、`internal/model/studyrecord` の `logColumns` など）にまとめてある。
+  列の並びを定数（`internal/model/goal` の `withFacultyColumns`、`internal/model/studyrecord` の `logColumns` など）にまとめてある。
 - **リポジトリ層の利点は、このプロジェクトには当てはまらない。** よく挙がる利点は
   「DB を差し替えられること」と「テストでモックしやすいこと」だが、MySQL から移る予定は無く、
   テストは本物のテスト用 MySQL で行っている。残る「データの扱いを1か所に集める」は、書き込みだけで足りる。
@@ -215,9 +215,10 @@ apps/api/
   │ ├ admin/  line/  notifications/  ops/  blog/  universities/
   │ └ sim/  chaos/  analytics/  cspreport/
   ├ model/                モデル：入力の決まり・読み取り・書き込みを持つ（下の「モデル・コントローラー・ビュー」）
-  │ └ studyrecord/        学習記録（実績・予定・初回記録の日時）
+  │ ├ studyrecord/        学習記録（実績・予定・初回記録の日時）
+  │ └ goal/               志望校
   ├ write/                書き込みの持ち主（操作とトランザクション）。model へ順に移す
-  │ ├ account/  authguard/  textbook/  goal/
+  │ ├ account/  authguard/  textbook/
   │ ├ university/  textbookmaster/  notification/  simulation/  chaos/   （一覧は下の「持ち主の一覧」）
   │ └ expired/            持ち主ではなく、持ち主たちが使う期限切れの行の消し方（下の「決まり」の5）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
@@ -266,7 +267,7 @@ apps/api/
 4. **トランザクションと条件の保証は、操作の中で完結させる。** 呼ぶ側が済ませた所有者の確認などを
    そのまま信用せず、必要な条件は操作の中で保証する（`WHERE id = ? AND userId = ?`）。
    書き込むための読み取り（自分の行かの確認など）も、書き込みの一部として持ち主に置く。
-5. **単純な更新にも持ち主を決める。** 志望校の更新が単純なら、`write/goal` は小さな具体型と関数だけでよい。
+5. **単純な更新にも持ち主を決める。** 志望校の更新が単純なら、`model/goal` は小さな具体型と関数だけでよい。
    例外を作らないのは、「INSERT・UPDATE・DELETE は `internal/write/`・`internal/model/` の下にしか無い」をテストで確かめられるように
    するためである。例外があると、テストが例外の一覧の管理になり、守られなくなる。
    アプリのデータではないものを書く `internal/migrate`（マイグレーションの記録）と `internal/dbtest`
@@ -283,8 +284,9 @@ apps/api/
 
 #### モデル・コントローラー・ビュー（2026-11-12 決定、JUK-219。学習記録から）
 
-Rails の MVC に合わせ、「入力チェックはモデルでやる」をそのまま守れる形にした。最初は学習記録だけで、
-ほかの機能は順に移す（移すまでは今までどおり `feature` が読み取りと入力チェック、`write` が書き込みを持つ）。
+Rails の MVC に合わせ、「入力チェックはモデルでやる」をそのまま守れる形にした。学習記録から始め、
+ほかの機能も持ち主ごとに移している（JUK-221。移した機能は学習記録・志望校）。移すまでは今までどおり
+`feature` が読み取りと入力チェック、`write` が書き込みを持つ。下の表は学習記録の例で、志望校は `feature/goals` と `model/goal`。
 
 | 層 | 置き場所 | 持つもの | 持たないもの |
 |---|---|---|---|
@@ -299,8 +301,10 @@ Rails の MVC に合わせ、「入力チェックはモデルでやる」をそ
   一覧の2つの入口だけが使い、どちらも同じ集約の形（実績＋参考書）を返すので、集約の持ち主にまとめた。
 - **画面の Zod は使いやすさのためだけに残す**（送る前に誤りを見せる）。正はモデルの決まりで、
   文言とコードは Zod と同じにしてある（Node の Zod に同じ本文を通した結果をテストの期待値にしている）。
-- 確かめるテストは `apps/api/internal/feature/study/controller_test.go`。コントローラーに SQL の文字列か
-  `internal/validation` の import があれば落ちる。科目・単位の値が契約（`apischema` の enum）と同じかも、両方を知るここで確かめる。
+- 確かめるテストは `apps/api/internal/feature/controller_test.go`。そこの `controllers` に並べた機能（移したもの）の
+  コントローラーに SQL の文字列か `internal/validation` の import があれば落ちる。モデルの選べる値（科目・単位・
+  志望校のステータス）が契約（`apischema` の enum）と同じかも、両方を知るここで確かめる。
+- モデルの入力の決まりのテストは `httpxtest` を使えない（決まり2）ので、`internal/validation/validationtest` を使う。
 
 #### 持ち主の一覧（2026-10-06、JUK-150）
 
@@ -313,7 +317,7 @@ Rails の MVC に合わせ、「入力チェックはモデルでやる」をそ
 | `authguard` | `AuthOAuthState`・`AuthThrottle`・`EmailSend` | ログインの途中の一時的な状態と、回数の制限。`account` の表と一緒に変える操作は無い |
 | `studyrecord`（`model/` に移した） | `StudyLog`・`StudyPlan`・`user.firstStudyLogAt` | 予定の完了（予定＋実績＋初回記録日時）、実績の記録（実績＋初回記録日時） |
 | `textbook` | `Textbook` | 学習記録と一緒に変える操作は無い（予定の完了は総量を読むだけ） |
-| `goal` | `FinalGoal` | 単独 |
+| `goal`（`model/` に移した） | `FinalGoal` | 単独 |
 | `university` | `University`・`Faculty`・`_FacultyToTag` | 学部の作成・変更（学部＋タグの付け替え） |
 | `textbookmaster` | `TextbookMaster`・`TextbookMasterMetric` | 参考書マスターの作成・変更（マスター＋測り方の付け替え）。大学と一緒に変える操作は無いので、`catalog` にはまとめない |
 | `notification` | `LineConnection`・`LineLinkNonce`・`LineOAuthAttempt`・`LineWebhookEvent`・`NotificationPreference`・`NotificationDelivery` | LINE の連携の解除（連携＋確認用の値＋通知の設定） |

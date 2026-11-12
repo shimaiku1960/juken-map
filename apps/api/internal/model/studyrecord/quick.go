@@ -27,7 +27,7 @@ var quickTextRule = validation.StringRule{
 func ReadQuickText(attrs any) (string, error) {
 	in := validation.ReadObject(attrs)
 	text := in.String("text", quickTextRule)
-	if err := issue(in); err != nil {
+	if err := in.Err(); err != nil {
 		return "", err
 	}
 	return text, nil

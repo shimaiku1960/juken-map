@@ -4,15 +4,16 @@ package goal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
 
-// 志望校の操作を、本物の MySQL で確かめる。画面の形（入力チェックの 400・応答の形）は internal/feature/goals のテストにある。
+// 志望校の操作を、本物の MySQL で確かめる。入力の決まりは input_test.go にある。
 func TestGoalDB(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)
@@ -22,14 +23,14 @@ func TestGoalDB(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
 		faculty := fx.University() // 片付けは逆順なので、学部は利用者（志望校ごと消える）より先に作る
 		user := fx.User()
-		id, err := Create(ctx, db, user, faculty, nil, now)
+		created, err := Create(ctx, db, user, facultyBody(faculty), now)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if g, err := find(ctx, db, id, user, ""); err != nil || g.Status != "decided" || g.FacultyID != faculty {
-			t.Errorf("登録した行: %+v, %v", g, err)
+		if created.Status != "decided" || created.FacultyID != faculty || created.Faculty.ID != faculty || created.Faculty.University.Name == "" {
+			t.Errorf("登録した行: %+v", created)
 		}
-		if _, err := Create(ctx, db, user, faculty, nil, now); !errors.Is(err, ErrDuplicate) {
+		if _, err := Create(ctx, db, user, facultyBody(faculty), now); !errors.Is(err, ErrDuplicate) {
 			t.Errorf("2回目: %v", err)
 		}
 	})
@@ -40,7 +41,7 @@ func TestGoalDB(t *testing.T) {
 		user := fx.User()
 		first, second := fx.FinalGoal(user, a), fx.FinalGoal(user, b)
 		for _, id := range []int64{first, second} {
-			if err := ApplyPatch(ctx, db, user, id, Patch{IsFirstChoice: opt.Of(true)}); err != nil {
+			if err := Update(ctx, db, user, id, map[string]any{"isFirstChoice": true}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -56,16 +57,16 @@ func TestGoalDB(t *testing.T) {
 		faculty, before := fx.University(), fx.University()
 		user, other := fx.User(), fx.User()
 		id := fx.FinalGoal(user, before)
-		if _, err := ReplaceFaculty(ctx, db, other, id, &faculty); !errors.Is(err, ErrNotFound) {
+		if _, err := Replace(ctx, db, other, id, facultyBody(faculty)); !errors.Is(err, ErrNotFound) {
 			t.Errorf("差し替え: %v", err)
 		}
-		if err := ApplyPatch(ctx, db, other, id, Patch{}); !errors.Is(err, ErrNotFound) {
+		if err := Update(ctx, db, other, id, map[string]any{}); !errors.Is(err, ErrNotFound) {
 			t.Errorf("メモ: %v", err)
 		}
 		if err := Delete(ctx, db, other, id); !errors.Is(err, ErrNotFound) {
 			t.Errorf("削除: %v", err)
 		}
-		replaced, err := ReplaceFaculty(ctx, db, user, id, &faculty)
+		replaced, err := Replace(ctx, db, user, id, facultyBody(faculty))
 		if err != nil || replaced.FacultyID != faculty {
 			t.Errorf("自分の差し替え: %+v, %v", replaced, err)
 		}
@@ -73,4 +74,9 @@ func TestGoalDB(t *testing.T) {
 			t.Errorf("自分の削除: %v", err)
 		}
 	})
+}
+
+// facultyBody は学部だけの本文（入口と同じく、数は json.Number）。
+func facultyBody(facultyID int64) map[string]any {
+	return map[string]any{"facultyId": json.Number(strconv.FormatInt(facultyID, 10))}
 }

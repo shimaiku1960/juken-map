@@ -393,6 +393,15 @@ var ISODateCheck = StringCheck{
 	Message: "Invalid ISO date",
 }
 
+// Err は入力の誤りを error で返す（誤りが無ければ nil）。モデルの操作はこれを返し、コントローラーが 400 にする。
+// in.Issue をそのまま返すと、誤りが無いときに型付きの nil が error に入り、nil と比べても等しくならない。
+func (in *ObjectInput) Err() error {
+	if in.Issue == nil {
+		return nil
+	}
+	return in.Issue
+}
+
 // AddIssue は項目の読み取りの後に、superRefine の ctx.addIssue にあたる issue を足す。
 // すでに issue があれば何もしない（最初の1件だけを返すので）。
 func (in *ObjectInput) AddIssue(code, field, message string) {

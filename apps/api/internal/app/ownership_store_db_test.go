@@ -10,13 +10,14 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/goal"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/studyrecord"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
 )
 
@@ -38,14 +39,14 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "志望校の学部の差し替え", table: "FinalGoal",
 			seed: func(fx dbFixture, holder string) int64 { return fx.FinalGoal(holder, facultyID) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = goal.ReplaceFaculty(ctx, db, caller, id, &otherFacultyID)
+				_, _ = goal.Replace(ctx, db, caller, id, map[string]any{"facultyId": json.Number(strconv.FormatInt(otherFacultyID, 10))})
 			},
 		},
 		{
 			name: "志望校のメモ", table: "FinalGoal",
 			seed: func(fx dbFixture, holder string) int64 { return fx.FinalGoal(holder, facultyID) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_ = goal.ApplyPatch(ctx, db, caller, id, goal.Patch{Note: opt.Of(note)})
+				_ = goal.Update(ctx, db, caller, id, map[string]any{"note": note})
 			},
 		},
 		{

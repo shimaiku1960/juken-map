@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/goal"
 )
 
 func TestGoalJSONTags(t *testing.T) {
@@ -16,8 +16,8 @@ func TestGoalJSONTags(t *testing.T) {
 		goal    any
 		wantKey bool
 	}{
-		{"一覧：タグの無い学部は tags: []", withTags(apischema.FirstChoiceGoal{}), true},
-		{"第一志望：tags のキーを出さない", apischema.FirstChoiceGoal{}, false},
+		{"一覧：タグの無い学部は tags: []", listView([]goal.Listed{{}})[0], true},
+		{"第一志望：tags のキーを出さない", firstChoiceView(goal.WithFaculty{}), false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			raw, err := json.Marshal(tt.goal)
