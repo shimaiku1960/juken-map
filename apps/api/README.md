@@ -270,7 +270,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/feature/study/` | 学習記録のコントローラーとビュー。学習記録・予定の一覧、ダッシュボード、実績の記録・書き換え・削除、予定の作成（まとめて）・書き換え・削除・完了の入口。HTTP だけを扱い、SQL と入力の決まりは `internal/model/studyrecord` にある（JUK-219） |
 | `internal/feature/goals/` | 志望校のコントローラーとビュー。一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除の入口。SQL と入力の決まりは `internal/model/goal` にある（JUK-222） |
 | `internal/feature/textbooks/` | 参考書のコントローラーとビュー。一覧と参考書マスター（応答はメモリに持つ）／参考書の追加（マスターからも）・逆算設定の書き換えの入口。SQL と入力の決まりは `internal/model/textbook` にある（JUK-223） |
-| `internal/feature/universities/` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 |
+| `internal/feature/universities/` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細のコントローラー。読み取りは `internal/model/university`、応答の形は `view.go`（JUK-224） |
 | `internal/feature/auth/profile.go` | プロフィールの更新 |
 | `internal/feature/notifications/notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存（保存は `internal/write/notification`） |
 
@@ -279,9 +279,9 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `internal/feature/admin/users.go` | 利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） |
-| `internal/feature/admin/masters.go` | マスター編集の共通部分（使われている行は消さない決まり、断ったときの返し方、変更の記録、大学・学部の store の定義） |
-| `internal/feature/admin/universities.go` | マスター編集の大学（入口・入力・一覧の SQL。書き込みは `internal/write/university` を呼び、変えたら大学一覧のキャッシュを捨てる） |
-| `internal/feature/admin/faculties.go` | マスター編集の学部とタグ（入口・入力・タグの一覧。書き込みは `internal/write/university`） |
+| `internal/feature/admin/masters.go` | マスター編集の共通部分（断ったときの文言と返し方、変更の記録、path の id の読み方） |
+| `internal/feature/admin/universities.go` | マスター編集の大学のコントローラー（`internal/model/university` を呼び、変えたら大学一覧のキャッシュを捨てる） |
+| `internal/feature/admin/faculties.go` | マスター編集の学部とタグのコントローラー（`internal/model/university` を呼ぶ） |
 | `internal/feature/admin/textbook_masters.go` | マスター編集の参考書の入口。読み書きと入力の決まりは `internal/model/textbookmaster` を呼び、変えたら参考書マスターの一覧のキャッシュを捨てる |
 | `internal/feature/admin/view.go` | マスター編集の応答の形（モデルの値を `apischema` の型に直す） |
 
@@ -347,7 +347,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/model/goal/` | 志望校のモデル。入力の決まり（Zod と同じ 400）、一覧（学部のタグつき）と第一志望の読み取り、登録・学部の差し替え・第一志望やメモの変更・削除。第一志望の付け替えを1つのトランザクションで行う（JUK-154・JUK-222） |
 | `internal/model/textbook/` | 参考書のモデル。入力の決まり（Zod と同じ 400。登録は名前かマスターの2択）、自分の参考書と参考書マスターの一覧の読み取り、名前・マスターからの登録と逆算設定の変更（JUK-154・JUK-223） |
 | `internal/model/textbookmaster/` | 参考書マスター（総量の候補を含む）のモデル。入力の決まり（Zod と同じ 400）、管理画面の一覧（q で絞る）、作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154・JUK-224） |
-| `internal/write/university/` | 大学・学部のマスター（学部のタグを含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。志望校に使われている行は消さない（JUK-154） |
+| `internal/model/university/` | 大学・学部（学部のタグを含む）のモデル。入力の決まり（Zod と同じ 400）、管理画面の一覧（q と page）・詳細・タグ、作成・書き換え・削除、大学を探す画面の一覧と大学詳細の読み取り。志望校に使われている行は消さない（JUK-154・JUK-224） |
 | `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |
 | `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
 | `internal/write/chaos/` | 障害注入の実験（`ChaosExperiment`）への書き込みの持ち主。始める・まとめて止める。実行中の実験は表全体で1つまでを、1つの SQL で守る（JUK-173） |

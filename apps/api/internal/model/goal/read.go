@@ -158,3 +158,21 @@ func findWithFaculty(ctx context.Context, db *sql.DB, id int64) (WithFaculty, er
 	fixDates(&g)
 	return g, nil
 }
+
+// FacultyIDs は利用者が志望校にしている学部の id（昇順）。大学詳細で「登録済み」を出し分けるのに使う。
+func FacultyIDs(ctx context.Context, db *sql.DB, userID string) ([]int64, error) {
+	rows, err := db.QueryContext(ctx, "SELECT facultyId FROM FinalGoal WHERE userId = ? ORDER BY facultyId ASC", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}

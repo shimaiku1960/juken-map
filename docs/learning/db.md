@@ -71,7 +71,7 @@
 
 ## 1-2 N+1（2026-10-12〜14）
 
-題材は「大学を探す」画面の一覧（`GET /api/universities`）。今の `listForExplore`（`universities.go:57`）は大学 → 学部 → タグを `LEFT JOIN` 1本で取る。これと、わざと N+1 で書いた版（大学の一覧を取ってから、大学ごとに学部、学部ごとにタグを取る）を同じ DB に流して比べた。道具は `apps/api/internal/feature/universities/nplus1_learn_test.go`（`//go:build learn` を付けたときだけ動き、CI では動かない）。
+題材は「大学を探す」画面の一覧（`GET /api/universities`）。今の `ListForExplore`（`apps/api/internal/model/university/explore.go`。実験したときは `feature/universities/universities.go` の `listForExplore`）は大学 → 学部 → タグを `LEFT JOIN` 1本で取る。これと、わざと N+1 で書いた版（大学の一覧を取ってから、大学ごとに学部、学部ごとにタグを取る）を同じ DB に流して比べた。道具は `apps/api/internal/model/university/nplus1_learn_test.go`（`//go:build learn` を付けたときだけ動き、CI では動かない）。
 
 ### 学んだこと
 
