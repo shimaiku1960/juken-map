@@ -1,11 +1,11 @@
 //go:build learn
 
-// 学習 1-2（JUK-183）の実験。今の listForExplore（JOIN 1本）と、わざと N+1 で書いた版を、
+// 学習 1-2（JUK-183）の実験。今の ListForExplore（JOIN 1本）と、わざと N+1 で書いた版を、
 // 同じ DB に流して SQL の本数と時間を比べる。`-tags learn` を付けたときだけ動き、CI では動かない。
 //
 //	LEARN_DATABASE_URL=mysql://juken:jukenpassword@localhost:3306/juken_map \
-//	  go test -tags learn -run TestLearnNPlus1 -v ./internal/feature/universities/
-package universities
+//	  go test -tags learn -run TestLearnNPlus1 -v ./internal/model/university/
+package university
 
 import (
 	"context"
@@ -21,17 +21,27 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
-// listForExploreNPlus1 は listForExplore と同じ結果を、大学ごと・学部ごとに SQL を流して作る。
+// store は実験の2つの読み方を並べるための入れ物。
+type store struct{ db *sql.DB }
+
+func newStore(db *sql.DB) store { return store{db: db} }
+
+// listForExplore は今の読み方（ListForExplore）。
+func (st store) listForExplore(ctx context.Context) ([]ExploreUniversity, error) {
+	return ListForExplore(ctx, st.db)
+}
+
+// listForExploreNPlus1 は ListForExplore と同じ結果を、大学ごと・学部ごとに SQL を流して作る。
 // 本数は 1（大学の一覧）＋ 大学の数（学部を取る）＋ 学部の数（タグを取る）になる。
-func (st *store) listForExploreNPlus1(ctx context.Context) ([]exploreUniversityDTO, error) {
+func (st store) listForExploreNPlus1(ctx context.Context) ([]ExploreUniversity, error) {
 	rows, err := st.db.QueryContext(ctx,
 		`SELECT id, name, prefecture, type FROM University ORDER BY name ASC, id ASC`)
 	if err != nil {
 		return nil, err
 	}
-	universities := make([]exploreUniversityDTO, 0)
+	universities := make([]ExploreUniversity, 0)
 	for rows.Next() {
-		var u exploreUniversityDTO
+		var u ExploreUniversity
 		if err := rows.Scan(&u.ID, &u.Name, &u.Prefecture, &u.Type); err != nil {
 			rows.Close()
 			return nil, err
@@ -49,13 +59,13 @@ func (st *store) listForExploreNPlus1(ctx context.Context) ([]exploreUniversityD
 		if err != nil {
 			return nil, err
 		}
-		universities[i].Faculties = make([]exploreFacultyDTO, 0, len(facultyIDs))
+		universities[i].Faculties = make([]ExploreFaculty, 0, len(facultyIDs))
 		for _, facultyID := range facultyIDs {
 			tags, err := queryTagNames(ctx, st.db, facultyID)
 			if err != nil {
 				return nil, err
 			}
-			universities[i].Faculties = append(universities[i].Faculties, exploreFacultyDTO{Tags: tags})
+			universities[i].Faculties = append(universities[i].Faculties, ExploreFaculty{TagNames: tags})
 		}
 	}
 	return universities, nil
@@ -78,7 +88,7 @@ func queryInt64s(ctx context.Context, db *sql.DB, query string, args ...any) ([]
 	return ids, rows.Err()
 }
 
-func queryTagNames(ctx context.Context, db *sql.DB, facultyID int64) ([]exploreTagDTO, error) {
+func queryTagNames(ctx context.Context, db *sql.DB, facultyID int64) ([]string, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT t.name FROM _FacultyToTag AS ft JOIN Tag AS t ON t.id = ft.B
 		 WHERE ft.A = ? ORDER BY t.id ASC`, facultyID)
@@ -86,10 +96,10 @@ func queryTagNames(ctx context.Context, db *sql.DB, facultyID int64) ([]exploreT
 		return nil, err
 	}
 	defer rows.Close()
-	tags := make([]exploreTagDTO, 0)
+	tags := make([]string, 0)
 	for rows.Next() {
-		var tag exploreTagDTO
-		if err := rows.Scan(&tag.Name); err != nil {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
 			return nil, err
 		}
 		tags = append(tags, tag)
@@ -145,7 +155,7 @@ func TestLearnNPlus1(t *testing.T) {
 	st := newStore(db)
 	ctx := context.Background()
 
-	run := func(name string, list func(context.Context) ([]exploreUniversityDTO, error)) []exploreUniversityDTO {
+	run := func(name string, list func(context.Context) ([]ExploreUniversity, error)) []ExploreUniversity {
 		before := questions(t, db)
 		start := time.Now()
 		got, err := list(ctx)
@@ -175,7 +185,7 @@ func BenchmarkLearnNPlus1(b *testing.B) {
 
 	for _, c := range []struct {
 		name string
-		list func(context.Context) ([]exploreUniversityDTO, error)
+		list func(context.Context) ([]ExploreUniversity, error)
 	}{
 		{"JOIN", st.listForExplore},
 		{"N+1", st.listForExploreNPlus1},
@@ -255,7 +265,7 @@ func BenchmarkLearnNPlus1Scale(b *testing.B) {
 
 		for _, c := range []struct {
 			name string
-			list func(context.Context) ([]exploreUniversityDTO, error)
+			list func(context.Context) ([]ExploreUniversity, error)
 		}{
 			{"JOIN", st.listForExplore},
 			{"N+1", st.listForExploreNPlus1},
@@ -300,7 +310,7 @@ func BenchmarkLearnNPlus1Latency(b *testing.B) {
 
 		for _, c := range []struct {
 			name string
-			list func(context.Context) ([]exploreUniversityDTO, error)
+			list func(context.Context) ([]ExploreUniversity, error)
 		}{
 			{"JOIN", st.listForExplore},
 			{"N+1", st.listForExploreNPlus1},

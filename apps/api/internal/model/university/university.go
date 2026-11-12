@@ -1,13 +1,14 @@
-// Package university は大学・学部のマスター（University・Faculty と、学部のタグ _FacultyToTag）への書き込みの持ち主。
-// 管理画面のマスター編集（JUK-78）の作成・書き換え・削除を操作として出す。持ち主の一覧と決まりは
-// docs/architecture.md「バックエンドの構成」（JUK-148・JUK-150）。
+// Package university は大学・学部のマスター（University・Faculty と、学部のタグ _FacultyToTag）のモデル（JUK-221）。
+// 入力の決まり（Zod と同じ 400）、管理画面の一覧・詳細とタグの読み取り、大学を探す画面と大学詳細の読み取り、
+// 管理画面のマスター編集（JUK-78）の作成・書き換え・削除を持つ。HTTP は知らない（応答の形と文言はコントローラー）。
+// 表の持ち主の一覧と決まりは docs/architecture.md「バックエンドの構成」（JUK-148・JUK-150）。
 //
 // 削除は「誰にも使われていない行」に限る。学部は志望校（FinalGoal）が参照していれば消せず（DB も ON DELETE RESTRICT で拒む）、
 // 大学は学部が CASCADE で一緒に消えるので、配下の学部がどれか志望校に使われていれば止める。事前に数えて断り、
 // 数えたあとに志望校が増えた場合も、DB の外部キーが拒んだエラーを同じ InUseError に読み替える。
 //
-// 入力の形の確かめ（Zod と同じ 400）は入口が行い、ここには確かめ済みの値が来る。大学を探す画面のキャッシュを捨てるのも、
-// 変更をログに残すのも入口（操作が成功して確定したあと）。
+// 作成・書き換えは本文（JSON を読んだ値）を受け取り、形が違えば *validation.Issue を返す。大学を探す画面のキャッシュを
+// 捨てるのも、変更をログに残すのもコントローラー（操作が成功して確定したあと）。
 package university
 
 import (
@@ -20,7 +21,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
-// 操作が断る理由。入口が利用者向けの文言（404・409・400）に直す。
+// 操作が断る理由。コントローラーが利用者向けの文言（404・409・400）に直す。
 var (
 	// ErrNotFound は、大学・学部（学部の作成では大学）が無いこと。
 	ErrNotFound = errors.New("university: not found")
@@ -35,7 +36,7 @@ type InUseError struct{ Count int }
 
 func (e *InUseError) Error() string { return fmt.Sprintf("university: used by %d goals", e.Count) }
 
-// University は管理画面の大学の行。項目の名前・型・並びを apischema の AdminUniversity とそろえ、入口が型の変換だけで返せるようにしている。
+// University は管理画面の大学の行。
 type University struct {
 	FacultyCount int
 	// GoalCount は配下の学部を志望校にしている件数。
@@ -46,7 +47,7 @@ type University struct {
 	Type       string
 }
 
-// Faculty は学部の行（タグは id だけ）。監査ログと応答に使う。項目の並びは apischema の AdminFacultySnapshot とそろえている。
+// Faculty は学部の行（タグは id だけ）。監査ログと応答に使う。
 type Faculty struct {
 	// ExamDate は YYYY-MM-DD。
 	ExamDate     string
@@ -56,32 +57,23 @@ type Faculty struct {
 	UniversityID int64
 }
 
-// Change は書き換えの前と後。入口は監査ログに両方を残し、応答は後を返す。
+// Change は書き換えの前と後。コントローラーは監査ログに両方を残し、応答は後を返す。
 type Change[T any] struct {
 	Before, After T
-}
-
-// UniversityInput は大学の作成・書き換えの値。
-type UniversityInput struct {
-	Name, Prefecture, Type string
-}
-
-// FacultyInput は学部の作成・書き換えの値。ExamDate はその日の 00:00 UTC。UniversityID は作成のときだけ使う（書き換えでは大学を移せない）。
-type FacultyInput struct {
-	Name         string
-	ExamDate     time.Time
-	TagIDs       []int64
-	UniversityID int64
 }
 
 const universityColumns = `u.id, u.name, u.prefecture, u.type,
   (SELECT COUNT(*) FROM Faculty f WHERE f.universityId = u.id) AS facultyCount,
   (SELECT COUNT(*) FROM FinalGoal g JOIN Faculty f ON f.id = g.facultyId WHERE f.universityId = u.id) AS goalCount`
 
-// CreateUniversity は大学を作る。同じ名前の大学があれば ErrDuplicate。
-func CreateUniversity(ctx context.Context, db *sql.DB, in UniversityInput, now time.Time) (University, error) {
+// CreateUniversity は大学を作る。本文の形が違えば *validation.Issue、同じ名前の大学があれば ErrDuplicate。
+func CreateUniversity(ctx context.Context, db *sql.DB, body any, now time.Time) (University, error) {
+	in, err := decodeUniversity(body)
+	if err != nil {
+		return University{}, err
+	}
 	res, err := db.ExecContext(ctx,
-		"INSERT INTO University (name, prefecture, type, createdAt) VALUES (?, ?, ?, ?)", in.Name, in.Prefecture, in.Type, now)
+		"INSERT INTO University (name, prefecture, type, createdAt) VALUES (?, ?, ?, ?)", in.name, in.prefecture, in.typ, now)
 	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return University{}, ErrDuplicate
 	}
@@ -96,14 +88,18 @@ func CreateUniversity(ctx context.Context, db *sql.DB, in UniversityInput, now t
 }
 
 // UpdateUniversity は大学の名前・都道府県・種類を書き換え、前と後を返す。無ければ ErrNotFound、名前が重なれば ErrDuplicate。
-func UpdateUniversity(ctx context.Context, db *sql.DB, id int64, in UniversityInput) (Change[University], error) {
+func UpdateUniversity(ctx context.Context, db *sql.DB, id int64, body any) (Change[University], error) {
+	in, err := decodeUniversity(body)
+	if err != nil {
+		return Change[University]{}, err
+	}
 	var change Change[University]
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		var err error
 		if change.Before, err = findUniversity(ctx, tx, id, " FOR UPDATE"); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, "UPDATE University SET name = ?, prefecture = ?, type = ? WHERE id = ?", in.Name, in.Prefecture, in.Type, id)
+		_, err = tx.ExecContext(ctx, "UPDATE University SET name = ?, prefecture = ?, type = ? WHERE id = ?", in.name, in.prefecture, in.typ, id)
 		if database.IsMySQLError(err, database.DuplicateEntry) {
 			return ErrDuplicate
 		}
@@ -147,20 +143,24 @@ func findUniversity(ctx context.Context, q database.QueryRower, id int64, suffix
 	return u, err
 }
 
-// CreateFaculty は学部をタグつきで作る。大学が無ければ ErrNotFound、同じ大学に同じ名前があれば ErrDuplicate、
+// CreateFaculty は学部をタグつきで作る。本文の形が違えば *validation.Issue、大学が無ければ ErrNotFound、同じ大学に同じ名前があれば ErrDuplicate、
 // 無いタグがあれば ErrInvalidTags。
-func CreateFaculty(ctx context.Context, db *sql.DB, in FacultyInput, now time.Time) (Faculty, error) {
+func CreateFaculty(ctx context.Context, db *sql.DB, body any, now time.Time) (Faculty, error) {
+	in, err := decodeFaculty(body, true)
+	if err != nil {
+		return Faculty{}, err
+	}
 	var created Faculty
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		// 大学を押さえてから学部を足す（確かめている間に大学が消されないように）。
-		if _, err := findUniversity(ctx, tx, in.UniversityID, " FOR UPDATE"); err != nil {
+		if _, err := findUniversity(ctx, tx, in.universityID, " FOR UPDATE"); err != nil {
 			return err
 		}
-		if err := checkFaculty(ctx, tx, in.UniversityID, in, 0); err != nil {
+		if err := checkFaculty(ctx, tx, in.universityID, in, 0); err != nil {
 			return err
 		}
 		res, err := tx.ExecContext(ctx, "INSERT INTO Faculty (name, examDate, universityId, createdAt) VALUES (?, ?, ?, ?)",
-			in.Name, in.ExamDate, in.UniversityID, now)
+			in.name, in.examDate, in.universityID, now)
 		if err != nil {
 			return err
 		}
@@ -168,7 +168,7 @@ func CreateFaculty(ctx context.Context, db *sql.DB, in FacultyInput, now time.Ti
 		if err != nil {
 			return err
 		}
-		if err := replaceTags(ctx, tx, id, in.TagIDs); err != nil {
+		if err := replaceTags(ctx, tx, id, in.tagIDs); err != nil {
 			return err
 		}
 		created, err = findFaculty(ctx, tx, id, "")
@@ -178,9 +178,13 @@ func CreateFaculty(ctx context.Context, db *sql.DB, in FacultyInput, now time.Ti
 }
 
 // UpdateFaculty は学部の名前・受験日・タグを書き換え、前と後を返す。断る理由は CreateFaculty と同じ。
-func UpdateFaculty(ctx context.Context, db *sql.DB, id int64, in FacultyInput) (Change[Faculty], error) {
+func UpdateFaculty(ctx context.Context, db *sql.DB, id int64, body any) (Change[Faculty], error) {
+	in, err := decodeFaculty(body, false)
+	if err != nil {
+		return Change[Faculty]{}, err
+	}
 	var change Change[Faculty]
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		var err error
 		if change.Before, err = findFaculty(ctx, tx, id, " FOR UPDATE"); err != nil {
 			return err
@@ -188,10 +192,10 @@ func UpdateFaculty(ctx context.Context, db *sql.DB, id int64, in FacultyInput) (
 		if err := checkFaculty(ctx, tx, change.Before.UniversityID, in, id); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "UPDATE Faculty SET name = ?, examDate = ? WHERE id = ?", in.Name, in.ExamDate, id); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE Faculty SET name = ?, examDate = ? WHERE id = ?", in.name, in.examDate, id); err != nil {
 			return err
 		}
-		if err := replaceTags(ctx, tx, id, in.TagIDs); err != nil {
+		if err := replaceTags(ctx, tx, id, in.tagIDs); err != nil {
 			return err
 		}
 		change.After, err = findFaculty(ctx, tx, id, "")
@@ -256,29 +260,29 @@ func findFaculty(ctx context.Context, q database.Runner, id int64, suffix string
 
 // checkFaculty は学部の作成・書き換えで、名前の重なり（exceptID の学部を除く）とタグの存在を確かめる。
 // Faculty には (universityId, name) の一意制約が無い（seed が名前で照合している）ので、ここで重複を断る。
-func checkFaculty(ctx context.Context, tx *sql.Tx, universityID int64, in FacultyInput, exceptID int64) error {
+func checkFaculty(ctx context.Context, tx *sql.Tx, universityID int64, in facultyInput, exceptID int64) error {
 	var id int64
 	err := tx.QueryRowContext(ctx, "SELECT id FROM Faculty WHERE universityId = ? AND name = ? AND id <> ? LIMIT 1",
-		universityID, in.Name, exceptID).Scan(&id)
+		universityID, in.name, exceptID).Scan(&id)
 	switch {
 	case err == nil:
 		return ErrDuplicate
 	case !errors.Is(err, sql.ErrNoRows):
 		return err
 	}
-	if len(in.TagIDs) == 0 {
+	if len(in.tagIDs) == 0 {
 		return nil
 	}
-	args := make([]any, len(in.TagIDs))
-	for i, id := range in.TagIDs {
+	args := make([]any, len(in.tagIDs))
+	for i, id := range in.tagIDs {
 		args[i] = id
 	}
 	var count int
 	// #nosec G202 -- 埋め込むのは件数ぶん並べた ? だけ。値は args で渡す
-	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM Tag WHERE id IN ("+database.Placeholders(len(in.TagIDs), "?")+")", args...).Scan(&count); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM Tag WHERE id IN ("+database.Placeholders(len(in.tagIDs), "?")+")", args...).Scan(&count); err != nil {
 		return err
 	}
-	if count != len(in.TagIDs) {
+	if count != len(in.tagIDs) {
 		return ErrInvalidTags
 	}
 	return nil

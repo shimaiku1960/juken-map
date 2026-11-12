@@ -15,11 +15,12 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/studyrecord"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/textbook"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/textbookmaster"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/university"
 )
 
 // controllers は、モデルに移した機能のコントローラー（internal/feature の下のパッケージ）。
 // 機能をモデルに移したら、ここに足す（docs/architecture.md「モデル・コントローラー・ビュー」、JUK-219・JUK-221）。
-var controllers = []string{"goals", "study", "textbooks"}
+var controllers = []string{"goals", "study", "textbooks", "universities"}
 
 // TestControllerHasNoSQLOrRules は、コントローラーが SQL も入力の決まりも持たないことを確かめる。
 // 読み書きと入力の決まりはモデル（internal/model の下）が持つ。
@@ -87,6 +88,7 @@ func TestEnumsMatchContract(t *testing.T) {
 		"TextbookNameInputRangeUnit":     textbook.RangeUnits,
 		"TextbookProgressInputRangeUnit": textbook.RangeUnits,
 		"TextbookMasterInputMetricsUnit": textbookmaster.Units,
+		"UniversityInputType":            university.Types,
 	} {
 		got := slices.Sorted(slices.Values(consts[typ]))
 		if !slices.Equal(got, slices.Sorted(slices.Values(want))) {

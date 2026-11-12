@@ -9,67 +9,27 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/university"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
-// 管理者ページのマスター編集（/admin/masters、JUK-78）。どれも rt.Admin（管理者＋2段階認証を通したセッションだけ）で登録する。
+// 管理者ページのマスター編集（/admin/masters、JUK-78）のコントローラー。どれも rt.Admin（管理者＋2段階認証を通したセッションだけ）で登録する。
 //
-// 削除は「誰にも使われていない行」に限る。
-//   - 学部：志望校（FinalGoal）が参照していれば消せない（DB も ON DELETE RESTRICT で拒む）
-//   - 大学：学部は CASCADE で一緒に消えるので、配下の学部がどれか志望校に使われていれば止める
-//   - 参考書：利用者の参考書（Textbook.masterId）は SET NULL で黙って紐づきが外れるので、1冊でもあれば止める
+// 入力の決まり・読み書き・「使われている行は消さない」決まりはモデル（internal/model/university・internal/model/textbookmaster）にあり（JUK-224）、
+// ここは HTTP と、モデルが断った理由を status と文言に直すことだけを持つ。応答の形は view.go。
 //
-// 事前に数えて断るのが基本で、数えたあとに志望校が増えた場合も、DB の外部キーが拒んだエラーを
-// 同じ「使われている」に読み替える（二重の守り）。
-//
-// 参考書マスターはモデル（internal/model/textbookmaster）を直接呼ぶ（JUK-224）。大学・学部の書き込みは
-// 持ち主の internal/write/university にあり（JUK-154）、store はその操作を呼んで結果を masterOutcome に直す。
-//
-// 大学・学部を変えたら、大学を探す画面の一覧のキャッシュ（internal/feature/universities）を捨てる。成功したときだけ。
+// 大学・学部を変えたら、大学を探す画面の一覧のキャッシュ（internal/feature/universities）を、
+// 参考書マスターを変えたら GET /api/textbook-masters のキャッシュを捨てる。どちらも成功して確定したあとだけ
+// （トランザクションの中で捨てると、確定前に別のリクエストが古い一覧を読み直して置き直せる）。
 // 変更はすべて構造化ログ「admin master change」に「誰が・何を・前→後」で残す（Grafana の Loki で追える）。
 //
-// ファイルは対象ごとに分け、それぞれに入口・入力・DB をまとめる（JUK-135）。
+// ファイルは対象ごとに分ける（JUK-135）。
 //   - universities.go：大学（/api/admin/universities）
 //   - faculties.go：学部とタグ（/api/admin/faculties・/api/admin/tags）
 //   - textbook_masters.go：参考書マスター（/api/admin/textbook-masters）
 //
-// このファイルには、3つが共通で使うもの（上限・断ったときの返し方・変更の記録・store の定義・入力と DB の部品）を置く。
-
-const (
-	adminUniversitiesPageSize = 50
-	// adminUniversitiesMaxPage は一覧の page の上限。
-	adminUniversitiesMaxPage = 1_000
-	// adminMasterQueryMax は一覧の検索語（q）の上限。前後の空白を削ってから数える。
-	adminMasterQueryMax = 100
-	adminFacultyTagsMax = 20
-)
-
-// masterFailure は、行を書き換えずに断った理由。
-type masterFailure int
-
-const (
-	masterOK masterFailure = iota
-	masterNotFound
-	masterDuplicate
-	masterInUse
-	masterInvalidTags
-)
-
-// masterOutcome は書き込みの結果。failure が masterOK なら value に結果が入る。
-// count は masterInUse のときの「使われている件数」（文言に入れる）。
-type masterOutcome[T any] struct {
-	failure masterFailure
-	value   T
-	count   int
-}
-
-// masterChange は書き換えの前と後。監査ログに両方を残し、応答は後を返す。
-type masterChange[T any] struct {
-	before, after T
-}
+// このファイルには、3つが共通で使うもの（断ったときの文言・変更の記録・path の id の読み方）を置く。
 
 // masterMessages は断ったときの文言。inUse は件数を %d で入れる。
 type masterMessages struct {
@@ -94,21 +54,18 @@ var (
 	}
 )
 
-// rejectMasterFailure は断った結果なら status と文言を送って true を返す。
-func rejectMasterFailure(w http.ResponseWriter, m masterMessages, failure masterFailure, count int) bool {
-	switch failure {
-	case masterOK:
-		return false
-	case masterNotFound:
-		httpx.WriteError(w, http.StatusNotFound, m.notFound)
-	case masterDuplicate:
-		httpx.WriteError(w, http.StatusConflict, m.duplicate)
-	case masterInUse:
-		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf(m.inUse, count))
-	case masterInvalidTags:
-		httpx.WriteError(w, http.StatusBadRequest, "存在しないタグが含まれています")
-	}
-	return true
+type MasterHandlers struct {
+	db *sql.DB
+	// universitiesChanged は大学・学部を変えて確定したあとに呼ぶ（大学を探す画面のキャッシュを捨てる）。
+	universitiesChanged func()
+	// textbookMastersChanged は参考書マスターを変えて確定したあとに呼ぶ（GET /api/textbook-masters のキャッシュを捨てる）。
+	textbookMastersChanged func()
+}
+
+// NewMasterHandlers の universitiesChanged・textbookMastersChanged は、変更を確定したあとに
+// ほかの入口のキャッシュを捨てるために呼ぶ。
+func NewMasterHandlers(db *sql.DB, universitiesChanged, textbookMastersChanged func()) *MasterHandlers {
+	return &MasterHandlers{db: db, universitiesChanged: universitiesChanged, textbookMastersChanged: textbookMastersChanged}
 }
 
 // logMasterChange は、誰が・何を・前→後に変えたかを残す（info）。
@@ -117,41 +74,6 @@ func logMasterChange(ctx context.Context, adminID, action, table string, id int6
 	attrs := append([]any{"adminId", adminID, "action", action, "table", table, "id", id}, detail...)
 	slog.InfoContext(ctx, "admin master change", attrs...)
 }
-
-// adminMasterStore は DB の読み書き。テストでは偽物を渡す（Go の CI には DB が無い）。
-// 書き込みは、断ったときは failure を、想定外の失敗は error を返す。
-type adminMasterStore interface {
-	listUniversities(ctx context.Context, q string, page int) (apischema.AdminUniversityList, error)
-	// UniversityDetail は大学と学部。大学が無ければ nil。
-	universityDetail(ctx context.Context, id int64) (*apischema.AdminUniversityDetail, error)
-	listTags(ctx context.Context) ([]apischema.AdminTag, error)
-	createUniversity(ctx context.Context, in universityInput) (masterOutcome[apischema.AdminUniversity], error)
-	updateUniversity(ctx context.Context, id int64, in universityInput) (masterOutcome[masterChange[apischema.AdminUniversity]], error)
-	deleteUniversity(ctx context.Context, id int64) (masterOutcome[apischema.AdminUniversity], error)
-	createFaculty(ctx context.Context, in facultyInput) (masterOutcome[apischema.AdminFacultySnapshot], error)
-	updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[apischema.AdminFacultySnapshot]], error)
-	deleteFaculty(ctx context.Context, id int64) (masterOutcome[apischema.AdminFacultySnapshot], error)
-}
-
-type MasterHandlers struct {
-	store adminMasterStore
-	db    *sql.DB
-	// textbookMastersChanged は参考書マスターを変えて確定したあとに呼ぶ（GET /api/textbook-masters のキャッシュを捨てる）。
-	textbookMastersChanged func()
-}
-
-// NewMasterHandlers の universitiesChanged・textbookMastersChanged は、変更を確定したあとに
-// ほかの入口のキャッシュを捨てるために呼ぶ（sqlAdminMasterStore の同名のフィールド）。
-func NewMasterHandlers(db *sql.DB, universitiesChanged, textbookMastersChanged func()) *MasterHandlers {
-	return &MasterHandlers{
-		store:                  &sqlAdminMasterStore{db: db, universitiesChanged: universitiesChanged},
-		db:                     db,
-		textbookMastersChanged: textbookMastersChanged,
-	}
-}
-
-// ---- 入力 ----
-// 規則の正は src/shared/validations/master.ts の Zod のスキーマ（internal/httpx/validate.go の冒頭を参照）。
 
 // masterID は path の {id} を読む。判定は httpx.PathID と同じだが、マスター編集の契約（openapi.yaml）では
 // 断ったときの本文が ValidationError の形になっている。
@@ -166,40 +88,24 @@ func masterID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return id, true
 }
 
-// masterNameRule は名前の規則：z.string().trim().min(1).max(100)。
-func masterNameRule(label string) validation.StringRule {
-	return validation.StringRule{
-		TrimFirst: true,
-		Min:       1, MinMessage: label + "を入力してください",
-		Max: 100, MaxMessage: label + "は100文字以内で入力してください",
-	}
-}
-
-// ---- ここから下は本物の DB ----
-
-type sqlAdminMasterStore struct {
-	db *sql.DB
-	// universitiesChanged は大学・学部を変えて確定したあとに呼ぶ（大学を探す画面のキャッシュを捨てる）。
-	universitiesChanged func()
-}
-
-// masterOutcomeOf は持ち主（internal/write/university）の操作の結果を masterOutcome にする。
-// 断った理由は failure に、想定外の失敗は error にする。成功したら（確定したあとに）changed でキャッシュを捨てる。
-// トランザクションの中で捨てると、確定前に別のリクエストが古い一覧を読み直して置き直せる。
-func masterOutcomeOf[T any](v T, err error, changed func()) (masterOutcome[T], error) {
-	var universityInUse *university.InUseError
+// writeUniversityError は、大学・学部のモデルが断った理由を status と文言（m）にして送り、送ったら true を返す。
+// 想定外の失敗は 500。err が nil なら何もしない。
+func writeUniversityError(w http.ResponseWriter, r *http.Request, m masterMessages, op string, err error) bool {
+	var inUse *university.InUseError
 	switch {
 	case err == nil:
-		changed()
-		return masterOutcome[T]{value: v}, nil
+		return false
+	case httpx.RejectIssue(w, err):
 	case errors.Is(err, university.ErrNotFound):
-		return masterOutcome[T]{failure: masterNotFound}, nil
+		httpx.WriteError(w, http.StatusNotFound, m.notFound)
 	case errors.Is(err, university.ErrDuplicate):
-		return masterOutcome[T]{failure: masterDuplicate}, nil
+		httpx.WriteError(w, http.StatusConflict, m.duplicate)
 	case errors.Is(err, university.ErrInvalidTags):
-		return masterOutcome[T]{failure: masterInvalidTags}, nil
-	case errors.As(err, &universityInUse):
-		return masterOutcome[T]{failure: masterInUse, count: universityInUse.Count}, nil
+		httpx.WriteError(w, http.StatusBadRequest, "存在しないタグが含まれています")
+	case errors.As(err, &inUse):
+		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf(m.inUse, inUse.Count))
+	default:
+		httpx.InternalError(w, r, fmt.Errorf("%s: %w", op, err))
 	}
-	return masterOutcome[T]{}, err
+	return true
 }
