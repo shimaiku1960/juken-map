@@ -16,10 +16,11 @@ import (
 const apiRoot = "../.."
 
 // 書き込みの SQL を置いてよいディレクトリ（apps/api からの相対）。docs/architecture.md「バックエンドの構成」の決まり5。
-// internal/write の外で例外にするのは、最初に決めた2つだけ（マイグレーションの記録とテストデータ）。
+// 持ち主の置き場（internal/write と internal/model）の外で例外にするのは、最初に決めた2つだけ（マイグレーションの記録とテストデータ）。
 // ここに足したくなったら、足す前に決まりそのものを見直す。
 var writeAllowed = []string{
 	"internal/write/",
+	"internal/model/",   // 入力の決まり・読み取りまで持つ持ち主（write から順に移す。JUK-219）
 	"internal/migrate/", // _prisma_migrations への記録
 	"internal/dbtest/",  // テストデータ
 }
@@ -74,7 +75,7 @@ func TestWriteSQLOnlyUnderWrite(t *testing.T) {
 				inside++
 				return true
 			}
-			t.Errorf("%s: 書き込みの SQL が internal/write の外にある。表の持ち主（internal/write/<持ち主>）の操作にする: %.80q",
+			t.Errorf("%s: 書き込みの SQL が持ち主（internal/write・internal/model）の外にある。表の持ち主の操作にする: %.80q",
 				fset.Position(lit.Pos()), s)
 			return true
 		})
@@ -85,7 +86,7 @@ func TestWriteSQLOnlyUnderWrite(t *testing.T) {
 	}
 	// 探し方が壊れて何も見つけずに通る、ということが無いように。
 	if inside < 50 {
-		t.Fatalf("internal/write の下で見つけた書き込みの SQL が %d 件しかない。探し方を見直す", inside)
+		t.Fatalf("internal/write と internal/model の下で見つけた書き込みの SQL が %d 件しかない。探し方を見直す", inside)
 	}
 }
 

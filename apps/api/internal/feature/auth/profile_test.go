@@ -7,6 +7,7 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 )
 
 func TestNicknameRule(t *testing.T) {
@@ -52,10 +53,10 @@ func TestNicknameRule(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			in := httpx.ReadObject(tt.body)
+			in := validation.ReadObject(tt.body)
 			got := in.String("nickname", nicknameRule)
 			res := httptest.NewRecorder()
-			rejected := in.Reject(res)
+			rejected := httpx.Reject(res, in)
 
 			if tt.issue != "" {
 				if !rejected {

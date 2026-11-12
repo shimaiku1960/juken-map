@@ -10,6 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
@@ -35,7 +36,7 @@ func (h *MasterHandlers) CreateFaculty(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	input, in := readFacultyInput(body.Value(), true)
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	outcome, err := h.store.createFaculty(r.Context(), input)
@@ -61,7 +62,7 @@ func (h *MasterHandlers) UpdateFaculty(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	input, in := readFacultyInput(body.Value(), false)
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	outcome, err := h.store.updateFaculty(r.Context(), id, input)
@@ -114,17 +115,17 @@ func (in facultyInput) record() university.FacultyInput {
 
 // readFacultyInput は facultyInputSchema（withUniversity なら createFacultySchema）。
 // createFacultySchema は facultyInputSchema を extend したものなので、universityId は最後に確かめる。
-func readFacultyInput(body any, withUniversity bool) (facultyInput, *httpx.ObjectInput) {
-	in := httpx.ReadObject(body)
+func readFacultyInput(body any, withUniversity bool) (facultyInput, *validation.ObjectInput) {
+	in := validation.ReadObject(body)
 	var v facultyInput
 	v.name = in.String("name", masterNameRule("学部名"))
-	examDate := in.String("examDate", httpx.StringRule{Checks: []httpx.StringCheck{
-		{OK: httpx.YMDPattern.MatchString, Code: "invalid_format", Message: "受験日を選んでください"},
+	examDate := in.String("examDate", validation.StringRule{Checks: []validation.StringCheck{
+		{OK: validation.YMDPattern.MatchString, Code: "invalid_format", Message: "受験日を選んでください"},
 		{OK: func(s string) bool { _, ok := examDateOf(s); return ok }, Code: "invalid_exam_date", Message: "受験日を選んでください"},
 	}})
 	v.tagIDs = readTagIDs(in, "tagIds")
 	if withUniversity {
-		v.universityID = int64(in.Number("universityId", httpx.NumberRule{Int: true, Positive: true}))
+		v.universityID = int64(in.Number("universityId", validation.NumberRule{Int: true, Positive: true}))
 	}
 	if in.Issue == nil {
 		v.examDate, _ = examDateOf(examDate)
@@ -133,7 +134,7 @@ func readFacultyInput(body any, withUniversity bool) (facultyInput, *httpx.Objec
 }
 
 // examDateOf は受験日（YYYY-MM-DD）を、その日の UTC の0時にする。月が 01〜12・日が 01〜31 なら受け付け、
-// その月に無い日は time.Date が繰り上げる（2027-02-30 は 3月2日。JavaScript の new Date も同じ）。形（httpx.YMDPattern）は呼ぶ前に確かめておくこと。
+// その月に無い日は time.Date が繰り上げる（2027-02-30 は 3月2日。JavaScript の new Date も同じ）。形（validation.YMDPattern）は呼ぶ前に確かめておくこと。
 func examDateOf(s string) (time.Time, bool) {
 	year, _ := strconv.Atoi(s[0:4])
 	month, _ := strconv.Atoi(s[5:7])
@@ -146,14 +147,14 @@ func examDateOf(s string) (time.Time, bool) {
 
 // readTagIDs は z.array(z.number().int().positive()).max(20, …).refine(重ならない)。
 // Zod は要素 → max → refine の順に確かめる（要素が不正なら、21個でも要素の issue が先）。
-func readTagIDs(in *httpx.ObjectInput, key string) []int64 {
+func readTagIDs(in *validation.ObjectInput, key string) []int64 {
 	items := in.Array(key, "")
 	if in.Issue != nil {
 		return nil
 	}
 	ids := make([]int64, 0, len(items))
 	for i, item := range items {
-		f, issue := httpx.CheckNumber(in.Field(key)+"."+strconv.Itoa(i), item, httpx.NumberRule{Int: true, Positive: true})
+		f, issue := validation.CheckNumber(in.Field(key)+"."+strconv.Itoa(i), item, validation.NumberRule{Int: true, Positive: true})
 		if issue != nil {
 			in.Issue = issue
 			return nil

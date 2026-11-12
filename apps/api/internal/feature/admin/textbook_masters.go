@@ -12,6 +12,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbookmaster"
 )
 
@@ -24,7 +25,7 @@ import (
 func (h *MasterHandlers) ListTextbookMasters(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	q, issue := readMasterSearchQuery(httpx.ParseQuery(r.URL.RawQuery))
 	if issue != nil {
-		issue.Write(w)
+		httpx.WriteValidationIssue(w, issue)
 		return
 	}
 	masters, err := h.store.listTextbookMasters(r.Context(), q)
@@ -42,7 +43,7 @@ func (h *MasterHandlers) CreateTextbookMaster(w http.ResponseWriter, r *http.Req
 		return
 	}
 	input, in := readTextbookMasterInput(body.Value())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	outcome, err := h.store.createTextbookMaster(r.Context(), input)
@@ -68,7 +69,7 @@ func (h *MasterHandlers) UpdateTextbookMaster(w http.ResponseWriter, r *http.Req
 		return
 	}
 	input, in := readTextbookMasterInput(body.Value())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	outcome, err := h.store.updateTextbookMaster(r.Context(), id, input)
@@ -123,10 +124,10 @@ func (in textbookMasterInput) record() textbookmaster.Input {
 }
 
 // readTextbookMasterInput は textbookMasterInputSchema。
-func readTextbookMasterInput(body any) (textbookMasterInput, *httpx.ObjectInput) {
-	in := httpx.ReadObject(body)
+func readTextbookMasterInput(body any) (textbookMasterInput, *validation.ObjectInput) {
+	in := validation.ReadObject(body)
 	var v textbookMasterInput
-	v.name = in.String("name", httpx.StringRule{
+	v.name = in.String("name", validation.StringRule{
 		TrimFirst: true,
 		Min:       1, MinMessage: "参考書名を入力してください",
 		Max: 150, MaxMessage: "参考書名は150文字以内で入力してください",
@@ -134,7 +135,7 @@ func readTextbookMasterInput(body any) (textbookMasterInput, *httpx.ObjectInput)
 	v.publisher = readOptionalText(in, "publisher", 100)
 	v.edition = readOptionalText(in, "edition", 50)
 	// isbn は z.string() を読んでから整え（transform）、整えた後の形を確かめる（refine）。
-	v.isbn = normalizeISBN(in.String("isbn", httpx.StringRule{}))
+	v.isbn = normalizeISBN(in.String("isbn", validation.StringRule{}))
 	if in.Issue == nil && !isbnPattern.MatchString(v.isbn) {
 		in.AddIssue("invalid_isbn", "isbn", "ISBN は10桁か13桁で入力してください")
 	}
@@ -144,8 +145,8 @@ func readTextbookMasterInput(body any) (textbookMasterInput, *httpx.ObjectInput)
 
 // readOptionalText は任意の文字列：z.string().trim().max(max).nullable().optional() で、
 // 空（キーが無い・null・削ったら空）なら null。
-func readOptionalText(in *httpx.ObjectInput, key string, max int) *string {
-	o := in.OptionalString(key, httpx.StringRule{TrimFirst: true, Max: max, MaxMessage: fmt.Sprintf("%d文字以内で入力してください", max)}, true)
+func readOptionalText(in *validation.ObjectInput, key string, max int) *string {
+	o := in.OptionalString(key, validation.StringRule{TrimFirst: true, Max: max, MaxMessage: fmt.Sprintf("%d文字以内で入力してください", max)}, true)
 	if o.Value == nil || *o.Value == "" {
 		return nil
 	}
@@ -160,7 +161,7 @@ var isbnPattern = regexp.MustCompile(`^(\d{13}|\d{9}[\dX])$`)
 // （JavaScript の toUpperCase と Go の ToUpper は一部の文字で結果が違うが、どちらも isbnPattern に合わない）。
 func normalizeISBN(s string) string {
 	s = strings.Map(func(r rune) rune {
-		if r == '-' || httpx.IsJSWhitespace(r) {
+		if r == '-' || validation.IsJSWhitespace(r) {
 			return -1
 		}
 		return r
@@ -170,22 +171,22 @@ func normalizeISBN(s string) string {
 
 // readMetrics は総量の候補：z.array(metric).min(1).max(6).refine(単位が重ならない).refine(既定がちょうど1つ)。
 // 要素 → min・max → refine の順に確かめる。
-func readMetrics(in *httpx.ObjectInput) []apischema.AdminTextbookMasterMetric {
+func readMetrics(in *validation.ObjectInput) []apischema.AdminTextbookMasterMetric {
 	items := in.Array("metrics", "総量を1つ以上入力してください")
 	if in.Issue != nil {
 		return nil
 	}
 	metrics := make([]apischema.AdminTextbookMasterMetric, 0, len(items))
 	for i, item := range items {
-		m := httpx.ReadObjectAt(item, in.Field("metrics")+"."+strconv.Itoa(i))
+		m := validation.ReadObjectAt(item, in.Field("metrics")+"."+strconv.Itoa(i))
 		metric := apischema.AdminTextbookMasterMetric{
-			Unit: m.String("unit", httpx.StringRule{Checks: []httpx.StringCheck{{
+			Unit: m.String("unit", validation.StringRule{Checks: []validation.StringCheck{{
 				OK:   func(s string) bool { return apischema.TextbookMasterInputMetricsUnit(s).Valid() },
 				Code: "invalid_range_unit", Message: "単位を選んでください",
 			}}}),
 			// z.number({ error: "総量を入力してください" }).int(…).min(1, …).max(100000, …)。
 			// 整数に限ると min(1) は positive と同じ（0.5 は int で先に弾かれる）。
-			TotalAmount: int(m.Number("totalAmount", httpx.NumberRule{
+			TotalAmount: int(m.Number("totalAmount", validation.NumberRule{
 				TypeMessage: "総量を入力してください",
 				Int:         true, IntMessage: "総量は整数で入力してください",
 				Positive: true, PositiveMessage: "総量は1以上で入力してください",

@@ -1,9 +1,10 @@
-// Package studyrecord は学習記録（実績 StudyLog・予定 StudyPlan・user.firstStudyLogAt）への書き込みの持ち主。
-// 外に出すのは操作で、操作ごとに一緒に確定させることと、書き込みの決まり（自分の参考書か、範囲が参考書の
-// 逆算設定に合うか、実績のある予定を未完了に戻さない）をトランザクションの中で済ませる。
-// 持ち主の一覧と決まりは docs/architecture.md「バックエンドの構成」（JUK-148・JUK-150）。
+// Package studyrecord は学習記録（実績 StudyLog・予定 StudyPlan・user.firstStudyLogAt）のモデル。
+// Rails のモデルにあたり、入力の決まり（input.go）・読み取り（read.go）・書き込みを1か所に持つ。HTTP は知らない。
 //
-// 入力の形の確かめ（Zod と同じ 400）は入口が行い、ここには確かめ済みの値が来る。
+// 外に出すのは操作で、操作は送られた本文（JSON を読んだ値）を受け取り、確かめてから書く。誤りは
+// *validation.Issue で返し、コントローラー（internal/feature/study）が 400 にする。書き込みの決まり
+// （自分の参考書か、範囲が参考書の逆算設定に合うか、実績のある予定を未完了に戻さない）と、一緒に確定させる
+// ことは、トランザクションの中で済ませる。層の分け方は docs/architecture.md「バックエンドの構成」（JUK-148・JUK-219）。
 package studyrecord
 
 import (

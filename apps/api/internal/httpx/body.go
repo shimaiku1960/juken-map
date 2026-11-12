@@ -5,14 +5,13 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"math"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 )
 
 // 書き込みの本文の読み方（JUK-80・JUK-75）。細かい規則は、API を Go へ移したときに応答を変えないよう
@@ -51,11 +50,10 @@ type requestBody struct {
 	Text bool
 }
 
-// JSUndefined は「値が無い」を表す。JSON の null（nil）と区別するため、別の値にする。
-// JavaScript の undefined にあたる（本文が無いとき、オブジェクトにキーが無いとき）。
-type JSUndefined struct{}
+// JSUndefined は「値が無い」を表す（定義は internal/validation。入力チェックと同じ値を使う）。
+type JSUndefined = validation.JSUndefined
 
-// Value は本文を読んだ値を返す。入力チェック（validate.go）に渡す。
+// Value は本文を読んだ値を返す。入力チェック（internal/validation）に渡す。
 //   - 本文なし・JSON として読めない：JSUndefined{}
 //   - text/plain：string
 //   - JSON：nil（null）・bool・json.Number・string・[]any・map[string]any
@@ -232,7 +230,7 @@ func maximalSubpart(b []byte) int {
 
 // ParseJSON は JSON.parse と同じく本文全体を1つの値として読む。前後の空白以外の余りがあれば失敗にする。
 // 数は json.Number で受ける（1.5 と 1 を区別して、整数かどうかを Zod と同じく確かめるため。
-// 範囲を超えた数も、JavaScript と同じく ±Infinity として読める。jsNumber を参照）。
+// 範囲を超えた数も、JavaScript と同じく ±Infinity として読める。validation.JSNumber を参照）。
 func ParseJSON(text string) (any, error) {
 	dec := json.NewDecoder(strings.NewReader(text))
 	dec.UseNumber()
@@ -244,17 +242,6 @@ func ParseJSON(text string) (any, error) {
 		return nil, errors.New("JSON の後ろに余分な文字がある")
 	}
 	return v, nil
-}
-
-// jsNumber は json.Number を JSON.parse と同じ float64 にする。範囲外の数は ±Infinity、小さすぎる数は 0。
-// strconv.ParseFloat は範囲外で ErrRange を返すが、値は ±Inf・0 になっているのでそのまま使う。
-func jsNumber(n json.Number) float64 {
-	f, err := strconv.ParseFloat(string(n), 64)
-	if err != nil && !errors.Is(err, strconv.ErrRange) {
-		// Decoder が数として読んだものなので、ここには来ない。
-		return math.NaN()
-	}
-	return f
 }
 
 // rejectBody は本文を読まずに断る。ほかの 4xx と同じく warn でログに残す。

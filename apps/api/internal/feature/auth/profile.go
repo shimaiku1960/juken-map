@@ -10,6 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 )
 
@@ -17,7 +18,7 @@ import (
 
 // 入力チェックは Zod の profileSchema（src/shared/validations/profile.ts）と同じ。
 // 前後の空白を削ってから長さを確かめるので、空白だけのニックネームは「必須です」で弾く（JUK-64）。
-var nicknameRule = httpx.StringRule{
+var nicknameRule = validation.StringRule{
 	TypeMessage: "ニックネームは文字列で入力してください",
 	TrimFirst:   true,
 	Min:         1,
@@ -73,9 +74,9 @@ func (h *ProfileHandlers) Update(w http.ResponseWriter, r *http.Request, s *http
 	if !ok {
 		return
 	}
-	in := httpx.ReadObject(body.Value())
+	in := validation.ReadObject(body.Value())
 	input := apischema.ProfileInput{Nickname: in.String("nickname", nicknameRule)}
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 

@@ -7,21 +7,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
-
-// LogInput は実績の作成・変更で書く値。Date はその日の 00:00 UTC（JavaScript の new Date("YYYY-MM-DD") と同じ値）。
-// 任意の項目は「送られなかった」と null を区別する（変更で「範囲が変わったか」を見るため）。
-type LogInput struct {
-	Date       time.Time
-	Minutes    int64
-	Subject    opt.Field[string]
-	TextbookID opt.Field[int64]
-	RangeStart opt.Field[int64]
-	RangeEnd   opt.Field[int64]
-	RangeUnit  opt.Field[string]
-	Memo       opt.Field[string]
-}
 
 // CreatedLog は作った実績と、それが利用者の初めての実績だったか。
 type CreatedLog struct {
@@ -57,11 +43,15 @@ func findLog(ctx context.Context, q database.QueryRower, id int64, userID, suffi
 	return l, rawDate, nil
 }
 
-// CreateLog は実績を1件記録する。参考書を指定したら、自分のものか・範囲が逆算設定に合うかを確かめる。
-// 初回記録の印付けと同じトランザクションで行う。
-func CreateLog(ctx context.Context, db *sql.DB, userID string, in LogInput, now time.Time) (CreatedLog, error) {
+// CreateLog は実績を1件記録する。attrs は送られた本文で、入力の決まり（input.go）を先に確かめる。
+// 参考書を指定したら、自分のものか・範囲が逆算設定に合うかを確かめる。初回記録の印付けと同じトランザクションで行う。
+func CreateLog(ctx context.Context, db *sql.DB, userID string, attrs any, now time.Time) (CreatedLog, error) {
+	in, err := decodeLogInput(attrs, tokyoToday(now))
+	if err != nil {
+		return CreatedLog{}, err
+	}
 	var created CreatedLog
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		if in.TextbookID.Value != nil {
 			tb, err := findTextbookSettings(ctx, tx, *in.TextbookID.Value, userID)
 			if err != nil {
@@ -97,15 +87,20 @@ func CreateLog(ctx context.Context, db *sql.DB, userID string, in LogInput, now 
 	return created, err
 }
 
-// UpdateLog は userID の人の実績を書き換え、書き換えた後の行を返す。
+// UpdateLog は userID の人の実績を書き換え、書き換えた後の行を返す。自分の実績かを入力の決まりより先に見る
+// （無ければ本文に関わらず ErrNotFound）。
 //
 // 予定から作られた実績は、予定との紐づきを壊す項目（日付・科目・参考書）を今の値のまま書き戻す。
 // 参考書の範囲を確かめるのは、範囲か参考書を変えたときだけ。時間・メモだけの修正では、後から変わった
 // 参考書の設定を過去の実績へさかのぼって当てはめない。
-func UpdateLog(ctx context.Context, db *sql.DB, userID string, id int64, in LogInput, now time.Time) (Log, error) {
+func UpdateLog(ctx context.Context, db *sql.DB, userID string, id int64, attrs any, now time.Time) (Log, error) {
 	var updated Log
 	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
 		current, rawDate, err := findLog(ctx, tx, id, userID, " FOR UPDATE")
+		if err != nil {
+			return err
+		}
+		in, err := decodeLogInput(attrs, tokyoToday(now))
 		if err != nil {
 			return err
 		}

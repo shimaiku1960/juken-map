@@ -8,15 +8,15 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/studyrecord"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/goal"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/studyrecord"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
 )
 
@@ -64,7 +64,7 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "実績の書き換え", table: "StudyLog",
 			seed: func(fx dbFixture, holder string) int64 { return fx.StudyLog(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = studyrecord.UpdateLog(ctx, db, caller, id, studyrecord.LogInput{Date: dates.FromYMD("2027-01-01"), Minutes: 99}, now)
+				_, _ = studyrecord.UpdateLog(ctx, db, caller, id, map[string]any{"date": "2026-01-01", "minutes": json.Number("99")}, now)
 			},
 		},
 		{
@@ -76,7 +76,7 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "予定の書き換え", table: "StudyPlan",
 			seed: func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = studyrecord.UpdatePlan(ctx, db, caller, id, studyrecord.PlanPatch{Content: opt.Field[string]{Present: true, Value: &note}}, now)
+				_, _ = studyrecord.UpdatePlan(ctx, db, caller, id, map[string]any{"content": note}, now)
 			},
 		},
 		{
@@ -88,7 +88,7 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "予定の完了", table: "StudyPlan",
 			seed: func(fx dbFixture, holder string) int64 { return fx.StudyPlan(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = studyrecord.CompletePlan(ctx, db, caller, id, studyrecord.Completion{Minutes: 30}, now)
+				_, _ = studyrecord.CompletePlan(ctx, db, caller, id, map[string]any{"minutes": json.Number("30")}, now)
 			},
 		},
 	}

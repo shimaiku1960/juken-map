@@ -10,6 +10,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
 )
 
@@ -27,7 +28,7 @@ var (
 )
 
 // textbookNameRule は z.string().trim().min(1, …).max(100, …)。削ってから長さを確かめる。
-var textbookNameRule = httpx.StringRule{
+var textbookNameRule = validation.StringRule{
 	TrimFirst: true,
 	Min:       1, MinMessage: "参考書名を入力してください",
 	Max: 100, MaxMessage: "100文字以内で入力してください",
@@ -35,7 +36,7 @@ var textbookNameRule = httpx.StringRule{
 
 // totalAmountRule は z.number().int("整数で入力してください").min(1, …).max(100000, …)。
 // 整数の min(1) は positive と同じ判定・同じ issue になる。
-var totalAmountRule = httpx.NumberRule{
+var totalAmountRule = validation.NumberRule{
 	Int: true, IntMessage: "整数で入力してください",
 	Positive: true, PositiveMessage: "1以上で入力してください",
 	Max: 100000, MaxMessage: "100000以下で入力してください",
@@ -46,8 +47,8 @@ type textbookInput struct {
 	fromMaster bool
 	masterID   int64
 	name       string
-	subject    httpx.Optional[string]
-	rangeUnit  httpx.Optional[string]
+	subject    validation.Optional[string]
+	rangeUnit  validation.Optional[string]
 }
 
 // readTextbookInput は createTextbookSchema（z.union の2択）。
@@ -57,8 +58,8 @@ type textbookInput struct {
 // 選択肢がちょうど1つのときだけその issue を返し、それ以外は invalid_union（field は null）の1件にする。
 // 長さや範囲の誤り（too_small・too_big）は型の誤りではないので、たとえば {"name":""} は名前の too_small になる。
 //
-// その判定には選択肢の issue を全部見る必要があるので、ここは httpx.ObjectInput（最初の1件で止まる）を使わずに読む。
-func readTextbookInput(body any) (textbookInput, *httpx.ValidationIssue) {
+// その判定には選択肢の issue を全部見る必要があるので、ここは validation.ObjectInput（最初の1件で止まる）を使わずに読む。
+func readTextbookInput(body any) (textbookInput, *validation.Issue) {
 	m, isObject := body.(map[string]any)
 	if !isObject {
 		return textbookInput{}, invalidUnion()
@@ -72,24 +73,24 @@ func readTextbookInput(body any) (textbookInput, *httpx.ValidationIssue) {
 	}
 
 	// 1つ目の選択肢：名前で作る。issue は項目の順（name・subject・rangeUnit）に積む。
-	var byName []*httpx.ValidationIssue
+	var byName []*validation.Issue
 	nameValue, _ := get("name")
-	name, issue := httpx.CheckString("name", nameValue, textbookNameRule)
+	name, issue := validation.CheckString("name", nameValue, textbookNameRule)
 	byName = appendIssue(byName, issue)
-	subject := httpx.Optional[string]{}
+	subject := validation.Optional[string]{}
 	if v, ok := get("subject"); ok {
 		subject.Present = true
 		if v != nil {
-			s, issue := httpx.CheckEnum("subject", v, subjectValues)
+			s, issue := validation.CheckEnum("subject", v, subjectValues)
 			byName = appendIssue(byName, issue)
 			subject.Value = &s
 		}
 	}
-	rangeUnit := httpx.Optional[string]{}
+	rangeUnit := validation.Optional[string]{}
 	if v, ok := get("rangeUnit"); ok {
-		s, issue := httpx.CheckEnum("rangeUnit", v, textbookRangeUnits)
+		s, issue := validation.CheckEnum("rangeUnit", v, textbookRangeUnits)
 		byName = appendIssue(byName, issue)
-		rangeUnit = httpx.Optional[string]{Present: true, Value: &s}
+		rangeUnit = validation.Optional[string]{Present: true, Value: &s}
 	}
 	if len(byName) == 0 {
 		return textbookInput{name: name, subject: subject, rangeUnit: rangeUnit}, nil
@@ -97,7 +98,7 @@ func readTextbookInput(body any) (textbookInput, *httpx.ValidationIssue) {
 
 	// 2つ目の選択肢：参考書マスターから作る。
 	masterValue, _ := get("masterId")
-	masterID, masterIssue := httpx.CheckNumber("masterId", masterValue, httpx.PositiveIntRule)
+	masterID, masterIssue := validation.CheckNumber("masterId", masterValue, validation.PositiveIntRule)
 	if masterIssue == nil {
 		return textbookInput{fromMaster: true, masterID: int64(masterID)}, nil
 	}
@@ -112,7 +113,7 @@ func readTextbookInput(body any) (textbookInput, *httpx.ValidationIssue) {
 	return textbookInput{}, invalidUnion()
 }
 
-func appendIssue(issues []*httpx.ValidationIssue, issue *httpx.ValidationIssue) []*httpx.ValidationIssue {
+func appendIssue(issues []*validation.Issue, issue *validation.Issue) []*validation.Issue {
 	if issue == nil {
 		return issues
 	}
@@ -120,11 +121,11 @@ func appendIssue(issues []*httpx.ValidationIssue, issue *httpx.ValidationIssue) 
 }
 
 // isTypeIssue は、Zod 4 がその選択肢をそこで打ち切る issue（型の誤り）か。
-func isTypeIssue(issue *httpx.ValidationIssue) bool {
+func isTypeIssue(issue *validation.Issue) bool {
 	return issue.Code == "invalid_type" || issue.Code == "invalid_value"
 }
 
-func anyTypeIssue(issues []*httpx.ValidationIssue) bool {
+func anyTypeIssue(issues []*validation.Issue) bool {
 	for _, issue := range issues {
 		if isTypeIssue(issue) {
 			return true
@@ -133,24 +134,24 @@ func anyTypeIssue(issues []*httpx.ValidationIssue) bool {
 	return false
 }
 
-func invalidUnion() *httpx.ValidationIssue {
-	return &httpx.ValidationIssue{Code: "invalid_union", Message: "Invalid input"}
+func invalidUnion() *validation.Issue {
+	return &validation.Issue{Code: "invalid_union", Message: "Invalid input"}
 }
 
 // readTextbookProgress は updateTextbookProgressSchema。送られた項目だけを書き換える。
-func readTextbookProgress(body any) (*httpx.ObjectInput, textbookProgress) {
-	in := httpx.ReadObject(body)
+func readTextbookProgress(body any) (*validation.ObjectInput, textbookProgress) {
+	in := validation.ReadObject(body)
 	var v textbookProgress
 	v.totalAmount = in.OptionalInt("totalAmount", totalAmountRule, false)
 	v.rangeUnit = in.OptionalEnum("rangeUnit", textbookRangeUnits, false)
-	v.targetDate = in.OptionalString("targetDate", httpx.StringRule{Checks: []httpx.StringCheck{httpx.ISODateCheck}}, true)
+	v.targetDate = in.OptionalString("targetDate", validation.StringRule{Checks: []validation.StringCheck{validation.ISODateCheck}}, true)
 	v.subject = in.OptionalEnum("subject", subjectValues, true)
 	return in, v
 }
 
 type textbookProgress struct {
-	totalAmount                    httpx.Optional[int64]
-	rangeUnit, targetDate, subject httpx.Optional[string]
+	totalAmount                    validation.Optional[int64]
+	rangeUnit, targetDate, subject validation.Optional[string]
 }
 
 // record は持ち主に渡す形にする。目標日は日付だけを持つので、UTC の 0 時にする。
@@ -173,7 +174,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request, s *httpx.Sessi
 	}
 	input, issue := readTextbookInput(body.Value())
 	if issue != nil {
-		issue.Write(w)
+		httpx.WriteValidationIssue(w, issue)
 		return
 	}
 
@@ -210,7 +211,7 @@ func (h *Handlers) UpdateProgress(w http.ResponseWriter, r *http.Request, s *htt
 		return
 	}
 	in, progress := readTextbookProgress(body.Value())
-	if in.Reject(w) {
+	if httpx.Reject(w, in) {
 		return
 	}
 	updated, err := textbook.UpdateProgress(r.Context(), h.store.db, s.UserID, id, progress.record(), dates.NowMillis())

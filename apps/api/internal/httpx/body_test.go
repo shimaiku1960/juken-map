@@ -2,13 +2,13 @@ package httpx
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 )
 
 func TestReadBodyMediaTypes(t *testing.T) {
@@ -100,14 +100,14 @@ func prefsHandler(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	in := ReadObject(body.Value())
+	in := validation.ReadObject(body.Value())
 	p := apischema.NotificationPreference{
 		EmailMorningEnabled: in.Boolean("emailMorningEnabled"),
 		EmailEveningEnabled: in.Boolean("emailEveningEnabled"),
 		LineMorningEnabled:  in.Boolean("lineMorningEnabled"),
 		LineEveningEnabled:  in.Boolean("lineEveningEnabled"),
 	}
-	if in.Reject(w) {
+	if Reject(w, in) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, p)
@@ -203,19 +203,6 @@ func TestReadBodyDeclaredTooLarge(t *testing.T) {
 	prefsHandler(res, req)
 	if res.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want 413", res.Code)
-	}
-}
-
-func TestJSNumber(t *testing.T) {
-	// JSON.parse と同じく、範囲外の数は ±Infinity、小さすぎる数は 0 になる。
-	tests := map[string]float64{
-		"1": 1, "1.5": 1.5, "1e3": 1000, "-0": math.Copysign(0, -1),
-		"1e400": math.Inf(1), "-1e400": math.Inf(-1), "1e-400": 0,
-	}
-	for in, want := range tests {
-		if got := jsNumber(json.Number(in)); got != want || math.Signbit(got) != math.Signbit(want) {
-			t.Errorf("jsNumber(%s) = %v, want %v", in, got, want)
-		}
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	writechaos "github.com/shimaiku1960/juken-map/apps/api/internal/write/chaos"
 )
 
@@ -236,7 +237,7 @@ func number(v any) (float64, bool) {
 // integer は小数を含まない数（1.0 は整数）。範囲は呼び出し側が確かめるので、ここでは int に収まるかだけを見る。
 func integer(v any) (int64, bool) {
 	f, ok := number(v)
-	if !ok || f != math.Trunc(f) || math.Abs(f) > httpx.MaxSafeInteger {
+	if !ok || f != math.Trunc(f) || math.Abs(f) > validation.MaxSafeInteger {
 		return 0, false
 	}
 	return int64(f), true

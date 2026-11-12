@@ -29,6 +29,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/simulation"
 )
 
@@ -102,7 +103,7 @@ func positiveInt(v any) (int64, bool) {
 		return 0, false
 	}
 	f, err := n.Float64()
-	if err != nil || f != math.Trunc(f) || f <= 0 || f > httpx.MaxSafeInteger {
+	if err != nil || f != math.Trunc(f) || f <= 0 || f > validation.MaxSafeInteger {
 		return 0, false
 	}
 	return int64(f), true

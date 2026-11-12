@@ -8,30 +8,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
 )
-
-// PlanItem は予定1件の中身。
-type PlanItem struct {
-	TextbookID, RangeStart, RangeEnd *int64
-	RangeUnit, Content, Subject      *string
-}
-
-// PlanPatch は予定の変更。Present の項目だけを書き換える。Date はその日の 00:00 UTC。
-type PlanPatch struct {
-	Date                             opt.Field[time.Time]
-	TextbookID, RangeStart, RangeEnd opt.Field[int64]
-	RangeUnit, Content, Subject      opt.Field[string]
-	Done                             opt.Field[bool]
-}
-
-// Completion は予定の完了で書く実績の値。範囲は、送られていなければ（キーが無ければ）予定の値を使う。
-type Completion struct {
-	Minutes              int64
-	RangeStart, RangeEnd opt.Field[int64]
-	RangeUnit            opt.Field[string]
-	Memo                 *string
-}
 
 // Completed は完了にした予定と、作った実績。
 type Completed struct {
@@ -69,9 +46,13 @@ func findPlan(ctx context.Context, q database.QueryRower, id int64, userID, suff
 	return p, err
 }
 
-// CreatePlans は1つの日付に予定をまとめて作り、作った件数を返す。参考書は他人の ID を混ぜられないよう、
+// CreatePlans は1つの日付に予定をまとめて作り、作った件数を返す。attrs は送られた本文（日付と予定の配列）。参考書は他人の ID を混ぜられないよう、
 // 自分の分だけを許す。行は1本の INSERT で入れる。
-func CreatePlans(ctx context.Context, db *sql.DB, userID string, date time.Time, items []PlanItem, now time.Time) (int64, error) {
+func CreatePlans(ctx context.Context, db *sql.DB, userID string, attrs any, now time.Time) (int64, error) {
+	date, items, err := decodePlans(attrs)
+	if err != nil {
+		return 0, err
+	}
 	if err := checkTextbooksOwned(ctx, db, items, userID); err != nil {
 		return 0, err
 	}
@@ -94,7 +75,7 @@ func CreatePlans(ctx context.Context, db *sql.DB, userID string, date time.Time,
 }
 
 // checkTextbooksOwned は、予定の参考書がすべて userID の人のものかを確かめる（同じ ID は1つに数える）。
-func checkTextbooksOwned(ctx context.Context, db *sql.DB, items []PlanItem, userID string) error {
+func checkTextbooksOwned(ctx context.Context, db *sql.DB, items []planItem, userID string) error {
 	var args []any
 	seen := map[int64]bool{}
 	for _, item := range items {
@@ -121,10 +102,14 @@ func checkTextbooksOwned(ctx context.Context, db *sql.DB, items []PlanItem, user
 }
 
 // UpdatePlan は userID の人の予定のうち、送られた項目だけを書き換え、書き換えた後の行を返す。
-// 参考書は自分のものだけ。実績を記録済みの予定は未完了へ戻せない。
-func UpdatePlan(ctx context.Context, db *sql.DB, userID string, id int64, v PlanPatch, now time.Time) (Plan, error) {
+// 入力の決まりは自分の予定かを確かめるより先に見る。参考書は自分のものだけ。実績を記録済みの予定は未完了へ戻せない。
+func UpdatePlan(ctx context.Context, db *sql.DB, userID string, id int64, attrs any, now time.Time) (Plan, error) {
+	v, err := decodePlanPatch(attrs)
+	if err != nil {
+		return Plan{}, err
+	}
 	var updated Plan
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		if _, err := findPlan(ctx, tx, id, userID, " FOR UPDATE"); err != nil {
 			return err
 		}
@@ -183,9 +168,13 @@ func DeletePlan(ctx context.Context, db *sql.DB, userID string, id int64) error 
 // CompletePlan は userID の人の予定を完了にし、同時に実績を1件作る。実績の作成・予定の完了・初回記録の印は
 // 必ず一緒に成立させる（片方だけだと「完了なのに実績が無い」などが残る）ので、1つのトランザクションで行う。
 // 実績の日付・科目・参考書は予定のもの。範囲は参考書の逆算設定に合うかを確かめる。
-func CompletePlan(ctx context.Context, db *sql.DB, userID string, id int64, in Completion, now time.Time) (Completed, error) {
+func CompletePlan(ctx context.Context, db *sql.DB, userID string, id int64, attrs any, now time.Time) (Completed, error) {
+	in, err := decodeCompletion(attrs)
+	if err != nil {
+		return Completed{}, err
+	}
 	var done Completed
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		// 予定の行だけを押さえる（OF p）。実績の表まで押さえると、隣り合う予定を同時に完了したときに、
 		// 互いの隙間のロックを待ってデッドロックになり得る。同じ予定を同時に完了したときは、
 		// 後の方が studyPlanId の一意制約に当たって ErrAlreadyCompleted になる。
