@@ -1,7 +1,6 @@
-// Package chaos は障害注入の実験（ChaosExperiment）への書き込みの持ち主（JUK-173）。持ち主の一覧と決まりは
-// docs/architecture.md「バックエンドの構成」。実行中の実験の読み込みと、値の確かめは internal/fault。
-//
-// 入力の形の確かめは入口が行い、ここには確かめ済みの値が来る。
+// Package chaos は障害注入の実験（ChaosExperiment、JUK-173）のモデル。実験の種類と中身、入力の決まり（input.go）、
+// 読み取り（read.go）と書き込み（このファイル）を持ち、HTTP は知らない（docs/architecture.md「モデル・コントローラー・ビュー」、JUK-226）。
+// 障害を起こすのは internal/fault（アプリの層）と internal/hostfault（ホストの層）。
 package chaos
 
 import (
@@ -29,9 +28,9 @@ const (
 	StartedBySchedule = "schedule" // 予告なしのくじ（feature/chaos/schedule.go）
 )
 
-// Experiment は新しく始める実験。
-type Experiment struct {
-	Kind       string
+// NewExperiment は新しく始める実験。
+type NewExperiment struct {
+	Kind       Kind
 	Route      string
 	Rate       float64
 	DelayMs    int
@@ -45,7 +44,7 @@ type Experiment struct {
 //
 // 「実行中が無ければ入れる」を1つの文にする。2つ同時に来ると、片方は相手の行の範囲のロックで待つか
 // デッドロックで失敗し、両方は入らない。
-func Start(ctx context.Context, db *sql.DB, e Experiment, now time.Time) (int64, error) {
+func Start(ctx context.Context, db *sql.DB, e NewExperiment, now time.Time) (int64, error) {
 	startedBy := e.StartedBy
 	if startedBy == "" {
 		startedBy = StartedByJob
@@ -66,6 +65,19 @@ func Start(ctx context.Context, db *sql.DB, e Experiment, now time.Time) (int64,
 		return 0, ErrRunning
 	}
 	return res.LastInsertId()
+}
+
+// StartFromBody は機械の入口（POST /api/chaos/experiments）の本文を確かめて、実験を今から始め、その id を返す。
+// routes は障害注入の対象にしてよいルート。本文が決まりに合わなければ InputError、実行中の実験があれば ErrRunning。
+func StartFromBody(ctx context.Context, db *sql.DB, body any, routes []string, now time.Time) (int64, error) {
+	spec, err := decodeSpec(body)
+	if err != nil {
+		return 0, err
+	}
+	if err := spec.Validate(routes); err != nil {
+		return 0, err
+	}
+	return Start(ctx, db, spec.StartingAt(now, StartedByJob), now)
 }
 
 // StopAll は実行中の実験を全部止めて、止めた数を返す。by は止めた人（StoppedBy…）。

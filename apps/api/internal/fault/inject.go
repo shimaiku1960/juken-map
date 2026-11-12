@@ -1,6 +1,8 @@
 package fault
 
 import (
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
+
 	"context"
 	"database/sql/driver"
 	"net/http"
@@ -13,11 +15,11 @@ import (
 // InjectHTTP は httpx.Router から、対象のルートのリクエストごとに呼ばれる（httpx.FaultInjector）。
 // 遅延はハンドラの前に待つ。5xx はハンドラへ進まずに返す（応答の本文は本物の 500 と同じで、画面には障害注入だと出さない）。
 func (in *Injector) InjectHTTP(w http.ResponseWriter, r *http.Request) bool {
-	if e, ok := in.pick(r.Context(), KindLatency); ok {
+	if e, ok := in.pick(r.Context(), chaos.KindLatency); ok {
 		// 待っている間にリクエストの時間の上限が来たら、そのままハンドラへ進む（ハンドラが ctx の取り消しで失敗する）。
-		_ = in.sleep(r.Context(), e.delay())
+		_ = in.sleep(r.Context(), e.Delay())
 	}
-	if e, ok := in.pick(r.Context(), KindHTTPError); ok {
+	if e, ok := in.pick(r.Context(), chaos.KindHTTPError); ok {
 		httpx.WriteErrorBody(w, r, e.StatusCode, httpx.CodeInternal)
 		return true
 	}
@@ -75,7 +77,7 @@ type faultConn struct {
 }
 
 func (c *faultConn) fault(ctx context.Context) error {
-	if _, ok := c.in.pick(ctx, KindDBError); ok {
+	if _, ok := c.in.pick(ctx, chaos.KindDBError); ok {
 		return ErrInjected
 	}
 	return nil
@@ -123,7 +125,7 @@ type faultTransport struct {
 }
 
 func (t *faultTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	e, ok := t.in.pick(req.Context(), KindOutboundTimeout)
+	e, ok := t.in.pick(req.Context(), chaos.KindOutboundTimeout)
 	if !ok {
 		return t.base.RoundTrip(req)
 	}
@@ -131,7 +133,7 @@ func (t *faultTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Body != nil {
 		_ = req.Body.Close()
 	}
-	if err := t.in.sleep(req.Context(), e.delay()); err != nil {
+	if err := t.in.sleep(req.Context(), e.Delay()); err != nil {
 		return nil, err
 	}
 	return nil, outboundTimeout{}

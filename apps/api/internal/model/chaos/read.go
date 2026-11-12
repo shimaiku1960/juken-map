@@ -1,84 +1,12 @@
-package fault
+package chaos
 
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"fmt"
-	"slices"
 	"time"
 )
 
-// 実験の読み込みと、新しい実験の値の確かめ。書き込みは internal/write/chaos。
-
-// 実験の上限。
-const (
-	// MaxDuration は1つの実験の長さの上限。終わる時刻を必ず決め、長く続けない。
-	MaxDuration = time.Hour
-	MinDuration = time.Minute
-	// MaxDelayMs は待たせる時間の上限。1リクエストの時間の上限（internal/app/server.go の requestTimeout、10秒）より短くし、
-	// 待ったあとに応答を返せるようにする。
-	MaxDelayMs = 9000
-)
-
-// HTTPErrorStatuses は http_error で返せるステータス。
-var HTTPErrorStatuses = []int{500, 502, 503, 504}
-
-// Spec は新しく始める実験の中身。
-type Spec struct {
-	Kind       Kind
-	Route      string
-	Rate       float64
-	DelayMs    int
-	StatusCode int
-	Duration   time.Duration
-}
-
-// Validate は Spec が起こしてよい実験かを確かめる。routes は障害注入の対象にしてよいルート（httpx.Router.FaultRoutes）。
-// 誤りの文は入口がそのまま 400 で返す。
-func (s Spec) Validate(routes []string) error {
-	if !slices.Contains(Kinds, s.Kind) {
-		return errors.New("kind が正しくありません")
-	}
-	if s.Route != AllRoutes && !slices.Contains(routes, s.Route) {
-		return errors.New("route は * か、障害を起こしてよいルート（「GET /api/study-logs/:id」の形）にしてください")
-	}
-	if !(s.Rate > 0 && s.Rate <= 1) {
-		return errors.New("rate は 0 より大きく 1 以下にしてください")
-	}
-	if s.Duration < MinDuration || s.Duration > MaxDuration {
-		return fmt.Errorf("durationSeconds は %d〜%d にしてください", int(MinDuration.Seconds()), int(MaxDuration.Seconds()))
-	}
-	switch s.Kind {
-	case KindLatency, KindOutboundTimeout:
-		if s.DelayMs < 1 || s.DelayMs > MaxDelayMs {
-			return fmt.Errorf("delayMs は 1〜%d にしてください", MaxDelayMs)
-		}
-		if s.StatusCode != 0 {
-			return errors.New("statusCode は http_error のときだけ指定できます")
-		}
-	case KindHTTPError:
-		if !slices.Contains(HTTPErrorStatuses, s.StatusCode) {
-			return errors.New("statusCode は 500・502・503・504 のどれかにしてください")
-		}
-		if s.DelayMs != 0 {
-			return errors.New("delayMs は latency・outbound_timeout のときだけ指定できます")
-		}
-	case KindDBError:
-		if s.DelayMs != 0 || s.StatusCode != 0 {
-			return errors.New("db_error には delayMs・statusCode を指定できません")
-		}
-	}
-	return nil
-}
-
-// Record は記録に残った実験1つ。
-type Record struct {
-	Experiment
-	StoppedAt *time.Time
-	StoppedBy string
-	StartedBy string // 始めた入口（job・schedule）
-}
+// 実験の読み取り。
 
 // Running は now の時点で実行中の実験。
 func Running(ctx context.Context, db *sql.DB, now time.Time) ([]Experiment, error) {

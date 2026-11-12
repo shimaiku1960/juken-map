@@ -1,14 +1,13 @@
 package hostfault
 
 import (
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 )
 
 func TestSpecAndLevel(t *testing.T) {
@@ -18,12 +17,12 @@ func TestSpecAndLevel(t *testing.T) {
 			if s.Rate <= 0 || s.Rate > 1 {
 				t.Errorf("Spec(%s, %d).Rate = %v", kind, level, s.Rate)
 			}
-			if got := Level(fault.Experiment{Kind: kind, Rate: s.Rate, DelayMs: s.DelayMs}); got != level {
+			if got := Level(chaos.Experiment{Kind: kind, Rate: s.Rate, DelayMs: s.DelayMs}); got != level {
 				t.Errorf("Level(Spec(%s, %d)) = %d", kind, level, got)
 			}
 		}
 	}
-	if IsHost(fault.KindLatency) || !IsHost(KindDisk) {
+	if IsHost(chaos.KindLatency) || !IsHost(KindDisk) {
 		t.Error("IsHost")
 	}
 }

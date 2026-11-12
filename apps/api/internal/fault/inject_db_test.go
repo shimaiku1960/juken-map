@@ -3,6 +3,8 @@
 package fault
 
 import (
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
+
 	"context"
 	"errors"
 	"testing"
@@ -14,7 +16,7 @@ import (
 // 本物の MySQL の接続を包めているかを確かめる。MySQL の接続が fullConn に当たらなくなると（ドライバの更新など）、
 // 包まずに返すので障害が黙って起きなくなる。それをここで捕まえる。
 func TestWrapConnectorDB(t *testing.T) {
-	in, _ := newInjector(t, 0, running(KindDBError, AllRoutes))
+	in, _ := newInjector(t, 0, running(chaos.KindDBError, chaos.AllRoutes))
 	db := dbtest.Open(t, in.WrapConnector)
 	reqCtx, _ := requestCtx("GET /api/study-logs")
 

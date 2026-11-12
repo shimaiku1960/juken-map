@@ -13,7 +13,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/hostfault"
-	writechaos "github.com/shimaiku1960/juken-map/apps/api/internal/write/chaos"
+	chaosmodel "github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
 )
 
 // fakeHost はホストの層の障害を起こした・戻した回数を数える。
@@ -22,7 +22,7 @@ type fakeHost struct {
 	starts, reverts int
 }
 
-func (h *fakeHost) Start(context.Context, fault.Experiment) error {
+func (h *fakeHost) Start(context.Context, chaosmodel.Experiment) error {
 	h.starts++
 	return h.startErr
 }
@@ -54,7 +54,7 @@ func TestSchedulerRunDB(t *testing.T) {
 			Now:  func() time.Time { return *now },
 		}
 	}
-	spec := fault.Spec{Kind: fault.KindDBError, Route: fault.AllRoutes, Rate: 0.5, Duration: 10 * time.Minute}
+	spec := chaosmodel.Spec{Kind: chaosmodel.KindDBError, Route: chaosmodel.AllRoutes, Rate: 0.5, Duration: 10 * time.Minute}
 
 	t.Run("終わる時刻が来たら、どのプロセスからでも一度だけ知らせる", func(t *testing.T) {
 		now := base
@@ -83,7 +83,7 @@ func TestSchedulerRunDB(t *testing.T) {
 			t.Fatalf("starts = %d", host.starts)
 		}
 		now = now.Add(3 * time.Minute)
-		if _, err := writechaos.StopAll(ctx, fx.DB, writechaos.StoppedByDeploy, now); err != nil {
+		if _, err := chaosmodel.StopAll(ctx, fx.DB, chaosmodel.StoppedByDeploy, now); err != nil {
 			t.Fatal(err)
 		}
 		s.report(ctx)
@@ -106,7 +106,7 @@ func TestSchedulerRunDB(t *testing.T) {
 
 	t.Run("ほかの実験が実行中なら、始めず知らせもしない", func(t *testing.T) {
 		start := base.Add(3 * time.Hour)
-		if _, err := writechaos.Start(ctx, fx.DB, writechaos.Experiment{Kind: "db_error", Route: "*", Rate: 0.1,
+		if _, err := chaosmodel.Start(ctx, fx.DB, chaosmodel.NewExperiment{Kind: "db_error", Route: "*", Rate: 0.1,
 			StartsAt: start, EndsAt: start.Add(time.Hour)}, start); err != nil {
 			t.Fatal(err)
 		}

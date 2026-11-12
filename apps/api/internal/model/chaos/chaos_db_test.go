@@ -18,8 +18,8 @@ func TestChaosDB(t *testing.T) {
 	fx.Lock(dbtest.ChaosLock)
 	t.Cleanup(func() { fx.Exec("DELETE FROM `ChaosExperiment` WHERE startsAt >= '2100-01-01'") })
 	now := time.Date(2100, 1, 1, 3, 0, 0, 0, time.UTC).Add(time.Duration(time.Now().UnixNano() % int64(time.Hour))).Truncate(time.Millisecond)
-	experiment := func(start time.Time) Experiment {
-		return Experiment{Kind: "db_error", Route: "*", Rate: 0.25, StartsAt: start, EndsAt: start.Add(10 * time.Minute)}
+	experiment := func(start time.Time) NewExperiment {
+		return NewExperiment{Kind: "db_error", Route: "*", Rate: 0.25, StartsAt: start, EndsAt: start.Add(10 * time.Minute)}
 	}
 
 	id, err := Start(ctx, fx.DB, experiment(now), now)
