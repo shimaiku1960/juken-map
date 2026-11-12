@@ -33,6 +33,12 @@ func TestSimulationDB(t *testing.T) {
 		return fx.Rows("SELECT simSeq, simCohort, DATE_FORMAT(simLastActedOn, '%Y-%m-%d') AS lastActedOn,"+
 			" DATE_FORMAT(simDormantFrom, '%Y-%m-%d') AS dormantFrom FROM `user` WHERE email = ?", email)
 	}
+	// tableRow は UserSimulation の行を、row と同じキーで読む。両方が同じなら写せている（JUK-228）。
+	tableRow := func(fx dbtest.Fixture, email string) []string {
+		return fx.Rows("SELECT s.seq AS simSeq, s.cohort AS simCohort, DATE_FORMAT(s.lastActedOn, '%Y-%m-%d') AS lastActedOn,"+
+			" DATE_FORMAT(s.dormantFrom, '%Y-%m-%d') AS dormantFrom FROM UserSimulation s JOIN `user` u ON u.id = s.userId"+
+			" WHERE u.email = ?", email)
+	}
 
 	t.Run("連番を付け、同じ連番は ErrDuplicate。シミュレーションのアドレスでなければ ErrNotFound", func(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
@@ -43,6 +49,9 @@ func TestSimulationDB(t *testing.T) {
 		}
 		if err := Mark(ctx, db, other, seq, "steady", now); !errors.Is(err, ErrDuplicate) {
 			t.Errorf("同じ連番: %v", err)
+		}
+		if got := tableRow(fx, other); len(got) != 0 {
+			t.Errorf("断った利用者が UserSimulation に入った: %v", got)
 		}
 		real := fx.User() // id@example.test
 		if err := Mark(ctx, db, real+"@example.test", seq+1, "steady", now); !errors.Is(err, ErrNotFound) {
@@ -70,11 +79,39 @@ func TestSimulationDB(t *testing.T) {
 		if got := row(fx, email); len(got) != 1 || got[0] != want {
 			t.Errorf("行: %v", got)
 		}
+		if got := tableRow(fx, email); len(got) != 1 || got[0] != want {
+			t.Errorf("UserSimulation の行: %v", got)
+		}
 		if err := RecordActivity(ctx, db, seq+1, Activity{LastActedOn: opt.Of("2026-10-01")}); !errors.Is(err, ErrNotFound) {
 			t.Errorf("無い連番: %v", err)
 		}
 		if err := RecordActivity(ctx, db, seq+1, Activity{}); err != nil {
 			t.Errorf("変える項目が無ければ成功にする: %v", err)
+		}
+	})
+	t.Run("付け直すと UserSimulation も付け直す。この段階より前に付いた印は、次に書いたときに写る", func(t *testing.T) {
+		fx := dbtest.Fixture{T: t, DB: db}
+		email, seq := simUser(fx)
+		if err := Mark(ctx, db, email, seq, "steady", now); err != nil {
+			t.Fatal(err)
+		}
+		if err := Mark(ctx, db, email, seq+1, "fading", now); err != nil {
+			t.Fatal(err)
+		}
+		want := `{"dormantFrom":null,"lastActedOn":null,"simCohort":"fading","simSeq":"` + strconv.FormatInt(seq+1, 10) + `"}`
+		if got := tableRow(fx, email); len(got) != 1 || got[0] != want {
+			t.Errorf("付け直した行: %v", got)
+		}
+
+		// 古いアプリが user の列だけに書いた利用者（UserSimulation に行が無い）
+		old, oldSeq := simUser(fx)
+		fx.Exec("UPDATE `user` SET simSeq = ?, simCohort = 'sporadic' WHERE email = ?", oldSeq, old)
+		if err := RecordActivity(ctx, db, oldSeq, Activity{LastActedOn: opt.Of("2026-11-01")}); err != nil {
+			t.Fatal(err)
+		}
+		want = `{"dormantFrom":null,"lastActedOn":"2026-11-01","simCohort":"sporadic","simSeq":"` + strconv.FormatInt(oldSeq, 10) + `"}`
+		if got := tableRow(fx, old); len(got) != 1 || got[0] != want {
+			t.Errorf("あとから写した行: %v", got)
 		}
 	})
 }

@@ -323,7 +323,7 @@ Rails の MVC に合わせ、「入力チェックはモデルでやる」をそ
 | `university` | `University`・`Faculty`・`_FacultyToTag` | 学部の作成・変更（学部＋タグの付け替え） |
 | `textbookmaster`（`model/` に移した） | `TextbookMaster`・`TextbookMasterMetric` | 参考書マスターの作成・変更（マスター＋測り方の付け替え）。大学と一緒に変える操作は無いので、`catalog` にはまとめない |
 | `notification` | `LineConnection`・`LineLinkNonce`・`LineOAuthAttempt`・`LineWebhookEvent`・`NotificationPreference`・`NotificationDelivery` | LINE の連携の解除（連携＋確認用の値＋通知の設定） |
-| `simulation` | `user.simSeq`・`simCohort`・`simLastActedOn`・`simDormantFrom` | 負荷のシミュレーション（`/admin/sim`）の利用者の印。ほかの持ち主の列と一緒に変える操作は無い |
+| `simulation` | `UserSimulation`・`user.simSeq`・`simCohort`・`simLastActedOn`・`simDormantFrom` | 負荷のシミュレーション（`/admin/sim`）の利用者の印。ほかの持ち主の列と一緒に変える操作は無い。`user` の列から 1対1 の `UserSimulation` へ移している途中（JUK-228） |
 | `chaos` | `ChaosExperiment` | 障害注入の実験（JUK-173）。利用者のデータとは一緒に変えない |
 
 決めたこと：
