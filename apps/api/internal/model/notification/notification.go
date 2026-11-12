@@ -1,13 +1,12 @@
-// Package notification は通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。
-// 持ち主の一覧と決まりは docs/architecture.md「バックエンドの構成」（JUK-148・JUK-150）。
+// Package notification は通知（LINE の連携・通知の設定・送った印）のモデル。入力の決まり・読み取り・書き込みを持ち、
+// HTTP は知らない（docs/architecture.md「モデル・コントローラー・ビュー」、JUK-221）。
 //
-//   - internal/feature/line：LINE の連携（Account Link の nonce・LINE Login の試行・連携・解除・Webhook の処理済みの印）
-//   - このファイル：通知の設定と、毎日の通知を送った印
+//   - line.go・line_read.go：LINE の連携（Account Link の nonce・LINE Login の試行・連携・解除・Webhook の処理済みの印）
+//   - このファイル・input.go：通知の設定と、毎日の通知を送った印
+//   - recipients.go：毎日の通知を受け取る人と、その日の予定・実績の読み取り
 //
 // 「LINE 通知は連携しているときだけ ON にできる」はここで守る。設定の保存は連携の行を共有ロックで読んでから書き、
 // 解除は連携の行を消してから設定を落とすので、どちらが先に来ても、連携が無いのに LINE 通知が ON の行は残らない。
-//
-// 入力の形の確かめ（Zod と同じ 400）は入口が行い、ここには確かめ済みの値が来る。
 package notification
 
 import (
@@ -23,7 +22,7 @@ import (
 var ErrLineNotConnected = errors.New("LINEと連携してからLINE通知を選択してください")
 
 // Preference は通知の設定。
-// 項目の名前・型・並びを画面に返す形（apischema の NotificationPreference）とそろえ、入口が型の変換だけで渡せるようにしている。
+// 項目の名前・型・並びを画面に返す形（apischema の NotificationPreference）とそろえ、ビューが型の変換だけで返せるようにしている。
 type Preference struct {
 	EmailEveningEnabled bool
 	EmailMorningEnabled bool
@@ -31,9 +30,28 @@ type Preference struct {
 	LineMorningEnabled  bool
 }
 
-// SavePreference は通知の設定を保存する（無ければ作る）。LINE 通知を ON にするなら、連携していなければ ErrLineNotConnected。
-func SavePreference(ctx context.Context, db *sql.DB, userID string, p Preference, now time.Time) error {
-	return database.InTx(ctx, db, func(tx *sql.Tx) error {
+// FindPreference は通知の設定を返す。まだ保存していなければ、全部 false。
+func FindPreference(ctx context.Context, db *sql.DB, userID string) (Preference, error) {
+	var p Preference
+	err := db.QueryRowContext(ctx,
+		`SELECT morningEnabled, eveningEnabled, lineMorningEnabled, lineEveningEnabled
+		 FROM NotificationPreference WHERE userId = ?`,
+		userID,
+	).Scan(&p.EmailMorningEnabled, &p.EmailEveningEnabled, &p.LineMorningEnabled, &p.LineEveningEnabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Preference{}, nil
+	}
+	return p, err
+}
+
+// SavePreference は本文（body）を確かめて通知の設定を保存し（無ければ作る）、保存した設定を返す。
+// 本文の形が違えば *validation.Issue、LINE 通知を ON にするのに連携していなければ ErrLineNotConnected。
+func SavePreference(ctx context.Context, db *sql.DB, userID string, body any, now time.Time) (Preference, error) {
+	p, err := decodePreference(body)
+	if err != nil {
+		return Preference{}, err
+	}
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		if p.LineMorningEnabled || p.LineEveningEnabled {
 			// FOR SHARE で連携の行を押さえ、保存し終わるまで解除（行の削除）を待たせる。
 			var one int
@@ -61,6 +79,10 @@ func SavePreference(ctx context.Context, db *sql.DB, userID string, p Preference
 			userID, p.EmailMorningEnabled, p.EmailEveningEnabled, p.LineMorningEnabled, p.LineEveningEnabled, now, now)
 		return err
 	})
+	if err != nil {
+		return Preference{}, err
+	}
+	return FindPreference(ctx, db, userID)
 }
 
 // Delivery は毎日の通知の「この日・この時間帯・この経路」。

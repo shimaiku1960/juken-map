@@ -1,6 +1,6 @@
 //go:build dbtest
 
-// LINE 連携の SQL（sqlLineStore と、その書き込みが呼ぶ持ち主の internal/write/notification）を本物の DB に流して確かめる。ふだんの go test では動かない
+// LINE 連携の SQL（sqlLineStore と、それが呼ぶモデルの internal/model/notification）を本物の DB に流して確かめる。ふだんの go test では動かない
 // （dbtest タグ。`pnpm test:go-db` と CI の check のジョブが動かす）。
 // 利用者はテストごとに作り、最後に消す（LINE の表は user の削除で一緒に消える）。
 package line
@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/notification"
 )
 
 func TestLineStoreDB(t *testing.T) {

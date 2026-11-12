@@ -133,7 +133,7 @@
 - **`FOR UPDATE` は写真を見ずに、確定済みの最新の行を読んでロックする。** 同じ B のトランザクションの中でも、普通の SELECT は 60、`FOR UPDATE` は 90 を返した
 - **READ COMMITTED は、普通の SELECT のたびに写真を撮り直す。** B が同じ SELECT を2回打つと 60 → 90 と変わった。同じ行を読み直すと値が変わることを non-repeatable read と言い、REPEATABLE READ はこれが起きないことから名前が付いている
 - **分離レベルが変えるのは「普通の SELECT に何が見えるか」だけ。** READ COMMITTED にしても、A と B がほぼ同時に 60 を読めば lost update は起きる（実験はしていない）。防ぐのは行のロック（`FOR UPDATE`）か、読まずに DB の中で足す `SET minutes = minutes + 30`（実験はしていない）
-- **このリポジトリが既定の REPEATABLE READ のままで足りている理由。** 読んでから書き戻す更新は `FOR UPDATE` で読んでいる。学習記録の書き換え `UpdateLog`（`model/studyrecord/log.go:99`）と、LINE 連携の nonce を使い切る `CompleteAccountLink`（`write/notification/line.go:60`）がそう。`FOR UPDATE` の読み取りは分離レベルによらず最新を読むので、分離レベルを変えても得るものが無い。違いが出る普通の SELECT は画面に出すための読み取りで、ほかの人の更新が一瞬遅れて見えても困らない
+- **このリポジトリが既定の REPEATABLE READ のままで足りている理由。** 読んでから書き戻す更新は `FOR UPDATE` で読んでいる。学習記録の書き換え `UpdateLog`（`model/studyrecord/log.go:99`）と、LINE 連携の nonce を使い切る `CompleteAccountLink`（`model/notification/line.go`）がそう。`FOR UPDATE` の読み取りは分離レベルによらず最新を読むので、分離レベルを変えても得るものが無い。違いが出る普通の SELECT は画面に出すための読み取りで、ほかの人の更新が一瞬遅れて見えても困らない
 
 ### 数字で見た結果
 

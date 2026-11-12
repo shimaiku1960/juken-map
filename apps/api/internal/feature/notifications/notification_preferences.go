@@ -1,7 +1,6 @@
 package notifications
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -10,68 +9,47 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/notification"
 )
 
-// 通知設定の読み取り（JUK-73）と保存（JUK-75）。
-// 保存（LINE と連携していなければ LINE 通知を ON にできない、も含む）は持ち主の internal/write/notification にある（JUK-154）。
-
-type preferenceStore struct {
-	db *sql.DB
-}
-
-// find は自分の通知設定を返す。まだ保存していなければ、全部 false。
-func (st *preferenceStore) find(ctx context.Context, userID string) (apischema.NotificationPreference, error) {
-	var p apischema.NotificationPreference
-	err := st.db.QueryRowContext(ctx,
-		`SELECT morningEnabled, eveningEnabled, lineMorningEnabled, lineEveningEnabled
-		 FROM NotificationPreference WHERE userId = ?`,
-		userID,
-	).Scan(&p.EmailMorningEnabled, &p.EmailEveningEnabled, &p.LineMorningEnabled, &p.LineEveningEnabled)
-	if errors.Is(err, sql.ErrNoRows) {
-		return apischema.NotificationPreference{}, nil
-	}
-	return p, err
-}
+// 通知設定の読み取り（JUK-73）と保存（JUK-75）のコントローラー。
+// 入力の決まり・読み取り・保存（LINE と連携していなければ LINE 通知を ON にできない、も含む）は
+// モデルの internal/model/notification にある（JUK-225）。
 
 type PreferenceHandlers struct {
-	store *preferenceStore
+	db *sql.DB
 }
 
 // NewPreferenceHandlers は通知設定の入口を組み立てる。
 func NewPreferenceHandlers(db *sql.DB) *PreferenceHandlers {
-	return &PreferenceHandlers{store: &preferenceStore{db: db}}
+	return &PreferenceHandlers{db: db}
+}
+
+// preferenceView は通知の設定を画面に返す形にする。項目は同じ並びなので型の変換だけ。
+func preferenceView(p notification.Preference) apischema.NotificationPreference {
+	return apischema.NotificationPreference(p)
 }
 
 // Get は GET /api/notification-preferences。
 func (h *PreferenceHandlers) Get(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
-	p, err := h.store.find(r.Context(), s.UserID)
+	p, err := notification.FindPreference(r.Context(), h.db, s.UserID)
 	if err != nil {
 		httpx.InternalError(w, r, fmt.Errorf("notification-preferences: %w", err))
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, p)
+	httpx.WriteJSON(w, http.StatusOK, preferenceView(p))
 }
 
-// Save は PUT /api/notification-preferences。入力チェックは Zod の notificationPreferenceSchema と同じ（4つとも真偽値）。
+// Save は PUT /api/notification-preferences。
 func (h *PreferenceHandlers) Save(w http.ResponseWriter, r *http.Request, s *httpx.Session) {
 	body, ok := httpx.ReadBody(w, r, httpx.DefaultBodyLimit)
 	if !ok {
 		return
 	}
-	in := validation.ReadObject(body.Value())
-	input := apischema.NotificationPreference{
-		EmailMorningEnabled: in.Boolean("emailMorningEnabled"),
-		EmailEveningEnabled: in.Boolean("emailEveningEnabled"),
-		LineMorningEnabled:  in.Boolean("lineMorningEnabled"),
-		LineEveningEnabled:  in.Boolean("lineEveningEnabled"),
-	}
-	if httpx.Reject(w, in) {
+	saved, err := notification.SavePreference(r.Context(), h.db, s.UserID, body.Value(), dates.NowMillis())
+	if httpx.RejectIssue(w, err) {
 		return
 	}
-
-	err := notification.SavePreference(r.Context(), h.store.db, s.UserID, notification.Preference(input), dates.NowMillis())
 	if errors.Is(err, notification.ErrLineNotConnected) {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
@@ -80,10 +58,5 @@ func (h *PreferenceHandlers) Save(w http.ResponseWriter, r *http.Request, s *htt
 		httpx.InternalError(w, r, fmt.Errorf("notification-preferences: %w", err))
 		return
 	}
-	saved, err := h.store.find(r.Context(), s.UserID)
-	if err != nil {
-		httpx.InternalError(w, r, fmt.Errorf("notification-preferences: %w", err))
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, saved)
+	httpx.WriteJSON(w, http.StatusOK, preferenceView(saved))
 }

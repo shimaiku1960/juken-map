@@ -20,7 +20,7 @@ import (
 
 // controllers は、モデルに移した機能のコントローラー（internal/feature の下のパッケージ）。
 // 機能をモデルに移したら、ここに足す（docs/architecture.md「モデル・コントローラー・ビュー」、JUK-219・JUK-221）。
-var controllers = []string{"goals", "study", "textbooks", "universities"}
+var controllers = []string{"goals", "line", "notifications", "study", "textbooks", "universities"}
 
 // TestControllerHasNoSQLOrRules は、コントローラーが SQL も入力の決まりも持たないことを確かめる。
 // 読み書きと入力の決まりはモデル（internal/model の下）が持つ。

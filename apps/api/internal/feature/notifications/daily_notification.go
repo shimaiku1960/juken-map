@@ -7,18 +7,14 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/notification"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
 )
 
 // 毎日の通知の文面と、「日本時間の今日」の範囲（JUK-74）。
 // DB も外部サービスも使わない。
 
-type planSummary struct {
-	Done         bool
-	Content      *string
-	Subject      *string
-	TextbookName *string
-}
+type planSummary = notification.Plan
 
 type dailyMessage struct {
 	Subject string
