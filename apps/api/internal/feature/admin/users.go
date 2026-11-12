@@ -41,10 +41,10 @@ const (
 // userKinds は種別の並び。概要ではこの順に全部並べる（画面の src/shared/dto/admin.ts の USER_KINDS と同じ）。
 var userKinds = []apischema.UserKind{apischema.UserKindReal, apischema.UserKindSim, apischema.UserKindSeed, apischema.UserKindDemo}
 
-// kindSQL は利用者の種別を SQL の中で決める。判定の順番に意味がある：sim は simSeq で、
+// kindSQL は利用者の種別を SQL の中で決める。判定の順番に意味がある：sim は UserSimulation に行があるかで、
 // seed はメールの印で、デモは固定アドレスで見分ける。? を含むので、使うたびに kindParams を同じ位置に並べる。
 const kindSQL = `CASE
-  WHEN u.simSeq IS NOT NULL THEN 'sim'
+  WHEN EXISTS (SELECT 1 FROM UserSimulation s WHERE s.userId = u.id) THEN 'sim'
   WHEN u.email LIKE ? THEN 'seed'
   WHEN u.email = ? THEN 'demo'
   ELSE 'real'

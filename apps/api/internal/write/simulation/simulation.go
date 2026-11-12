@@ -1,12 +1,11 @@
-// Package simulation は負荷のシミュレーション（sim/、/admin/sim）の利用者の印（user.simSeq・simCohort・
-// simLastActedOn・simDormantFrom と、UserSimulation）への書き込みの持ち主。持ち主の一覧と決まりは docs/architecture.md
-// 「バックエンドの構成」（JUK-148・JUK-150）。
+// Package simulation は負荷のシミュレーション（sim/、/admin/sim）の利用者の印（UserSimulation）への書き込みの持ち主。
+// 持ち主の一覧と決まりは docs/architecture.md「バックエンドの構成」（JUK-148・JUK-150）。
 //
-// 印は user の列から 1対1 の UserSimulation へ移している途中（JUK-228）。今は user の列が正で、書き込みのたびに
-// その利用者の行を UserSimulation へ写す（copyToTable）。次の段階で UserSimulation だけを読み書きする。
+// 印は user と 1対1 の UserSimulation に持つ（JUK-228）。この表に行がある利用者がシミュレーション用。
+// 前は user の列（simSeq など）に持っていた。その列は読み書きしなくなり、次のデプロイで消す。
 //
 // 触れる相手はシミュレーション用のメールアドレス（delivered+simNNNNN@resend.dev）だけ。どの SQL もアドレスの形を
-// WHERE に入れる。simSeq が付いているかだけで絞ると、何かの間違いで実ユーザーに simSeq が付いたときに触ってしまう。
+// WHERE に入れる。UserSimulation に行があるかだけで絞ると、何かの間違いで実ユーザーに行ができたときに触ってしまう。
 //
 // 入力の形の確かめは入口が行い、ここには確かめ済みの値が来る。
 package simulation
@@ -16,7 +15,6 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
@@ -33,19 +31,29 @@ var (
 	ErrDuplicate = errors.New("この連番はすでに使われています")
 )
 
-// Mark は登録を済ませた合成ユーザーに連番と続き方の型を付ける。
-func Mark(ctx context.Context, db *sql.DB, email string, seq int64, cohort string, now time.Time) error {
+// Mark は登録を済ませた合成ユーザーに連番と続き方の型を付ける。付け直すときは、最後に操作した日・来なくなった日を残す。
+func Mark(ctx context.Context, db *sql.DB, email string, seq int64, cohort string) error {
 	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx,
-			"UPDATE `user` SET simSeq = ?, simCohort = ?, updatedAt = ? WHERE email = ? AND email LIKE ?",
-			seq, cohort, now, email, EmailLike)
+		var userID string
+		err := tx.QueryRowContext(ctx,
+			"SELECT id FROM `user` WHERE email = ? AND email LIKE ? FOR UPDATE", email, EmailLike).Scan(&userID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
 		if err != nil {
 			return err
 		}
-		if err := foundOrErr(res); err != nil {
+		// 行があれば書き換え、無ければ入れる。INSERT ... ON DUPLICATE KEY UPDATE は、連番がほかの利用者の行と
+		// ぶつかったときにその行のほうを書き換えてしまうため使わない。こう書けば、ぶつかったときは DuplicateEntry で止まる。
+		res, err := tx.ExecContext(ctx, "UPDATE UserSimulation SET seq = ?, cohort = ? WHERE userId = ?", seq, cohort, userID)
+		if err != nil {
 			return err
 		}
-		return copyToTable(ctx, tx, "email = ?", email)
+		if n, err := res.RowsAffected(); err != nil || n > 0 {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, "INSERT INTO UserSimulation (userId, seq, cohort) VALUES (?, ?, ?)", userID, seq, cohort)
+		return err
 	})
 	if database.IsMySQLError(err, database.DuplicateEntry) {
 		return ErrDuplicate
@@ -68,8 +76,8 @@ func RecordActivity(ctx context.Context, db *sql.DB, seq int64, a Activity) erro
 		column string
 		field  opt.Field[string]
 	}{
-		{"simLastActedOn", a.LastActedOn},
-		{"simDormantFrom", a.DormantFrom},
+		{"s.lastActedOn", a.LastActedOn},
+		{"s.dormantFrom", a.DormantFrom},
 	} {
 		if c.field.Present {
 			sets = append(sets, c.column+" = ?")
@@ -79,41 +87,15 @@ func RecordActivity(ctx context.Context, db *sql.DB, seq int64, a Activity) erro
 	if len(sets) == 0 {
 		return nil
 	}
-	return database.InTx(ctx, db, func(tx *sql.Tx) error {
-		// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（sets）。値は args で ? として渡す
-		res, err := tx.ExecContext(ctx,
-			"UPDATE `user` SET "+strings.Join(sets, ", ")+" WHERE simSeq = ? AND email LIKE ?",
-			append(args, seq, EmailLike)...)
-		if err != nil {
-			return err
-		}
-		if err := foundOrErr(res); err != nil {
-			return err
-		}
-		return copyToTable(ctx, tx, "simSeq = ?", seq)
-	})
-}
-
-// copyToTable は、user の列の印を UserSimulation へ写す（JUK-228 の「足す」の段階）。where は user を1人に絞る
-// 固定の条件で、値は arg で渡す。差分ではなく行ごと写し直すので、この段階の前に印が付いた利用者も、
-// 次に書き込んだときに UserSimulation へ入る。
-//
-// 一度消してから入れる。INSERT ... ON DUPLICATE KEY UPDATE は、連番がほかの利用者の行とぶつかったときに
-// その行のほうを書き換えてしまうため使わない。消してから入れれば、ぶつかったときは DuplicateEntry で止まる。
-func copyToTable(ctx context.Context, tx *sql.Tx, where string, arg any) error {
-	// #nosec G202 -- where は呼び出し元に書いた固定の条件だけ。値は arg で ? として渡す
-	if _, err := tx.ExecContext(ctx,
-		"DELETE s FROM UserSimulation s JOIN `user` u ON u.id = s.userId WHERE u."+where+" AND u.email LIKE ?",
-		arg, EmailLike); err != nil {
+	// #nosec G202 -- 列名はこの関数に書いた固定の名前だけ（sets）。値は args で ? として渡す
+	res, err := db.ExecContext(ctx,
+		"UPDATE UserSimulation s JOIN `user` u ON u.id = s.userId SET "+strings.Join(sets, ", ")+
+			" WHERE s.seq = ? AND u.email LIKE ?",
+		append(args, seq, EmailLike)...)
+	if err != nil {
 		return err
 	}
-	// #nosec G202 -- 同上
-	_, err := tx.ExecContext(ctx,
-		"INSERT INTO UserSimulation (userId, seq, cohort, dormantFrom, lastActedOn)"+
-			" SELECT id, simSeq, simCohort, simDormantFrom, simLastActedOn FROM `user`"+
-			" WHERE "+where+" AND email LIKE ? AND simSeq IS NOT NULL AND simCohort IS NOT NULL",
-		arg, EmailLike)
-	return err
+	return foundOrErr(res)
 }
 
 // foundOrErr は UPDATE が1行も当たらなければ ErrNotFound。

@@ -19,7 +19,7 @@ GitHub Actions（`.github/workflows/simulation.yml`）が毎時 `sim/run-hour.ts
   アプリは実際の利用者と同じく確認メールを送る。シミュレーターは Resend の API でその本文を読み、
   リンクを踏む（`resend-inbox.ts`）。
 - ペルソナは連番と日付だけから決まる純粋関数なので、ランナーがまっさらでも同じ人は同じように振る舞う。
-  DB に残すのは「実際に起きたこと」（`user.simLastActedOn` / `simDormantFrom`）だけ。
+  DB に残すのは「実際に起きたこと」（`UserSimulation.lastActedOn` / `dormantFrom`）だけ。
 - 「今日すでにやったか」を DB の値で判断するので、同じ時間に2回動いても二重にはならない。
 - GitHub Actions の定時実行はよく間引かれる（2026-09-18〜19 は約24時間で6回）。来訪も登録も、同じ日のうちなら次の回で取り戻す。日付をまたいだ分は取り戻さない。
 - ログイン状態（Cookie）は暗号化して `actions/cache` で次の回へ引き継ぐ。消えてもログインし直すだけ。

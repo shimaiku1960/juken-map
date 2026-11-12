@@ -96,7 +96,7 @@ func (app dbAdminApp) expectError(rec *httptest.ResponseRecorder, status int, me
 	}
 }
 
-// adminUser は利用者を1人作る。email が空ならメールなし（NULL）。消すのはテストの終わり（ぶら下がる行は CASCADE）。
+// adminUser は利用者を1人作る。email が空ならメールなし（NULL）。simSeq が nil でなければシミュレーション用にする。消すのはテストの終わり（ぶら下がる行は CASCADE）。
 func (fx dbFixture) adminUser(email, role string, createdAt time.Time, simSeq any) string {
 	fx.T.Helper()
 	id := "test-go-" + dbtest.Hex(8)
@@ -104,9 +104,12 @@ func (fx dbFixture) adminUser(email, role string, createdAt time.Time, simSeq an
 	if email != "" {
 		emailValue = email
 	}
-	fx.Exec("INSERT INTO `user` (id, email, role, simSeq, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, TRUE, ?, ?)",
-		id, emailValue, role, simSeq, createdAt, createdAt)
+	fx.Exec("INSERT INTO `user` (id, email, role, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, TRUE, ?, ?)",
+		id, emailValue, role, createdAt, createdAt)
 	fx.T.Cleanup(func() { fx.Exec("DELETE FROM `user` WHERE id = ?", id) })
+	if simSeq != nil {
+		fx.Exec("INSERT INTO UserSimulation (userId, seq, cohort) VALUES (?, ?, 'steady')", id, simSeq)
+	}
 	return id
 }
 
