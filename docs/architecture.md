@@ -216,9 +216,10 @@ apps/api/
   │ └ sim/  chaos/  analytics/  cspreport/
   ├ model/                モデル：入力の決まり・読み取り・書き込みを持つ（下の「モデル・コントローラー・ビュー」）
   │ ├ studyrecord/        学習記録（実績・予定・初回記録の日時）
-  │ └ goal/               志望校
+  │ ├ goal/               志望校
+  │ └ textbook/           参考書（参考書マスターの一覧の読み取りも）
   ├ write/                書き込みの持ち主（操作とトランザクション）。model へ順に移す
-  │ ├ account/  authguard/  textbook/
+  │ ├ account/  authguard/
   │ ├ university/  textbookmaster/  notification/  simulation/  chaos/   （一覧は下の「持ち主の一覧」）
   │ └ expired/            持ち主ではなく、持ち主たちが使う期限切れの行の消し方（下の「決まり」の5）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
@@ -285,8 +286,8 @@ apps/api/
 #### モデル・コントローラー・ビュー（2026-11-12 決定、JUK-219。学習記録から）
 
 Rails の MVC に合わせ、「入力チェックはモデルでやる」をそのまま守れる形にした。学習記録から始め、
-ほかの機能も持ち主ごとに移している（JUK-221。移した機能は学習記録・志望校）。移すまでは今までどおり
-`feature` が読み取りと入力チェック、`write` が書き込みを持つ。下の表は学習記録の例で、志望校は `feature/goals` と `model/goal`。
+ほかの機能も持ち主ごとに移している（JUK-221。移した機能は学習記録・志望校・参考書）。移すまでは今までどおり
+`feature` が読み取りと入力チェック、`write` が書き込みを持つ。下の表は学習記録の例で、志望校は `feature/goals` と `model/goal`、参考書は `feature/textbooks` と `model/textbook`。
 
 | 層 | 置き場所 | 持つもの | 持たないもの |
 |---|---|---|---|
@@ -316,7 +317,7 @@ Rails の MVC に合わせ、「入力チェックはモデルでやる」をそ
 | `account` | `user`（下の列を除く）・`AuthSession`・`AuthPassword`・`AuthToken`・`AuthIdentity`・`AuthTotp`・`AuthBackupCode`・`AuthMfaChallenge`・`OpsAuditLog` | 利用停止（停止の印＋セッション削除）、パスワードの再設定（パスワード＋セッション・トークン・確認待ちの削除）、OAuth の連携（利用者＋連携＋パスワード・セッション・トークンの削除）、2段階認証の設定とリセット（TOTP＋予備コード＋確認待ち）、退会と管理者の削除（`DELETE FROM user` と外部キーの連鎖） |
 | `authguard` | `AuthOAuthState`・`AuthThrottle`・`EmailSend` | ログインの途中の一時的な状態と、回数の制限。`account` の表と一緒に変える操作は無い |
 | `studyrecord`（`model/` に移した） | `StudyLog`・`StudyPlan`・`user.firstStudyLogAt` | 予定の完了（予定＋実績＋初回記録日時）、実績の記録（実績＋初回記録日時） |
-| `textbook` | `Textbook` | 学習記録と一緒に変える操作は無い（予定の完了は総量を読むだけ） |
+| `textbook`（`model/` に移した） | `Textbook` | 学習記録と一緒に変える操作は無い（予定の完了は総量を読むだけ） |
 | `goal`（`model/` に移した） | `FinalGoal` | 単独 |
 | `university` | `University`・`Faculty`・`_FacultyToTag` | 学部の作成・変更（学部＋タグの付け替え） |
 | `textbookmaster` | `TextbookMaster`・`TextbookMasterMetric` | 参考書マスターの作成・変更（マスター＋測り方の付け替え）。大学と一緒に変える操作は無いので、`catalog` にはまとめない |

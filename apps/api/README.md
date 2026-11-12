@@ -269,7 +269,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | --- | --- |
 | `internal/feature/study/` | 学習記録のコントローラーとビュー。学習記録・予定の一覧、ダッシュボード、実績の記録・書き換え・削除、予定の作成（まとめて）・書き換え・削除・完了の入口。HTTP だけを扱い、SQL と入力の決まりは `internal/model/studyrecord` にある（JUK-219） |
 | `internal/feature/goals/` | 志望校のコントローラーとビュー。一覧と第一志望／志望校の追加・書き換え（PUT・PATCH）・削除の入口。SQL と入力の決まりは `internal/model/goal` にある（JUK-222） |
-| `internal/feature/textbooks/` | 参考書の一覧と参考書マスター／参考書の追加（マスターからも）・進み具合の書き換えの入口（書き込みは `internal/write/textbook`） |
+| `internal/feature/textbooks/` | 参考書のコントローラーとビュー。一覧と参考書マスター（応答はメモリに持つ）／参考書の追加（マスターからも）・逆算設定の書き換えの入口。SQL と入力の決まりは `internal/model/textbook` にある（JUK-223） |
 | `internal/feature/universities/` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細 |
 | `internal/feature/auth/profile.go` | プロフィールの更新 |
 | `internal/feature/notifications/notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存（保存は `internal/write/notification`） |
@@ -344,7 +344,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/write/account/` | アカウントへの書き込みの持ち主（`user` の行・ログインの状態・運用の記録）。利用停止・解除（`suspend.go`）、セッション（`session.go`）、登録とメールの確認（`registration.go`）、パスワード・メールのトークン・2段階認証の途中の状態（`credential.go`）、TOTP と予備コード（`totp.go`）、外部ログインの連携・削除・ニックネーム・計測の印（`user.go`）、権限（`role.go`）。運用のコマンドから呼ぶ操作は、記録（`OpsAuditLog`）を同じトランザクションで書く（JUK-151・JUK-154、構成は `docs/architecture.md`「バックエンドの構成」） |
 | `internal/model/studyrecord/` | 学習記録（実績・予定・初回記録の日時）のモデル。入力の決まり（Zod と同じ 400）、一覧とダッシュボードの読み取り（3本の SQL を同時に流す）、実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |
 | `internal/model/goal/` | 志望校のモデル。入力の決まり（Zod と同じ 400）、一覧（学部のタグつき）と第一志望の読み取り、登録・学部の差し替え・第一志望やメモの変更・削除。第一志望の付け替えを1つのトランザクションで行う（JUK-154・JUK-222） |
-| `internal/write/textbook/` | 利用者の参考書への書き込みの持ち主。名前・参考書マスターからの登録と、逆算設定の変更（JUK-154） |
+| `internal/model/textbook/` | 参考書のモデル。入力の決まり（Zod と同じ 400。登録は名前かマスターの2択）、自分の参考書と参考書マスターの一覧の読み取り、名前・マスターからの登録と逆算設定の変更（JUK-154・JUK-223） |
 | `internal/write/university/` | 大学・学部のマスター（学部のタグを含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。志望校に使われている行は消さない（JUK-154） |
 | `internal/write/textbookmaster/` | 参考書マスター（総量の候補を含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154） |
 | `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |

@@ -11,12 +11,13 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx/httpxtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/textbook"
 )
 
 func TestTextbookMasterJSON(t *testing.T) {
 	// 手元のマスターはどれも総量の候補と出版社・版を持つので、その逆の場合は応答一致テストで確かめられない。
 	// 画面が前提にしている形（候補が無くても "metrics": []、出版社・版が無ければ null）をここで確かめる。
-	raw, err := json.Marshal(apischema.TextbookMaster{Metrics: []apischema.TextbookMasterMetric{}})
+	raw, err := json.Marshal(mastersView([]textbook.Master{{}})[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,14 +33,14 @@ func TestTextbookMasterJSON(t *testing.T) {
 }
 
 func TestTextbookMastersFromCache(t *testing.T) {
-	st := newStore(nil)
+	h := &Handlers{}
 	loads := 0
-	st.masters = httpx.NewJSONSnapshotCache(time.Minute, func(context.Context) (any, error) {
+	h.masters = httpx.NewJSONSnapshotCache(time.Minute, func(context.Context) (any, error) {
 		loads++
 		return []apischema.TextbookMaster{}, nil
 	})
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
-	rt.User("GET /api/textbook-masters", (&Handlers{store: st}).ListMasters)
+	rt.User("GET /api/textbook-masters", h.ListMasters)
 
 	get := func(etag string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("GET", "/api/textbook-masters", nil)
