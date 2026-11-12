@@ -23,7 +23,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
@@ -56,10 +55,10 @@ type store struct {
 func (st *store) state(ctx context.Context) (apischema.SimulationState, error) {
 	// DATE 列はタイムゾーンの解釈を挟まないよう、文字列のまま返す。
 	rows, err := st.db.QueryContext(ctx,
-		"SELECT simSeq, email, simCohort, createdAt,"+
-			" DATE_FORMAT(simDormantFrom, '%Y-%m-%d') AS dormantFrom,"+
-			" DATE_FORMAT(simLastActedOn, '%Y-%m-%d') AS lastActedOn"+
-			" FROM `user` WHERE simSeq IS NOT NULL AND email LIKE ? ORDER BY simSeq ASC",
+		"SELECT s.seq, u.email, s.cohort, u.createdAt,"+
+			" DATE_FORMAT(s.dormantFrom, '%Y-%m-%d') AS dormantFrom,"+
+			" DATE_FORMAT(s.lastActedOn, '%Y-%m-%d') AS lastActedOn"+
+			" FROM UserSimulation s JOIN `user` u ON u.id = s.userId WHERE u.email LIKE ? ORDER BY s.seq ASC",
 		simEmailLike)
 	if err != nil {
 		return apischema.SimulationState{}, err
@@ -204,7 +203,7 @@ func (h *Handlers) MarkUser(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, invalidInput)
 		return
 	}
-	err := simulation.Mark(r.Context(), h.store.db, m.Email, m.Seq, string(m.Cohort), time.Now().UTC())
+	err := simulation.Mark(r.Context(), h.store.db, m.Email, m.Seq, string(m.Cohort))
 	if !writeSimError(w, r, "sim mark user", err) {
 		w.WriteHeader(http.StatusNoContent)
 	}
