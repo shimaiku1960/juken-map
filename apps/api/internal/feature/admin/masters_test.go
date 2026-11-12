@@ -26,10 +26,9 @@ type fakeAdminMasterStore struct {
 	failure masterFailure
 	count   int
 
-	universities    []universityInput
-	faculties       []facultyInput
-	textbookMasters []textbookMasterInput
-	deleted         []int64
+	universities []universityInput
+	faculties    []facultyInput
+	deleted      []int64
 }
 
 func (f *fakeAdminMasterStore) listUniversities(_ context.Context, q string, page int) (apischema.AdminUniversityList, error) {
@@ -79,29 +78,6 @@ func (f *fakeAdminMasterStore) deleteFaculty(_ context.Context, id int64) (maste
 	return masterOutcome[apischema.AdminFacultySnapshot]{failure: f.failure, count: f.count}, nil
 }
 
-func (f *fakeAdminMasterStore) listTextbookMasters(_ context.Context, q string) ([]apischema.AdminTextbookMaster, error) {
-	return []apischema.AdminTextbookMaster{{ID: 1, Name: q, Metrics: []apischema.AdminTextbookMasterMetric{}}}, nil
-}
-
-func (f *fakeAdminMasterStore) createTextbookMaster(_ context.Context, in textbookMasterInput) (masterOutcome[apischema.AdminTextbookMaster], error) {
-	f.textbookMasters = append(f.textbookMasters, in)
-	return masterOutcome[apischema.AdminTextbookMaster]{failure: f.failure, value: textbookMasterOf(3, in)}, nil
-}
-
-func (f *fakeAdminMasterStore) updateTextbookMaster(_ context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[apischema.AdminTextbookMaster]], error) {
-	f.textbookMasters = append(f.textbookMasters, in)
-	return masterOutcome[masterChange[apischema.AdminTextbookMaster]]{failure: f.failure, value: masterChange[apischema.AdminTextbookMaster]{after: textbookMasterOf(id, in)}}, nil
-}
-
-func (f *fakeAdminMasterStore) deleteTextbookMaster(_ context.Context, id int64) (masterOutcome[apischema.AdminTextbookMaster], error) {
-	f.deleted = append(f.deleted, id)
-	return masterOutcome[apischema.AdminTextbookMaster]{failure: f.failure, count: f.count}, nil
-}
-
-func textbookMasterOf(id int64, in textbookMasterInput) apischema.AdminTextbookMaster {
-	return apischema.AdminTextbookMaster{ID: id, Name: in.name, Publisher: in.publisher, Edition: in.edition, Isbn: in.isbn, Metrics: in.metrics}
-}
-
 func newAdminMasterTestRouter(store *fakeAdminMasterStore) *httpx.Router {
 	h := &MasterHandlers{store: store}
 	rt := httpx.NewRouter(httpxtest.FakeSessions(httpxtest.Sessions))
@@ -114,17 +90,12 @@ func newAdminMasterTestRouter(store *fakeAdminMasterStore) *httpx.Router {
 	rt.Admin("POST /api/admin/faculties", h.CreateFaculty)
 	rt.Admin("PATCH /api/admin/faculties/{id}", h.UpdateFaculty)
 	rt.Admin("DELETE /api/admin/faculties/{id}", h.DeleteFaculty)
-	rt.Admin("GET /api/admin/textbook-masters", h.ListTextbookMasters)
-	rt.Admin("POST /api/admin/textbook-masters", h.CreateTextbookMaster)
-	rt.Admin("PATCH /api/admin/textbook-masters/{id}", h.UpdateTextbookMaster)
-	rt.Admin("DELETE /api/admin/textbook-masters/{id}", h.DeleteTextbookMaster)
 	return rt
 }
 
 const (
-	validUniversity     = `{"name":"大学","prefecture":"東京都","type":"国立"}`
-	validFaculty        = `{"name":"学部","examDate":"2027-02-01","tagIds":[1,2],"universityId":1}`
-	validTextbookMaster = `{"name":"本","publisher":"社","edition":"第2版","isbn":"978-4-00-000000-0","metrics":[{"unit":"page","totalAmount":100,"isDefault":true}]}`
+	validUniversity = `{"name":"大学","prefecture":"東京都","type":"国立"}`
+	validFaculty    = `{"name":"学部","examDate":"2027-02-01","tagIds":[1,2],"universityId":1}`
 )
 
 // with は JSON のオブジェクト base の key を value（JSON）に置き換える。value が "" ならキーを消す。
@@ -153,9 +124,6 @@ func validationBody(code, field, message string) string {
 
 // TestAdminMasterValidation は入力チェック。期待値は Node（Zod のスキーマ）に同じ本文を渡して得たもの。
 func TestAdminMasterValidation(t *testing.T) {
-	metric := func(unit, total, isDefault string) string {
-		return `{"unit":` + unit + `,"totalAmount":` + total + `,"isDefault":` + isDefault + `}`
-	}
 	seq := func(n int, item func(i int) string) string {
 		items := make([]string, n)
 		for i := range items {
@@ -163,7 +131,6 @@ func TestAdminMasterValidation(t *testing.T) {
 		}
 		return "[" + strings.Join(items, ",") + "]"
 	}
-	units := []string{`"page"`, `"question"`, `"chapter"`, `"number"`, `"part"`, `"section"`}
 
 	tests := []struct {
 		name, method, path, body string
@@ -214,41 +181,6 @@ func TestAdminMasterValidation(t *testing.T) {
 		{"大学なし", "POST", "/api/admin/faculties", with(validFaculty, "universityId", ""), validationBody("invalid_type", "universityId", "Invalid input: expected number, received undefined")},
 		{"名前と大学の両方が不正なら名前（大学は最後）", "POST", "/api/admin/faculties", with(with(validFaculty, "name", `""`), "universityId", `0`), validationBody("too_small", "name", "学部名を入力してください")},
 		{"学部の書き換え：ID の形", "PATCH", "/api/admin/faculties/1111111111111111", validFaculty, validationBody("invalid_format", "id", "Invalid string: must match pattern /^[1-9][0-9]{0,14}$/")},
-
-		// 参考書
-		{"参考書名なし", "POST", "/api/admin/textbook-masters", `{}`, validationBody("invalid_type", "name", "Invalid input: expected string, received undefined")},
-		{"参考書名が空白だけ", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "name", `"  "`), validationBody("too_small", "name", "参考書名を入力してください")},
-		{"参考書名が151文字", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "name", `"`+strings.Repeat("a", 151)+`"`), validationBody("too_big", "name", "参考書名は150文字以内で入力してください")},
-		{"出版社が数", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "publisher", `1`), validationBody("invalid_type", "publisher", "Invalid input: expected string, received number")},
-		{"出版社が101文字", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "publisher", `"`+strings.Repeat("a", 101)+`"`), validationBody("too_big", "publisher", "100文字以内で入力してください")},
-		{"版が51文字", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "edition", `"`+strings.Repeat("a", 51)+`"`), validationBody("too_big", "edition", "50文字以内で入力してください")},
-		{"ISBN が3桁", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "isbn", `"123"`), validationBody("invalid_isbn", "isbn", "ISBN は10桁か13桁で入力してください")},
-		{"ISBN が空", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "isbn", `""`), validationBody("invalid_isbn", "isbn", "ISBN は10桁か13桁で入力してください")},
-		{"ISBN が数", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "isbn", `9784000000000`), validationBody("invalid_type", "isbn", "Invalid input: expected string, received number")},
-		{"総量の候補が空", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", `[]`), validationBody("too_small", "metrics", "総量を1つ以上入力してください")},
-		{"総量の候補が文字列", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", `"x"`), validationBody("invalid_type", "metrics", "Invalid input: expected array, received string")},
-		{"候補が null", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", `[null]`), validationBody("invalid_type", "metrics.0", "Invalid input: expected object, received null")},
-		{"単位が違う", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"x"`, "1", "true")+"]"), validationBody("invalid_range_unit", "metrics.0.unit", "単位を選んでください")},
-		{"単位が数", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`1`, "1", "true")+"]"), validationBody("invalid_type", "metrics.0.unit", "Invalid input: expected string, received number")},
-		{"総量が文字列", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, `"1"`, "true")+"]"), validationBody("invalid_type", "metrics.0.totalAmount", "総量を入力してください")},
-		{"総量なし", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", `[{"unit":"page","isDefault":true}]`), validationBody("invalid_type", "metrics.0.totalAmount", "総量を入力してください")},
-		{"総量が小数", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, "1.5", "true")+"]"), validationBody("invalid_type", "metrics.0.totalAmount", "総量は整数で入力してください")},
-		{"総量が0", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, "0", "true")+"]"), validationBody("too_small", "metrics.0.totalAmount", "総量は1以上で入力してください")},
-		{"総量が100001", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, "100001", "true")+"]"), validationBody("too_big", "metrics.0.totalAmount", "総量は100000以下で入力してください")},
-		{"既定が文字列", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, "1", `"true"`)+"]"), validationBody("invalid_type", "metrics.0.isDefault", "Invalid input: expected boolean, received string")},
-		{"単位が重なる", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, "1", "true")+","+metric(`"page"`, "1", "false")+"]"), validationBody("duplicate_units", "metrics", "同じ単位が重なっています")},
-		{"既定が無い", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, "1", "false")+"]"), validationBody("default_unit_required", "metrics", "既定の単位を1つ選んでください")},
-		{"既定が2つ", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, "1", "true")+","+metric(`"question"`, "1", "true")+"]"), validationBody("default_unit_required", "metrics", "既定の単位を1つ選んでください")},
-		{"既定が2つで単位も重なる（重なりが先）", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", "["+metric(`"page"`, "1", "true")+","+metric(`"page"`, "1", "true")+"]"), validationBody("duplicate_units", "metrics", "同じ単位が重なっています")},
-		{"候補が7つ（個数が重なりより先）", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", seq(7, func(i int) string { return metric(units[i%6], "1", "false") })), validationBody("too_big", "metrics", "Too big: expected array to have <=6 items")},
-		{"候補が7つで先頭の単位が違う（要素が先）", "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "metrics", seq(7, func(i int) string {
-			if i == 0 {
-				return metric(`"x"`, "1", "false")
-			}
-			return metric(units[i-1], "1", "false")
-		})), validationBody("invalid_range_unit", "metrics.0.unit", "単位を選んでください")},
-		{"一覧：q が2つ", "GET", "/api/admin/textbook-masters?q=a&q=b", "", validationBody("invalid_type", "q", "Invalid input: expected string, received array")},
-		{"一覧：q が101文字", "GET", "/api/admin/textbook-masters?q=" + strings.Repeat("a", 101), "", validationBody("too_big", "q", "Too big: expected string to have <=100 characters")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -258,7 +190,7 @@ func TestAdminMasterValidation(t *testing.T) {
 				t.Fatalf("status = %d, want 400（本文 %s）", rec.Code, rec.Body.String())
 			}
 			httpxtest.AssertJSONEqual(t, rec.Body.String(), tt.want)
-			if len(store.universities)+len(store.faculties)+len(store.textbookMasters)+len(store.deleted) != 0 {
+			if len(store.universities)+len(store.faculties)+len(store.deleted) != 0 {
 				t.Error("弾いた入力が DB に届いた")
 			}
 		})
@@ -300,32 +232,6 @@ func TestAdminMasterInputValues(t *testing.T) {
 		httpxtest.AssertJSONEqual(t, rec.Body.String(), `{"id":3,"universityId":1,"name":"学部","examDate":"2027-02-01","tagIds":[]}`)
 	})
 
-	t.Run("参考書：ISBN を整え、空の出版社・版は null にする", func(t *testing.T) {
-		for _, c := range []struct{ isbn, want string }{
-			{"978-4-00-000000-0", "9784000000000"}, {"4-00-000000-x", "400000000X"}, {"4 00 000000 X", "400000000X"},
-			{"978\u30004000000000", "9784000000000"}, {"\ufeff9784000000000\u00a0", "9784000000000"},
-		} {
-			store := &fakeAdminMasterStore{}
-			body := with(with(with(validTextbookMaster, "isbn", `"`+c.isbn+`"`), "publisher", `" "`), "edition", "")
-			rec := adminRequest(newAdminMasterTestRouter(store), "POST", "/api/admin/textbook-masters", body)
-			if rec.Code != http.StatusCreated {
-				t.Fatalf("%q: status = %d（%s）", c.isbn, rec.Code, rec.Body.String())
-			}
-			got := store.textbookMasters[0]
-			if got.isbn != c.want || got.publisher != nil || got.edition != nil {
-				t.Errorf("%q: isbn = %q, publisher = %v, edition = %v", c.isbn, got.isbn, got.publisher, got.edition)
-			}
-		}
-	})
-
-	t.Run("参考書：出版社・版は削ってから保存する", func(t *testing.T) {
-		store := &fakeAdminMasterStore{}
-		rec := adminRequest(newAdminMasterTestRouter(store), "POST", "/api/admin/textbook-masters", with(validTextbookMaster, "publisher", `"  社  "`))
-		if rec.Code != http.StatusCreated || *store.textbookMasters[0].publisher != "社" {
-			t.Fatalf("status = %d, publisher = %v", rec.Code, store.textbookMasters[0].publisher)
-		}
-	})
-
 	t.Run("一覧：q は削ってから渡し、空なら絞らない", func(t *testing.T) {
 		for raw, want := range map[string]string{"?q=%20%E6%9D%B1%20": "東", "?q=%20%20": "", "": ""} {
 			rec := adminRequest(newAdminMasterTestRouter(&fakeAdminMasterStore{}), "GET", "/api/admin/universities"+raw, "")
@@ -357,9 +263,6 @@ func TestAdminMasterFailures(t *testing.T) {
 		{"学部の重複", "PATCH", "/api/admin/faculties/7", validFaculty, masterDuplicate, 0, 409, `{"error":"この大学に同じ名前の学部がすでにあります"}`},
 		{"存在しないタグ", "POST", "/api/admin/faculties", validFaculty, masterInvalidTags, 0, 400, `{"error":"存在しないタグが含まれています"}`},
 		{"学部が使われている", "DELETE", "/api/admin/faculties/7", "", masterInUse, 2, 409, `{"error":"この学部が志望校に2件使われているため削除できません"}`},
-		{"ISBN の重複", "PATCH", "/api/admin/textbook-masters/7", validTextbookMaster, masterDuplicate, 0, 409, `{"error":"同じ ISBN の参考書がすでにあります"}`},
-		{"参考書が無い", "DELETE", "/api/admin/textbook-masters/7", "", masterNotFound, 0, 404, `{"error":"参考書が見つかりません"}`},
-		{"参考書が使われている", "DELETE", "/api/admin/textbook-masters/7", "", masterInUse, 5, 409, `{"error":"この参考書は利用者の5冊に使われているため削除できません"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -372,7 +275,7 @@ func TestAdminMasterFailures(t *testing.T) {
 	}
 
 	t.Run("削除の成功は 204 で本文なし", func(t *testing.T) {
-		for _, path := range []string{"/api/admin/universities/7", "/api/admin/faculties/7", "/api/admin/textbook-masters/7"} {
+		for _, path := range []string{"/api/admin/universities/7", "/api/admin/faculties/7"} {
 			rec := adminRequest(newAdminMasterTestRouter(&fakeAdminMasterStore{}), "DELETE", path, "")
 			if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 				t.Errorf("%s: status = %d, 本文 = %q", path, rec.Code, rec.Body.String())
@@ -403,7 +306,7 @@ func TestAdminMasterChangeLog(t *testing.T) {
 	rt := newAdminMasterTestRouter(&fakeAdminMasterStore{})
 	adminRequest(rt, "POST", "/api/admin/universities", validUniversity)
 	adminRequest(rt, "PATCH", "/api/admin/universities/4", validUniversity)
-	adminRequest(rt, "DELETE", "/api/admin/textbook-masters/6", "")
+	adminRequest(rt, "DELETE", "/api/admin/universities/6", "")
 	// 断った操作は残さない
 	adminRequest(newAdminMasterTestRouter(&fakeAdminMasterStore{failure: masterDuplicate}), "POST", "/api/admin/universities", validUniversity)
 
@@ -424,7 +327,7 @@ func TestAdminMasterChangeLog(t *testing.T) {
 	}{
 		{"create", "University", 9, []string{"after"}},
 		{"update", "University", 4, []string{"before", "after"}},
-		{"delete", "TextbookMaster", 6, []string{"before"}},
+		{"delete", "University", 6, []string{"before"}},
 	}
 	for i, w := range want {
 		m := lines[i]

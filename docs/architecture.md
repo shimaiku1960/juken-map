@@ -217,10 +217,11 @@ apps/api/
   ├ model/                モデル：入力の決まり・読み取り・書き込みを持つ（下の「モデル・コントローラー・ビュー」）
   │ ├ studyrecord/        学習記録（実績・予定・初回記録の日時）
   │ ├ goal/               志望校
-  │ └ textbook/           参考書（参考書マスターの一覧の読み取りも）
+  │ ├ textbook/           参考書（参考書マスターの一覧の読み取りも）
+  │ └ textbookmaster/     参考書マスター（管理画面の一覧・作成・書き換え・削除）
   ├ write/                書き込みの持ち主（操作とトランザクション）。model へ順に移す
   │ ├ account/  authguard/
-  │ ├ university/  textbookmaster/  notification/  simulation/  chaos/   （一覧は下の「持ち主の一覧」）
+  │ ├ university/  notification/  simulation/  chaos/   （一覧は下の「持ち主の一覧」）
   │ └ expired/            持ち主ではなく、持ち主たちが使う期限切れの行の消し方（下の「決まり」の5）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
   │ └ httpxtest/          入口を使うテストの補助（偽のセッション・JSON の比べ方）
@@ -320,7 +321,7 @@ Rails の MVC に合わせ、「入力チェックはモデルでやる」をそ
 | `textbook`（`model/` に移した） | `Textbook` | 学習記録と一緒に変える操作は無い（予定の完了は総量を読むだけ） |
 | `goal`（`model/` に移した） | `FinalGoal` | 単独 |
 | `university` | `University`・`Faculty`・`_FacultyToTag` | 学部の作成・変更（学部＋タグの付け替え） |
-| `textbookmaster` | `TextbookMaster`・`TextbookMasterMetric` | 参考書マスターの作成・変更（マスター＋測り方の付け替え）。大学と一緒に変える操作は無いので、`catalog` にはまとめない |
+| `textbookmaster`（`model/` に移した） | `TextbookMaster`・`TextbookMasterMetric` | 参考書マスターの作成・変更（マスター＋測り方の付け替え）。大学と一緒に変える操作は無いので、`catalog` にはまとめない |
 | `notification` | `LineConnection`・`LineLinkNonce`・`LineOAuthAttempt`・`LineWebhookEvent`・`NotificationPreference`・`NotificationDelivery` | LINE の連携の解除（連携＋確認用の値＋通知の設定） |
 | `simulation` | `user.simSeq`・`simCohort`・`simLastActedOn`・`simDormantFrom` | 負荷のシミュレーション（`/admin/sim`）の利用者の印。ほかの持ち主の列と一緒に変える操作は無い |
 | `chaos` | `ChaosExperiment` | 障害注入の実験（JUK-173）。利用者のデータとは一緒に変えない |

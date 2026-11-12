@@ -410,6 +410,23 @@ func (in *ObjectInput) AddIssue(code, field, message string) {
 	}
 }
 
+// SearchQuery は一覧の検索語（z.string().trim().max(max).optional()）を URL の query から読む。
+// キーが無ければ ""（空は「絞らない」として扱う）。同じキーが2つ以上あれば、文字列ではない（配列）として断る。
+func SearchQuery(query map[string][]string, key string, max int) (string, *Issue) {
+	values, ok := query[key]
+	if !ok {
+		return "", nil
+	}
+	if len(values) != 1 {
+		return "", InvalidType(key, "string", []any{})
+	}
+	q := JSTrim(values[0])
+	if CodePointLength(q) > max {
+		return "", &Issue{Code: "too_big", Field: key, Message: fmt.Sprintf("Too big: expected string to have <=%d characters", max)}
+	}
+	return q, nil
+}
+
 // InvalidType は Zod の invalid_type の issue。文言は Zod（en）の既定と同じ。
 func InvalidType(field, expected string, got any) *Issue {
 	return &Issue{

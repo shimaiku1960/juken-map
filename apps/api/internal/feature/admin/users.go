@@ -480,18 +480,13 @@ func (st *sqlAdminUserStore) overview(ctx context.Context, now time.Time) (apisc
 	return o, signups.Err()
 }
 
-// escapeLike は LIKE の % と _ を文字として扱う（検索語に含まれても全件一致にならないように）。
-func escapeLike(s string) string {
-	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
-}
-
 func (st *sqlAdminUserStore) listUsers(ctx context.Context, kind apischema.UserKind, q string, page int) (apischema.AdminUserList, error) {
 	list := apischema.AdminUserList{Users: []apischema.AdminUser{}, Page: page, PageSize: adminUsersPageSize}
 	where := kindSQL + " = ?"
 	whereParams := append(append([]any{}, kindParams...), kind)
 	if q = validation.JSTrim(q); q != "" {
 		where += " AND u.email LIKE ?"
-		whereParams = append(whereParams, "%"+escapeLike(q)+"%")
+		whereParams = append(whereParams, "%"+database.EscapeLike(q)+"%")
 	}
 
 	if err := st.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM `user` u WHERE "+where, whereParams...).Scan(&list.Total); err != nil {

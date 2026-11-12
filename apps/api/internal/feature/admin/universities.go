@@ -35,7 +35,7 @@ var prefectures = []string{
 // ListUniversities は GET /api/admin/universities。
 func (h *MasterHandlers) ListUniversities(w http.ResponseWriter, r *http.Request, _ *httpx.Session) {
 	query := httpx.ParseQuery(r.URL.RawQuery)
-	q, issue := readMasterSearchQuery(query)
+	q, issue := validation.SearchQuery(query, "q", adminMasterQueryMax)
 	if issue == nil {
 		var page int
 		page, issue = readPageQuery(query, adminUniversitiesMaxPage)
@@ -179,7 +179,7 @@ func (st *sqlAdminMasterStore) listUniversities(ctx context.Context, q string, p
 	list := apischema.AdminUniversityList{Universities: []apischema.AdminUniversity{}, Page: page, PageSize: adminUniversitiesPageSize}
 	where, params := "", []any{}
 	if q != "" {
-		where, params = "WHERE u.name LIKE ?", append(params, "%"+escapeLike(q)+"%")
+		where, params = "WHERE u.name LIKE ?", append(params, "%"+database.EscapeLike(q)+"%")
 	}
 	if err := st.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM University u "+where, params...).Scan(&list.Total); err != nil {
 		return list, err
