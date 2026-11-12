@@ -19,9 +19,9 @@ import (
 	"slices"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/notification"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/authguard"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
 const (

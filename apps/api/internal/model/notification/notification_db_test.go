@@ -22,17 +22,28 @@ func TestNotificationDB(t *testing.T) {
 			FROM NotificationPreference WHERE userId = ?`, user)
 	}
 
+	prefBody := func(p Preference) any {
+		return map[string]any{
+			"emailMorningEnabled": p.EmailMorningEnabled, "emailEveningEnabled": p.EmailEveningEnabled,
+			"lineMorningEnabled": p.LineMorningEnabled, "lineEveningEnabled": p.LineEveningEnabled,
+		}
+	}
+
 	t.Run("LINE と連携していなければ LINE 通知は ON にできない。メールだけなら保存できる", func(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
 		user := fx.User()
-		if err := SavePreference(ctx, db, user, Preference{LineMorningEnabled: true}, now); !errors.Is(err, ErrLineNotConnected) {
+		if _, err := SavePreference(ctx, db, user, prefBody(Preference{LineMorningEnabled: true}), now); !errors.Is(err, ErrLineNotConnected) {
 			t.Fatalf("err = %v", err)
 		}
 		if got := prefs(fx, user); len(got) != 0 {
 			t.Errorf("断ったのに行ができた: %v", got)
 		}
-		if err := SavePreference(ctx, db, user, Preference{EmailMorningEnabled: true}, now); err != nil {
+		saved, err := SavePreference(ctx, db, user, prefBody(Preference{EmailMorningEnabled: true}), now)
+		if err != nil {
 			t.Fatal(err)
+		}
+		if saved != (Preference{EmailMorningEnabled: true}) {
+			t.Errorf("返した設定: %+v", saved)
 		}
 		want := `{"eveningEnabled":"0","lineEveningEnabled":"0","lineMorningEnabled":"0","morningEnabled":"1"}`
 		if got := prefs(fx, user); len(got) != 1 || got[0] != want {
@@ -44,10 +55,10 @@ func TestNotificationDB(t *testing.T) {
 		fx := dbtest.Fixture{T: t, DB: db}
 		user := fx.User()
 		fx.LineConnection(user)
-		if err := SavePreference(ctx, db, user, Preference{EmailEveningEnabled: true, LineMorningEnabled: true}, now); err != nil {
+		if _, err := SavePreference(ctx, db, user, prefBody(Preference{EmailEveningEnabled: true, LineMorningEnabled: true}), now); err != nil {
 			t.Fatal(err)
 		}
-		if err := SavePreference(ctx, db, user, Preference{EmailEveningEnabled: true, LineEveningEnabled: true}, now.Add(time.Minute)); err != nil {
+		if _, err := SavePreference(ctx, db, user, prefBody(Preference{EmailEveningEnabled: true, LineEveningEnabled: true}), now.Add(time.Minute)); err != nil {
 			t.Fatal(err)
 		}
 		want := `{"eveningEnabled":"1","lineEveningEnabled":"1","lineMorningEnabled":"0","morningEnabled":"0"}`
@@ -62,7 +73,7 @@ func TestNotificationDB(t *testing.T) {
 		if got := prefs(fx, user); len(got) != 1 || got[0] != want {
 			t.Errorf("解除のあと: %v", got)
 		}
-		if err := SavePreference(ctx, db, user, Preference{LineEveningEnabled: true}, now); !errors.Is(err, ErrLineNotConnected) {
+		if _, err := SavePreference(ctx, db, user, prefBody(Preference{LineEveningEnabled: true}), now); !errors.Is(err, ErrLineNotConnected) {
 			t.Errorf("解除のあとに LINE 通知を ON にできた: %v", err)
 		}
 	})

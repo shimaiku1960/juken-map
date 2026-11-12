@@ -1,5 +1,5 @@
 // Package line は LINE 連携の入口（/api/line/*・GET /line/settings）。連携の確認・解除、トークからの Account Link、
-// プロフィールからの LINE Login、Webhook を受ける。書き込みは internal/write/notification に任せる（JUK-156）。
+// プロフィールからの LINE Login、Webhook を受けるコントローラー。DB の読み書きはモデルの internal/model/notification に任せる（JUK-156・JUK-225）。
 // LINE の API を呼ぶ部分は api.go にあり、テストでは偽物に差し替える。
 package line
 
@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -23,8 +22,8 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/notification"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/site"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/notification"
 )
 
 // LINE 連携（JUK-79）。
@@ -36,7 +35,7 @@ import (
 //
 // /line/settings（LINE のメッセージが案内する行き先）は画面を持たない振り分けで、Settings が行う。
 //
-// DB の書き込み（連携・解除・nonce・試行・Webhook の印）は持ち主の internal/write/notification にある（JUK-154）。
+// DB の読み書き（連携の有無・連携・解除・nonce・試行・Webhook の印）はモデルの internal/model/notification にある（JUK-154・JUK-225）。
 
 const (
 	// lineCallbackPath は LINE Login の戻り先。LINE Developers に登録した URL と同じでないと LINE が断る。
@@ -453,23 +452,11 @@ type sqlLineStore struct {
 }
 
 func (st *sqlLineStore) isConnected(ctx context.Context, userID string) (bool, error) {
-	return st.exists(ctx, "SELECT 1 FROM LineConnection WHERE userId = ? LIMIT 1", userID)
+	return notification.IsConnected(ctx, st.db, userID)
 }
 
 func (st *sqlLineStore) isLineUserConnected(ctx context.Context, lineUserID string) (bool, error) {
-	return st.exists(ctx, "SELECT 1 FROM LineConnection WHERE lineUserId = ? LIMIT 1", lineUserID)
-}
-
-func (st *sqlLineStore) exists(ctx context.Context, query string, arg any) (bool, error) {
-	var one int
-	err := st.db.QueryRowContext(ctx, query, arg).Scan(&one)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("line: %w", err)
-	}
-	return true, nil
+	return notification.IsLineUserConnected(ctx, st.db, lineUserID)
 }
 
 func (st *sqlLineStore) issueLinkNonce(ctx context.Context, userID, nonce string) error {
@@ -492,18 +479,13 @@ func (st *sqlLineStore) startOAuthAttempt(ctx context.Context, state string, a o
 }
 
 func (st *sqlLineStore) findOAuthAttempt(ctx context.Context, state string) (*oauthAttempt, error) {
-	var a oauthAttempt
-	err := st.db.QueryRowContext(ctx,
-		`SELECT userId, nonce, codeVerifier, redirectUri, expiresAt <= UTC_TIMESTAMP(3)
-		 FROM LineOAuthAttempt WHERE state = ?`, state,
-	).Scan(&a.UserID, &a.Nonce, &a.CodeVerifier, &a.RedirectURI, &a.Expired)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+	a, err := notification.FindOAuthAttempt(ctx, st.db, state)
+	if a == nil || err != nil {
+		return nil, err
 	}
-	if err != nil {
-		return nil, fmt.Errorf("find line oauth attempt: %w", err)
-	}
-	return &a, nil
+	return &oauthAttempt{
+		UserID: a.UserID, Nonce: a.Nonce, CodeVerifier: a.CodeVerifier, RedirectURI: a.RedirectURI, Expired: a.Expired,
+	}, nil
 }
 
 func (st *sqlLineStore) discardOAuthAttempt(ctx context.Context, state string) error {

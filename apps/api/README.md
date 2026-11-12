@@ -272,7 +272,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/feature/textbooks/` | 参考書のコントローラーとビュー。一覧と参考書マスター（応答はメモリに持つ）／参考書の追加（マスターからも）・逆算設定の書き換えの入口。SQL と入力の決まりは `internal/model/textbook` にある（JUK-223） |
 | `internal/feature/universities/` | 大学の一覧（メモリに持ち、マスター編集で捨てる。ETag と 304、gzip 済みを返す）と大学詳細のコントローラー。読み取りは `internal/model/university`、応答の形は `view.go`（JUK-224） |
 | `internal/feature/auth/profile.go` | プロフィールの更新 |
-| `internal/feature/notifications/notification_preferences.go` | 通知設定の読み取り（保存していなければ全部 false）と保存（保存は `internal/write/notification`） |
+| `internal/feature/notifications/notification_preferences.go` | 通知設定の読み取りと保存のコントローラー。読み書きと入力の決まりは `internal/model/notification`（JUK-225） |
 
 ### 管理画面（`/api/admin/*`）
 
@@ -297,7 +297,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `internal/feature/line/` | LINE 連携の入口（連携の確認・解除、トークからの Account Link、プロフィールからの LINE Login、Webhook）。書き込みは `internal/write/notification` |
+| `internal/feature/line/` | LINE 連携の入口（連携の確認・解除、トークからの Account Link、プロフィールからの LINE Login、Webhook）のコントローラー。DB の読み書きは `internal/model/notification`（JUK-225） |
 | `internal/feature/line/api.go` | LINE の API を呼ぶ部分（Messaging API・LINE Login、Webhook の署名の確かめ）。テストでは偽物に差し替える |
 | `internal/feature/blog/microcms_webhook.go` | microCMS の記事の公開・更新・削除を受け、署名を確かめてから GitHub の API でデプロイを動かす（JUK-112） |
 
@@ -307,7 +307,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 
 | ファイル | 中身 |
 | --- | --- |
-| `internal/feature/notifications/notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる。送った印は `internal/write/notification` |
+| `internal/feature/notifications/notifications.go` | 毎日の通知の送信（同時に5本、メールは毎秒5通まで）。DB と送信先は差し替えられる。受け取る人の読み取りと送った印は `internal/model/notification` |
 | `internal/feature/notifications/daily_notification.go` | 通知の文面と、日本時間の「今日」の範囲 |
 
 ### 計測・シミュレーション
@@ -348,7 +348,7 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/model/textbook/` | 参考書のモデル。入力の決まり（Zod と同じ 400。登録は名前かマスターの2択）、自分の参考書と参考書マスターの一覧の読み取り、名前・マスターからの登録と逆算設定の変更（JUK-154・JUK-223） |
 | `internal/model/textbookmaster/` | 参考書マスター（総量の候補を含む）のモデル。入力の決まり（Zod と同じ 400）、管理画面の一覧（q で絞る）、作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154・JUK-224） |
 | `internal/model/university/` | 大学・学部（学部のタグを含む）のモデル。入力の決まり（Zod と同じ 400）、管理画面の一覧（q と page）・詳細・タグ、作成・書き換え・削除、大学を探す画面の一覧と大学詳細の読み取り。志望校に使われている行は消さない（JUK-154・JUK-224） |
-| `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |
+| `internal/model/notification/` | 通知（LINE の連携・通知の設定・送った印）のモデル。入力の決まり（4つとも真偽値）、通知の設定の読み取りと保存、LINE の連携の有無・連携・解除・LINE Login の試行、毎日の通知を受け取る人とその日の予定・実績の読み取り。LINE と連携していなければ LINE 通知を ON にしない（JUK-154・JUK-225） |
 | `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`UserSimulation` と、移行中の `user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
 | `internal/write/chaos/` | 障害注入の実験（`ChaosExperiment`）への書き込みの持ち主。始める・まとめて止める。実行中の実験は表全体で1つまでを、1つの SQL で守る（JUK-173） |
 | `internal/write/authguard/` | ログインの守り（回数の制限・メールの送信の上限・外部ログインの state）への書き込みの持ち主。試行を先に数えてから判定し、メールは数えてから記録するまでを名前付きロックで1件ずつ通す（JUK-154） |
