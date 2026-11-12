@@ -18,8 +18,8 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
-	writechaos "github.com/shimaiku1960/juken-map/apps/api/internal/write/chaos"
 )
 
 type cliFixture struct {
@@ -427,7 +427,7 @@ func TestChaosStopDB(t *testing.T) {
 	t.Cleanup(func() { fx.Exec("DELETE FROM `ChaosExperiment` WHERE startsAt >= '2100-01-01'") })
 	now := time.Date(2100, 1, 1, 3, 0, 0, 0, time.UTC).Add(time.Duration(time.Now().UnixNano() % int64(time.Hour))).Truncate(time.Millisecond)
 	fx.st.now = func() time.Time { return now.Add(time.Minute) }
-	id, err := writechaos.Start(context.Background(), fx.DB, writechaos.Experiment{Kind: "db_error", Route: "*", Rate: 0.1,
+	id, err := chaos.Start(context.Background(), fx.DB, chaos.NewExperiment{Kind: "db_error", Route: "*", Rate: 0.1,
 		StartsAt: now, EndsAt: now.Add(10 * time.Minute)}, now)
 	if err != nil {
 		t.Fatal(err)

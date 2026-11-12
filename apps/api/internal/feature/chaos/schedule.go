@@ -13,7 +13,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dates"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/hostfault"
-	writechaos "github.com/shimaiku1960/juken-map/apps/api/internal/write/chaos"
+	chaosmodel "github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
 )
 
 // 予告なしで実験を始めるくじ（JUK-176）。CHAOS_ENABLED=on に加えて CHAOS_SCHEDULE=on のときだけ、API のプロセスの中で動く。
@@ -28,7 +28,7 @@ import (
 //     実行中の実験を止めるのは .github/scripts/deploy-ec2.sh（`/api chaos stop`）
 //   - 予告しない。終わったら、何を起こしたかを運営者（ADMIN_NOTIFICATION_EMAIL）へメールで知らせる。ホストの障害では
 //     始めたプロセスが途中で落ちることがあるので、終わるまで待たず、どのプロセスでも watchInterval ごとに
-//     「終わったのにまだ知らせていない」実験（fault.Unreported）を拾って知らせる
+//     「終わったのにまだ知らせていない」実験（chaosmodel.Unreported）を拾って知らせる
 const (
 	drawInterval = 10 * time.Minute
 	startupGrace = 15 * time.Minute
@@ -44,7 +44,7 @@ const (
 	hostPct = 0.5
 )
 
-// 当たったときの中身の候補。どれも fault.Spec.Validate を通る値にする（schedule_test.go）。
+// 当たったときの中身の候補。どれも chaosmodel.Spec.Validate を通る値にする（schedule_test.go）。
 var (
 	drawDurations    = []time.Duration{10 * time.Minute, 15 * time.Minute, 20 * time.Minute, 30 * time.Minute}
 	drawRates        = []float64{0.1, 0.25, 0.5, 1}
@@ -98,20 +98,11 @@ func (s *Scheduler) Run(ctx context.Context) {
 
 // run は1つの実験を始める。始められなかったとき（ほかの実験が実行中など）は何もしない。
 // ホストの障害を起こせなかったら、記録した実験をすぐ止め（stoppedBy=failed）、次の report で知らせる。
-func (s *Scheduler) run(ctx context.Context, spec fault.Spec) {
+func (s *Scheduler) run(ctx context.Context, spec chaosmodel.Spec) {
 	now := s.Now()
-	e := writechaos.Experiment{
-		Kind:       string(spec.Kind),
-		Route:      spec.Route,
-		Rate:       spec.Rate,
-		DelayMs:    spec.DelayMs,
-		StatusCode: spec.StatusCode,
-		StartsAt:   now,
-		EndsAt:     now.Add(spec.Duration),
-		StartedBy:  writechaos.StartedBySchedule,
-	}
-	id, err := writechaos.Start(ctx, s.DB, e, now)
-	if errors.Is(err, writechaos.ErrRunning) {
+	e := spec.StartingAt(now, chaosmodel.StartedBySchedule)
+	id, err := chaosmodel.Start(ctx, s.DB, e, now)
+	if errors.Is(err, chaosmodel.ErrRunning) {
 		return
 	}
 	if err != nil {
@@ -125,13 +116,13 @@ func (s *Scheduler) run(ctx context.Context, spec fault.Spec) {
 		}
 		return
 	}
-	err = s.Host.Start(ctx, fault.Experiment{ID: id, Kind: spec.Kind, Rate: e.Rate, DelayMs: e.DelayMs,
+	err = s.Host.Start(ctx, chaosmodel.Experiment{ID: id, Kind: spec.Kind, Rate: e.Rate, DelayMs: e.DelayMs,
 		StartsAt: e.StartsAt, EndsAt: e.EndsAt})
 	if err == nil {
 		return
 	}
 	slog.Warn("[schedule] Failed to start.", "err", err.Error())
-	if err := writechaos.Stop(ctx, s.DB, id, writechaos.StoppedByFailed, s.Now()); err != nil {
+	if err := chaosmodel.Stop(ctx, s.DB, id, chaosmodel.StoppedByFailed, s.Now()); err != nil {
 		slog.Warn("[schedule] Failed to stop.", "err", err.Error())
 	}
 }
@@ -139,17 +130,17 @@ func (s *Scheduler) run(ctx context.Context, spec fault.Spec) {
 // report は、くじで始めて終わった実験のうち、まだ知らせていないものを知らせる。ホストの障害を途中で止めた
 // （管理画面・デプロイ）ものは、ホストでも戻してから知らせる。
 func (s *Scheduler) report(ctx context.Context) {
-	records, err := fault.Unreported(ctx, s.DB, s.Now())
+	records, err := chaosmodel.Unreported(ctx, s.DB, s.Now())
 	if err != nil {
 		slog.Warn("[schedule] Failed to read.", "err", err.Error())
 		return
 	}
 	for _, rec := range records {
-		claimed, err := writechaos.ClaimNotify(ctx, s.DB, rec.ID, s.Now())
+		claimed, err := chaosmodel.ClaimNotify(ctx, s.DB, rec.ID, s.Now())
 		if err != nil || !claimed {
 			continue
 		}
-		if hostfault.IsHost(rec.Kind) && rec.StoppedAt != nil && rec.StoppedBy != writechaos.StoppedByFailed && s.Host != nil {
+		if hostfault.IsHost(rec.Kind) && rec.StoppedAt != nil && rec.StoppedBy != chaosmodel.StoppedByFailed && s.Host != nil {
 			if err := s.Host.Revert(ctx); err != nil {
 				slog.Warn("[schedule] Failed to revert.", "err", err.Error())
 			}
@@ -158,7 +149,7 @@ func (s *Scheduler) report(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) notify(ctx context.Context, rec fault.Record) {
+func (s *Scheduler) notify(ctx context.Context, rec chaosmodel.Record) {
 	if s.Notify == nil {
 		slog.Warn("[schedule] ADMIN_NOTIFICATION_EMAIL is not configured.")
 		return
@@ -171,9 +162,9 @@ func (s *Scheduler) notify(ctx context.Context, rec fault.Record) {
 
 // Draw は now にくじを1回引き、当たれば起こす実験を返す。routes は障害注入の対象にしてよいルート。
 // host なら hostPct の割合でホストの層の障害を選ぶ。
-func Draw(r *rand.Rand, now time.Time, routes []string, host bool) (fault.Spec, bool) {
+func Draw(r *rand.Rand, now time.Time, routes []string, host bool) (chaosmodel.Spec, bool) {
 	if r.Float64() >= targetPerWeek/float64(drawsPerWeek) {
-		return fault.Spec{}, false
+		return chaosmodel.Spec{}, false
 	}
 	if host && r.Float64() < hostPct {
 		kind := hostfault.Kinds[r.IntN(len(hostfault.Kinds))]
@@ -183,30 +174,30 @@ func Draw(r *rand.Rand, now time.Time, routes []string, host bool) (fault.Spec, 
 			d = hostfault.ProcessKillDuration
 		}
 		if !inWindow(now, d) {
-			return fault.Spec{}, false
+			return chaosmodel.Spec{}, false
 		}
 		return hostfault.Spec(kind, levels[r.IntN(len(levels))], d), true
 	}
-	spec := fault.Spec{
-		Kind:     fault.Kinds[r.IntN(len(fault.Kinds))],
-		Route:    fault.AllRoutes,
+	spec := chaosmodel.Spec{
+		Kind:     chaosmodel.Kinds[r.IntN(len(chaosmodel.Kinds))],
+		Route:    chaosmodel.AllRoutes,
 		Rate:     drawRates[r.IntN(len(drawRates))],
 		Duration: drawDurations[r.IntN(len(drawDurations))],
 	}
 	if !inWindow(now, spec.Duration) {
-		return fault.Spec{}, false
+		return chaosmodel.Spec{}, false
 	}
 	// 外部 API を呼ぶルートは少ないので、外部 API のタイムアウトは全ルートにする（1つのルートでは起きないことが多い）。
-	if spec.Kind != fault.KindOutboundTimeout && len(routes) > 0 && r.Float64() >= drawAllRoutesPct {
+	if spec.Kind != chaosmodel.KindOutboundTimeout && len(routes) > 0 && r.Float64() >= drawAllRoutesPct {
 		spec.Route = routes[r.IntN(len(routes))]
 	}
 	switch spec.Kind {
-	case fault.KindLatency:
+	case chaosmodel.KindLatency:
 		spec.DelayMs = drawLatencyMs[r.IntN(len(drawLatencyMs))]
-	case fault.KindOutboundTimeout:
+	case chaosmodel.KindOutboundTimeout:
 		spec.DelayMs = drawTimeoutMs[r.IntN(len(drawTimeoutMs))]
-	case fault.KindHTTPError:
-		spec.StatusCode = fault.HTTPErrorStatuses[r.IntN(len(fault.HTTPErrorStatuses))]
+	case chaosmodel.KindHTTPError:
+		spec.StatusCode = chaosmodel.HTTPErrorStatuses[r.IntN(len(chaosmodel.HTTPErrorStatuses))]
 	}
 	return spec, true
 }
@@ -224,11 +215,11 @@ func inWindow(now time.Time, d time.Duration) bool {
 
 // reportEmail は終わった実験を知らせるメールの件名と本文。
 // 気づくまでの時間（MTTD）と直るまでの時間（MTTR）を振り返りの記録で出せるよう、始めた・終わった時刻と終わり方を書く。
-func reportEmail(rec fault.Record) (string, string) {
+func reportEmail(rec chaosmodel.Record) (string, string) {
 	format := func(t time.Time) string { return t.In(dates.Tokyo).Format("2006年1月2日 15:04:05") }
 	endedAt, endedHow := rec.EndsAt, "終わる時刻が来て戻った"
 	switch {
-	case rec.StoppedAt != nil && rec.StoppedBy == writechaos.StoppedByFailed:
+	case rec.StoppedAt != nil && rec.StoppedBy == chaosmodel.StoppedByFailed:
 		endedAt, endedHow = *rec.StoppedAt, "ホストで起こせず、すぐ止めた。API のログを見る"
 	case rec.StoppedAt != nil:
 		endedAt, endedHow = *rec.StoppedAt, stoppedByLabel(rec.StoppedBy)+"で止めた"
@@ -237,7 +228,7 @@ func reportEmail(rec fault.Record) (string, string) {
 	switch {
 	case hostfault.IsHost(rec.Kind):
 		route = "—（ホスト）"
-	case route == fault.AllRoutes:
+	case route == chaosmodel.AllRoutes:
 		route = "すべて（* ）"
 	}
 	detail := detailLabel(rec.Experiment)
@@ -253,15 +244,15 @@ func reportEmail(rec fault.Record) (string, string) {
 	return "【受験マップ】障害注入の実験が終わりました", body
 }
 
-func kindLabel(k fault.Kind) string {
+func kindLabel(k chaosmodel.Kind) string {
 	switch k {
-	case fault.KindLatency:
+	case chaosmodel.KindLatency:
 		return "遅延"
-	case fault.KindHTTPError:
+	case chaosmodel.KindHTTPError:
 		return "5xx"
-	case fault.KindDBError:
+	case chaosmodel.KindDBError:
 		return "DB の失敗"
-	case fault.KindOutboundTimeout:
+	case chaosmodel.KindOutboundTimeout:
 		return "外部 API のタイムアウト"
 	case hostfault.KindProcessKill:
 		return "API のプロセスの kill"
@@ -280,11 +271,11 @@ func kindLabel(k fault.Kind) string {
 }
 
 // detailLabel は実験の中身を、知らせる文の言葉にする。
-func detailLabel(e fault.Experiment) string {
+func detailLabel(e chaosmodel.Experiment) string {
 	switch e.Kind {
-	case fault.KindHTTPError:
+	case chaosmodel.KindHTTPError:
 		return fmt.Sprintf("%d を返す", e.StatusCode)
-	case fault.KindLatency, fault.KindOutboundTimeout:
+	case chaosmodel.KindLatency, chaosmodel.KindOutboundTimeout:
 		return fmt.Sprintf("%dms", e.DelayMs)
 	case hostfault.KindProcessKill:
 		return "始めに1回 kill -9"
@@ -305,9 +296,9 @@ func detailLabel(e fault.Experiment) string {
 // stoppedByLabel は stoppedBy（admin:<userId>・deploy・job）を、知らせる文の言葉にする。
 func stoppedByLabel(by string) string {
 	switch by {
-	case writechaos.StoppedByDeploy:
+	case chaosmodel.StoppedByDeploy:
 		return "デプロイ"
-	case writechaos.StoppedByJob:
+	case chaosmodel.StoppedByJob:
 		return "機械の入口（/api/chaos/）"
 	}
 	return "管理画面"

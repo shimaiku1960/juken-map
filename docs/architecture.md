@@ -220,10 +220,11 @@ apps/api/
   │ ├ textbook/           参考書（参考書マスターの一覧の読み取りも）
   │ ├ textbookmaster/     参考書マスター（管理画面の一覧・作成・書き換え・削除）
   │ ├ university/         大学・学部（管理画面の一覧・詳細・作成・書き換え・削除と、大学を探す画面・大学詳細の読み取り）
-  │ └ notification/       通知（LINE の連携・通知の設定・送った印と、毎日の通知を受け取る人の読み取り）
+  │ ├ notification/       通知（LINE の連携・通知の設定・送った印と、毎日の通知を受け取る人の読み取り）
+  │ └ chaos/              障害注入の実験（種類と中身・入力の決まり・記録の読み書き。障害を起こすのは fault・hostfault）
   ├ write/                書き込みの持ち主（操作とトランザクション）。model へ順に移す
   │ ├ account/  authguard/
-  │ ├ simulation/  chaos/   （一覧は下の「持ち主の一覧」）
+  │ ├ simulation/   （一覧は下の「持ち主の一覧」）
   │ └ expired/            持ち主ではなく、持ち主たちが使う期限切れの行の消し方（下の「決まり」の5）
   ├ httpx/                HTTP の共通処理（本文の読み取り・エラー応答・入力チェック・ルーター）
   │ └ httpxtest/          入口を使うテストの補助（偽のセッション・JSON の比べ方）
@@ -289,8 +290,8 @@ apps/api/
 #### モデル・コントローラー・ビュー（2026-11-12 決定、JUK-219。学習記録から）
 
 Rails の MVC に合わせ、「入力チェックはモデルでやる」をそのまま守れる形にした。学習記録から始め、
-ほかの機能も持ち主ごとに移している（JUK-221。移した機能は学習記録・志望校・参考書・参考書マスター・大学と学部・通知）。移すまでは今までどおり
-`feature` が読み取りと入力チェック、`write` が書き込みを持つ。下の表は学習記録の例で、志望校は `feature/goals` と `model/goal`、参考書は `feature/textbooks` と `model/textbook`、大学と学部は `feature/universities`・`feature/admin` と `model/university`、通知は `feature/notifications`・`feature/line` と `model/notification`。
+ほかの機能も持ち主ごとに移している（JUK-221。移した機能は学習記録・志望校・参考書・参考書マスター・大学と学部・通知・障害注入）。移すまでは今までどおり
+`feature` が読み取りと入力チェック、`write` が書き込みを持つ。下の表は学習記録の例で、志望校は `feature/goals` と `model/goal`、参考書は `feature/textbooks` と `model/textbook`、大学と学部は `feature/universities`・`feature/admin` と `model/university`、通知は `feature/notifications`・`feature/line` と `model/notification`、障害注入は `feature/chaos` と `model/chaos`。
 
 | 層 | 置き場所 | 持つもの | 持たないもの |
 |---|---|---|---|
@@ -326,7 +327,7 @@ Rails の MVC に合わせ、「入力チェックはモデルでやる」をそ
 | `textbookmaster`（`model/` に移した） | `TextbookMaster`・`TextbookMasterMetric` | 参考書マスターの作成・変更（マスター＋測り方の付け替え）。大学と一緒に変える操作は無いので、`catalog` にはまとめない |
 | `notification`（`model/` に移した） | `LineConnection`・`LineLinkNonce`・`LineOAuthAttempt`・`LineWebhookEvent`・`NotificationPreference`・`NotificationDelivery` | LINE の連携の解除（連携＋確認用の値＋通知の設定） |
 | `simulation` | `UserSimulation`・`user.simSeq`・`simCohort`・`simLastActedOn`・`simDormantFrom` | 負荷のシミュレーション（`/admin/sim`）の利用者の印。ほかの持ち主の列と一緒に変える操作は無い。`user` の列から 1対1 の `UserSimulation` へ移している途中（JUK-228） |
-| `chaos` | `ChaosExperiment` | 障害注入の実験（JUK-173）。利用者のデータとは一緒に変えない |
+| `chaos`（`model/` に移した） | `ChaosExperiment` | 障害注入の実験（JUK-173）。利用者のデータとは一緒に変えない |
 
 決めたこと：
 

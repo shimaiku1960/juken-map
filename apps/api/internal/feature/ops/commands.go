@@ -11,8 +11,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/account"
-	writechaos "github.com/shimaiku1960/juken-map/apps/api/internal/write/chaos"
 )
 
 const incidentUsage = `使い方: incident <操作> [メールアドレス]
@@ -225,7 +225,7 @@ func runChaos(ctx context.Context, st incidentStore, args []string, out io.Write
 		return usageError(chaosUsage)
 	}
 	// DATETIME(3) に書くので、ミリ秒で切り捨てる（dates.NowMillis と同じ）。
-	if _, err := writechaos.StopAll(ctx, st.db, writechaos.StoppedByDeploy, st.now().UTC().Truncate(time.Millisecond)); err != nil {
+	if _, err := chaos.StopAll(ctx, st.db, chaos.StoppedByDeploy, st.now().UTC().Truncate(time.Millisecond)); err != nil {
 		return err
 	}
 	fmt.Fprintln(out, "実行中の実験があれば止めました")

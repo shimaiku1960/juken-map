@@ -16,34 +16,18 @@
 package fault
 
 import (
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
+
 	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
 	"math/rand/v2"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/telemetry"
 )
-
-// Kind は起こす障害の種類。
-type Kind string
-
-const (
-	KindLatency         Kind = "latency"          // 応答を DelayMs 遅らせてからハンドラへ進む
-	KindHTTPError       Kind = "http_error"       // ハンドラへ進まず StatusCode を返す
-	KindDBError         Kind = "db_error"         // SQL を流さずに失敗させる
-	KindOutboundTimeout Kind = "outbound_timeout" // 外部 API を DelayMs 待たせてから、タイムアウトで失敗させる
-)
-
-// Kinds は起こせる障害の種類の全部。
-var Kinds = []Kind{KindLatency, KindHTTPError, KindDBError, KindOutboundTimeout}
-
-// AllRoutes を Route に入れると、/api/ の対象のルートのうち /api/health を除く全部に起こす。
-// /api/health は外からの死活監視とデプロイ後の確認が叩くので、名指ししたときだけ対象にする。
-const AllRoutes = "*"
 
 // ErrInjected は、障害注入で失敗させた DB の操作の誤り。調べる練習で答えにならないよう、接続が切れたときの
 // go-sql-driver/mysql の誤り（mysql.ErrInvalidConn）と同じ文言にする（JUK-178）。
@@ -53,41 +37,13 @@ var ErrInjected = errors.New("invalid connection")
 // （同じプロセスで始めた・止めたものは、その場で読み直す）。
 const pollInterval = 5 * time.Second
 
-// Experiment は実行中の実験1つ。
-type Experiment struct {
-	ID         int64
-	Kind       Kind
-	Route      string  // AllRoutes か「GET /api/study-logs/:id」の形
-	Rate       float64 // 対象のリクエストのうち障害を起こす割合（0 より大きく 1 以下）
-	DelayMs    int     // latency・outbound_timeout の待ち時間
-	StatusCode int     // http_error で返すステータス
-	StartsAt   time.Time
-	EndsAt     time.Time
-}
-
-func (e Experiment) runningAt(now time.Time) bool {
-	return !now.Before(e.StartsAt) && now.Before(e.EndsAt)
-}
-
-func (e Experiment) matches(route string) bool {
-	if e.Route != AllRoutes {
-		return e.Route == route
-	}
-	_, path, _ := strings.Cut(route, " ")
-	return strings.HasPrefix(path, "/api/") && path != "/api/health"
-}
-
-func (e Experiment) delay() time.Duration {
-	return time.Duration(e.DelayMs) * time.Millisecond
-}
-
 // Injector は実行中の実験を持ち、リクエストごとに障害を起こすかを決める。
 type Injector struct {
 	now   func() time.Time
 	roll  func() float64 // [0, 1) の乱数
 	sleep func(ctx context.Context, d time.Duration) error
 
-	active atomic.Pointer[[]Experiment]
+	active atomic.Pointer[[]chaos.Experiment]
 }
 
 // New は Injector を作る。障害を起こしたかどうかは数値にもログにも出さない。調べる練習で答えにならないようにするため
@@ -99,30 +55,30 @@ func New() *Injector {
 		roll:  rand.Float64,
 		sleep: sleepContext,
 	}
-	in.active.Store(&[]Experiment{})
+	in.active.Store(&[]chaos.Experiment{})
 	return in
 }
 
 // pick は ctx のリクエストに kind の障害を起こすなら、その実験を返す。
-func (in *Injector) pick(ctx context.Context, kind Kind) (Experiment, bool) {
+func (in *Injector) pick(ctx context.Context, kind chaos.Kind) (chaos.Experiment, bool) {
 	if in == nil {
-		return Experiment{}, false
+		return chaos.Experiment{}, false
 	}
 	info := telemetry.RequestInfoFrom(ctx)
 	if info == nil || info.FaultRoute == "" {
-		return Experiment{}, false
+		return chaos.Experiment{}, false
 	}
 	now := in.now()
 	for _, e := range *in.active.Load() {
-		if e.Kind != kind || !e.runningAt(now) || !e.matches(info.FaultRoute) {
+		if e.Kind != kind || !e.RunningAt(now) || !e.Matches(info.FaultRoute) {
 			continue
 		}
 		if in.roll() >= e.Rate {
-			return Experiment{}, false
+			return chaos.Experiment{}, false
 		}
 		return e, true
 	}
-	return Experiment{}, false
+	return chaos.Experiment{}, false
 }
 
 // Run は起動したときと、その後 pollInterval ごとに実行中の実験を読み直す。ctx が取り消されたら戻る。
@@ -147,7 +103,7 @@ func (in *Injector) Refresh(ctx context.Context, db *sql.DB) error {
 	if in == nil {
 		return nil
 	}
-	list, err := Running(ctx, db, in.now())
+	list, err := chaos.Running(ctx, db, in.now())
 	if err != nil {
 		return err
 	}

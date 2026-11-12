@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/chaos"
 	"math"
 	"strconv"
 	"strings"
@@ -19,26 +20,24 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-
-	"github.com/shimaiku1960/juken-map/apps/api/internal/fault"
 )
 
 // 種類。ChaosExperiment.kind には "host_" を付けて入れ、SSM ドキュメントには付けずに渡す。
 const (
-	KindProcessKill fault.Kind = "host_process_kill" // API のプロセスを kill -9 する（コンテナの再起動の方針で戻るか）
-	KindCPU         fault.Kind = "host_cpu"          // stress-ng で CPU を使い切る
-	KindMemory      fault.Kind = "host_memory"       // stress-ng でメモリを使う
-	KindDisk        fault.Kind = "host_disk"         // ルートのディスクを埋める
-	KindDBDelay     fault.Kind = "host_db_delay"     // tc netem で RDS への通信を遅らせる
-	KindDBLoss      fault.Kind = "host_db_loss"      // tc netem で RDS への通信を落とす
+	KindProcessKill chaos.Kind = "host_process_kill" // API のプロセスを kill -9 する（コンテナの再起動の方針で戻るか）
+	KindCPU         chaos.Kind = "host_cpu"          // stress-ng で CPU を使い切る
+	KindMemory      chaos.Kind = "host_memory"       // stress-ng でメモリを使う
+	KindDisk        chaos.Kind = "host_disk"         // ルートのディスクを埋める
+	KindDBDelay     chaos.Kind = "host_db_delay"     // tc netem で RDS への通信を遅らせる
+	KindDBLoss      chaos.Kind = "host_db_loss"      // tc netem で RDS への通信を落とす
 )
 
 // Kinds はホストの層で起こせる種類の全部。
-var Kinds = []fault.Kind{KindProcessKill, KindCPU, KindMemory, KindDisk, KindDBDelay, KindDBLoss}
+var Kinds = []chaos.Kind{KindProcessKill, KindCPU, KindMemory, KindDisk, KindDBDelay, KindDBLoss}
 
 // Levels は種類ごとに起こせる強さ。cpu・memory・db_loss は %、disk は埋めたあとの使用率の %、db_delay は ms。
 // SSM ドキュメントのスクリプトも同じ値だけを受け付ける（hostfault_test.go が突き合わせる）。
-var Levels = map[fault.Kind][]int{
+var Levels = map[chaos.Kind][]int{
 	KindProcessKill: {0},
 	KindCPU:         {50, 80, 100},
 	KindMemory:      {50, 70, 90},
@@ -51,14 +50,14 @@ var Levels = map[fault.Kind][]int{
 const ProcessKillDuration = 10 * time.Minute
 
 // IsHost は kind がホストの層の種類か。
-func IsHost(kind fault.Kind) bool {
+func IsHost(kind chaos.Kind) bool {
 	_, ok := Levels[kind]
 	return ok
 }
 
 // Spec は kind を level の強さで d 続ける実験の中身（ChaosExperiment の行の値）。route は使わないので空にする。
-func Spec(kind fault.Kind, level int, d time.Duration) fault.Spec {
-	s := fault.Spec{Kind: kind, Duration: d, Rate: 1}
+func Spec(kind chaos.Kind, level int, d time.Duration) chaos.Spec {
+	s := chaos.Spec{Kind: kind, Duration: d, Rate: 1}
 	switch kind {
 	case KindDBDelay:
 		s.DelayMs = level
@@ -69,7 +68,7 @@ func Spec(kind fault.Kind, level int, d time.Duration) fault.Spec {
 }
 
 // Level は記録した実験の強さ（Spec の逆）。
-func Level(e fault.Experiment) int {
+func Level(e chaos.Experiment) int {
 	switch e.Kind {
 	case KindDBDelay:
 		return e.DelayMs
@@ -82,7 +81,7 @@ func Level(e fault.Experiment) int {
 // Runner はホストで障害を起こし・戻す。本番は SSM、テストは偽物。
 type Runner interface {
 	// Start は e を起こし、ホストで始まったら戻る。始められなければ誤り。
-	Start(ctx context.Context, e fault.Experiment) error
+	Start(ctx context.Context, e chaos.Experiment) error
 	// Revert は起こしている障害を全部戻す。何も起こしていなければ何もしない。
 	Revert(ctx context.Context) error
 }
@@ -112,7 +111,7 @@ func NewSSM(ctx context.Context) (*SSM, error) {
 	return &SSM{client: ssm.NewFromConfig(cfg), instanceID: doc.InstanceID}, nil
 }
 
-func (s *SSM) Start(ctx context.Context, e fault.Experiment) error {
+func (s *SSM) Start(ctx context.Context, e chaos.Experiment) error {
 	if !IsHost(e.Kind) {
 		return fmt.Errorf("not a host kind: %s", e.Kind)
 	}
