@@ -279,10 +279,11 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | ファイル | 中身 |
 | --- | --- |
 | `internal/feature/admin/users.go` | 利用者の管理（概要・一覧・停止・停止解除・削除、監査ログ） |
-| `internal/feature/admin/masters.go` | マスター編集の共通部分（使われている行は消さない決まり、断ったときの返し方、変更の記録、store の定義） |
+| `internal/feature/admin/masters.go` | マスター編集の共通部分（使われている行は消さない決まり、断ったときの返し方、変更の記録、大学・学部の store の定義） |
 | `internal/feature/admin/universities.go` | マスター編集の大学（入口・入力・一覧の SQL。書き込みは `internal/write/university` を呼び、変えたら大学一覧のキャッシュを捨てる） |
 | `internal/feature/admin/faculties.go` | マスター編集の学部とタグ（入口・入力・タグの一覧。書き込みは `internal/write/university`） |
-| `internal/feature/admin/textbook_masters.go` | マスター編集の参考書（入口・入力・一覧の SQL。書き込みは `internal/write/textbookmaster`） |
+| `internal/feature/admin/textbook_masters.go` | マスター編集の参考書の入口。読み書きと入力の決まりは `internal/model/textbookmaster` を呼び、変えたら参考書マスターの一覧のキャッシュを捨てる |
+| `internal/feature/admin/view.go` | マスター編集の応答の形（モデルの値を `apischema` の型に直す） |
 
 ### 画面の配信（JUK-111）
 
@@ -345,8 +346,8 @@ Go ではフォルダ1つが1つのパッケージで、ファイルの分け方
 | `internal/model/studyrecord/` | 学習記録（実績・予定・初回記録の日時）のモデル。入力の決まり（Zod と同じ 400）、一覧とダッシュボードの読み取り（3本の SQL を同時に流す）、実績の記録・変更・削除と、予定の作成・変更・削除・完了。参考書の持ち主と範囲の確かめ、予定の完了と実績の作成を1つのトランザクションで行う（JUK-153） |
 | `internal/model/goal/` | 志望校のモデル。入力の決まり（Zod と同じ 400）、一覧（学部のタグつき）と第一志望の読み取り、登録・学部の差し替え・第一志望やメモの変更・削除。第一志望の付け替えを1つのトランザクションで行う（JUK-154・JUK-222） |
 | `internal/model/textbook/` | 参考書のモデル。入力の決まり（Zod と同じ 400。登録は名前かマスターの2択）、自分の参考書と参考書マスターの一覧の読み取り、名前・マスターからの登録と逆算設定の変更（JUK-154・JUK-223） |
+| `internal/model/textbookmaster/` | 参考書マスター（総量の候補を含む）のモデル。入力の決まり（Zod と同じ 400）、管理画面の一覧（q で絞る）、作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154・JUK-224） |
 | `internal/write/university/` | 大学・学部のマスター（学部のタグを含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。志望校に使われている行は消さない（JUK-154） |
-| `internal/write/textbookmaster/` | 参考書マスター（総量の候補を含む）への書き込みの持ち主。管理画面の作成・書き換え・削除。利用者の参考書に使われているものは消さない（JUK-154） |
 | `internal/write/notification/` | 通知（LINE の連携・通知の設定・送った印）への書き込みの持ち主。連携・解除、通知の設定の保存。LINE と連携していなければ LINE 通知を ON にしない（JUK-154） |
 | `internal/write/simulation/` | 負荷のシミュレーションの利用者の印（`user.simSeq` など）への書き込みの持ち主。連番と続き方の型を付け、最後に操作した日・来なくなった日を記録する。シミュレーション用のアドレスの利用者にしか触れない（JUK-154） |
 | `internal/write/chaos/` | 障害注入の実験（`ChaosExperiment`）への書き込みの持ち主。始める・まとめて止める。実行中の実験は表全体で1つまでを、1つの SQL で守る（JUK-173） |

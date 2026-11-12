@@ -12,7 +12,6 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/apischema"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/httpx"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/validation"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbookmaster"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/write/university"
 )
 
@@ -26,8 +25,8 @@ import (
 // 事前に数えて断るのが基本で、数えたあとに志望校が増えた場合も、DB の外部キーが拒んだエラーを
 // 同じ「使われている」に読み替える（二重の守り）。
 //
-// 書き込みは持ち主の internal/write/university（大学・学部）と internal/write/textbookmaster（参考書）にあり（JUK-154）、
-// store はその操作を呼んで結果を masterOutcome に直す。
+// 参考書マスターはモデル（internal/model/textbookmaster）を直接呼ぶ（JUK-224）。大学・学部の書き込みは
+// 持ち主の internal/write/university にあり（JUK-154）、store はその操作を呼んで結果を masterOutcome に直す。
 //
 // 大学・学部を変えたら、大学を探す画面の一覧のキャッシュ（internal/feature/universities）を捨てる。成功したときだけ。
 // 変更はすべて構造化ログ「admin master change」に「誰が・何を・前→後」で残す（Grafana の Loki で追える）。
@@ -45,11 +44,7 @@ const (
 	adminUniversitiesMaxPage = 1_000
 	// adminMasterQueryMax は一覧の検索語（q）の上限。前後の空白を削ってから数える。
 	adminMasterQueryMax = 100
-	// adminTextbookMastersLimit は参考書マスターの一覧の上限。件数が少ないので、ページに分けず先頭から返す。
-	adminTextbookMastersLimit = 200
-	adminFacultyTagsMax       = 20
-	// textbookMetricsMax は総量の候補の上限。単位（RANGE_UNIT_VALUES）の数で、単位は重ねられないのでこれ以上は無い。
-	textbookMetricsMax = 6
+	adminFacultyTagsMax = 20
 )
 
 // masterFailure は、行を書き換えずに断った理由。
@@ -136,24 +131,23 @@ type adminMasterStore interface {
 	createFaculty(ctx context.Context, in facultyInput) (masterOutcome[apischema.AdminFacultySnapshot], error)
 	updateFaculty(ctx context.Context, id int64, in facultyInput) (masterOutcome[masterChange[apischema.AdminFacultySnapshot]], error)
 	deleteFaculty(ctx context.Context, id int64) (masterOutcome[apischema.AdminFacultySnapshot], error)
-	listTextbookMasters(ctx context.Context, q string) ([]apischema.AdminTextbookMaster, error)
-	createTextbookMaster(ctx context.Context, in textbookMasterInput) (masterOutcome[apischema.AdminTextbookMaster], error)
-	updateTextbookMaster(ctx context.Context, id int64, in textbookMasterInput) (masterOutcome[masterChange[apischema.AdminTextbookMaster]], error)
-	deleteTextbookMaster(ctx context.Context, id int64) (masterOutcome[apischema.AdminTextbookMaster], error)
 }
 
 type MasterHandlers struct {
 	store adminMasterStore
+	db    *sql.DB
+	// textbookMastersChanged は参考書マスターを変えて確定したあとに呼ぶ（GET /api/textbook-masters のキャッシュを捨てる）。
+	textbookMastersChanged func()
 }
 
 // NewMasterHandlers の universitiesChanged・textbookMastersChanged は、変更を確定したあとに
 // ほかの入口のキャッシュを捨てるために呼ぶ（sqlAdminMasterStore の同名のフィールド）。
 func NewMasterHandlers(db *sql.DB, universitiesChanged, textbookMastersChanged func()) *MasterHandlers {
-	return &MasterHandlers{store: &sqlAdminMasterStore{
+	return &MasterHandlers{
+		store:                  &sqlAdminMasterStore{db: db, universitiesChanged: universitiesChanged},
 		db:                     db,
-		universitiesChanged:    universitiesChanged,
 		textbookMastersChanged: textbookMastersChanged,
-	}}
+	}
 }
 
 // ---- 入力 ----
@@ -172,24 +166,6 @@ func masterID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return id, true
 }
 
-// readMasterSearchQuery は一覧の q（z.string().trim().max(100).optional()）を読む。
-// 空の q は「絞らない」として扱うので、"" はそのまま返す。
-func readMasterSearchQuery(query map[string][]string) (string, *validation.Issue) {
-	values, ok := query["q"]
-	if !ok {
-		return "", nil
-	}
-	// 同じキーが2つ以上あるときは、文字列ではない（配列）として断る。
-	if len(values) != 1 {
-		return "", validation.InvalidType("q", "string", []any{})
-	}
-	q := validation.JSTrim(values[0])
-	if validation.CodePointLength(q) > adminMasterQueryMax {
-		return "", &validation.Issue{Code: "too_big", Field: "q", Message: "Too big: expected string to have <=100 characters"}
-	}
-	return q, nil
-}
-
 // masterNameRule は名前の規則：z.string().trim().min(1).max(100)。
 func masterNameRule(label string) validation.StringRule {
 	return validation.StringRule{
@@ -205,30 +181,25 @@ type sqlAdminMasterStore struct {
 	db *sql.DB
 	// universitiesChanged は大学・学部を変えて確定したあとに呼ぶ（大学を探す画面のキャッシュを捨てる）。
 	universitiesChanged func()
-	// textbookMastersChanged は参考書マスターを変えて確定したあとに呼ぶ（GET /api/textbook-masters のキャッシュを捨てる）。
-	textbookMastersChanged func()
 }
 
-// masterOutcomeOf は持ち主（internal/write/university・textbookmaster）の操作の結果を masterOutcome にする。
+// masterOutcomeOf は持ち主（internal/write/university）の操作の結果を masterOutcome にする。
 // 断った理由は failure に、想定外の失敗は error にする。成功したら（確定したあとに）changed でキャッシュを捨てる。
 // トランザクションの中で捨てると、確定前に別のリクエストが古い一覧を読み直して置き直せる。
 func masterOutcomeOf[T any](v T, err error, changed func()) (masterOutcome[T], error) {
 	var universityInUse *university.InUseError
-	var textbookInUse *textbookmaster.InUseError
 	switch {
 	case err == nil:
 		changed()
 		return masterOutcome[T]{value: v}, nil
-	case errors.Is(err, university.ErrNotFound), errors.Is(err, textbookmaster.ErrNotFound):
+	case errors.Is(err, university.ErrNotFound):
 		return masterOutcome[T]{failure: masterNotFound}, nil
-	case errors.Is(err, university.ErrDuplicate), errors.Is(err, textbookmaster.ErrDuplicate):
+	case errors.Is(err, university.ErrDuplicate):
 		return masterOutcome[T]{failure: masterDuplicate}, nil
 	case errors.Is(err, university.ErrInvalidTags):
 		return masterOutcome[T]{failure: masterInvalidTags}, nil
 	case errors.As(err, &universityInUse):
 		return masterOutcome[T]{failure: masterInUse, count: universityInUse.Count}, nil
-	case errors.As(err, &textbookInUse):
-		return masterOutcome[T]{failure: masterInUse, count: textbookInUse.Count}, nil
 	}
 	return masterOutcome[T]{}, err
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/goal"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/studyrecord"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/textbook"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/textbookmaster"
 )
 
 // controllers は、モデルに移した機能のコントローラー（internal/feature の下のパッケージ）。
@@ -85,6 +86,7 @@ func TestEnumsMatchContract(t *testing.T) {
 		"TextbookProgressInputSubject":   textbook.Subjects,
 		"TextbookNameInputRangeUnit":     textbook.RangeUnits,
 		"TextbookProgressInputRangeUnit": textbook.RangeUnits,
+		"TextbookMasterInputMetricsUnit": textbookmaster.Units,
 	} {
 		got := slices.Sorted(slices.Values(consts[typ]))
 		if !slices.Equal(got, slices.Sorted(slices.Values(want))) {

@@ -164,3 +164,8 @@ type QueryRower interface {
 func Placeholders(n int, one string) string {
 	return strings.TrimSuffix(strings.Repeat(one+", ", n), ", ")
 }
+
+// EscapeLike は LIKE の % と _ を文字として扱う（検索語に含まれても全件一致にならないように）。
+func EscapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}

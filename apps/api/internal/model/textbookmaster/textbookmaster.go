@@ -1,13 +1,13 @@
-// Package textbookmaster は参考書マスター（TextbookMaster と総量の候補 TextbookMasterMetric）への書き込みの持ち主。
-// 管理画面のマスター編集（JUK-78）の作成・書き換え・削除を操作として出す。持ち主の一覧と決まりは
-// docs/architecture.md「バックエンドの構成」（JUK-148・JUK-150）。
+// Package textbookmaster は参考書マスター（TextbookMaster と総量の候補 TextbookMasterMetric）のモデル。
+// 管理画面のマスター編集（JUK-78）の一覧・作成・書き換え・削除と、入力の決まり（input.go）を持つ。
+// HTTP を知らない（JUK-221、docs/architecture.md「バックエンドの構成」）。
 //
 // 利用者の参考書（Textbook.masterId）は外部キーが SET NULL で黙って紐づきが外れるので、1冊でも登録されていれば消さない。
 // 利用者が登録した参考書は総量を自分の行に写し取っているので、マスターの総量を変えても既存の参考書は変わらない
 // （これから登録する人から効く）。
 //
-// 入力の形の確かめ（Zod と同じ 400）は入口が行い、ここには確かめ済みの値が来る。参考書マスターの一覧のキャッシュを捨てるのも、
-// 変更をログに残すのも入口（操作が成功して確定したあと）。
+// 作成・書き換えは本文をそのまま受け取り、形が違えば書き込む前に *validation.Issue を返す。参考書マスターの一覧の
+// キャッシュを捨てるのも、変更をログに残すのも入口（操作が成功して確定したあと）。
 package textbookmaster
 
 import (
@@ -20,7 +20,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/database"
 )
 
-// 操作が断る理由。入口が利用者向けの文言（404・409）に直す。
+// 操作が断る理由。入口が利用者向けの文言（404・409）に直す。入力の形の誤りは *validation.Issue。
 var (
 	// ErrNotFound は、参考書マスターが無いこと。
 	ErrNotFound = errors.New("textbookmaster: not found")
@@ -35,7 +35,7 @@ func (e *InUseError) Error() string {
 	return fmt.Sprintf("textbookmaster: used by %d textbooks", e.Count)
 }
 
-// Metric は総量の候補（単位ごと）。項目の並びは apischema の AdminTextbookMasterMetric とそろえている。
+// Metric は総量の候補（単位ごと）。項目の並びは apischema の AdminTextbookMasterMetric とそろえ、ビューが型の変換だけで返せるようにしている。
 type Metric struct {
 	// IsDefault は、利用者が参考書を登録したときにこの候補で総量が入ること。
 	IsDefault   bool
@@ -60,21 +60,17 @@ type Change struct {
 	Before, After Master
 }
 
-// Input は参考書マスターの作成・書き換えの値。Metrics は1つ以上で、既定（IsDefault）はちょうど1つ（入口が確かめる）。
-type Input struct {
-	Name               string
-	Publisher, Edition *string
-	Isbn               string
-	Metrics            []Metric
-}
-
 // Create は参考書マスターを総量の候補つきで作る。同じ ISBN があれば ErrDuplicate。
-func Create(ctx context.Context, db *sql.DB, in Input, now time.Time) (Master, error) {
+func Create(ctx context.Context, db *sql.DB, body any, now time.Time) (Master, error) {
+	in, err := decode(body)
+	if err != nil {
+		return Master{}, err
+	}
 	var created Master
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx,
 			`INSERT INTO TextbookMaster (name, publisher, edition, isbn, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`,
-			in.Name, in.Publisher, in.Edition, in.Isbn, now, now)
+			in.name, in.publisher, in.edition, in.isbn, now, now)
 		if err != nil {
 			return err
 		}
@@ -82,7 +78,7 @@ func Create(ctx context.Context, db *sql.DB, in Input, now time.Time) (Master, e
 		if err != nil {
 			return err
 		}
-		if err := replaceMetrics(ctx, tx, id, in.Metrics, now); err != nil {
+		if err := replaceMetrics(ctx, tx, id, in.metrics, now); err != nil {
 			return err
 		}
 		created, err = find(ctx, tx, id)
@@ -95,19 +91,23 @@ func Create(ctx context.Context, db *sql.DB, in Input, now time.Time) (Master, e
 }
 
 // Update は参考書マスターと総量の候補を書き換え、前と後を返す。無ければ ErrNotFound、ISBN が重なれば ErrDuplicate。
-func Update(ctx context.Context, db *sql.DB, id int64, in Input, now time.Time) (Change, error) {
+func Update(ctx context.Context, db *sql.DB, id int64, body any, now time.Time) (Change, error) {
+	in, err := decode(body)
+	if err != nil {
+		return Change{}, err
+	}
 	var change Change
-	err := database.InTx(ctx, db, func(tx *sql.Tx) error {
+	err = database.InTx(ctx, db, func(tx *sql.Tx) error {
 		var err error
 		if change.Before, err = lockAndFind(ctx, tx, id); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx,
 			"UPDATE TextbookMaster SET name = ?, publisher = ?, edition = ?, isbn = ?, updatedAt = ? WHERE id = ?",
-			in.Name, in.Publisher, in.Edition, in.Isbn, now, id); err != nil {
+			in.name, in.publisher, in.edition, in.isbn, now, id); err != nil {
 			return err
 		}
-		if err := replaceMetrics(ctx, tx, id, in.Metrics, now); err != nil {
+		if err := replaceMetrics(ctx, tx, id, in.metrics, now); err != nil {
 			return err
 		}
 		change.After, err = find(ctx, tx, id)
@@ -196,7 +196,7 @@ func find(ctx context.Context, tx *sql.Tx, id int64) (Master, error) {
 	return master, nil
 }
 
-// replaceMetrics は総量の候補を送られたものに置き換える（入口の確かめで1つ以上ある）。
+// replaceMetrics は総量の候補を送られたものに置き換える（decode の確かめで1つ以上ある）。
 func replaceMetrics(ctx context.Context, tx *sql.Tx, masterID int64, metrics []Metric, now time.Time) error {
 	if _, err := tx.ExecContext(ctx, "DELETE FROM TextbookMasterMetric WHERE masterId = ?", masterID); err != nil {
 		return err
