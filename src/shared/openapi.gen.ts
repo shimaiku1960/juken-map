@@ -1245,7 +1245,7 @@ export interface components {
             /** @enum {string} */
             status?: "candidate" | "decided";
         };
-        /** @description 参考書の登録（Zod の createTextbookSchema）。名前で作る形が先に当たる（両方送ると名前で作る）。 どちらにも当たらなければ invalid_union（field は null）。Go は本文を手で読む（textbook_writes.go）ので、 oneOf の型は作らない（作ると oapi-codegen の runtime への依存が増える） */
+        /** @description 参考書の登録（Zod の createTextbookSchema）。名前で作る形が先に当たる（両方送ると名前で作る）。 どちらにも当たらなければ invalid_union（field は null）。Go は本文を手で読む（internal/model/textbook/input.go）ので、 oneOf の型は作らない（作ると oapi-codegen の runtime への依存が増える） */
         TextbookInput: components["schemas"]["TextbookNameInput"] | components["schemas"]["TextbookFromMasterInput"];
         TextbookNameInput: {
             /** @description 前後の空白を削ってから長さを確かめる */

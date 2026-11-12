@@ -17,8 +17,7 @@ import (
 	"github.com/shimaiku1960/juken-map/apps/api/internal/dbtest"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/goal"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/studyrecord"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/opt"
-	"github.com/shimaiku1960/juken-map/apps/api/internal/write/textbook"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/textbook"
 )
 
 func TestA3StoreScopedByUserDB(t *testing.T) {
@@ -58,7 +57,7 @@ func TestA3StoreScopedByUserDB(t *testing.T) {
 			name: "参考書の逆算設定", table: "Textbook",
 			seed: func(fx dbFixture, holder string) int64 { return fx.Textbook(holder) },
 			write: func(_ dbFixture, caller, _ string, id int64) {
-				_, _ = textbook.UpdateProgress(ctx, db, caller, id, textbook.Progress{Subject: opt.Of(note)}, now)
+				_, _ = textbook.UpdateProgress(ctx, db, caller, id, map[string]any{"totalAmount": json.Number("999")}, now)
 			},
 		},
 		{

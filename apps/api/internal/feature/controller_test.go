@@ -13,11 +13,12 @@ import (
 
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/goal"
 	"github.com/shimaiku1960/juken-map/apps/api/internal/model/studyrecord"
+	"github.com/shimaiku1960/juken-map/apps/api/internal/model/textbook"
 )
 
 // controllers は、モデルに移した機能のコントローラー（internal/feature の下のパッケージ）。
 // 機能をモデルに移したら、ここに足す（docs/architecture.md「モデル・コントローラー・ビュー」、JUK-219・JUK-221）。
-var controllers = []string{"goals", "study"}
+var controllers = []string{"goals", "study", "textbooks"}
 
 // TestControllerHasNoSQLOrRules は、コントローラーが SQL も入力の決まりも持たないことを確かめる。
 // 読み書きと入力の決まりはモデル（internal/model の下）が持つ。
@@ -70,16 +71,20 @@ func checkController(t *testing.T, dir string) {
 func TestEnumsMatchContract(t *testing.T) {
 	consts := contractEnums(t)
 	for typ, want := range map[string][]string{
-		"StudyLogInputSubject":          studyrecord.Subjects,
-		"StudyPlanItemInputSubject":     studyrecord.Subjects,
-		"StudyPlanUpdateInputSubject":   studyrecord.Subjects,
-		"StudyLogParseResultSubject":    studyrecord.Subjects,
-		"StudyLogInputRangeUnit":        studyrecord.RangeUnits,
-		"StudyPlanItemInputRangeUnit":   studyrecord.RangeUnits,
-		"StudyPlanUpdateInputRangeUnit": studyrecord.RangeUnits,
-		"GoalInputStatus":               goal.Statuses,
-		"GoalUpdateInputStatus":         goal.Statuses,
-		"GoalPatchInputStatus":          goal.Statuses,
+		"StudyLogInputSubject":           studyrecord.Subjects,
+		"StudyPlanItemInputSubject":      studyrecord.Subjects,
+		"StudyPlanUpdateInputSubject":    studyrecord.Subjects,
+		"StudyLogParseResultSubject":     studyrecord.Subjects,
+		"StudyLogInputRangeUnit":         studyrecord.RangeUnits,
+		"StudyPlanItemInputRangeUnit":    studyrecord.RangeUnits,
+		"StudyPlanUpdateInputRangeUnit":  studyrecord.RangeUnits,
+		"GoalInputStatus":                goal.Statuses,
+		"GoalUpdateInputStatus":          goal.Statuses,
+		"GoalPatchInputStatus":           goal.Statuses,
+		"TextbookNameInputSubject":       textbook.Subjects,
+		"TextbookProgressInputSubject":   textbook.Subjects,
+		"TextbookNameInputRangeUnit":     textbook.RangeUnits,
+		"TextbookProgressInputRangeUnit": textbook.RangeUnits,
 	} {
 		got := slices.Sorted(slices.Values(consts[typ]))
 		if !slices.Equal(got, slices.Sorted(slices.Values(want))) {
